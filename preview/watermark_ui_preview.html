@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>水印 UI 视觉稿预览</title>
+<style>
+  :root{
+    --canvas:#ECEAE4;
+    --surface:#F7F5F0;
+    --surfaceAlt:#E4E1DA;
+    --text:#3E3B36;
+    --text2:#8A8579;
+    --brand:#A9A08F;
+    --brandDeep:#7E7663;
+    --brandSub:#EDE9DF;
+    --danger:#C86A5A;
+    --shadow1:8px 8px 16px rgba(96,88,74,.18), -8px -8px 16px rgba(255,255,255,.9);
+    --shadow2:4px 4px 8px rgba(96,88,74,.14), -4px -4px 8px rgba(255,255,255,.8);
+    --shadowInset:inset 3px 3px 6px rgba(96,88,74,.16), inset -3px -3px 6px rgba(255,255,255,.7);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",sans-serif;
+    background:radial-gradient(1200px 800px at 30% 0%,#f5f2eb,#e4e0d6);
+    color:var(--text);
+    display:flex;flex-direction:column;align-items:center;
+    padding:32px 16px 80px;
+    min-height:100vh;
+  }
+  .stage-title{
+    text-align:center;margin-bottom:8px;
+    font-size:20px;font-weight:700;letter-spacing:.5px;color:#4a463f;
+  }
+  .stage-sub{font-size:12px;color:#9a9487;margin-bottom:20px;letter-spacing:.3px}
+  .tabs{display:flex;justify-content:center;gap:10px;margin-bottom:28px}
+  .tab{
+    padding:9px 22px;border-radius:999px;font-size:13px;font-weight:600;cursor:pointer;
+    color:var(--text2);background:transparent;border:1px solid #d8d3c8;transition:.2s;
+  }
+  .tab.active{color:var(--brandDeep);background:#fff;box-shadow:var(--shadow1,0 4px 12px rgba(96,88,74,.15));border-color:transparent}
+  .device{
+    width:390px;background:var(--canvas);border-radius:40px;box-shadow:0 30px 60px rgba(60,52,40,.28),0 4px 16px rgba(60,52,40,.12);
+    overflow:hidden;border:10px solid #2e2b26;position:relative;
+  }
+  .notch{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:110px;height:26px;background:#2e2b26;border-radius:20px;z-index:30}
+  .screen{padding-top:48px}
+  .nav{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:6px 18px 12px;font-weight:700;font-size:17px;
+  }
+  .nav .back{font-size:15px;font-weight:600;color:var(--brandDeep);cursor:pointer}
+  .nav .actions{display:flex;align-items:center;gap:10px}
+  .neu-btn{padding:7px 12px;border-radius:10px;font-size:13px;font-weight:700;color:#fff;background:var(--brandDeep);box-shadow:var(--shadow2);cursor:pointer;border:none}
+  .icon-btn{width:34px;height:34px;border-radius:10px;background:var(--surface);box-shadow:var(--shadow1);display:flex;align-items:center;justify-content:center;color:var(--brandDeep);cursor:pointer}
+
+  /* ============ 管理页 ============ */
+  .impl-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 12px}
+  .impl-header .lbl{font-size:12px;color:var(--text2);font-weight:600;letter-spacing:.5px}
+  .seg{display:flex;background:var(--surfaceAlt);border-radius:10px;padding:3px;box-shadow:var(--shadow2)}
+  .seg .s{padding:6px 12px;border-radius:8px;font-size:12px;color:var(--text2);cursor:pointer}
+  .seg .s.active{background:var(--surface);color:var(--brandDeep);box-shadow:var(--shadow1);font-weight:700}
+  .grid{padding:0 16px 30px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .tcard{background:var(--surface);border-radius:18px;box-shadow:var(--shadow1);overflow:hidden;cursor:pointer;transition:.18s;position:relative;padding:9px}
+  .tcard:active{transform:scale(.97);box-shadow:var(--shadowInset)}
+  .tcard.using{border:1.6px solid var(--brandDeep)}
+  .thumb{position:relative;border-radius:11px;overflow:hidden;aspect-ratio:4/4.2;background:#2c2a26}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .badge{position:absolute;top:6px;left:6px;display:flex;align-items:center;gap:5px;background:rgba(40,38,34,.55);color:#fff;font-size:10px;padding:4px 8px;border-radius:999px;backdrop-filter:blur(4px);font-weight:600;letter-spacing:.4px}
+  .check{position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:999px;background:var(--brandDeep);display:none;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+  .tcard.using .check{display:flex}
+  .tcard .meta{padding:9px 2px 2px}
+  .tcard .name{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tcard .row{display:flex;align-items:center;justify-content:space-between;margin-top:5px}
+  .pill{font-size:10px;color:var(--brandDeep);background:var(--brandSub);padding:2px 8px;border-radius:999px;font-weight:600}
+  .uselabel{font-size:10px;color:var(--text2);font-weight:500}
+  .dotmenu{color:var(--text2);font-size:14px;cursor:pointer;padding:2px 4px}
+
+  /* ============ 编辑页 ============ */
+  .editor-photo{background:#1f1e1b;position:relative;
+    margin:0 12px;border-radius:18px;height:300px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .editor-photo img{height:80%;object-fit:contain;position:absolute;border-radius:6px}
+  .wm-el{position:absolute;color:#fff;font-weight:700;font-size:20px;letter-spacing:1.5px;text-shadow:0 1px 3px rgba(0,0,0,.4)}
+  .wm-el.sel{outline:1.6px solid #fff;outline-offset:2px}
+  .handle{position:absolute;bottom:-1px;right:-1px;width:18px;height:18px;border-radius:4px;background:#fff;outline:1.6px solid #fff}
+  .panel{background:var(--surface);box-shadow:var(--shadow1);padding:12px 14px 18px;margin-top:10px}
+  .collapse{display:flex;align-items:center;justify-content:center;gap:4px;font-size:11px;color:var(--text2);cursor:pointer;padding:4px 0 10px}
+  .seg3{display:flex;background:var(--surfaceAlt);border-radius:12px;padding:4px;gap:4px}
+  .seg3 .s{flex:1;text-align:center;padding:9px 0;border-radius:9px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;transition:.18s}
+  .seg3 .s.active{background:var(--surface);color:var(--brandDeep);box-shadow:var(--shadow1)}
+  .divider{height:1px;background:#e5e1d8;margin:12px 0}
+  .tab-body{min-height:200px}
+  .sec-title{font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.5px;margin:10px 0 6px}
+  .el-row{display:flex;align-items:center;gap:8px}
+  .el-chip{flex:0 0 auto;padding:7px 14px;border-radius:999px;font-size:12px;background:var(--surfaceAlt);color:var(--text2);cursor:pointer}
+  .el-chip.active{background:var(--surface);color:var(--brandDeep);font-weight:700;box-shadow:var(--shadow1)}
+  .mini{flex:1 1 auto;text-align:center;padding:8px 0;border-radius:10px;font-size:12px;font-weight:700;background:var(--surfaceAlt);color:var(--brandDeep);cursor:pointer;box-shadow:var(--shadow2)}
+  .mini.danger{color:var(--danger)}
+  .mini.ghost{background:transparent;box-shadow:none}
+  .slider-row{display:flex;align-items:center;gap:10px;margin:8px 0}
+  .slider-row .lbl{font-size:12px;color:var(--text2);flex:0 0 40px;font-weight:600}
+  .track{flex:1;height:24px;display:flex;align-items:center;cursor:pointer}
+  .bar{width:100%;height:6px;border-radius:999px;background:var(--surfaceAlt);position:relative;box-shadow:var(--shadowInset)}
+  .bar .fill{position:absolute;left:0;top:0;bottom:0;background:var(--brandDeep);border-radius:999px;width:55%}
+  .bar .knob{position:absolute;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:999px;background:#fdfcf8;box-shadow:var(--shadow1);left:55%;margin:-12px 0 0 -12px}
+  .slider-row .val{flex:0 0 34px;font-size:11px;color:var(--text2);text-align:right}
+  .palette{display:flex;gap:12px;margin:6px 0 4px}
+  .sw{width:28px;height:28px;border-radius:999px;cursor:pointer;box-shadow:var(--shadow2)}
+  .sw.sel{box-shadow:var(--shadow1);outline:2px solid var(--brandDeep);outline-offset:2px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .mini-chip{padding:6px 14px;border-radius:8px;font-size:12px;background:var(--surfaceAlt);color:var(--text);cursor:pointer;box-shadow:var(--shadow2)}
+  .mini-chip.active{background:var(--brandSub);color:var(--brandDeep);outline:1px solid var(--brandDeep)}
+  .switch-row{display:flex;align-items:center;justify-content:space-between;margin:8px 0}
+  .switch-row .lbl{font-size:12px;color:var(--text2);font-weight:600}
+  .switch{width:44px;height:26px;border-radius:999px;background:var(--surfaceAlt);position:relative;cursor:pointer;box-shadow:var(--shadowInset);transition:.2s}
+  .switch.on{background:var(--brandDeep)}
+  .switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:999px;background:#fdfcf8;box-shadow:var(--shadow2);transition:.2s}
+  .switch.on::after{left:21px}
+  .empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:34px 0;color:var(--text2)}
+  .hint{font-size:12px;color:#b6b1a3;text-align:center;line-height:1.7;padding:8px 0}
+  .row-2{display:flex;gap:8px}
+  .row-2 .mini{flex:1}
+
+  /* footer note */
+  .note{max-width:360px;text-align:center;font-size:11px;color:#a8a294;line-height:1.8;margin-top:26px}
+</style>
+</head>
+<body>
+  <div class="tabs">
+    <div class="tab active" data-p="manage">① 水印管理</div>
+    <div class="tab" data-p="editor">② 水印编辑</div>
+  </div>
+
+  <!-- ================= 管理页 ================= -->
+  <div class="device" id="pv-manage">
+    <div class="notch"></div>
+    <div class="screen">
+      <div class="nav">
+        <div class="back">‹</div>
+        <div>水印管理</div>
+        <div class="actions">
+          <div class="icon-btn" onclick="toggleLayout()">▤</div>
+          <div class="neu-btn" onclick="addCard()">＋ 新建</div>
+        </div>
+      </div>
+      <div class="impl-header">
+        <div class="lbl">模板</div>
+        <div class="seg">
+          <div class="s active" onclick="setLayout('list')">≡ 列表</div>
+          <div class="s" onclick="setLayout('grid')">▦ 网格</div>
+        </div>
+      </div>
+      <div class="grid" id="grid"></div>
+    </div>
+  </div>
+
+  <!-- ================= 编辑页 ================= -->
+  <div class="device" id="pv-editor" style="display:none">
+    <div class="notch"></div>
+    <div class="screen">
+      <div class="nav">
+        <div class="back">取消</div>
+        <div>编辑水印</div>
+        <div class="actions"><span style="font-size:15px;font-weight:700;color:var(--brandDeep);cursor:pointer">保存</span></div>
+      </div>
+      <div class="editor-photo" id="photoStage">
+        <img src="https://picsum.photos/id/1019/480/640" id="pimg" alt="示例照片">
+        <div class="wm-el" id="wm0" style="left:50%;bottom:16%">LUMIRA</div>
+        <div class="handle" style="position:absolute;bottom:9%;right:calc(50% - 60px)"></div>
+      </div>
+      <div class="panel">
+        <div class="collapse" onclick="togglePanel()"><span>▼</span> 展开操作栏</div>
+        <div class="seg3" id="editorTab">
+          <div class="s active" data-tab="element" onclick="tab('element')">元素</div>
+          <div class="s" data-tab="style" onclick="tab('style')">样式</div>
+          <div class="s" data-tab="border" onclick="tab('border')">边框</div>
+        </div>
+        <div class="divider"></div>
+        <div class="tab-body" id="tabBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">交互说明：卡片可点击切换"使用中"选中态；编辑页底部可在 元素/样式/边框 间切换、可收起操作栏、可点击色板/开关/滑块。仅为视觉方向稿，落地以 Flutter 主题为准。</div>
+
+<script>
+  // ---------- 管理页数据 ----------
+  const T = [
+    {n:"晴空少女", t:"预置", using:true, img:"https://picsum.photos/id/1027/320/340"},
+    {n:"复古胶片 LOMO", t:"预置", using:false, img:"https://picsum.photos/id/122/320/340"},
+    {n:"我的专属签名", t:"自定义", using:false, img:"https://picsum.photos/id/180/320/340"},
+    {n:"旅行日期角标", t:"自定义", using:false, img:"https://picsum.photos/id/178/320/340"},
+  ];
+  let layout = 'list';
+  function cardHTML(t, i){
+    const using = t.using ? 'using' : '';
+    return `<div class="tcard ${using}" onclick="selectCard(${i})" data-i="${i}">
+      <div class="thumb">
+        <img src="${t.img}">
+        <div class="badge">● 使用中</div>
+        <div class="check">✓</div>
+      </div>
+      <div class="meta">
+        <div class="name">${t.n}</div>
+        <div class="row">
+          <span class="pill">${t.t}</span>
+          <span class="uselabel">${t.using?'使用中':'未使用'}</span>
+          <span class="dotmenu" onclick="menu(event)">⋮</span>
+        </div>
+      </div>
+    </div>`;
+  }
+  function render(){ document.getElementById('grid').innerHTML = T.map((t,i)=>cardHTML(t,i)).join(''); }
+  function selectCard(i){
+    T.forEach(t=>t.using=false); T[i].using=true; render();
+    // 网格样式提示
+  }
+  function menu(e){ e.stopPropagation(); }
+  function toggleLayout(){ setLayout(layout==='list'?'grid':'list'); }
+  function setLayout(l){
+    layout = l;
+    document.querySelectorAll('.seg .s').forEach((s,i)=>s.classList.toggle('active',(i===0)=== (l==='list')));
+    document.getElementById('grid').style.gridTemplateColumns = l==='grid' ? '1fr 1fr' : '1fr';
+    document.querySelectorAll('.tcard .thumb').forEach(t=>{ t.style.aspectRatio = l==='grid' ? '' : 'auto'; });
+  }
+  function addCard(){
+    T.push({n:"新水印",t:"自定义",using:false,img:"https://picsum.photos/id/160/320/340"}); render();
+  }
+
+  // ---------- 编辑页 ----------
+  const _tabs = { element, style, border };
+  function tab(k){ document.querySelectorAll('.seg3 .s').forEach(s=>s.classList.toggle('active',s.dataset.tab===k)); document.getElementById('tabBody').innerHTML = _tabs[k](); bindSlider(); }
+  let el = {font:.55, opacity:1, rot:0, space:'photo'};
+  function element(){
+    return `<div class="el-row">
+      <div class="el-chip active">LUMIRA</div>
+      <div class="el-chip">2026.08.20</div>
+    </div>
+    <div class="sec-title"></div>
+    <div class="row-2" style="margin-top:12px">
+      <div class="mini ghost">＋ 文本</div>
+      <div class="mini ghost">＋ 日期</div>
+      <div class="mini ghost">复制</div>
+      <div class="mini danger ghost">删除</div>
+    </div>
+    <div class="hint">点选元素后，在「样式」中调整 · 在照片上可拖拽/缩放</div>`;
+  }
+  function style(){
+    const setk=(k,v)=>el[k]=v;
+    return `<div class="el-row" style="margin-top:2px">
+      <div class="mini-chip ${el.space==='photo'?'active':''}" onclick="selSpace(this)">照片</div>
+      <div class="mini-chip ${el.space==='frame'?'active':''}" onclick="selSpace(this)">白边</div>
+      <div style="flex:1"></div>
+      <div class="mini-chip active">粗体</div>
+      <div class="mini-chip">斜体</div>
+    </div>
+    <div class="sec-title">字号 / 透明度 / 旋转 / 字间距</div>
+    <div class="slider-row"><span class="lbl">字号</span><div class="track" onclick="slider(event,'font')"><div class="bar"><div class="fill" data-v="55"></div><div class="knob" data-v="55"></div></div></div><span class="val">${ (el.font*100).toFixed(0) }</span></div>
+    <div class="slider-row"><span class="lbl">透明度</span><div class="track" onclick="slider(event,'opacity')"><div class="bar"><div class="fill" data-v="100" style="width:100%"></div><div class="knob" data-v="100" style="left:100%"></div></div></div><span class="val">100</span></div>
+    <div class="slider-row"><span class="lbl">字间距</span><div class="track" onclick="slider(event,'gap')"><div class="bar"><div class="fill" data-v="30"></div><div class="knob" data-v="30"></div></div></div><span class="val">${ (0.3*10).toFixed(0) }</span></div>
+    <div class="sec-title">颜色</div>
+    <div class="palette">
+      <div class="sw sel" style="background:#fff" onclick="sw(this)"></div>
+      <div class="sw" style="background:#000" onclick="sw(this)"></div>
+      <div class="sw sel" style="background:#fff" onclick="sw(this)"></div>
+      <div class="sw" style="background:#fff" onclick="sw(this)"></div>
+      <div class="sw" style="background:#fff" onclick="sw(this)"></div>
+      <div class="sw" style="background:#fff" onclick="sw(this)"></div>
+    </div>`;
+  }
+  function border(){
+    return `<div class="el-row"><div class="mini-chip active">无</div><div class="mini-chip">拍立得</div><div class="mini-chip">内描边</div></div>
+    <div class="sec-title">拍立得 · 白边宽度</div>
+    <div class="slider-row"><span class="lbl">白板</span><div class="track" onclick="slider(event,'plate')"><div class="bar"><div class="fill" data-v="18"></div><div class="knob" data-v="18"></div></div></div><span class="val">18</span></div>
+    <div class="switch-row"><span class="lbl">白板</span><div class="switch on" onclick="this.classList.toggle('on')"></div></div>
+    <div class="switch-row"><span class="lbl">投影</span><div class="switch on" onclick="this.classList.toggle('on')"></div></div>
+    <div class="chips" style="margin-top:8px"><div class="mini-chip active">上→下</div><div class="mini-chip">左→右</div><div class="mini-chip">左上→右下</div></div>`;
+  }
+  function selSpace(chip){ document.querySelectorAll('#tabBody .mini-chip').forEach(c=>c.classList.remove('active')); chip.classList.add('active'); }
+  function sw(s){ document.querySelectorAll('#tabBody .sw').forEach(x=>x.classList.remove('sel')); s.classList.add('sel'); }
+  function bindSlider(){}
+  function slider(e,k){
+    const r=e.currentTarget.getBoundingClientRect();
+    const pct=Math.max(0,Math.min(100,(e.clientX-r.left)/r.width*100));
+    const fill=r.querySelector('.fill'), knob=r.querySelector('.knob');
+    fill.style.width=pct+'%'; knob.style.left=pct+'%';
+    fill.dataset.v=knob.dataset.v=Math.round(pct);
+    const val=r.closest('.slider-row').querySelector('.val');
+    val.textContent=Math.round(pct*(k==='font'?2:1));
+  }
+  function togglePanel(){
+    const t=document.getElementById('editorTab'), b=document.getElementById('tabBody'), c=document.querySelector('.collapse');
+    const hidden = t.style.display==='none';
+    t.style.display=hidden?'':'none'; b.style.display=hidden?'':'none'; c.style.display=hidden?'none':'';
+    c.innerHTML = hidden?'<span>▼</span> 展开操作栏':'<span>▼</span> 收起';
+  }
+
+  // ---------- 页面切换 ----------
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); t.classList.add('active');
+    document.getElementById('pv-manage').style.display = t.dataset.p==='manage'?'':'none';
+    document.getElementById('pv-editor').style.display = t.dataset.p==='editor'?'':'none';
+  });
+
+  render(); tab('element');
+</script>
+</body>
+</html>
