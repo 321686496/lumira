@@ -116,6 +116,25 @@ void main() {
       expect(container.read(CaptureState.levelEnabledProvider), false);
     });
 
+    group('delayTimerProvider', () {
+      test('defaults to 0 (disabled / instant capture)', () {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        expect(container.read(CaptureState.delayTimerProvider), 0);
+      });
+
+      test('can be set to a selected seconds value', () {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        container.read(CaptureState.delayTimerProvider.notifier).state = 5;
+        expect(container.read(CaptureState.delayTimerProvider), 5);
+      });
+
+      test('delayOptions exposes off/3/5/10 seconds', () {
+        expect(CaptureState.delayOptions, [0, 3, 5, 10]);
+      });
+    });
+
     test('resetAll clears all new providers', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);

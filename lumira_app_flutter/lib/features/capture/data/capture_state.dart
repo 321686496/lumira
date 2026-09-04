@@ -49,6 +49,12 @@ class CaptureState {
   /// 当前缩放倍数（真实倍数，1.0 = 1x 无缩放）。由 UI 控件或双指缩放手势更新。
   static final zoomProvider = StateProvider<double>((ref) => 1.0);
 
+  /// 延迟拍照可选档位（秒）：0 表示关闭（即时拍照）
+  static const List<int> delayOptions = [0, 3, 5, 10];
+
+  /// 延迟拍照时长（秒）：0 = 关闭（即时拍），可选 3 / 5 / 10
+  static final delayTimerProvider = StateProvider<int>((ref) => 0);
+
   /// UI 显示用的缩放倍数（与 [zoomProvider] 保持一致，用于跨比例切换时保持视觉稳定）。
   static final apparentZoomProvider = StateProvider<double>((ref) => 1.0);
 
