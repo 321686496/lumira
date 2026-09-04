@@ -165,6 +165,19 @@ export class Constants {
 
     static readonly MIN_VIDEO_FRAME: number = 30;
     /**
+     * 拍照输出像素上限（宽×高）。成片管线虽按 desiredSize 硬件解码直达输出边长（~1280/1600），
+     * 但源图分辨率决定下采样超采样率：
+     * - 3MP（如 2048x1536）对 1600 解码目标仅 ~1.28x 超采样，下采样后细节不足偏糊（禁）。
+     * - 5MP（如 2592x1944）对 1600 ~1.62x 超采样：锐度适中，明显优于 3MP、接近旧 8.2MP（~2x），
+     *   是「画质基本不丢」与「capture 提速」的最佳折中。
+     * - 8.2MP（如 3264x2448）被此上限排除：对成片定稿 ≤1600 长边而言超采样过剩，而 capture() 的
+     *   JPEG 编码+写盘耗时近似随源分辨率线性增长，老 8.2MP 档实测拖慢拍照 ~2.6s，纯属浪费。
+     * 取 5MP 档：capture 编码写盘可压到 ~1.6s（向 iOS 靠拢），成片锐度仍接近旧档。
+     * 注意：真实机型 photoProfilesArray 无精确 2592x1944 时，photoConfig 会退到 ≤上限的最大档；
+     * 由「选最大可用档」逻辑保证不选过小档，避免成片偏糊。
+     */
+    static readonly MAX_PHOTO_PIXELS: number = 5038848;
+    /**
      * FLASH_POSITION_X.
      */
     static readonly FLASH_POSITION_X: number = 0;
