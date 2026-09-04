@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>解锁模板页 · 优化原型</title>
+<style>
+  :root{
+    --canvas:#e9e4da;
+    --surface:#f2ede3;
+    --surface-alt:#dfd9cc;
+    --ink:#4a4438;
+    --ink-2:#837a6a;
+    --ink-3:#a89f8e;
+    --brand:#8a8a75;      /* morandi 橄榄 */
+    --brand-text:#6f6f5c;
+    --brand-subtle:#e6e2d2;
+    --success:#7f9d8b;
+    --success-subtle:#e0e8df;
+    --danger:#b08a7a;
+    --convex-hi:#fffdf8;
+    --convex-lo:#c9c2b4;
+    --radius:14px;
+    --font:"PingFang SC","Microsoft YaHei",-apple-system,sans-serif;
+    --serif:"Noto Serif SC","Songti SC",serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:var(--font);
+    background:
+      radial-gradient(120% 90% at 12% -8%, rgba(138,138,117,.16), transparent 60%),
+      #e4ded2;
+    min-height:100vh;
+    display:flex;flex-direction:column;align-items:center;
+    padding:28px 16px 60px;
+  }
+  .hint{
+    color:#6b6355;font-size:13px;margin-bottom:18px;text-align:center;line-height:1.7;
+    max-width:520px;
+  }
+  .hint b{color:#8a8a75}
+
+  .phone{
+    width:390px;max-width:100%;
+    background:var(--canvas);
+    border-radius:38px;
+    box-shadow:0 30px 60px -20px rgba(70,60,40,.35), inset 0 0 0 1px rgba(255,255,255,.35);
+    overflow:hidden;
+    position:relative;
+  }
+  @media(max-width:420px){ .phone{border-radius:0} .hint{display:none} }
+
+  .screen{height:820px;max-height:88vh;overflow-y:auto;overscroll-behavior:contain;padding-bottom:8px}
+
+  /* 顶部导航 */
+  .nav{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:52px 18px 4px;position:sticky;top:0;z-index:5;
+    background:var(--canvas);
+  }
+  .nav .close{
+    width:34px;height:34px;border-radius:12px;display:grid;place-items:center;
+    color:var(--ink);cursor:pointer;user-select:none;
+    box-shadow: 4px 4px 10px var(--convex-lo), -4px -4px 10px var(--convex-hi);
+  }
+  .nav .close:active{
+    box-shadow: inset 3px 3px 7px var(--convex-lo), inset -3px -3px 7px var(--convex-hi);
+    color:var(--brand-text);
+  }
+  .nav h1{font-size:17px;font-weight:600;color:var(--ink);font-family:var(--serif)}
+
+  .scroll{padding:12px 22px 30px}
+  .seg{color:#a09a8c;font-size:12px;font-weight:500}
+
+  /* 预览卡 */
+  .preview{
+    border-radius:var(--radius);overflow:hidden;
+    background:var(--surface);
+    box-shadow: 8px 8px 18px var(--convex-lo), -6px -6px 14px var(--convex-hi);
+  }
+  .cover{position:relative;aspect-ratio:16/9;background:linear-gradient(135deg,#cfc7b4,#b9ad96)}
+  .cover .pic{
+    width:100%;height:100%;object-fit:cover;display:block;
+    background:linear-gradient(135deg,#b9ad96, #a99b82);
+  }
+  .cover .lock{
+    position:absolute;top:10px;right:10px;width:26px;height:26px;border-radius:50%;
+    background:rgba(26,26,26,.6);display:grid;place-items:center;color:#fff;font-size:13px;
+  }
+  .body{padding:18px 20px 20px}
+  .title-row{display:flex;align-items:center;gap:6px}
+  .title-row svg{flex:none}
+  .tx{font-family:var(--serif);font-size:19px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sub{font-size:12.5px;color:var(--ink-3);margin-top:5px;line-height:1.5}
+  .tags{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .tag{font-size:11px;padding:3px 9px;border-radius:999px}
+  .tag.gold{background:var(--brand-subtle);color:var(--brand-text)}
+  .tag.green{background:var(--success-subtle);color:var(--success)}
+  .tag.neu{background:var(--surface-alt);color:var(--ink-2)}
+
+  /* 解锁方式 */
+  .sub-zone{text-align:center;padding:30px 0 4px}
+  .sub-zone .t{font-family:var(--serif);font-size:17px;font-weight:600;color:var(--ink)}
+  .sub-zone .s{font-size:12px;color:var(--ink-3);margin-top:4px}
+
+  .opts{display:flex;flex-direction:column;gap:12px;margin-top:18px}
+
+  /* 免费解锁横幅 */
+  .freebar{
+    display:flex;align-items:center;gap:9px;padding:11px 13px;border-radius:10px;
+    background:var(--surface-alt);color:var(--ink-3);font-size:12px;font-weight:500;
+  }
+  .freebar.has{background:var(--brand-subtle);color:var(--link,#6b6b58)}
+  .freebar .dot{width:16px;height:16px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:9px}
+  .freebar.has .dot{background:var(--brand);color:#fff}
+
+  /* 选项卡 */
+  .opt{
+    display:flex;align-items:center;gap:12px;padding:15px 16px;border-radius:var(--radius);
+    background:var(--surface);box-shadow: 6px 6px 14px var(--convex-lo), -5px -5px 12px var(--convex-hi);
+    cursor:pointer;user-select:none;position:relative;transition:transform .12s ease;
+  }
+  .opt:active{box-shadow: inset 4px 4px 9px var(--convex-lo), inset -4px -4px 9px var(--convex-hi);transform:scale(.992)}
+  .opt.main{background:var(--surface)}
+  .opt.main::after{content:"";position:absolute;inset:0;border-radius:var(--radius);border:1px solid rgba(138,138,117,.55);pointer-events:none}
+  .opt .ic{width:40px;height:40px;flex:none;border-radius:9px;display:grid;place-items:center;font-size:19px}
+  .opt .ic.soft{color:var(--brand)}
+  .opt .ic.full{background:var(--brand);color:#fff;box-shadow:4px 4px 8px var(--convex-lo)}
+  .mt{flex:1;min-width:0}
+  .mt .tt{font-size:14px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mt .dd{font-size:12px;color:var(--ink-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* 小按钮 */
+  .btn{
+    flex:none;font-size:13px;font-weight:500;padding:9px 16px;border-radius:9px;
+    color:var(--ink);cursor:pointer;user-select:none;
+    background:linear-gradient(145deg,var(--surface),var(--surface-alt));
+    box-shadow: inset 1px 1px 1px rgba(255,255,255,.8), inset -2px -2px 4px var(--convex-lo);
+    transition:transform .12s ease;
+  }
+  .btn:active{box-shadow: inset 3px 3px 6px var(--convex-lo), inset -2px -2px 5px var(--convex-hi);transform:scale(.98)}
+  .btn.primary{
+    background:var(--brand);color:#fff;
+    box-shadow: 3px 3px 8px var(--convex-lo);
+  }
+  .btn.primary:active{box-shadow: inset 3px 3px 8px rgba(0,0,0,.22)}
+
+  /* 底部备注 */
+  .note{display:flex;align-items:center;justify-content:center;gap:5px;color:var(--ink-3);font-size:12px;padding:30px 0 10px;letter-spacing:.2px}
+
+  /* 成功态 */
+  .success{display:none;text-align:center;padding:44px 0}
+  .success .ring{width:62px;height:62px;margin:0 auto;border-radius:50%;background:var(--success-subtle);display:grid;place-items:center;color:var(--success);font-size:34px}
+  .success .t{font-family:var(--serif);font-size:20px;font-weight:600;color:var(--ink);margin-top:16px}
+  .success .s{font-size:13px;color:var(--ink-3);margin-top:6px}
+  .bigbtn{top:24px;width:100%;padding:15px;border-radius:12px;background:var(--brand);color:#fff;font-size:16px;font-weight:500;text-align:center;cursor:pointer;user-select:none;box-shadow:4px 4px 10px var(--convex-lo);border:none}
+  .bigbtn:active{box-shadow: inset 4px 4px 10px rgba(0,0,0,.22)}
+
+  /* 弹层 */
+  .sheet-back{position:fixed;inset:0;background:rgba(40,34,24,.35);backdrop-filter:blur(2px);display:none;align-items:flex-end;justify-content:center;z-index:20}
+  .sheet{width:390px;max-width:100%;background:var(--surface);border-radius:24px 24px 0 0;padding:22px 22px 26px;animation:up .25s ease}
+  @keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}
+  .sheet h3{font-family:var(--serif);font-size:17px;font-weight:600;color:var(--ink);text-align:center}
+  .price-big{text-align:center;font-size:38px;font-weight:700;color:var(--brand);margin-top:14px}
+  .price-big small{font-size:16px}
+  .price-sub{text-align:center;font-size:12px;color:var(--ink-3);margin-top:8px}
+  .rows{display:flex;gap:12px;margin-top:22px}
+  .half{flex:1;text-align:center;padding:14px;border-radius:10px;cursor:pointer;user-select:none;font-size:15px;font-weight:500}
+  .half.ghost{color:var(--ink-2);background:linear-gradient(145deg,var(--surface),var(--surface-alt));box-shadow: inset 1px 1px 1px rgba(255,255,255,.8), inset -2px -2px 4px var(--convex-lo)}
+  .half.ghost:active{box-shadow: inset 3px 3px 6px var(--convex-lo), inset -2px -2px 5px var(--convex-hi)}
+  .half.primary{background:var(--brand);color:#fff;box-shadow:3px 3px 8px var(--convex-lo)}
+  .half.primary:active{box-shadow: inset 3px 3px 8px rgba(0,0,0,.22)}
+</style>
+</head>
+<body>
+  <div class="hint">
+    <b>解锁模板页 · 优化原型</b><br>
+    真实数据（模板名 / 简介 / 标签）+ 清单式布局 + 各处新拟态<a href="#" data-sel="sheet" style="color:inherit">按压态</a>。<br>
+    点击「解锁」弹确认层 · 点击「免费解锁 ×2」会弹出「选择解锁方式」。
+  </div>
+
+  <div class="phone">
+    <div class="screen" id="screen">
+      <!-- 顶部导航 -->
+      <div class="nav">
+        <div class="close" title="关闭">✕</div>
+        <h1>解锁模板</h1>
+        <div style="width:34px"></div>
+      </div>
+
+      <div class="scroll">
+        <div id="locked">
+          <!-- 预览卡：真实模板数据 -->
+          <div class="preview">
+            <div class="cover">
+              <img class="pic" src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=%E6%99%B4%E7%A9%BA%E7%94%B0%E5%9B%AD%E5%B0%91%E5%A5%B3%E4%BA%BA%E5%83%8F%E4%BE%A7%E6%8B%8D%EF%BC%8C%E7%81%B0%E7%BB%BF%E8%89%B2%E8%B0%83%EF%BC%8C%E8%BD%AF%E5%85%89%EF%BC%8C%E6%97%A5%E7%B3%BB%E8%83%B6%E7%89%87&image_size=landscape_4_3" alt="模板封面">
+              <div class="lock">🔒</div>
+            </div>
+            <div class="body">
+              <div class="title-row">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="#8a8a75"><path d="M12 2l2.9 6.3 6.9.8-5 4.9 1.3 6.8L12 17.3 5.9 20.8l1.3-6.8-5-4.9 6.9-.8z"/></svg>
+                <span class="tx">晴空田园少女人像</span>
+              </div>
+              <div class="sub">明亮晴空与田园绿野，捕捉少女松弛的自然笑靥</div>
+              <div class="tags">
+                <span class="tag gold">胶片</span>
+                <span class="tag green">日系</span>
+                <span class="tag neu">人像</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 解锁方式标题 -->
+          <div class="sub-zone">
+            <div class="t">解锁方式任选其一</div>
+            <div class="s">完成任意一项即可永久解锁</div>
+          </div>
+
+          <div class="opts">
+            <!-- 免费解锁横幅 -->
+            <div class="freebar has">
+              <div class="dot">✓</div>
+              免费解锁 ×2：可在解锁页任选付费模板，不消耗积分
+            </div>
+
+            <!-- 主 CTA：积分解锁 -->
+            <div class="opt main">
+              <div class="ic full">✦</div>
+              <div class="mt">
+                <div class="tt">68 积分解锁</div>
+                <div class="dd">消耗积分，永久使用</div>
+              </div>
+              <div class="btn primary" data-sel="sheet">解锁</div>
+            </div>
+
+            <!-- 次级：兑换码 / 分享 -->
+            <div class="opt" data-sel="toast" data-toast="已弹出兑换码输入框">
+              <div class="ic soft">🔑</div>
+              <div class="mt">
+                <div class="tt">输入兑换码</div>
+                <div class="dd">使用兑换码直接解锁模板</div>
+              </div>
+              <div class="btn">输入</div>
+            </div>
+            <div class="opt" data-sel="toast" data-toast="已跳转 邀请有礼页">
+              <div class="ic soft">✈</div>
+              <div class="mt">
+                <div class="tt">分享给好友</div>
+                <div class="dd">邀请好友赚积分 / 兑换模板</div>
+              </div>
+              <div class="btn">去邀请</div>
+            </div>
+          </div>
+
+          <div class="note">🔓 解锁后永久使用</div>
+        </div>
+
+        <!-- 成功态（预览） -->
+        <div class="success" id="success">
+          <div class="ring">✓</div>
+          <div class="t">解锁成功</div>
+          <div class="s">晴空田园少女人像已永久解锁</div>
+          <button class="bigbtn" style="margin-top:26px">开始使用</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 确认解锁弹层 -->
+  <div class="sheet-back" id="sheetBack">
+    <div class="sheet">
+      <h3>积分解锁</h3>
+      <div class="price-big">68 <small>积分</small></div>
+      <div class="price-sub">消耗 68 积分，永久解锁该模板</div>
+      <div class="rows">
+        <div class="half ghost" data-close>取消</div>
+        <div class="half primary" data-unlock>确认解锁</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $=s=>document.querySelector(s);
+    // 关闭导航
+    document.querySelector('.nav .close').addEventListener('click',()=>{location.href='about:blank'});
+    // 次级选项点击 → 提示
+    document.querySelectorAll('[data-sel="toast"]').forEach(el=>{
+      el.addEventListener('click',e=>{
+        if(e.target.closest('.btn')&&el.dataset.sel==='toast')return;
+        toast(el.dataset.toast||'');
+      });
+    });
+    // 解锁按钮 → 打开弹层
+    document.querySelectorAll('[data-sel="sheet"]').forEach(el=>{
+      el.addEventListener('click',e=>{e.stopPropagation();$('#sheetBack').style.display='flex';});
+    });
+    // 弹层取消
+    document.querySelectorAll('[data-close]').forEach(el=>el.addEventListener('click',()=>{$('#sheetBack').style.display='none';}));
+    $('#sheetBack').addEventListener('click',e=>{if(e.target.id==='sheetBack')$('#sheetBack').style.display='none';});
+    // 确认解锁 → 成功态
+    document.querySelector('[data-unlock]').addEventListener('click',()=>{
+      $('#sheetBack').style.display='none';
+      $('#locked').style.display='none';
+      $('#success').style.display='block';
+    });
+    let tt;
+    function toast(msg){
+      chrome_tips=tt;clearTimeout(tt);
+      if(!document.getElementById('tt')){const d=document.createElement('div');d.id='tt';Object.assign(d.style,{position:'fixed',left:'50%',bottom:'30px',transform:'translateX(-50%)',background:'#4a4438',color:'#fff',padding:'10px 16px',borderRadius:'10px',fontSize:'13px',zIndex:30,boxShadow:'0 8px 20px rgba(0,0,0,.25)'});document.body.appendChild(d);}
+      const d=document.getElementById('tt');d.textContent=msg;tt=setTimeout(()=>d.remove(),1600);
+    }
+  </script>
+</body>
+</html>

@@ -16,6 +16,7 @@ import '../../../core/utils/image_cache.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/common/lumira_surface.dart';
+import '../../../shared/widgets/effects/pressable_recess.dart';
 import '../../../shared/widgets/effects/recessed_surface.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_scene_mock_data.dart';
@@ -565,6 +566,37 @@ class _TabPill extends ConsumerWidget {
   }
 }
 
+/// 品牌色 CTA 按钮：按压保持主色背景（仅加深 + 缩放），不切换为凹陷表面。
+/// 用于「去场景指南发现更多」「新建场景」等主操作，满足「主色 CTA 保持主色」。
+class _BrandCtaButton extends ConsumerStatefulWidget {
+  const _BrandCtaButton({required this.onTap, required this.child});
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  ConsumerState<_BrandCtaButton> createState() => _BrandCtaButtonState();
+}
+
+class _BrandCtaButtonState extends ConsumerState<_BrandCtaButton> {
+  @override
+  Widget build(BuildContext context) {
+    final tokens = ref.watch(appThemeProvider).tokens;
+    // 主色 CTA 新拟态内斜边：纯品牌色顶面 + 内斜边（亮上左/暗下右），
+    // 按压时反转斜边（暗上左/亮下右），1.5px 实线不发散，无外阴影避免悬浮感。
+    return PressableRecess(
+      onTap: widget.onTap,
+      borderRadius: 9999,
+      raisedFill: tokens.brand,
+      bevelLight: ThemeTokens.brandBevelLight(tokens),
+      bevelDark: ThemeTokens.brandBevelDark(tokens),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 /// 通用空状态
 class _EmptyState extends ConsumerWidget {
   const _EmptyState({
@@ -615,27 +647,14 @@ class _EmptyState extends ConsumerWidget {
           ),
           if (btnText != null && onBtnTap != null) ...[
             const SizedBox(height: 20),
-            GestureDetector(
-              onTap: onBtnTap,
-              behavior: HitTestBehavior.opaque,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [tokens.brand, tokens.brandDeep],
-                  ),
-                  borderRadius: BorderRadius.circular(9999),
-                ),
-                child: Text(
-                  btnText!,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: tokens.textInverse,
-                  ),
+            _BrandCtaButton(
+              onTap: onBtnTap!,
+              child: Text(
+                btnText!,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: tokens.textInverse,
                 ),
               ),
             ),
@@ -844,32 +863,24 @@ class _CustomTab extends ConsumerWidget {
             ),
           ],
           const SizedBox(height: 12),
-          // 新建场景按钮
-          GestureDetector(
+          // 新建场景按钮（主色 CTA：纯品牌色 + 品牌浮雕，按下同色内影凹陷）
+          _BrandCtaButton(
             onTap: onNew,
-            behavior: HitTestBehavior.opaque,
-            child: LumiraSurface(
-              padding: const EdgeInsets.all(16),
-              radius: 12,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.add,
-                    size: 18,
-                    color: tokens.brand,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.add, size: 18, color: tokens.textInverse),
+                const SizedBox(width: 6),
+                Text(
+                  '新建场景',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: tokens.textInverse,
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '新建场景',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: tokens.brand,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],

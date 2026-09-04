@@ -3,6 +3,8 @@
 // 今日灵感智能模板——语境 → 候选模板 的纯函数推荐链路。
 // 令牌体系与 inspiration_rules.dart 一致（slot / season / tempRange / weather）。
 // 匹配策略：规则表为主（取最高特异度单条），ambience 元数据命中者最高优先级。
+import 'dart:math';
+
 import 'inspiration_models.dart' show RecommendedTemplate;
 import 'inspiration_rules.dart';
 
@@ -159,11 +161,17 @@ class _Pooled {
 
 /// 推荐主函数（纯）：在候选里选出归属当前语境且最火的模板。
 /// 排序：ambience 命中 > 用户偏好类别命中 > 全站 use_shoot 热度（降序）。
+///
+/// [varietySeed] 可选多样性种子：
+/// - 为 null 时退化为确定性（取排序第一），保持旧行为/test 稳定；
+/// - 提供时（生产端用「日期」作种子）会在同优先级的前 N 个热门中随机抽签，
+///   使"今日灵感"每天不同、同一天保持稳定，避免连续几天推荐同一模板。
 /// 候选为空、或无任何语境命中（类别/风格/ambience 均不匹配）时返回 null。
 RecommendedTemplate? pickRecommendedTemplate({
   required List<Candidate> candidates,
   required InspirationContext context,
   required String preferredCategory,
+  int? varietySeed,
 }) {
   if (candidates.isEmpty) return null;
   final fit = resolveContextFit(context);
@@ -179,6 +187,8 @@ RecommendedTemplate? pickRecommendedTemplate({
     if (amb || ruleHit) pooled.add(_Pooled(c, amb));
   }
   if (pooled.isEmpty) return null;
+
+  // 先按优先级分组排序：ambience 命中 > 用户偏好类别 > 热度（降序）
   pooled.sort((a, b) {
     final ambCmp = (b.amb ? 1 : 0).compareTo(a.amb ? 1 : 0);
     if (ambCmp != 0) return ambCmp;
@@ -188,12 +198,22 @@ RecommendedTemplate? pickRecommendedTemplate({
     if (catCmp != 0) return catCmp;
     return b.c.popularity.compareTo(a.c.popularity);
   });
-  final best = pooled.first.c;
-  return RecommendedTemplate(
-    id: best.id,
-    name: best.name,
-    category: best.category,
-    cover: best.cover,
-    coverData: best.coverData,
-  );
+
+  // 无多样性种子时取排序第一（确定性，保持旧行为）
+  if (varietySeed == null) return _toRec(pooled.first.c);
+
+  // 同优先级的前 N 个热门中随机抽签：保证仍在热门/相关池内，又能跨日变化
+  const topN = 3;
+  final pickCount = pooled.length < topN ? pooled.length : topN;
+  if (pickCount <= 1) return _toRec(pooled.first.c);
+  final idx = Random(varietySeed).nextInt(pickCount);
+  return _toRec(pooled[idx].c);
 }
+
+RecommendedTemplate _toRec(Candidate c) => RecommendedTemplate(
+      id: c.id,
+      name: c.name,
+      category: c.category,
+      cover: c.cover,
+      coverData: c.coverData,
+    );

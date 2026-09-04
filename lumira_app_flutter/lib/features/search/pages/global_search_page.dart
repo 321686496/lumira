@@ -16,11 +16,13 @@ import '../../../shared/searchengine/paged_results_controller.dart';
 import '../../../shared/searchengine/search_filters.dart';
 import '../../../shared/searchengine/search_scope.dart';
 import '../../../shared/searchengine/search_store.dart';
+import '../../../shared/widgets/effects/pressable_recess.dart';
 import '../../../shared/widgets/effects/recessed_surface.dart';
 import '../../../shared/widgets/lumira/lumira.dart' show LumiraIconButton;
 import '../../academy/data/academy_content.dart';
 import '../../academy/data/academy_models.dart';
 import '../../academy/search/academy_search_service.dart';
+import '../../capture/data/scene_presets_data.dart';
 import '../../scenes/search/scene_search_service.dart';
 import '../../templates/data/remote_template_dto.dart';
 import '../../templates/data/remote_templates_providers.dart';
@@ -502,6 +504,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
   }
 
   Widget _buildScopeBar(ThemeTokens tokens) {
+    final isNeu = ref.watch(appThemeProvider).style == UIStyle.neumorphic;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 2, 20, 10),
       child: Row(
@@ -509,36 +512,71 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
           for (final s in SearchScope.values)
             Padding(
               padding: const EdgeInsets.only(right: 10),
-              child: GestureDetector(
-                onTap: () => _switchScope(s),
-                behavior: HitTestBehavior.opaque,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOut,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: _scope == s ? tokens.brand : tokens.surfaceAlt,
-                    borderRadius: BorderRadius.circular(999),
-                    border: _scope == s
-                        ? null
-                        : Border.all(color: tokens.divider, width: 1),
-                  ),
-                  child: Text(
-                    s.label,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight:
-                          _scope == s ? FontWeight.w600 : FontWeight.w500,
-                      color: _scope == s
-                          ? tokens.textInverse
-                          : tokens.textSecondary,
-                    ),
-                  ),
-                ),
-              ),
+              child: _scopePill(tokens, s, isNeu),
             ),
         ],
+      ),
+    );
+  }
+
+  /// 类型选择 tab。新拟态下选中态用凹陷表面（上/左暗、下/右亮、中心平底），
+  /// 未选中态用「常态浮雕凸起 + 按下凹陷」（[PressableRecess]），与筛选 chip 的
+  /// 凹陷/凸起语义一致；其余 UI 风格沿用品牌色背景选中态。
+  Widget _scopePill(ThemeTokens tokens, SearchScope s, bool isNeu) {
+    final selected = _scope == s;
+    final constPadding = const EdgeInsets.symmetric(horizontal: 16, vertical: 7);
+    final child = Padding(
+      padding: constPadding,
+      child: Text(
+        s.label,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          color: selected ? tokens.textPrimary : tokens.textSecondary,
+        ),
+      ),
+    );
+    if (isNeu && selected) {
+      return RecessedSurface(
+        tokens: tokens,
+        borderRadius: 999,
+        depth: 0.7,
+        rimFraction: 0.34,
+        child: child,
+      );
+    }
+    if (isNeu) {
+      // 未选中态（新拟态）：常态浮雕凸起胶囊，按下凹陷
+      return PressableRecess(
+        onTap: () => _switchScope(s),
+        borderRadius: 999,
+        raisedFill: tokens.surface,
+        raisedShadow: tokens.shadowConvexSubtle,
+        child: child,
+      );
+    }
+    return GestureDetector(
+      onTap: () => _switchScope(s),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: constPadding,
+        decoration: BoxDecoration(
+          color: selected ? tokens.brand : tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(999),
+          border: selected
+              ? null
+              : Border.all(color: tokens.divider, width: 1),
+        ),
+        child: Text(
+          s.label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            color: selected ? tokens.textInverse : tokens.textSecondary,
+          ),
+        ),
       ),
     );
   }
@@ -672,9 +710,16 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       if (s.style.isEmpty || !seenStyles.add(s.style)) continue;
       final rep = _latestSceneForStyle(s.style);
       if (rep == null) continue;
-      final cover = rep.coverUrl.isNotEmpty
-          ? rep.coverUrl
-          : (rep.exampleImages.isNotEmpty ? rep.exampleImages.first : '');
+      // 封面选取：自定义场景优先自己的 coverUrl；内置预设场景优先本地打包封面
+      // （ScenePresetsData.localCoverOf，稳定离线显示，避免 picsum 网络图加载失败导致无封面）；
+      // 兜底再回退到 exampleImages 首图。
+      String cover = rep.coverUrl;
+      if (cover.isEmpty) {
+        final local = ScenePresetsData.localCoverOf(rep.id);
+        cover = local.isNotEmpty
+            ? local
+            : (rep.exampleImages.isNotEmpty ? rep.exampleImages.first : '');
+      }
       items.add(SearchRecommendItem(
         scope: SearchScope.scene,
         keyword: rep.name,

@@ -16,6 +16,7 @@ import '../../../core/utils/safe_temp_dir.dart';
 import '../../profile/providers/collection_providers.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../../shared/widgets/cards/neu_card.dart';
 import '../data/gallery_models.dart';
 import '../data/name_resolver.dart';
 import '../widgets/photo_cell.dart';
@@ -45,6 +46,12 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
   bool _isMultiSelectMode = false;
   final Set<String> _selectedIds = <String>{};
 
+  // 相册分组视图使用单一 CustomScrollView，该控制器供滑动多选「到底自动滚动」使用。
+  final ScrollController _albumScrollController = ScrollController();
+  // 供分区网格单元格长按进入多选时调用 beginSweep 定位滑动起点。
+  final GlobalKey<SweepAlbumGridState> _albumGridKey =
+      GlobalKey<SweepAlbumGridState>();
+
   // 搜索状态
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
@@ -52,6 +59,7 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _albumScrollController.dispose();
     super.dispose();
   }
 
@@ -584,35 +592,52 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
         // 长按多选提示 / 多选操作栏（搜索时隐藏）
         if (!_isSearching)
           _isMultiSelectMode
-              ? Padding(
-                  padding: const EdgeInsets.only(top: 12, bottom: 12),
+              ? NeuCard(
+                  key: const ValueKey('multiselect_action_bar'),
+                  margin: const EdgeInsets.only(top: 12, bottom: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      LumiraButton(
-                        variant: ButtonVariant.ghost,
+                      _MultiActionIcon(
+                        tokens: tokens,
+                        icon: Icons.close,
                         onPressed: () {
                           setState(() {
                             _isMultiSelectMode = false;
                             _selectedIds.clear();
                           });
                         },
-                        child: const Text('取消'),
                       ),
-                      LumiraButton(
-                        variant: ButtonVariant.ghost,
-                        onPressed: _selectedIds.isEmpty ? null : _deleteSelected,
-                        child: Text('删除 (${_selectedIds.length})'),
+                      _MultiActionIcon(
+                        tokens: tokens,
+                        icon: Icons.delete_outline,
+                        color: tokens.danger,
+                        badgeText: _selectedIds.isEmpty
+                            ? null
+                            : '${_selectedIds.length}',
+                        onPressed:
+                            _selectedIds.isEmpty ? null : _deleteSelected,
                       ),
-                      LumiraButton(
-                        variant: ButtonVariant.ghost,
-                        onPressed: _selectedIds.isEmpty ? null : _saveSelectedToAlbum,
-                        child: Text('保存到相册 (${_selectedIds.length})'),
+                      _MultiActionIcon(
+                        tokens: tokens,
+                        icon: Icons.save_alt,
+                        badgeText: _selectedIds.isEmpty
+                            ? null
+                            : '${_selectedIds.length}',
+                        onPressed: _selectedIds.isEmpty
+                            ? null
+                            : _saveSelectedToAlbum,
                       ),
-                      LumiraButton(
-                        variant: ButtonVariant.ghost,
-                        onPressed: _selectedIds.isEmpty ? null : _addToCollection,
-                        child: const Text('加入精选集'),
+                      _MultiActionIcon(
+                        tokens: tokens,
+                        icon: Icons.collections_bookmark_outlined,
+                        badgeText: _selectedIds.isEmpty
+                            ? null
+                            : '${_selectedIds.length}',
+                        onPressed:
+                            _selectedIds.isEmpty ? null : _addToCollection,
                       ),
                     ],
                   ),
@@ -675,77 +700,112 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
         itemBuilder: (_, i) => _buildPhotoCell(tokens, photoViews, i),
       );
     }
-    // 时间分组展示：杂志式翻阅
+    // 时间分组展示：单一 CustomScrollView + 统一滑动驱动
+    // （进入多选态后一按下即选、可跨分区连续滑动、滑到底部自动滚动继续选择）。
     final sectionKeys = grouped.keys.toList();
     final sectionViews = sectionKeys
         .map((k) => grouped[k]!.map(GalleryPhoto.fromRecord).toList())
         .toList();
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
-      itemCount: sectionKeys.length,
-      itemBuilder: (_, sectionIndex) {
-        final key = sectionKeys[sectionIndex];
-        final sectionPhotos = sectionViews[sectionIndex];
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    final flatPhotos = sectionViews.expand((l) => l).toList();
+    final sections = <SweepAlbumSection>[
+      for (var s = 0; s < sectionKeys.length; s++)
+        SweepAlbumSection(
+          id: sectionKeys[s],
+          photoCount: sectionViews[s].length,
+        ),
+    ];
+
+    Widget buildCell(BuildContext context, int flatIndex, bool isSelected) {
+      final photo = flatPhotos[flatIndex];
+      return PhotoCell(
+        photo: photo,
+        isSelected: isSelected,
+        isMultiSelectMode: _isMultiSelectMode,
+        // 多选态下格子去手势，完全交由 SweepAlbumGrid 的裸 Listener 按下即选；
+        // 非多选态保留单击看图 + 快速长按进入多选并定位滑动起点。
+        onTap: _isMultiSelectMode ? null : () => _openDetail(photo),
+        onLongPress: _isMultiSelectMode
+            ? null
+            : () {
+                setState(() => _isMultiSelectMode = true);
+                _albumGridKey.currentState?.beginSweep(flatIndex);
+              },
+      );
+    }
+
+    Widget buildHeader(BuildContext context, int sectionIndex) {
+      final key = sectionKeys[sectionIndex];
+      final photos = sectionViews[sectionIndex];
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // 组头
-            Padding(
-              padding: const EdgeInsets.only(top: 12, bottom: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    key,
-                    style: TextStyle(
-                      fontFamily: 'Noto Serif SC',
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
-                    ),
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // 多选模式下一键全选/取消全选
-                      if (_isMultiSelectMode)
-                        _SectionSelectAllButton(
-                          tokens: tokens,
-                          allSelected: sectionPhotos.isNotEmpty &&
-                              sectionPhotos
-                                  .every((p) => _selectedIds.contains(p.id)),
-                          onTap: () {
-                            setState(() {
-                              final allSelected = sectionPhotos
-                                  .every((p) => _selectedIds.contains(p.id));
-                              final ids =
-                                  sectionPhotos.map((p) => p.id).toList();
-                              if (allSelected) {
-                                _selectedIds.removeAll(ids);
-                              } else {
-                                _selectedIds.addAll(ids);
-                              }
-                            });
-                          },
-                        ),
-                      const SizedBox(width: 10),
-                      Text(
-                        '${sectionPhotos.length} 张',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: tokens.textTertiary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+            Text(
+              key,
+              style: TextStyle(
+                fontFamily: 'Noto Serif SC',
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
               ),
             ),
-            // 该组照片网格（支持长按滑动批量选，仅限本分区内连续）
-            _buildSectionGrid(tokens, sectionPhotos),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 多选模式下一键全选/取消全选
+                if (_isMultiSelectMode)
+                  _SectionSelectAllButton(
+                    tokens: tokens,
+                    allSelected: photos.isNotEmpty &&
+                        photos.every((p) => _selectedIds.contains(p.id)),
+                    onTap: () {
+                      setState(() {
+                        final allSelected =
+                            photos.every((p) => _selectedIds.contains(p.id));
+                        final ids = photos.map((p) => p.id).toList();
+                        if (allSelected) {
+                          _selectedIds.removeAll(ids);
+                        } else {
+                          _selectedIds.addAll(ids);
+                        }
+                      });
+                    },
+                  ),
+                const SizedBox(width: 10),
+                Text(
+                  '${photos.length} 张',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: tokens.textTertiary,
+                  ),
+                ),
+              ],
+            ),
           ],
-        );
-      },
+        ),
+      );
+    }
+
+    return SweepAlbumGrid(
+      key: _albumGridKey,
+      scrollController: _albumScrollController,
+      sections: sections,
+      idOf: (flat) => flatPhotos[flat].id,
+      itemBuilder: buildCell,
+      headerBuilder: buildHeader,
+      selectedIds: _selectedIds,
+      onSelectionChanged: (next) => setState(() {
+        _selectedIds
+          ..clear()
+          ..addAll(next);
+      }),
+      isMultiSelectMode: _isMultiSelectMode,
+      crossAxisCount: 3,
+      mainAxisSpacing: 6,
+      crossAxisSpacing: 6,
+      horizontalPadding: const EdgeInsets.symmetric(horizontal: 24),
+      bottomPadding: 100,
     );
   }
 
@@ -775,54 +835,6 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
           _isMultiSelectMode = true;
           _selectedIds.add(photo.id);
         });
-      },
-    );
-  }
-
-  /// 构建某一个时间分区的照片网格，支持长按滑动批量选（仅限本分区连续）。
-  Widget _buildSectionGrid(
-      ThemeTokens tokens, List<GalleryPhoto> photos) {
-    return SweepSelectGrid(
-      itemCount: photos.length,
-      idOf: (i) => photos[i].id,
-      selectedIds: _selectedIds,
-      onSelectionChanged: (next) => setState(() {
-        _selectedIds
-          ..clear()
-          ..addAll(next);
-      }),
-      crossAxisCount: 3,
-      mainAxisSpacing: 6,
-      crossAxisSpacing: 6,
-      padding: EdgeInsets.zero,
-      aspectRatio: 1,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemBuilder: (_, i, isSelected, startSweep) {
-        final photo = photos[i];
-        return PhotoCell(
-          key: ValueKey('photo_cell_$i'),
-          photo: photo,
-          isSelected: isSelected,
-          isMultiSelectMode: _isMultiSelectMode,
-          onTap: () {
-            if (_isMultiSelectMode) {
-              setState(() {
-                if (!_selectedIds.remove(photo.id)) {
-                  _selectedIds.add(photo.id);
-                }
-              });
-            } else {
-              _openDetail(photo);
-            }
-          },
-          onLongPress: () {
-            if (!_isMultiSelectMode) {
-              setState(() => _isMultiSelectMode = true);
-            }
-            startSweep();
-          },
-        );
       },
     );
   }
@@ -1361,4 +1373,76 @@ class _GalleryDerivedData {
   final List<SceneFilterPill> pills;
   final List<String> sectionKeys;
   final List<List<GalleryPhoto>> sectionViews;
+}
+
+/// 多选底部操作栏中的单个图标按钮：紧凑无溢出，适配主题；可选右上角数量角标。
+///
+/// 禁用态（[onPressed] 为 null）转为透明标准态，图标用 textTertiary 淡化，
+/// 视觉、间距、配色全部由 NeuCard + LumiraIconButton 随设置自适应，无硬编码。
+class _MultiActionIcon extends StatelessWidget {
+  const _MultiActionIcon({
+    required this.tokens,
+    required this.icon,
+    required this.onPressed,
+    this.color,
+    this.badgeText,
+  });
+
+  final ThemeTokens tokens;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  /// 图标颜色（删除用 danger 红）；为 null 时用默认 brandText
+  final Color? color;
+
+  /// 数量角标文案（如选中数量），为 null 不显示
+  final String? badgeText;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        LumiraIconButton(
+          icon: icon,
+          size: 22,
+          padding: const EdgeInsets.all(10),
+          variant: enabled
+              ? LumiraIconButtonVariant.filled
+              : LumiraIconButtonVariant.standard,
+          color: color,
+          onPressed: onPressed,
+        ),
+        if (badgeText != null && enabled)
+          Positioned(
+            top: -4,
+            right: -2,
+            child: Container(
+              constraints: const BoxConstraints(
+                minWidth: 18,
+                minHeight: 18,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: color ?? tokens.brand,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: tokens.surface, width: 1.5),
+              ),
+              child: Text(
+                badgeText!,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }

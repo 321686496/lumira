@@ -262,23 +262,65 @@ static void applyVignette(uint8_t* rgba, int w, int h, int strength) {
   }
 }
 
-// ── 颗粒（逐像素加性随机噪声，[B,G,R,A] 布局，原地修改）──
-// 使用线性同余伪随机（LCG）：每帧稳定、无重复形变，观感即胶片颗粒。
-static void applyGrain(uint8_t* rgba, int w, int h, int strength) {
-  if (strength <= 0) return;
-  double s = (double)strength / 100.0; if (s > 1.0) s = 1.0;
-  const double amp = s * 24.0; // 满强度 ±24/255
-  const size_t nPix = (size_t)w * (size_t)h;
-  uint32_t seed = 0x85EBCA6Bu ^ (uint32_t)nPix ^ ((uint32_t)w << 16) ^ (uint32_t)h;
-  for (size_t i = 0; i < nPix; ++i) {
+// ── 颗粒：预计算 128×128 白噪声 tile（每进程一次）+ 双线性 + 幅度随亮度缩放 ──
+// 消除旧实现两个问题：① ±24 均匀平噪（观感差 → 无胶片感）；② 逐像素 LCG（无法被
+// 预览 FragmentShader 复用，导致预览与成片颗粒不一致）。改为一次性固定种子的 128×128
+// tile 表，预览 shader 与成片共用同一张表 + 固定 offset → 三端颗粒语义一致且零逐帧开销。
+static const int kGrainTex = 128;
+static float g_grainTile[kGrainTex * kGrainTex];
+static bool g_grainInit = false;
+static void ensureGrainTile() {
+  if (g_grainInit) return;
+  g_grainInit = true;
+  uint32_t seed = 0x85EBCA6Bu; // 固定种子（与旧 LCG 同种子族，可复现）
+  for (int i = 0; i < kGrainTex * kGrainTex; ++i) {
     seed = seed * 1664525u + 1013904223u;
     const double rnd = (double)((seed >> 8) & 0xFFFFu) * (1.0 / 65535.0); // 0..1
-    const double off = (rnd * 2.0 - 1.0) * amp;
-    uint8_t* p = rgba + i * 4;
+    g_grainTile[i] = (float)(rnd * 2.0 - 1.0); // -1..1
+  }
+}
+
+// 灰阶 ≈ 1 像素细颗粒：uv 用 ox*invTex + 固定 offset（tile 周期性重复），双线性采样。
+static void applyGrain(uint8_t* rgba, int w, int h, int strength) {
+  if (strength <= 0) return;
+  ensureGrainTile();
+  double s = (double)strength / 100.0; if (s > 1.0) s = 1.0;
+  const double kFilm = 24.0; // 峰值幅度 ±24/255（与旧满强度一致）
+  const double invTex = 1.0 / (double)kGrainTex; // 1 texel/像素
+  const double uOff = 13.0 * invTex, vOff = 29.0 * invTex; // 每会话固定 offset
+  const size_t nPix = (size_t)w * (size_t)h;
+  for (size_t i = 0; i < nPix; ++i) {
+    const size_t oy = i / (size_t)w;
+    const size_t ox = i - oy * (size_t)w;
+    const uint8_t* p = rgba + i * 4;
+    // 布局 [B,G,R,A]：R=p[2], G=p[1], B=p[0]
+    const double luma = 0.299 * p[2] + 0.587 * p[1] + 0.114 * p[0]; // 0..255
+    const double ln = luma / 255.0;
+    double lw = (ln - 0.05) / (0.85 - 0.05);
+    if (lw < 0.0) lw = 0.0; else if (lw > 1.0) lw = 1.0;
+    const double lumaScale = 0.35 + 0.65 * (lw * lw * (3.0 - 2.0 * lw)); // mix(0.35,1.0,smoothstep)
+    const double amp = s * kFilm * lumaScale; // 幅度随亮度增大（胶片感）
+
+    double u = (double)ox * invTex + uOff;
+    double v = (double)oy * invTex + vOff;
+    u -= std::floor(u); v -= std::floor(v);
+    double xp = u * kGrainTex - 0.5; int x0 = (int)std::floor(xp); double wx = xp - x0;
+    double yp = v * kGrainTex - 0.5; int y0 = (int)std::floor(yp); double wy = yp - y0;
+    auto wrap = [](int x) { return ((x % kGrainTex) + kGrainTex) % kGrainTex; };
+    const int x1 = wrap(x0 + 1), y1 = wrap(y0 + 1);
+    x0 = wrap(x0); y0 = wrap(y0);
+    const double g00 = g_grainTile[(size_t)y0 * kGrainTex + x0];
+    const double g10 = g_grainTile[(size_t)y0 * kGrainTex + x1];
+    const double g01 = g_grainTile[(size_t)y1 * kGrainTex + x0];
+    const double g11 = g_grainTile[(size_t)y1 * kGrainTex + x1];
+    const double gval = g00 * (1 - wx) * (1 - wy) + g10 * wx * (1 - wy)
+                      + g01 * (1 - wx) * wy + g11 * wx * wy;
+    const double off = gval * amp; // [-1,1]*amp
+    uint8_t* o = rgba + i * 4;
     for (int c = 0; c < 3; c++) {
-      double v = p[c] + off;
-      if (v > 255.0) v = 255.0; else if (v < 0.0) v = 0.0;
-      p[c] = (uint8_t)llround(v);
+      double vv = p[c] + off;
+      if (vv > 255.0) vv = 255.0; else if (vv < 0.0) vv = 0.0;
+      o[c] = (uint8_t)llround(vv);
     }
   }
 }
@@ -389,19 +431,17 @@ static napi_value ProcessRgba(napi_env env, napi_callback_info info) {
   // （clarity 已折进色彩矩阵，无需单独 pass）；这样 OHOS 原生快路径与慢管线成片视觉一致。
   uint8_t* final = out;
   if (sharpen > 0) {
-    // 锐化强度完全跟随入参 sharpen（不额外放大增益）。死区 edgeThr 从原始 4.0 降到 1.0：
-    // 成片改为「整图 DCT 高质量解码 + 中心裁切」后，解码下调采样已经让边缘偏锐、局部像素
-    // 梯度变小，旧阈值 4.0 高于绝大多数局部差异 → 接近全像素落入死区，锐化几乎不触发，
-    // 表现为「调整锐化值成片无变化」。降到 1.0 让锐化重新咬合真实边缘，同时平坦区仍原样保留。
+    // 亮度域死区 Unsharp（与预览 FragmentShader 同一公式）：
+    //   luma = 0.299R+0.587G+0.114B；lumaBlur = 4 邻域均值；
+    //   diff = luma - lumaBlur；edge = smoothstep(1.0, 2.5, |diff|)；
+    //   amnt = a×(diff>thr ? diff-thr : diff<-thr ? diff+thr : 0)，a=clamp(sharpen/100,0,1.2)
+    // 亮度方向统一增益 → 色相不变、平坦区不放大颗粒；死区 1.0 让锐化重新咬合真实边缘。
     double a = (double)sharpen / 100.0;
-    if (a > 1.2) a = 1.2;
-    if (a < 0.0) a = 0.0;
-    const double edgeThr = 1.0;
+    if (a > 1.2) a = 1.2; if (a < 0.0) a = 0.0;
+    const double thr = 1.0;    // 死区下界（0-255 亮度差）
+    const double e0 = 1.0, e1v = 2.5; // 边缘门控 smoothstep 区间
     uint8_t* conv = (uint8_t*)malloc(outLen);
-    if (!conv) {
-      free(out);
-      return nullptr;
-    }
+    if (!conv) { free(out); return nullptr; }
     for (int oy = 0; oy < height; ++oy) {
       const int y0 = oy > 0 ? oy - 1 : oy;
       const int y1 = oy < height - 1 ? oy + 1 : oy;
@@ -409,21 +449,28 @@ static napi_value ProcessRgba(napi_env env, napi_callback_info info) {
       for (int ox = 0; ox < width; ++ox) {
         const int x0 = ox > 0 ? ox - 1 : ox;
         const int x1 = ox < width - 1 ? ox + 1 : ox;
-        const size_t ci = crow + ((size_t)ox << 2);
-        const size_t ui = ((size_t)y0 * (size_t)width + (size_t)ox) << 2;
+        const size_t ci  = crow + ((size_t)ox << 2);
+        const size_t ui  = ((size_t)y0 * (size_t)width + (size_t)ox) << 2;
         const size_t dic = ((size_t)y1 * (size_t)width + (size_t)ox) << 2;
-        const size_t li = ((size_t)oy * (size_t)width + (size_t)x0) << 2;
-        const size_t ri = ((size_t)oy * (size_t)width + (size_t)x1) << 2;
+        const size_t li  = ((size_t)oy * (size_t)width + (size_t)x0) << 2;
+        const size_t ri  = ((size_t)oy * (size_t)width + (size_t)x1) << 2;
+        // 布局 [B,G,R,A]：R=+2, G=+1, B=+0
+        const double c0 = 0.299 * out[ci + 2] + 0.587 * out[ci + 1] + 0.114 * out[ci + 0];
+        const double mn = (0.299 * out[ui + 2] + 0.587 * out[ui + 1] + 0.114 * out[ui + 0]
+                        + 0.299 * out[dic + 2] + 0.587 * out[dic + 1] + 0.114 * out[dic + 0]
+                        + 0.299 * out[li + 2] + 0.587 * out[li + 1] + 0.114 * out[li + 0]
+                        + 0.299 * out[ri + 2] + 0.587 * out[ri + 1] + 0.114 * out[ri + 0]) * 0.25;
+        const double diff = c0 - mn;
+        double amnt = 0.0;
+        if (diff > thr) amnt = a * (diff - thr);
+        else if (diff < -thr) amnt = a * (diff + thr);
+        double ad = std::fabs(diff);
+        double et = (ad - e0) / (e1v - e0);
+        if (et < 0.0) et = 0.0; else if (et > 1.0) et = 1.0;
+        const double edge = et * et * (3.0 - 2.0 * et); // 0..1
+        const double gain = amnt * edge;
         for (int ch = 0; ch < 3; ++ch) {
-          const double c0 = out[ci + ch];
-          const double mm = (out[ui + ch] + out[dic + ch] + out[li + ch] + out[ri + ch]) * 0.25;
-          const double diff = c0 - mm;
-          double v = c0;
-          if (diff > edgeThr) {
-            v = c0 + a * (diff - edgeThr);
-          } else if (diff < -edgeThr) {
-            v = c0 + a * (diff + edgeThr);
-          }
+          double v = out[ci + ch] + gain;
           if (v > 255) v = 255; else if (v < 0) v = 0;
           conv[ci + ch] = (uint8_t)llround(v);
         }

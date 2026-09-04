@@ -5,6 +5,7 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/searchengine/search_scope.dart';
 import '../../../shared/widgets/common/lumira_surface.dart';
+import '../../../shared/widgets/effects/pressable_recess.dart';
 import '../../templates/widgets/template_cover_image.dart';
 
 /// 历史搜索区块：词条 pill + 右上「清空」。
@@ -93,21 +94,31 @@ class SearchHotSection extends ConsumerWidget {
             runSpacing: 12,
             children: [
               for (var i = 0; i < keywords.length; i++)
-                GestureDetector(
+                PressableRecess(
                   onTap: () => onTap(keywords[i]),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('${i + 1}',
-                          style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: i < 3 ? tokens.brand : tokens.textTertiary)),
-                      const SizedBox(width: 8),
-                      Text(keywords[i],
-                          style:
-                              TextStyle(fontSize: 13, color: tokens.textPrimary)),
-                    ],
+                  borderRadius: 12,
+                  // 新拟态：未选中词条常态浮雕凸起，按下凹陷
+                  raisedFill: tokens.surface,
+                  raisedShadow: tokens.shadowConvexSubtle,
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('${i + 1}',
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: i < 3
+                                    ? tokens.brand
+                                    : tokens.textTertiary)),
+                        const SizedBox(width: 8),
+                        Text(keywords[i],
+                            style: TextStyle(
+                                fontSize: 13, color: tokens.textPrimary)),
+                      ],
+                    ),
                   ),
                 ),
             ],
@@ -373,7 +384,7 @@ class _RecommendCard extends StatelessWidget {
   }
 }
 
-class _KeywordPill extends StatelessWidget {
+class _KeywordPill extends ConsumerWidget {
   const _KeywordPill({
     required this.label,
     required this.tokens,
@@ -387,25 +398,37 @@ class _KeywordPill extends StatelessWidget {
   final VoidCallback onDelete;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.only(left: 14, right: 6, top: 7, bottom: 7),
-      decoration: BoxDecoration(
-        color: tokens.surfaceAlt,
-        borderRadius: BorderRadius.circular(9999),
-        border: Border.all(color: tokens.divider, width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          GestureDetector(onTap: onTap, child: Text(label,
-              style: TextStyle(fontSize: 12, color: tokens.textPrimary))),
-          const SizedBox(width: 6),
-          GestureDetector(
-            onTap: onDelete,
-            child: Icon(Icons.close, size: 12, color: tokens.textTertiary),
-          ),
-        ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeu = ref.watch(appThemeProvider).style == UIStyle.neumorphic;
+    // 整颗 pill 作为点击目标（提交搜索），按压时新拟态凹陷反馈；删除按钮单独保留。
+    // 新拟态下未选中词条常态浮雕凸起，故把节点本身背景交给 PressableRecess 的
+    // raisedFill 绘制，内层仅保留 padding + 文本（不再额外叠 surfaceAlt/边框）。
+    return PressableRecess(
+      onTap: onTap,
+      borderRadius: 24,
+      raisedFill: isNeu ? tokens.surface : null,
+      raisedShadow: tokens.shadowConvexSubtle,
+      child: Container(
+        padding: const EdgeInsets.only(left: 14, right: 6, top: 7, bottom: 7),
+        decoration: isNeu
+            ? null
+            : BoxDecoration(
+                color: tokens.surfaceAlt,
+                borderRadius: BorderRadius.circular(9999),
+                border: Border.all(color: tokens.divider, width: 1),
+              ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label,
+                style: TextStyle(fontSize: 12, color: tokens.textPrimary)),
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: onDelete,
+              child: Icon(Icons.close, size: 12, color: tokens.textTertiary),
+            ),
+          ],
+        ),
       ),
     );
   }

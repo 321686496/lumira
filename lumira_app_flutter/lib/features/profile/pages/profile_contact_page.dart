@@ -342,6 +342,8 @@ class _EmailCard extends StatelessWidget {
         const SizedBox(height: 14),
         LumiraButton(
           variant: ButtonVariant.primary,
+          // 主色 CTA：按下保持品牌色（加深+扁平化+缩小），不切凹陷表面
+          keepBrandOnPress: true,
           onPressed: onSendEmail,
           child: const Text('发送邮件'),
         ),

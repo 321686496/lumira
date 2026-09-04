@@ -35,6 +35,7 @@ class LumiraButton extends ConsumerStatefulWidget {
     this.radius,
     this.overlay = false,
     this.enableHoverScale = false,
+    this.keepBrandOnPress = false,
   });
 
   /// 按钮 variant，决定背景/前景/边框/阴影
@@ -59,6 +60,13 @@ class LumiraButton extends ConsumerStatefulWidget {
 
   /// 是否启用悬停/按压缩放反馈，默认 false
   final bool enableHoverScale;
+
+  /// 是否在按压时保持品牌色背景（品牌 CTA，默认 false）。
+  ///
+  /// 默认 false：新拟态下主/其他按钮按压时把外凸浮雕切换为凹陷表面（品牌色随之消失）。
+  /// 为 true 时：新拟态主色按钮按压仅「加深品牌色 + 扁平化 + 缩小」，不切换凹陷表面，
+  /// 满足「主色 CTA 保持主色」的诉求（如兑换码页「立即兑换」、场景管理「新建场景」）。
+  final bool keepBrandOnPress;
 
   @override
   ConsumerState<LumiraButton> createState() => _LumiraButtonState();
@@ -126,13 +134,31 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
-    final visual = appTheme.buttonVisual(widget.variant);
+    var visual = appTheme.buttonVisual(widget.variant);
+    final isNeu = appTheme.style == UIStyle.neumorphic;
 
     final radius = (widget.radius ?? appTheme.buttonRadius / 2);
 
+    // 品牌 CTA（keepBrandOnPress）新拟态：纯品牌色顶面 + 内斜边（亮上左/暗下右），
+    // 按压时反转斜边（暗上左/亮下右），颜色不变、不加深。1.5px 实线不发散，
+    // 替代外阴影避免异色按钮悬浮感。
+    if (isNeu && widget.keepBrandOnPress) {
+      visual = ButtonVisual(
+        background: tokens.brand,
+        foreground: tokens.textInverse,
+        border: Border(
+          top: BorderSide(color: ThemeTokens.brandBevelLight(tokens), width: 1.5),
+          left: BorderSide(color: ThemeTokens.brandBevelLight(tokens), width: 1.5),
+          bottom: BorderSide(color: ThemeTokens.brandBevelDark(tokens), width: 1.5),
+          right: BorderSide(color: ThemeTokens.brandBevelDark(tokens), width: 1.5),
+        ),
+        shadows: const [],
+      );
+    }
+
     // 悬浮/叠图形态：新拟态下用改良漂浮浮层视觉（半透明表面 + 细边 + 仅暗投影），
     // 覆盖画布上的双向浮雕，避免在图片/浮层上形成光晕脏边。
-    final effectiveVisual = (widget.overlay && appTheme.style == UIStyle.neumorphic)
+    final effectiveVisual = (widget.overlay && isNeu)
         ? _overlayVisual(tokens, radius, visual)
         : visual;
 
@@ -149,16 +175,23 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
       foreground = tokens.textTertiary;
       shadows = const [];
       gradient = null;
-    } else if (appTheme.style == UIStyle.neumorphic &&
-        _pressed &&
-        !widget.overlay) {
-      // 新拟态按压态：将外凸浮雕切换为凹陷表面，
-      // 模拟手指按下去被压进画布的物理反馈。overlay（叠图）场景保持
-      // 仅按压缩放，避免在图片上形成脏边（Neumorphism §4）。
-      // 凹陷用 RecessedSurface 沿四边叠加明/暗（上/左暗、下/右亮、中心平底）。
+    } else if (isNeu && _pressed && !widget.overlay) {
+      // 新拟态按压态：将外凸浮雕切换为凹陷表面（上/左暗、下/右亮、中心平底），
+      // 模拟手指按下去被压进画布的物理反馈。overlay（叠图）场景保持仅按压缩放，
+      // 避免在图片上形成脏边（Neumorphism §4）。
+      if (widget.keepBrandOnPress) {
+        // 品牌 CTA 按压：反转内斜边（暗上左 / 亮下右），颜色不变、不加深。
+        border = Border(
+          top: BorderSide(color: ThemeTokens.brandBevelDark(tokens), width: 1.5),
+          left: BorderSide(color: ThemeTokens.brandBevelDark(tokens), width: 1.5),
+          bottom: BorderSide(color: ThemeTokens.brandBevelLight(tokens), width: 1.5),
+          right: BorderSide(color: ThemeTokens.brandBevelLight(tokens), width: 1.5),
+        );
+      } else {
+        useRecessedSurface = true;
+      }
       gradient = null;
       shadows = const [];
-      useRecessedSurface = true;
     } else if (widget.variant == ButtonVariant.ghost && _pressed) {
       // ghost 按下时加 brandSubtle 背景
       background = tokens.brandSubtle;

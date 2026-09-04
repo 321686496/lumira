@@ -14,6 +14,7 @@ import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/safe_share.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/effects/pressable_recess.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../providers/collection_providers.dart';
@@ -145,17 +146,18 @@ class _CreateButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => GoRouter.of(context).push(RouteNames.profileCollectionEdit),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        margin: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: tokens.brand,
-          borderRadius: BorderRadius.circular(9999),
-        ),
-        child: Center(
+    // 品牌 CTA 新拟态内斜边：纯品牌色顶面 + 内斜边（亮上左/暗下右），
+    // 按压时反转斜边（暗上左/亮下右），1.5px 实线不发散，无外阴影避免悬浮感。
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: PressableRecess(
+        onTap: () => GoRouter.of(context).push(RouteNames.profileCollectionEdit),
+        borderRadius: 9999,
+        raisedFill: tokens.brand,
+        bevelLight: ThemeTokens.brandBevelLight(tokens),
+        bevelDark: ThemeTokens.brandBevelDark(tokens),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: Text(
             '+ 新建',
             style: TextStyle(

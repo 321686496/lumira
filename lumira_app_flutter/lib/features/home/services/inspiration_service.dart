@@ -169,7 +169,9 @@ class InspirationService {
         break;
     }
     final lightHint = '${seasonOf(now.month)} · $slotHint';
-    final dateText = '${now.month}月${now.day}日 星期$weekday · $lightHint';
+    final hh = now.hour.toString().padLeft(2, '0');
+    final mm = now.minute.toString().padLeft(2, '0');
+    final dateText = '${now.month}月${now.day}日 星期$weekday $hh:$mm · $lightHint';
 
     // 主导 category
     String? topCat;
@@ -325,6 +327,12 @@ class InspirationService {
       candidates: candidates,
       context: context,
       preferredCategory: prefCat,
+      // 以「本地日期」作多样性种子：同一天固定，跨日变化，避免连续几天推同一模板。
+      varietySeed: _daySeed(DateTime.now()),
     );
   }
+
+  /// 用本地日期构造整数种子（YYYYMMDD），保证每天稳定、每天不同。
+  int _daySeed(DateTime now) =>
+      now.year * 10000 + now.month * 100 + now.day;
 }

@@ -211,6 +211,8 @@ class _CodeCard extends StatelessWidget {
           const SizedBox(height: 14),
           LumiraButton(
             variant: ButtonVariant.primary,
+            // 品牌 CTA：按压保持主色背景（新拟态下不切换为凹陷表面）
+            keepBrandOnPress: true,
             onPressed: submitting ? null : onSubmit,
             child: Text(submitting ? '兑换中...' : '立即兑换'),
           ),

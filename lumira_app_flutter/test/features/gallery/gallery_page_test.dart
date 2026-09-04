@@ -185,11 +185,11 @@ void main() {
     expect(find.text('2 张照片'), findsOneWidget);
 
     // 长按第一张进入多选
-    await tester.longPress(find.byKey(const ValueKey('photo_cell_0')));
+    await tester.longPress(find.byType(PhotoCell).first);
     await tester.pumpAndSettle();
 
-    // 点击多选操作栏的删除按钮
-    await tester.tap(find.text('删除 (1)'));
+    // 点击多选操作栏的删除图标按钮
+    await tester.tap(find.byIcon(Icons.delete_outline));
     await tester.pumpAndSettle();
 
     // 删除后列表应立即刷新为 1 张，无需重新进页
@@ -236,7 +236,15 @@ void main() {
     await tester.longPress(find.byType(PhotoCell));
     await tester.pumpAndSettle();
 
-    expect(find.text('加入精选集'), findsOneWidget);
+    // 多选态下底部操作栏含「加入精选集」图标入口
+    expect(
+      find.byKey(const ValueKey('multiselect_action_bar')),
+      findsOneWidget,
+    );
+    expect(
+      find.byIcon(Icons.collections_bookmark_outlined),
+      findsOneWidget,
+    );
   });
 }
 

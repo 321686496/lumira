@@ -486,6 +486,12 @@ class _CachedNetworkImageState extends State<CachedNetworkImage> {
 
         int? cw = widget.cacheWidth;
         int? ch = widget.cacheHeight;
+        // 性能(Forced fix): 父级约束为「无限」时对应边长算不出，若不兜底会按
+        // 原图全尺寸解码（后端封面可达 4000px），OHOS 软件解码下是解码突刺来源。
+        // 以「屏幕宽度×DPR」为目标上限兜底：图片不可能显示超过一屏宽，
+        // 既避免全尺寸解码，也不会低于实际渲染尺寸导致发虚。
+        final cappedScreen =
+            (MediaQuery.of(context).size.width * dpr).round().clamp(1, 4096);
         if (cw == null && ch == null) {
           // 只传「较大物理边长」一个维度做解码降采样，另一维度由引擎按原图宽高比推导。
           // 若同时传 cacheWidth+cacheHeight，Flutter 会把解码图强制拉伸成容器比例——
@@ -502,10 +508,11 @@ class _CachedNetworkImageState extends State<CachedNetworkImage> {
           } else {
             ch = hPx;
           }
+          if (cw == null && ch == null) cw = cappedScreen;
         } else if (cw == null) {
-          cw ??= wPx;
+          cw = wPx ?? cappedScreen;
         } else {
-          ch ??= hPx;
+          ch = hPx ?? cappedScreen;
         }
 
         Widget image = Image.memory(

@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart' as pp;
 
-import 'dart_photo_pipeline.dart' show applyLegStretchImg;
+import 'dart_photo_pipeline.dart' show applyLegStretchImg, applyPerPixelEffectsImg;
 import 'skin_smooth_shader.dart';
 import 'skin_smoother.dart';
 import '../data/capture_state.dart';
@@ -165,19 +165,31 @@ class PhotoPostProcessor {
       );
 
       if (hasVignette) {
+        // 统一解析暗角 A.3（与 OHOS C++ / iOS 预览同一公式）：
+        //   dn = 径向归一距离（中心 0、对角 ~1）；factor = 1 − s·smoothstep(0.45,1.0,dn)，s=vignette/100。
+        // 用半透明黑 source-over 等效乘法（黑色 src → out = dst·(1−alpha)），alpha = s·smoothstep(0.45,1.0,dn)，
+        // 在 [0.45,1.0] 上分段线性采样 smoothstep 逼近解析曲线 → 预览与成片暗角逐像素一致、中心不变边缘渐变。
+        final double s = params.vignette / 100.0;
+        const int kSeg = 9;
+        final stops = List<double>.filled(kSeg, 0);
+        final colors = List<ui.Color>.filled(kSeg, const ui.Color(0x00000000));
+        for (var i = 0; i < kSeg; i++) {
+          final t = 0.45 + (1.0 - 0.45) * i / (kSeg - 1);
+          stops[i] = t;
+          var u = (t - 0.45) / (1.0 - 0.45);
+          final e = u * u * (3.0 - 2.0 * u); // smoothstep
+          final alpha = (s * e).clamp(0.0, 1.0).toDouble();
+          colors[i] = ui.Color.fromRGBO(0, 0, 0, alpha);
+        }
         final centerX = outW / 2.0;
         final centerY = outH / 2.0;
         final radius = math.sqrt(centerX * centerX + centerY * centerY);
-        final vignetteAlpha = params.vignette / 100.0 * 0.5;
         final vignettePaint = ui.Paint()
           ..shader = ui.Gradient.radial(
             ui.Offset(centerX, centerY),
             radius,
-            [
-              const ui.Color(0x00000000),
-              ui.Color.fromRGBO(0, 0, 0, vignetteAlpha),
-            ],
-            [0.5, 1.0],
+            colors,
+            stops,
             ui.TileMode.clamp,
           );
         canvas.drawRect(
@@ -407,41 +419,13 @@ class PhotoPostProcessor {
       order: img.ChannelOrder.rgba,
     );
 
-    if (sharpen > 0) {
-      final a = (sharpen / 100.0).clamp(0.0, 1.0);
-      img.convolution(
-        imgImage,
-        filter: [0, -a, 0, -a, 1 + 4 * a, -a, 0, -a, 0],
-        div: 1.0,
-        amount: 1.0,
-      );
-    }
-
-    if (clarity != null && clarity != 0) {
-      final amount = (clarity.abs() / 100.0).clamp(0.0, 1.0) * 0.6;
-      final sign = clarity > 0 ? 1.0 : -1.0;
-      final blurred = img.gaussianBlur(img.Image.from(imgImage), radius: 3);
-      for (final p in imgImage) {
-        final bp = blurred.getPixel(p.x, p.y);
-        p
-          ..r = (p.r + (p.r - bp.r) * sign * amount).clamp(0, 255)
-          ..g = (p.g + (p.g - bp.g) * sign * amount).clamp(0, 255)
-          ..b = (p.b + (p.b - bp.b) * sign * amount).clamp(0, 255);
-      }
-    }
-
-    if (grain > 0) {
-      final intensity = (grain / 100.0).clamp(0.0, 1.0) * 0.25;
-      const maxOffset = 64.0;
-      final random = math.Random(42);
-      for (final p in imgImage) {
-        final noise = (random.nextDouble() * 2 - 1) * intensity * maxOffset;
-        p
-          ..r = (p.r + noise).clamp(0, 255)
-          ..g = (p.g + noise).clamp(0, 255)
-          ..b = (p.b + noise).clamp(0, 255);
-      }
-    }
+    // 复用统一逐像素管线（锐化亮度死区 + clarity + 颗粒 tile），与 isolate 慢管线同源。
+    applyPerPixelEffectsImg(
+      imgImage,
+      sharpen: sharpen,
+      clarity: clarity,
+      grain: grain,
+    );
 
     final outBytes = imgImage.getBytes(order: img.ChannelOrder.rgba);
     final buffer = await ui.ImmutableBuffer.fromUint8List(outBytes);

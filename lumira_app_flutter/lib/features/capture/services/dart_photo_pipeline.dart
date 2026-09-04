@@ -636,21 +636,66 @@ img.Image applyColorMatrixImg(img.Image image, List<double> m) {
 
 /// Sharpen + Clarity + Grain 逐像素效果（公共方法，供 isolate 后处理复用）。
 /// 从 PhotoPostProcessor._applyPerPixelEffects 移植，去掉 ui.Image ↔ img.Image 转换。
+///
+/// 统一算法规格（与 OHOS C++ / 预览 FragmentShader 同源）：
+/// - 锐化：亮度域死区 Unsharp（lumaBlur=4 邻域均值，死区 thr=1，edge=smoothstep(1,2.5))，
+///   仅亮度方向增益 → 色相不变、平坦区不放大颗粒、避免 halo。
+/// - 颗粒：预置 128×128 tile + 双线性 + 幅度随亮度（阴影弱、高光强，胶片感），
+///   固定 offset (13,29) → 与预览/水印/成片一致。
 void applyPerPixelEffectsImg(
   img.Image image, {
   required int sharpen,
   required double? clarity,
   required int grain,
 }) {
-  // Sharpen（卷积核）
+  // Sharpen（亮度域死区 Unsharp）
   if (sharpen > 0) {
-    final a = (sharpen / 100.0).clamp(0.0, 1.0);
-    img.convolution(
-      image,
-      filter: [0, -a, 0, -a, 1 + 4 * a, -a, 0, -a, 0],
-      div: 1.0,
-      amount: 1.0,
-    );
+    final double a = (sharpen / 100.0).clamp(0.0, 1.2).toDouble();
+    const thr = 1.0; // 死区下界（0-255 亮度差）
+    const e0 = 1.0, e1v = 2.5;
+    final w = image.width, h = image.height;
+    final luma = Float64List(w * h);
+    final lumaBlur = Float64List(w * h);
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        final p = image.getPixel(x, y);
+        luma[y * w + x] = 0.299 * p.r + 0.587 * p.g + 0.114 * p.b;
+      }
+    }
+    for (var y = 0; y < h; y++) {
+      final ym0 = y > 0 ? y - 1 : y;
+      final yp1 = y < h - 1 ? y + 1 : y;
+      for (var x = 0; x < w; x++) {
+        final xm0 = x > 0 ? x - 1 : x;
+        final xp1 = x < w - 1 ? x + 1 : x;
+        final idx = y * w + x;
+        lumaBlur[idx] =
+            (luma[ym0 * w + x] + luma[yp1 * w + x] +
+                luma[y * w + xm0] + luma[y * w + xp1]) *
+            0.25;
+      }
+    }
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        final idx = y * w + x;
+        final diff = luma[idx] - lumaBlur[idx];
+        double amnt = 0;
+        if (diff > thr) {
+          amnt = a * (diff - thr);
+        } else if (diff < -thr) {
+          amnt = a * (diff + thr);
+        }
+        var et = (diff.abs() - e0) / (e1v - e0);
+        et = et.clamp(0.0, 1.0).toDouble();
+        final edge = et * et * (3.0 - 2.0 * et); // 0..1
+        final gain = amnt * edge;
+        final p = image.getPixel(x, y);
+        p
+          ..r = (p.r + gain).clamp(0, 255)
+          ..g = (p.g + gain).clamp(0, 255)
+          ..b = (p.b + gain).clamp(0, 255);
+      }
+    }
   }
 
   // Clarity（中频对比度：原图 - 高斯模糊，再按 amount 混合）
@@ -667,19 +712,77 @@ void applyPerPixelEffectsImg(
     }
   }
 
-  // Grain（胶片颗粒噪声）
+  // Grain（预置 128×128 tile + 双线性 + 亮度驱动幅度）
   if (grain > 0) {
-    final intensity = (grain / 100.0).clamp(0.0, 1.0) * 0.25;
-    const maxOffset = 64.0;
-    final random = math.Random(42);
-    for (final p in image) {
-      final noise = (random.nextDouble() * 2 - 1) * intensity * maxOffset;
-      p
-        ..r = (p.r + noise).clamp(0, 255)
-        ..g = (p.g + noise).clamp(0, 255)
-        ..b = (p.b + noise).clamp(0, 255);
+    final tile = _ensureGrainTile();
+    final double s = (grain / 100.0).clamp(0.0, 1.0).toDouble();
+    const kFilm = 24.0; // 峰值幅度 ±24/255
+    const invTex = 1.0 / _kGrainTex;
+    final uOff = 13.0 * invTex, vOff = 29.0 * invTex;
+    final w = image.width, h = image.height;
+    for (var y = 0; y < h; y++) {
+      var v = (y * invTex) + vOff;
+      v -= v.floor();
+      final yp = v * _kGrainTex - 0.5;
+      final y0f = yp.floor();
+      var y0 = y0f;
+      final wy = yp - y0;
+      final y1 = _wrapMod(y0 + 1);
+      y0 = _wrapMod(y0);
+      for (var x = 0; x < w; x++) {
+        var u = (x * invTex) + uOff;
+        u -= u.floor();
+        final xp = u * _kGrainTex - 0.5;
+        final x0f = xp.floor();
+        var x0 = x0f;
+        final wx = xp - x0;
+        final x1 = _wrapMod(x0 + 1);
+        x0 = _wrapMod(x0);
+        final g00 = tile[y0 * _kGrainTex + x0];
+        final g10 = tile[y0 * _kGrainTex + x1];
+        final g01 = tile[y1 * _kGrainTex + x0];
+        final g11 = tile[y1 * _kGrainTex + x1];
+        final gval = g00 * (1 - wx) * (1 - wy) +
+            g10 * wx * (1 - wy) +
+            g01 * (1 - wx) * wy +
+            g11 * wx * wy;
+
+        final p = image.getPixel(x, y);
+        final luma = 0.299 * p.r + 0.587 * p.g + 0.114 * p.b;
+        final ln = luma / 255.0;
+        var lw = (ln - 0.05) / (0.85 - 0.05);
+        lw = lw.clamp(0.0, 1.0).toDouble();
+        final lumaScale = 0.35 + 0.65 * (lw * lw * (3.0 - 2.0 * lw));
+        final off = gval * s * kFilm * lumaScale;
+
+        p
+          ..r = (p.r + off).clamp(0, 255)
+          ..g = (p.g + off).clamp(0, 255)
+          ..b = (p.b + off).clamp(0, 255);
+      }
     }
   }
+}
+
+/// 预计算 128×128 白噪声 tile（进程一次，固定 LCG 种子族与 OHOS C++ 一致）。
+const int _kGrainTex = 128;
+List<double>? _grainTileCache;
+List<double> _ensureGrainTile() {
+  final cached = _grainTileCache;
+  if (cached != null) return cached;
+  final tile = List<double>.filled(_kGrainTex * _kGrainTex, 0);
+  var seed = 0x85EBCA6B; // 固定种子（与旧 LCG 同种子族，可复现）
+  for (var i = 0; i < _kGrainTex * _kGrainTex; ++i) {
+    seed = (seed * 1664525 + 1013904223) & 0xFFFFFFFF;
+    final rnd = ((seed >> 8) & 0xFFFF) / 65535.0; // 0..1
+    tile[i] = rnd * 2.0 - 1.0; // -1..1
+  }
+  _grainTileCache = tile;
+  return tile;
+}
+
+int _wrapMod(int x) {
+  return ((x % _kGrainTex) + _kGrainTex) % _kGrainTex;
 }
 
 /// 磨皮：边缘感知的皮肤平滑（仅 smoothStrength > 0 时调用）

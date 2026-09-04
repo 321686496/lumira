@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:camerawesome/camerawesome_plugin.dart'
     show CamerawesomePlugin;
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
+import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
@@ -20,6 +23,7 @@ import 'package:lumira_app_flutter/features/templates/widgets/pose_silhouette.da
 import '../data/capture_state.dart';
 import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
+import '../services/preview_beauty_shader.dart';
 
 /// 将 EditorFormPostProcess 转换为 domain PostProcess（用于 fromPostProcess）
 ///
@@ -215,14 +219,12 @@ class CameraPreview extends ConsumerWidget {
               post: effectivePost,
               child: cameraBody,
             )
-          // Android/OHOS：无逐帧像素通道，取景器仅实时呈现色彩矩阵（ColorFiltered）。
-          // 磨皮/锐化/颗粒/清晰度等需逐像素处理的效果，在 OHOS 上没有零读回的真实现，
-          // 暂不伪造预览（伪模糊既不是磨皮又拖帧），保持成片时才真实生效。
+          // Android/OHOS：传统上仅实时呈现色彩矩阵（ColorFiltered）。OHOS 已升级为
+          // 真视图层逐帧美颜（锐化/磨皮/暗角/颗粒 FragmentShader 单 pass，铺垫在色彩矩阵之上
+          // 的 ColorFiltered → capture → shader），见 _LiveBeautyLayer。
+          // 引擎不支持 shader 或仅色彩矩阵时，安全回退到纯 ColorFiltered（不伪造预览、不拖帧）。
           : applyFilter
-              ? ColorFiltered(
-                  colorFilter: fromPostProcess(effectivePost),
-                  child: cameraBody,
-                )
+              ? _buildOhosLivePreview(effectivePost, cameraBody)
               : cameraBody,
     );
 
@@ -825,6 +827,171 @@ class _PostEffectSyncState extends State<_PostEffectSync> {
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+/// OHOS 取景器实时预览包装：有空间效果且引擎支持 shader 时用 [_LiveBeautyLayer] 做
+/// 真视图层逐帧美颜；否则回退纯 ColorFiltered 色彩矩阵（保持既有观感，不伪造、不拖帧）。
+Widget _buildOhosLivePreview(PostProcess post, Widget child) {
+  if (Platform.operatingSystem == 'ohos' &&
+      PreviewBeautyShader.hasSpatialEffects(post)) {
+    return _LiveBeautyLayer(post: post, rawChild: child);
+  }
+  return ColorFiltered(colorFilter: fromPostProcess(post), child: child);
+}
+
+/// OHOS 真视图层逐帧美颜层。
+///
+/// 结构：RepaintBoundary 内叠 ColorFiltered 色彩矩阵 → Ticker 按 30fps 捕获
+/// （kPreviewScale 降采样）→ preview_beauty.frag 单 pass（锐化+颗粒+磨皮+暗角）→
+/// 覆盖显示。全程 GPU、异步、按帧忙丢弃；单帧超预算自动降采样，重试失败则停 Ticker
+/// 回退到纯 ColorFiltered —— 硬约束：取景器绝不卡顿/掉帧。
+class _LiveBeautyLayer extends StatefulWidget {
+  const _LiveBeautyLayer({required this.post, required this.rawChild});
+
+  final PostProcess post;
+  final Widget rawChild;
+
+  @override
+  State<_LiveBeautyLayer> createState() => _LiveBeautyLayerState();
+}
+
+class _LiveBeautyLayerState extends State<_LiveBeautyLayer>
+    with SingleTickerProviderStateMixin {
+  static const double _kMinScale = 0.20;
+  static const double _kMaxScale = 0.30;
+
+  final GlobalKey _repaintKey = GlobalKey();
+  Ticker? _ticker;
+  bool _ready = false;
+  bool _capturing = false;
+  double _scale = _kMaxScale;
+  ui.Image? _processed;
+  int _failCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await PreviewBeautyShader.ensureInit();
+    if (!mounted) {
+      debugPrint('[preview-beauty] _LiveBeautyLayer._init: unmounted, abort');
+      return;
+    }
+    if (PreviewBeautyShader.program == null) {
+      // program 加载失败（OHOS 引擎可能不支持 FragmentProgram / 资产未打包），
+      // 无 Ticker → 无空间效果，降级为纯 ColorFiltered（不伪造预览、不拖帧）。
+      debugPrint('[preview-beauty] _LiveBeautyLayer shader program==null, '
+          '降级纯色彩矩阵（空间效果不可见）');
+    }
+    setState(() => _ready = true);
+    if (PreviewBeautyShader.program != null) {
+      _ticker = createTicker(_onTick)..start();
+      debugPrint('[preview-beauty] _LiveBeautyLayer shader OK, ticker started '
+          '(noise=${PreviewBeautyShader.noiseTile == null ? 'NULL' : 'ok'})');
+    }
+  }
+
+  void _onTick(Duration elapsed) {
+    if (!_ready || _capturing) return;
+    final boundary = _repaintKey.currentContext?.findRenderObject();
+    if (boundary is! RenderRepaintBoundary) return;
+    if (!boundary.hasSize || boundary.debugNeedsPaint) return;
+    _capturing = true;
+    final sw = Stopwatch()..start();
+    boundary
+        .toImage(pixelRatio: _scale)
+        .then((img) async {
+          final out = await PreviewBeautyShader.render(img, post: widget.post);
+          img.dispose();
+          if (!mounted) {
+            out?.dispose();
+            return;
+          }
+          if (out == null) {
+            // render 失败（程序可用但渲染不可用）：累计 5 次停 Ticker。
+            debugPrint('[preview-beauty] render 返回 null（frame ${_failCount + 1}）');
+            if (++_failCount >= 5) _ticker?.stop();
+          } else {
+            _adaptScale(sw.elapsedMilliseconds);
+            setState(() {
+              _processed?.dispose();
+              _processed = out;
+            });
+            _failCount = 0;
+          }
+        })
+        .catchError((Object e) {
+          // 捕获/渲染失败：累计 5 次则停 Ticker，回退纯 ColorFiltered（避免空转拖帧）。
+          debugPrint('[preview-beauty] capture/render 异常: $e');
+          if (++_failCount >= 5) {
+            _ticker?.stop();
+          }
+        })
+        .whenComplete(() => _capturing = false);
+  }
+
+  /// 自适应保帧：单帧 Capture+Render 超 33ms 自动降采样；回落后提升。
+  void _adaptScale(int ms) {
+    if (ms > 33) {
+      _scale = math.max(_kMinScale, _scale - 0.05);
+    } else if (ms < 16 && _scale < _kMaxScale) {
+      _scale = math.min(_kMaxScale, _scale + 0.02);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.dispose();
+    _processed?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 注意：base（相机预览）必须保持可命中，否则取景器的单击对焦/长按锁定
+    // 等手势会被吞掉 —— 只有叠加的 shader 处理帧才忽略指针（避免挡手势）。
+    final base = ColorFiltered(
+      colorFilter: fromPostProcess(widget.post),
+      child: widget.rawChild,
+    );
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        RepaintBoundary(key: _repaintKey, child: base),
+        if (_processed != null)
+          IgnorePointer(
+            child: CustomPaint(
+              isComplex: true,
+              painter: _BeautyPainter(_processed!),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// 把 shader 处理后的帧拉伸铺满取景器。
+class _BeautyPainter extends CustomPainter {
+  _BeautyPainter(this.image);
+  final ui.Image image;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(
+          0, 0, image.width.toDouble(), image.height.toDouble()),
+      Offset.zero & size,
+      Paint()..filterQuality = FilterQuality.medium,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_BeautyPainter oldDelegate) =>
+      !identical(oldDelegate.image, image);
 }
 
 /// 判断 20 元素 ColorMatrix 是否为恒等（无任何色彩调整）。

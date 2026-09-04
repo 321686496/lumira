@@ -46,19 +46,25 @@ class DiaryPhotoCell extends StatelessWidget {
                 left: 6,
                 child: _MoodBadge(mood: photo.mood!, tokens: tokens),
               ),
-            // 场景/模板标签浮在照片底部（最多 2 个，纵向堆叠避免窄格溢出）
+            // 场景/模板标签浮在照片底部（最多 2 个，纵向堆叠）
+            // 用 right + Align 把标签最大宽度约束在照片宽度内，避免窄格溢出被裁剪
             if (photo.tags.isNotEmpty)
               Positioned(
                 left: 6,
+                right: 6,
                 bottom: 6,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (var i = 0; i < photo.tags.length && i < 2; i++) ...[
-                      if (i > 0) const SizedBox(height: 4),
-                      _TagBadge(tag: photo.tags[i], tokens: tokens),
+                child: Align(
+                  alignment: Alignment.bottomLeft,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var i = 0; i < photo.tags.length && i < 2; i++) ...[
+                        if (i > 0) const SizedBox(height: 4),
+                        _TagBadge(tag: photo.tags[i], tokens: tokens),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
           ],
@@ -135,12 +141,13 @@ class _TagBadge extends StatelessWidget {
         children: [
           Icon(tag.icon, size: 10, color: iconColor),
           const SizedBox(width: 3),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 90),
+          // 文字占剩余空间，超出照片宽度时以省略号收尾，避免标签溢出照片
+          Flexible(
             child: Text(
               tag.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              softWrap: false,
               style: const TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w500,

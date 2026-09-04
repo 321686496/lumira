@@ -25,6 +25,7 @@ import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../profile/providers/collection_providers.dart';
 import '../../watermark/data/watermark_providers.dart';
+import '../../capture/data/template_registry.dart';
 
 /// 原生「保存到系统相册」MethodChannel（与拍摄预览页共用同一通道，见
 /// CapturePreviewPage 同名字段）：{ 'path': <本地文件绝对路径> } -> { success, error }
@@ -131,6 +132,10 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
         final templatesDao = await ref.read(templatesDaoProvider.future);
         for (final t in await templatesDao.getAll()) {
           templateNameById[t.id] = t.name;
+        }
+        // 补充 TemplateRegistry 中的模板名（DB 未种子化新模板时的兜底）
+        for (final t in TemplateRegistry.allTemplates) {
+          templateNameById.putIfAbsent(t.meta.id, () => t.meta.name);
         }
         if (mounted) {
           _templateNameById
@@ -650,7 +655,8 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
             tokens: tokens,
             sceneName: _sceneNameById[photo.sceneId],
             templateName: photo.templateId != null
-                ? _templateNameById[photo.templateId]
+                ? (_templateNameById[photo.templateId] ??
+                    photo.templateId)
                 : null,
             sceneId: photo.sceneId,
             templateId: photo.templateId,

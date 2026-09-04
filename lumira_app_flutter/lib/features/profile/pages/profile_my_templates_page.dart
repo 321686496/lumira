@@ -9,6 +9,8 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/number_format.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/effects/pressable_recess.dart';
+import '../../../shared/widgets/effects/recessed_surface.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/data/capture_state.dart';
@@ -436,9 +438,9 @@ class _ImportButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return PressableRecess(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      borderRadius: 24,
       child: Padding(
         padding: const EdgeInsets.all(8),
         child: Icon(
@@ -541,6 +543,8 @@ class _ActionBar extends StatelessWidget {
           Expanded(
             child: LumiraButton(
               variant: ButtonVariant.primary,
+              // 主色 CTA：按下保持品牌色（加深+扁平化+缩小），不切凹陷表面
+              keepBrandOnPress: true,
               onPressed: () => GoRouter.of(context).push(RouteNames.templatesEditor),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -621,7 +625,7 @@ class _FilterConfig {
   final String label;
 }
 
-class _FilterPill extends StatelessWidget {
+class _FilterPill extends ConsumerStatefulWidget {
   const _FilterPill({
     required this.tokens,
     required this.label,
@@ -635,32 +639,81 @@ class _FilterPill extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  ConsumerState<_FilterPill> createState() => _FilterPillState();
+}
+
+class _FilterPillState extends ConsumerState<_FilterPill> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
+    final tokens = widget.tokens;
+    final isNeu = ref.watch(appThemeProvider).style == UIStyle.neumorphic;
+    // 新拟态：选中/按压态 = 凹陷表面（上/左暗、下/右亮、中心平底）；
+    // 其余 UI 风格沿用品牌渐变选中态。
+    final recessed = isNeu && (widget.active || _pressed);
+
+    const pad = EdgeInsets.symmetric(horizontal: 16, vertical: 8); // 32rpx/16rpx → 16/8dp
+
+    final Widget pill;
+    if (recessed) {
+      pill = RecessedSurface(
+        tokens: tokens,
+        borderRadius: 999,
+        depth: 0.7,
+        rimFraction: 0.34,
+        child: Padding(
+          padding: pad,
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: widget.active ? FontWeight.w500 : FontWeight.w400,
+              color:
+                  widget.active ? tokens.textPrimary : tokens.textSecondary,
+            ),
+          ),
+        ),
+      );
+    } else {
+      pill = AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // 32rpx/16rpx → 16/8dp
+        padding: pad,
         decoration: BoxDecoration(
           // active: linear gradient brand→brandDeep（硬编码颜色，与 uni-app 一致）
-          gradient: active
+          gradient: widget.active
               ? LinearGradient(colors: [tokens.brand, tokens.brandDeep])
               : null,
-          color: active ? null : tokens.surfaceAlt,
+          color: widget.active ? null : tokens.surfaceAlt,
           borderRadius: BorderRadius.circular(9999),
-          boxShadow: active
+          boxShadow: widget.active
               ? const []
               : tokens.shadowConvexSubtle,
         ),
         child: Text(
-          label,
+          widget.label,
           style: TextStyle(
-            fontSize: 13, // 26rpx → 13dp
-            fontWeight: active ? FontWeight.w500 : FontWeight.w400,
-            color: active ? Colors.white : tokens.textSecondary,
+            fontSize: 13,
+            fontWeight: widget.active ? FontWeight.w500 : FontWeight.w400,
+            color: widget.active ? Colors.white : tokens.textSecondary,
           ),
         ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      behavior: HitTestBehavior.opaque,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(end: _pressed ? 0.94 : 1.0),
+        duration: Duration(milliseconds: _pressed ? 140 : 260),
+        curve: _pressed ? Curves.easeIn : Curves.easeOutBack,
+        builder: (context, scale, child) =>
+            Transform.scale(scale: scale, child: child),
+        child: pill,
       ),
     );
   }
@@ -1019,6 +1072,8 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 8),
           LumiraButton(
             variant: ButtonVariant.primary,
+            // 主色 CTA：按下保持品牌色，不切凹陷表面
+            keepBrandOnPress: true,
             onPressed: () => GoRouter.of(context).push(RouteNames.templatesEditor),
             child: Row(
               mainAxisSize: MainAxisSize.min,

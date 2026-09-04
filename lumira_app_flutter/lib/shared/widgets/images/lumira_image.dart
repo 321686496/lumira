@@ -159,6 +159,13 @@ class LumiraImage extends StatelessWidget {
           }
         }
 
+        // 性能(Forced fix): 父级约束为「无限」时 cw/ch 均为 null，若不兜底会按
+        // 原图全尺寸解码（资产/大图可达数千 px），OHOS 软件解码下产生解码突刺。
+        // 退化为「屏幕宽度×DPR」为目标上限，既避免全尺寸解码也不至于发虚。
+        if (cw == null && ch == null) {
+          cw = (MediaQuery.of(context).size.width * dpr).round().clamp(1, 4096);
+        }
+
         Widget img = builder(
           cw?.clamp(1, 4096),
           ch?.clamp(1, 4096),

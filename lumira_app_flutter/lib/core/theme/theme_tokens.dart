@@ -95,6 +95,40 @@ class ThemeTokens {
     );
   }
 
+  /// 品牌色「凸起浮雕」外阴影（用于金色 CTA 按钮常态）。
+  ///
+  /// 复现 neumorphic `shadowConvex` 的双向浮雕，但阴影色调取自**品牌色本身**：
+  /// 右下暗影用「品牌色加深(压暗)」、左上亮影用「品牌浅色提亮(偏白)」。这样叠在
+  /// 金色/品牌背景上时仍能看出突出的浮雕边，而不是用中性灰 `shadowConvexBrand`(
+  /// 默认 `#B7BFB0`)——那在金色上是同明度、几乎看不见，导致主色按钮常态「看不出浮雕」。
+  static List<BoxShadow> brandEmbossShadows(ThemeTokens t) => [
+        BoxShadow(
+          color: Color.lerp(t.brand, Colors.black, 0.30)!,
+          offset: const Offset(5, 5),
+          blurRadius: 12,
+        ),
+        BoxShadow(
+          color: Color.lerp(t.brandLight, Colors.white, 0.5)!,
+          offset: const Offset(-5, -5),
+          blurRadius: 12,
+        ),
+      ];
+
+  /// 品牌色凹陷表面用的内影色调：左上暗、右下亮，均取品牌色系。
+  static Color brandRecessDark(ThemeTokens t) =>
+      Color.lerp(t.brand, Colors.black, 0.34)!;
+
+  static Color brandRecessLight(ThemeTokens t) =>
+      Color.lerp(t.brandLight, Colors.white, 0.55)!;
+
+  /// 品牌色内斜边亮色（用于上/左边，品牌色提亮）。
+  static Color brandBevelLight(ThemeTokens t) =>
+      Color.lerp(t.brand, Colors.white, 0.35)!;
+
+  /// 品牌色内斜边暗色（用于下/右边，品牌色压暗）。
+  static Color brandBevelDark(ThemeTokens t) =>
+      Color.lerp(t.brand, Colors.black, 0.22)!;
+
   static ThemeTokens of(ThemeKey theme) {
     switch (theme) {
       case ThemeKey.warmWhite:

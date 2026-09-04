@@ -90,5 +90,31 @@ void main() {
       final r = pickRecommendedTemplate(candidates: cands, context: ctxSunnyWarmNoon, preferredCategory: 'portrait');
       expect(r!.id, 'b');
     });
+
+    test('无 diversity 种子时保持确定性（取热度最高者）', () {
+      final cands = [
+        _c('a', category: 'portrait', popularity: 50),
+        _c('b', category: 'portrait', popularity: 2000),
+        _c('c', category: 'portrait', popularity: 100),
+      ];
+      final r = pickRecommendedTemplate(candidates: cands, context: ctxSunnyWarmNoon, preferredCategory: 'portrait');
+      expect(r!.id, 'b'); // 未传 seed：永远取排序第一
+    });
+
+    test('提供 diversity 种子时，在热门候选内变化但不会跳到冷门', () {
+      final cands = [
+        _c('hot1', category: 'portrait', popularity: 1000),
+        _c('hot2', category: 'portrait', popularity: 900),
+        _c('hot3', category: 'portrait', popularity: 800),
+        _c('cold', category: 'portrait', popularity: 1),
+      ];
+      // 两个不同日期种子都应命中热门三甲（不会选中 cold）
+      for (final seed in [20260903, 20260904, 20260905]) {
+        final r = pickRecommendedTemplate(
+            candidates: cands, context: ctxSunnyWarmNoon,
+            preferredCategory: 'portrait', varietySeed: seed);
+        expect(['hot1', 'hot2', 'hot3'], contains(r!.id), reason: 'seed=$seed');
+      }
+    });
   });
 }
