@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/theme_controller.dart';
-import '../../../core/theme/theme_tokens.dart';
 import '../data/capture_state.dart';
 
 /// 延迟拍照按钮（iOS 原相机风格）
@@ -18,7 +16,6 @@ class DelayTimerButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final delay = ref.watch(CaptureState.delayTimerProvider);
     final isActive = delay > 0;
-    final isNeu = ref.watch(appThemeProvider).style == UIStyle.neumorphic;
 
     final Widget capsule = GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -91,7 +88,7 @@ class DelayTimerButton extends ConsumerWidget {
             ),
           ),
       ],
-      child: isNeu ? capsule : capsule,
+      child: capsule,
     );
   }
 }

@@ -343,4 +343,10 @@ void main() {
     expect(find.byIcon(Icons.lightbulb_outline), findsNothing); // 后置无补光
   });
 
+  testWidgets('delayTimerProvider default is disabled (regression smoke)', (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    expect(container.read(CaptureState.delayTimerProvider), 0);
+  });
+
 }
