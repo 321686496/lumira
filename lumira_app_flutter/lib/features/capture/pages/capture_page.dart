@@ -56,6 +56,7 @@ import '../widgets/capture_button.dart';
 import '../widgets/capture_nav.dart';
 import '../widgets/camera_preview.dart';
 import '../widgets/capture_thumbnail.dart';
+import '../widgets/delay_timer_button.dart';
 import '../widgets/filter_picker.dart';
 import '../widgets/level_indicator.dart';
 import '../widgets/param_panel.dart';
@@ -154,6 +155,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
   /// 白闪动画触发器：每次拍照时递增，ShutterFeedback widget 监听变化播放动画。
   int _shutterTrigger = 0;
+
+  /// 延迟拍照倒计时剩余秒数（>0 表示正在倒计时，0 表示无倒计时）。
+  int _delayRemaining = 0;
+
+  /// 延迟拍照倒计时定时器（1s 周期）。
+  Timer? _delayTimer;
 
   /// 返回结果模式：当通过 ?mode=return 进入时，拍照完成后 pop 回上一页
   /// （用于实战作业页的"去拍摄"流程，捕获路径作为 String 返回）
@@ -557,6 +564,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
     _cameraReadySub?.cancel();
     _cameraReadyWatchdog?.cancel();
     _devicePortraitSub?.cancel();
+    _delayTimer?.cancel();
+    _delayTimer = null;
     _earlyFrameSub?.cancel();
     _earlyFrameSub = null;
     // 释放常驻 worker isolate（性能优化 A：避免 isolate 泄漏）
@@ -748,14 +757,65 @@ class _CapturePageState extends ConsumerState<CapturePage>
     }
   }
 
-  /// 拍照入口：调用 CameraService 拿到原始 JPEG，后处理后显示到角标。
+  /// 启动延迟拍照倒计时：中央大数字每秒递减并播放快门声节拍，计时到 0 触发真正拍照。
+  void _startDelayCountdown(int seconds) {
+    _delayTimer?.cancel();
+    _delayRemaining = seconds;
+    setState(() {});
+    SystemSound.play(SystemSoundType.click);
+    _delayTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      if (_delayRemaining <= 1) {
+        t.cancel();
+        _delayTimer = null;
+        setState(() => _delayRemaining = 0);
+        _doCapture();
+      } else {
+        setState(() => _delayRemaining--);
+        SystemSound.play(SystemSoundType.click);
+      }
+    });
+  }
+
+  /// 取消正在进行的延时倒计时（不发生拍照）。幂等，无倒计时时安全。
+  void _cancelDelayCountdown() {
+    _delayTimer?.cancel();
+    _delayTimer = null;
+    if (_delayRemaining > 0) {
+      setState(() => _delayRemaining = 0);
+    }
+  }
+
+  /// 快门入口：处理延迟拍照。
+  /// - 正在倒计时 → 再次点击取消延时（不发生拍照，iOS 风格）
+  /// - 已选延时(>0) 且未在倒计时 → 启动倒计时，不立即拍照
+  /// - 延时为 0 → 直接拍照
+  Future<void> _onCapture() async {
+    if (_delayRemaining > 0) {
+      debugPrint('[capture] _onCapture() cancel delay countdown');
+      _cancelDelayCountdown();
+      return;
+    }
+    final delay = ref.read(CaptureState.delayTimerProvider);
+    if (delay > 0) {
+      debugPrint('[capture] _onCapture() start delay: ${delay}s');
+      _startDelayCountdown(delay);
+      return;
+    }
+    await _doCapture();
+  }
+
+  /// 拍照体：调用 CameraService 拿到原始 JPEG，后处理后显示到角标。
   ///
   /// 连拍优化：capture（相机拍照）和后处理解耦。
   /// - capture 调用立即返回（camerawesome 内部排队 takePhoto，每次返回独立文件）
   /// - 后处理在独立 isolate 中串行执行，不阻塞 UI 和下次 capture 调用
   /// - 角标显示最新完成的一张
-  Future<void> _onCapture() async {
-    debugPrint('[capture] _onCapture() called');
+  Future<void> _doCapture() async {
+    debugPrint('[capture] _doCapture() called');
 
     // 试用模式：禁用快门，提示用户解锁后再拍摄
     if (ref.read(CaptureState.trialModeProvider)) {
@@ -1359,6 +1419,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// CameraPreview widget 会 watch 此 provider 并通过 CameraService 重建预览，
   /// onReady 回调中重新应用闪光灯/缩放/镜像等参数。
   void _switchCamera() {
+    // 倒计时进行中切换前后摄像头 → 取消延时
+    _cancelDelayCountdown();
+
     // 防抖：上一次摄像头切换尚未就绪时忽略快速连点。
     // 否则 CameraAwesomeBuilder 会被反复销毁重建，而原生相机的 init/start
     // （PreparingCameraState.start 内含 500ms 异步延迟且 dispose 不取消）会
@@ -1839,6 +1902,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // 延迟拍照按钮（iOS 原相机：取景器顶部居中，导航胶囊下方；试用模式隐藏）
+                if (!isTrialMode) const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Center(child: DelayTimerButton()),
+                ),
                 // 比例切换器（导航栏下方居中；全屏模式下隐藏，避免全屏时仍被比例胶囊遮挡）
                 if (!isFullscreen) const Center(child: AspectRatioSelector()),
                 // 比例切换器与参数 pill 栏之间的间隙
@@ -1922,6 +1990,31 @@ class _CapturePageState extends ConsumerState<CapturePage>
           Positioned.fill(
             child: ShutterFeedback(trigger: _shutterTrigger),
           ),
+
+          // 延时倒计时：全屏中央大数字（IgnorePointer 使其点击穿透到快门按钮 → 点快门取消）
+          if (_delayRemaining > 0)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Center(
+                  child: Text(
+                    '$_delayRemaining',
+                    style: TextStyle(
+                      fontSize: 120,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      height: 1,
+                      shadows: [
+                        Shadow(
+                          color: Colors.black.withOpacity(0.45),
+                          blurRadius: 16,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
 
           // 9. 水印定格动画 overlay（最顶层，IgnorePointer 不拦截手势）
           if (_showWatermarkAnimation &&
