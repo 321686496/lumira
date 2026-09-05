@@ -192,7 +192,7 @@ export class AdminTemplatesService {
 
     // 5 段内容：默认取 meta，若有 pptpl 则覆盖
     let composition = meta.composition || {};
-    let pose = meta.pose || {};          // 兼容旧字段（单 pose）
+    let pose: Record<string, unknown> | undefined = meta.pose || {};          // 兼容旧字段（单 pose）
     let poses = meta.poses;              // 新字段（pose 数组，优先）
     let camera = meta.camera || {};
     let sceneGuide = meta.sceneGuide || {};
@@ -202,8 +202,14 @@ export class AdminTemplatesService {
       try {
         const pptplContent = parsePptpl(pptpl.buffer);
         composition = pptplContent.composition;
-        pose = pptplContent.pose;  // pptpl 旧结构：单 pose 对象
-        poses = undefined;          // 让 fallback 走 [pose]
+        // .pptpl 的 pose 主流为数组（多姿势），单对象仅兼容旧文件
+        if (Array.isArray(pptplContent.pose)) {
+          poses = pptplContent.pose;
+          pose = undefined;
+        } else {
+          pose = pptplContent.pose;
+          poses = undefined;
+        }
         camera = pptplContent.camera;
         sceneGuide = pptplContent.sceneGuide;
         postProcess = pptplContent.postProcess;
@@ -382,7 +388,7 @@ export class AdminTemplatesService {
 
     // 5 段内容：默认取旧值，若 meta 提供则覆盖，若有 pptpl 则全覆盖
     let composition = meta.composition !== undefined ? meta.composition : safeParse(existing.compositionJson);
-    let pose = meta.pose !== undefined ? meta.pose : safeParse(existing.poseJson);
+    let pose: Record<string, unknown> | undefined = meta.pose !== undefined ? meta.pose : safeParse(existing.poseJson);
     let poses = meta.poses;
     let camera = meta.camera !== undefined ? meta.camera : safeParse(existing.cameraJson);
     let sceneGuide = meta.sceneGuide !== undefined ? meta.sceneGuide : safeParse(existing.sceneGuideJson);
@@ -392,8 +398,14 @@ export class AdminTemplatesService {
       try {
         const pptplContent = parsePptpl(pptpl.buffer);
         composition = pptplContent.composition;
-        pose = pptplContent.pose;
-        poses = undefined;
+        // .pptpl 的 pose 主流为数组（多姿势），单对象仅兼容旧文件
+        if (Array.isArray(pptplContent.pose)) {
+          poses = pptplContent.pose;
+          pose = undefined;
+        } else {
+          pose = pptplContent.pose;
+          poses = undefined;
+        }
         camera = pptplContent.camera;
         sceneGuide = pptplContent.sceneGuide;
         postProcess = pptplContent.postProcess;

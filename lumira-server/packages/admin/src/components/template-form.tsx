@@ -557,13 +557,30 @@ export default function TemplateForm({
         throw new Error('JSON 解析失败');
       }
       const composition = (json.composition ?? {}) as Record<string, unknown>;
-      const pose = (json.pose ?? {}) as Record<string, unknown>;
-      const silhouette = (pose.silhouette ?? {}) as Record<string, unknown>;
-      const position = (pose.position ?? {}) as Record<string, unknown>;
       const camera = (json.camera ?? {}) as Record<string, unknown>;
       const sceneGuide = (json.sceneGuide ?? {}) as Record<string, unknown>;
       const postProcess = (json.postProcess ?? {}) as Record<string, unknown>;
       const color = (postProcess.color ?? {}) as Record<string, unknown>;
+
+      // ===== 基本信息：兼容 Flutter 导出 `meta` 与模板包 `_meta` 两种键 =====
+      const meta = ((json.meta ?? json._meta) ?? {}) as Record<string, unknown>;
+      if (typeof meta.name === 'string' && meta.name) setValue('name', meta.name);
+      if (typeof meta.category === 'string' && meta.category) setValue('category', meta.category);
+      if (typeof meta.description === 'string') setValue('description', meta.description);
+      if (typeof meta.shortDesc === 'string') setValue('shortDesc', meta.shortDesc);
+      if (typeof meta.author === 'string' && meta.author) setValue('author', meta.author);
+      if (typeof meta.price === 'number') setValue('price', meta.price);
+      if (Array.isArray(meta.tags)) {
+        setValue('tags', (meta.tags as unknown[]).filter((t): t is string => typeof t === 'string').join(', '));
+      }
+      const ambience = (meta.ambience ?? {}) as Record<string, unknown>;
+      if (Array.isArray(ambience.seasons)) setValue('ambienceSeasons', ambience.seasons as string[]);
+      if (Array.isArray(ambience.weathers)) setValue('ambienceWeathers', ambience.weathers as string[]);
+      if (Array.isArray(ambience.timeTones)) setValue('ambienceTimeTones', ambience.timeTones as string[]);
+      const cls = (meta.classification ?? {}) as Record<string, unknown>;
+      if (typeof cls.majorStyle === 'string' && cls.majorStyle) setValue('classificationMajorStyle', cls.majorStyle as FormValues['classificationMajorStyle']);
+      if (typeof cls.style === 'string' && cls.style) setValue('classificationSubStyle', cls.style as FormValues['classificationSubStyle']);
+      if (typeof cls.method === 'string' && cls.method) setValue('classificationMethod', cls.method as FormValues['classificationMethod']);
 
       if (composition.overlayType) setValue('overlayType', composition.overlayType as FormValues['overlayType']);
       if (typeof composition.aspectRatio === 'string') setValue('aspectRatio', composition.aspectRatio);
@@ -576,24 +593,59 @@ export default function TemplateForm({
       if (typeof sf.w === 'number') setValue('subjectFrameW', sf.w);
       if (typeof sf.h === 'number') setValue('subjectFrameH', sf.h);
 
-      if (silhouette.type) setValue('silhouetteType', silhouette.type as FormValues['silhouetteType']);
-      if (typeof silhouette.data === 'string') setValue('silhouetteBuiltinKey', silhouette.data);
-      if (typeof pose.description === 'string') setValue('poseDescription', pose.description);
-      if (typeof position.x === 'number') setValue('posePositionX', position.x);
-      if (typeof position.y === 'number') setValue('posePositionY', position.y);
-      if (typeof pose.scale === 'number') setValue('poseScale', pose.scale);
-      if (typeof pose.rotation === 'number') setValue('poseRotation', pose.rotation);
+      // ===== 姿势：主流 .pptpl 的 pose 为数组（多姿势），填充姿势编辑器；单对象兼容旧文件 =====
+      const rawPose = json.pose;
+      if (Array.isArray(rawPose)) {
+        const importedPoses: PoseFormData[] = (rawPose as Record<string, unknown>[])
+          .filter((p) => p && typeof p === 'object')
+          .map((p) => {
+            const silhouette = (p.silhouette ?? {}) as Record<string, unknown>;
+            const position = (p.position ?? {}) as Record<string, unknown>;
+            // 'none' 等非表单类型统一落到 builtin（空 key = 无剪影）
+            const sType = silhouette.type === 'image' || silhouette.type === 'svg' ? (silhouette.type as 'image' | 'svg') : 'builtin';
+            return {
+              name: typeof p.name === 'string' ? p.name : '',
+              description: typeof p.description === 'string' ? p.description : '',
+              cameraDirection: typeof p.cameraDirection === 'string' ? p.cameraDirection : '',
+              silhouetteType: sType,
+              silhouetteBuiltinKey: sType === 'builtin' ? ((silhouette.data as string) ?? '') : '',
+              silhouetteFile: null,
+              silhouetteUrl: sType === 'image' ? ((silhouette.url as string) ?? (silhouette.data as string) ?? '') || null : null,
+              positionX: num(position.x, 0.5),
+              positionY: num(position.y, 0.5),
+              scale: num(p.scale, 1.0),
+              rotation: num(p.rotation, 0),
+            };
+          });
+        if (importedPoses.length > 0) {
+          setPoses(importedPoses);
+          setPoseIndex(0);
+        }
+      } else if (rawPose && typeof rawPose === 'object') {
+        const pose = rawPose as Record<string, unknown>;
+        const silhouette = (pose.silhouette ?? {}) as Record<string, unknown>;
+        const position = (pose.position ?? {}) as Record<string, unknown>;
+        if (silhouette.type && (SILHOUETTE_TYPES as readonly string[]).includes(silhouette.type as string)) {
+          setValue('silhouetteType', silhouette.type as FormValues['silhouetteType']);
+        }
+        if (typeof silhouette.data === 'string') setValue('silhouetteBuiltinKey', silhouette.data);
+        if (typeof pose.description === 'string') setValue('poseDescription', pose.description);
+        if (typeof position.x === 'number') setValue('posePositionX', position.x);
+        if (typeof position.y === 'number') setValue('posePositionY', position.y);
+        if (typeof pose.scale === 'number') setValue('poseScale', pose.scale);
+        if (typeof pose.rotation === 'number') setValue('poseRotation', pose.rotation);
+      }
 
       if (typeof camera.exposureCompensation === 'number') setValue('exposureCompensation', camera.exposureCompensation);
-      if (camera.isoMode) setValue('isoMode', camera.isoMode as FormValues['isoMode']);
+      if (camera.isoMode && (ISO_MODES as readonly string[]).includes(camera.isoMode as string)) setValue('isoMode', camera.isoMode as FormValues['isoMode']);
       if (typeof camera.iso === 'number') setValue('iso', camera.iso);
       if (typeof camera.shutterSpeed === 'string') setValue('shutterSpeed', camera.shutterSpeed);
-      if (camera.whiteBalance) setValue('whiteBalance', camera.whiteBalance as FormValues['whiteBalance']);
+      if (camera.whiteBalance && (WHITE_BALANCES as readonly string[]).includes(camera.whiteBalance as string)) setValue('whiteBalance', camera.whiteBalance as FormValues['whiteBalance']);
       if (typeof camera.whiteBalanceK === 'number') setValue('whiteBalanceK', camera.whiteBalanceK);
-      if (camera.flashMode) setValue('flashMode', camera.flashMode as FormValues['flashMode']);
-      if (camera.focusMode) setValue('focusMode', camera.focusMode as FormValues['focusMode']);
+      if (camera.flashMode && (FLASH_MODES as readonly string[]).includes(camera.flashMode as string)) setValue('flashMode', camera.flashMode as FormValues['flashMode']);
+      if (camera.focusMode && (FOCUS_MODES as readonly string[]).includes(camera.focusMode as string)) setValue('focusMode', camera.focusMode as FormValues['focusMode']);
       if (typeof camera.lensType === 'string') setValue('lensType', camera.lensType);
-      if (camera.lensSuggestion) setValue('lensSuggestion', camera.lensSuggestion as FormValues['lensSuggestion']);
+      if (camera.lensSuggestion && (LENS_SUGGESTIONS as readonly string[]).includes(camera.lensSuggestion as string)) setValue('lensSuggestion', camera.lensSuggestion as FormValues['lensSuggestion']);
 
       if (typeof sceneGuide.lightDirection === 'string') setValue('lightDirection', sceneGuide.lightDirection);
       if (typeof sceneGuide.shootingDistance === 'string') setValue('shootingDistance', sceneGuide.shootingDistance);
@@ -624,8 +676,8 @@ export default function TemplateForm({
       if (typeof postProcess.sharpen === 'number') setValue('sharpen', postProcess.sharpen);
       if (typeof postProcess.vignette === 'number') setValue('vignette', postProcess.vignette);
       if (typeof postProcess.grain === 'number') setValue('grain', postProcess.grain);
-      if (postProcess.lut) setValue('lut', postProcess.lut as FormValues['lut']);
-      if (postProcess.systemFilter) setValue('systemFilter', postProcess.systemFilter as FormValues['systemFilter']);
+      if (postProcess.lut && (LUTS as readonly string[]).includes(postProcess.lut as string)) setValue('lut', postProcess.lut as FormValues['lut']);
+      if (postProcess.systemFilter && (LUTS as readonly string[]).includes(postProcess.systemFilter as string)) setValue('systemFilter', postProcess.systemFilter as FormValues['systemFilter']);
       const fl = (postProcess.fillLight ?? {}) as Record<string, unknown>;
       if (typeof fl.enabled === 'boolean') setValue('fillLightEnabled', fl.enabled);
       if (typeof fl.color === 'number') setValue('fillLightColor', `#${(fl.color & 0xFFFFFF).toString(16).padStart(6, '0').toUpperCase()}`);
@@ -634,7 +686,7 @@ export default function TemplateForm({
       setPptplFile(file);
       toast({
         title: '已加载 .pptpl',
-        description: '构图 / 剪影 / 相机 / 场景引导 / 后期处理 5 段内容已自动填充，可在后续步骤中校对修改。',
+        description: '基本信息 / 构图 / 剪影 / 相机 / 场景引导 / 后期处理已自动填充，可在后续步骤中校对修改。',
       });
     } catch (e) {
       toast({

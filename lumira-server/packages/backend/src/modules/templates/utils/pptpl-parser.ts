@@ -3,7 +3,8 @@
 
 export interface PptplContent {
   composition: Record<string, unknown>;
-  pose: Record<string, unknown>;
+  /** .pptpl 的 pose 既可能是单对象（旧格式），也可能是数组（多姿势，当前主流格式） */
+  pose: Record<string, unknown> | Record<string, unknown>[];
   camera: Record<string, unknown>;
   sceneGuide: Record<string, unknown>;
   postProcess: Record<string, unknown>;
@@ -29,7 +30,7 @@ export function parsePptpl(buffer: Buffer): PptplContent {
 
   return {
     composition: (json.composition as Record<string, unknown>) || {},
-    pose: (json.pose as Record<string, unknown>) || {},
+    pose: (json.pose as Record<string, unknown> | Record<string, unknown>[] | undefined) || {},
     camera: (json.camera as Record<string, unknown>) || {},
     sceneGuide: (json.sceneGuide as Record<string, unknown>) || {},
     postProcess: (json.postProcess as Record<string, unknown>) || {},
