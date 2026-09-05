@@ -24,6 +24,8 @@ class PressableRecess extends ConsumerStatefulWidget {
     this.raisedShadow,
     this.recessDark,
     this.recessLight,
+    this.bevelLight,
+    this.bevelDark,
   });
 
   /// 点击回调
