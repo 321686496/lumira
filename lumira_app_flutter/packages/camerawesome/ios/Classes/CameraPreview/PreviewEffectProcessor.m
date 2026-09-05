@@ -6,6 +6,7 @@
 //
 
 #import "PreviewEffectProcessor.h"
+#import <Metal/Metal.h>
 
 // 统一效果内核：在一遍内完成 锐化(亮度死区Unsharp)→颗粒(tile+亮度)→磨皮(频率分离+肤色掩膜+结构门控)→暗角。
 // 数值语义与 OHOS C++ bake（photo_processor.cpp）及预览 FragmentShader 一致（颜色按 0..1，阈值/幅度相应折算）：
@@ -82,7 +83,7 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
 @interface PreviewEffectProcessor () {
   dispatch_queue_t _gpuQueue;
   CIContext *_ciContext;
-  CIColorSpace _workingColorSpace; // 自持有
+  CGColorSpaceRef _workingColorSpace; // 自持有
   CIKernel *_beautyKernel;   // 统一锐化/颗粒/磨皮/暗角内核（进程一次）
   CIImage *_noiseTile;       // 预计算 128×128 颗粒 tile（一次性，消除逐帧随机）
 
@@ -116,7 +117,6 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
     _noiseTile = [self makeNoiseTile];
     atomic_init(&_publishedBuffer, NULL);
     atomic_init(&_busy, false);
-    _poolIndex = 0;
     _active = NO;
   }
   return self;
