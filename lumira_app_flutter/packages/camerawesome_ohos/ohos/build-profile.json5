@@ -1,10 +1,24 @@
-{
+﻿{
   "apiType": "stageMode",
   "buildOption": {
     "sourceOption": {
       "workers": [
         "./src/main/ets/components/workers/GetImageWorker.ets"
       ]
+    },
+    // 取景器实时特效 GPU 管线（libpreview_fx.so）：预览流→GL 着色器→Flutter Texture。
+    // 详见 src/main/cpp/preview_fx.cpp 头注释。注意：hvigor 只识别 src/main/cpp 目录。
+    "externalNativeOptions": {
+      "path": "./src/main/cpp/CMakeLists.txt",
+      "arguments": "",
+      "cppFlags": "",
+      "abiFilters": ["arm64-v8a"]
+    },
+    // 构建期 flutter.har 临时放在模块 har/ 目录供依赖解析，打包时排除（避免 19MB 依赖打入产物）
+    "packingOptions": {
+      "asset": {
+        "exclude": ["har/**"]
+      }
     }
   },
   "targets": [
@@ -13,3 +27,6 @@
     }
   ]
 }
+
+
+

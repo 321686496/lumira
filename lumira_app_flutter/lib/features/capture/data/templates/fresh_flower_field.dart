@@ -1,0 +1,87 @@
+// lib/features/capture/data/templates/fresh_flower_field.dart
+import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
+
+/// 花田清新远景模板（风光 / 清新 / 远景）
+/// 内置模板补充：风光大类非人像模板
+const PhotoTemplate freshFlowerFieldTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'fresh_flower_field',
+    name: '花田清新远景',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'landscape',
+    classification: TemplateClassification(type: 'landscape', style: 'fresh', subStyle: 'fresh', method: 'wide'),
+    tags: ['风光', '花田', '清新', '远景', '治愈'],
+    tagIds: [],
+    price: 0,
+    images: [
+      TemplateImage(url: 'assets/images/templates/fresh_flower_field_1.jpg'),
+      TemplateImage(url: 'assets/images/templates/fresh_flower_field_2.jpg'),
+      TemplateImage(url: 'assets/images/templates/fresh_flower_field_3.jpg'),
+      TemplateImage(url: 'assets/images/templates/fresh_flower_field_4.jpg'),
+    ],
+    description: '这是一套专为广阔花海/梯田景观设计的风景摄影模板。利用起伏的地形与人工种植的色彩条带（薰衣草紫、樱花粉、油菜黄等），构建出极具纵深感的视觉引导线。光影上捕捉日出或日落时分的低角度柔光，营造朦胧、梦幻的油画质感。适用于春季或初夏的花田、公园、郊野拍摄，适合追求治愈系、ins风、大片感的摄影爱好者。',
+    referenceSource: '样片参考：500px 花田清风景精选；参数参考风光摄影清新色彩合集',
+    shortDesc: '晨雾漫过起伏丘陵，彩虹色花带如绸缎铺展，治愈系田园梦境，把春天装进镜头里🌸',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer'],
+      weathers: ['sunny', 'fog', 'cloudy'],
+      timeTones: ['goldenHour'],
+    ),
+  ),
+  composition: Composition(
+    overlayType: 'rule_of_thirds',
+    gridType: 'golden_spiral',
+    subjectFrame: SubjectFrame(x: 0.0, y: 0.3, w: 1.0, h: 0.7),
+    opacity: 0.25,
+    aspectRatio: '16:9',
+    description: '大远景风景构图。核心在于利用花田的自然线条（直线放射、S 型曲线、波浪线）作为视觉引导，将观众视线引向远方或画面趣味点（如孤树、太阳）。机位多为平视或轻微俯拍，以展现花海的广阔与层次。主体花田通常占据画面 60%-80%，天空或远山作为背景留白。',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0.3,
+    isoMode: 'auto',
+    iso: 100,
+    shutterSpeed: '1/250',
+    whiteBalance: 'custom',
+    whiteBalanceK: 6200,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensSuggestion: 'wide_angle_0.6x',
+    lensType: '广角镜头',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '主光为自然太阳光。图 1 为逆光/侧逆光，光源来自屏幕正前方偏上，晨雾柔化光线，光比低，阴影柔和投向屏幕后方；图 2/4 为侧顺光，光源来自屏幕左上方，光比中等，山坡右侧有投影；图 3 为漫射光/顶光，云层遮挡，光比极低，无明显硬阴影。无需人工补光，纯自然光拍摄。',
+    shootingDistance: '5m-无穷远',
+    background: '起伏的绿色丘陵、远处的树林、带有晨雾或云彩的天空',
+    props: [],
+    bestTime: '06:00-07:30 (晨雾逆光) 或 17:00-18:30 (日落暖光)',
+    tips: [
+      '寻找制高点或站在田埂高处，使用广角镜头（0.6x）以收纳更多花田线条，增强纵深感。',
+      '利用花田的种植行作为天然引导线，将对焦重点放在前景清晰的花朵上，让背景自然延伸。',
+      '图 1 效果需在有晨雾或薄云的日出时分拍摄，若光线过硬，可降低曝光补偿 (-0.3) 并后期提亮阴影。',
+      '真机无法实现光学长焦压缩感，建议物理靠近前景花卉，同时保持背景在画面内，利用透视关系模拟层次。',
+      '色彩还原关键：白平衡 K 值设在 6000-6500 之间，保留阳光的暖意但不过分偏黄，确保紫色和粉色不偏色。',
+      '若现场光线平淡（如阴天），后期需增加 vibrance (+15) 和 clarity (+10) 来提振花朵的质感与色彩分离度。',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '16:9',
+    color: PostProcessColor(
+      brightness: 6,
+      contrast: -4,
+      saturation: 12,
+      temperature: 5,
+      tint: 3,
+      highlights: -10,
+      shadows: 8,
+      vibrance: 15,
+      clarity: 8,
+    ),
+    smoothStrength: 15,
+    sharpen: 25,
+    vignette: 12,
+    grain: 8,
+    lut: 'pastel',
+  ),
+);
