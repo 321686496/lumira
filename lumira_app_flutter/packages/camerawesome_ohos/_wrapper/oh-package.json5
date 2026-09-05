@@ -1,0 +1,11 @@
+﻿{
+  "modelVersion": "5.0.0",
+  "name": "camerawesome_wrapper",
+  "version": "1.0.0",
+  "description": "Temp wrapper to build camerawesome_ohos.har",
+  "main": "",
+  "author": "",
+  "license": "",
+  "dependencies": {},
+  "overrides": {}
+}

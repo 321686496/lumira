@@ -31,3 +31,12 @@ _backup_*.bundle
 
 # Vendored plugin lockfile (library style: lockfile not tracked)
 lumira_app_flutter/packages/camerawesome/pubspec.lock
+
+# OHOS / DevEco build caches & python caches
+.hvigor/
+.idea/
+**/.hvigor/
+**/.idea/
+**/build/
+__pycache__/
+*.pyc
