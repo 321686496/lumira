@@ -298,3 +298,23 @@
 - **目标状态**：按需从 ppThemeProvider 派生菜单/胶囊配色，或在 4 风格下均采用 iOS 统一浮层观感并弱化当前无用的 	heme_controller 依赖残留情况。
 - **状态**：⏳ 待优化
 
+
+---
+
+## OHOS 取景器实时美颜（2026-09-05）
+
+### P0 · 取景器实时美颜原生化（B3 正式方案；Dart 过渡方案已停用）
+
+- **模块**：拍摄（camera_preview.dart / preview_beauty_shader.dart → 目标：ImageProcessorPlugin/XComponent 原生）
+- **优化点**：曾用「Ticker 逐帧 RepaintBoundary.toImage → FragmentShader 单 pass → 叠加显示」的 Dart 层方案实现取景器实时锐化/磨皮/颗粒/暗角。**2026-09-05 已整体停用并删除 **_LiveBeautyLayer**：OHOS GPU 读回单帧需数百 ms（快门冻结帧实测 455ms@1.0x，叠加层按 DPR 级采样更慢），取景器在开启磨皮/锐化/颗粒/暗角任一项后沦为幻灯片；且 radius-1 的 5-tap 磨皮核在预览分辨率下视觉不可感知。当前取景器回退纯 ColorFiltered（色彩/亮度等矩阵类效果仍实时预览），磨皮/锐化/颗粒/暗角仅作用于成片。
+- **背景/动机**：设计文档（2026-09-04-ohos-camera-capture-performance-design.md）B3 定义的正式方案是 XComponent 原生渲染取景器实时美颜，Dart 层逐帧读回在 OHOS 上架构性不成立（GPU→CPU readback 延迟不可接受）。
+- **目标状态**：按 B3 在 ImageProcessorPlugin/XComponent 原生侧用 OpenGL ES 片元着色器直接渲染预览效果（对齐 iOS PreviewEffectProcessor 的统一内核：锐化/颗粒/磨皮/暗角一遍合成），Dart 层仅透传参数；实现后「成片效果 = 取景器效果」闭环。
+- **状态**：⏳ 待优化
+
+### P2 · 成片锐化/磨皮强度补偿（HDR 区间与预览感知度对齐）
+
+- **模块**：拍摄 · 成片链（OHOS C++ photo_processor.cpp / Dart dart_photo_pipeline.dart / iOS PreviewEffectProcessor.m）
+- **优化点**：2026-09-05 将锐化响应曲线上限从 a=1.0 提到 a=2.5（软边缘增益 ~5-12/255 → ×2.5，三端同步）；磨皮因 5-tap 内核分辨率语义限制，成片与预览的感知强度仍存在差异。
+- **背景/动机**：真机反馈「锐化拉满无感」，实测统一死区版软边缘增益过低；强度已修正但尚未在真机复核成片观感（ETS processJpeg 日志已补 sharpen/grain 参数透传打印）。
+- **目标状态**：下次真机验证 2.5x 响应曲线成片观感；按需微调磨皮强度/核半径与颗粒幅度，使各参数拉满时成片有明显但不过度的效果。
+- **状态**：🔄 进行中

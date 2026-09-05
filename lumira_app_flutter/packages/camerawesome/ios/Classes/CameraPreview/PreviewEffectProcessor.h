@@ -13,7 +13,8 @@
 //
 //  线程模型：
 //  - [render:] 在调用方投递到内部串行 `_gpuQueue` 执行（CoreImage + Metal）。
-//  - 输出写入 3 槽回环缓冲池，渲染完成原子发布到 `copyDisplayBuffer` 供光栅线程读取。
+//  - 每帧渲染到全新输出缓冲，渲染完成原子发布到 `copyDisplayBuffer` 供光栅线程
+//    【非消费式】读取（可重复读取同一成帧直到新帧发布，返回前为引擎 retain 一份）。
 //  - 全部参数默认值即「无效果」时走直通快路径（返回原始输入），不产生任何 GPU 开销。
 //
 //  性能：约 8MP 预览分辨率下约 5~10 CIFilter/帧、GPU 执行 ~8~15ms，当代 iPhone 满足
@@ -59,9 +60,10 @@ typedef struct {
 /// 该调用会投递到内部队列，返回后【尚未】完成；用 [copyDisplayBuffer] 取最新成帧。
 - (void)render:(CVPixelBufferRef _Nonnull)input;
 
-/// 取出最新已渲染的显示缓冲（原子 swap-out，调用方负责 CFRelease）。
-/// 无已渲染帧/未激活时返回 NULL。与 PhotoPost 的 copyPixelBuffer 语义一致，
-/// 供 FlutterTexture 光栅线程每帧读取。
+/// 最新已渲染的显示缓冲（非消费式：可被光栅线程每帧重复读取直到新帧发布，
+/// 调用方负责 CFRelease）。无已渲染帧/未激活时返回 NULL。
+/// 供 FlutterTexture 光栅线程每帧读取（读取率高于发布率，绝不能消费式取走，
+/// 否则间隙期回落原始帧 → 处理帧/原始帧交替 = 闪烁，已修复的 bug）。
 - (CVPixelBufferRef _Nullable)copyDisplayBuffer;
 
 - (void)flush;

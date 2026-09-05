@@ -67,6 +67,7 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
    *   matrix: 20 元素 ColorMatrix（由 Dart composePostProcessMatrix 产出，保证颜色与
    *           取景器/编辑页完全一致）
    *   sharpen: 锐化值（0 表示不锐化；严格用用户/模板真实值，应用层不做强制下限）
+   *   clarity: 清晰度 -100..100（0=关闭，负值柔化；矩阵内对比度折叠外另有独立中频 pass，与 Dart 慢管线一致）
    *   smooth: 磨皮强度 0-100（0 表示不磨皮；原生 C++ 全分辨率肤色掩膜平滑，非皮肤保留）
    *   maxDim: 输出最大边（默认 1280）
    *
@@ -94,6 +95,7 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
       const smooth: number = call.argument('smooth') ?? 0;
       const vignette: number = call.argument('vignette') ?? 0;
       const grain: number = call.argument('grain') ?? 0;
+      const clarity: number = call.argument('clarity') ?? 0;
       const maxDim: number = call.argument('maxDim') ?? 1280;
       if (!matrixArr || matrixArr.length < 20) {
         result.success({ ok: false, error: 'matrix invalid (need 20)' });
@@ -192,7 +194,7 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
       for (let i = 0; i < 20; i++) { matrixF64[i] = matrixArr[i]; }
       const finBuf = nativeProcessor.processRgba(
         new Uint8Array(cropBuf), pw, ph, matrixF64, Math.max(0, sharpen), isFront, Math.max(0, smooth),
-        Math.max(0, vignette), Math.max(0, grain)) as ArrayBuffer;
+        Math.max(0, vignette), Math.max(0, grain), clarity) as ArrayBuffer;
       if (!finBuf) {
         result.success({ ok: false, error: 'native processRgba failed' });
         return;
@@ -216,8 +218,11 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
       wfd = -1;
       const tEncode = Date.now();
 
-      console.info(`[ImageProcessor] processJpeg ok ${pw}x${ph} src=${srcW}x${srcH} dec=${aDecW}x${aDecH} crop=${cropX},${cropY} mirror=${isFront} smooth=${smooth} `
-        + `decode=${tDecode - tStart}ms transform=${tTransform - tDecode}ms sharpen=${tSharpen - tTransform}ms encode=${tEncode - tSharpen}ms`);
+      // 2026-09-05 补 sharpen/grain 入日志：真机反馈「锐化拉满无感」，需验证参数链
+      // Dart→ETS→C++ processRgba 是否透传正确（smooth/sharp/grain 三合一排查）。
+      console.info(`[ImageProcessor] processJpeg ok ${pw}x${ph} src=${srcW}x${srcH} dec=${aDecW}x${aDecH} crop=${cropX},${cropY} mirror=${isFront} ` +
+        `params smooth=${smooth} sharpen=${sharpen} grain=${grain} vignette=${vignette} clarity=${clarity} ` +
+        `decode=${tDecode - tStart}ms transform=${tTransform - tDecode}ms sharpen=${tSharpen - tTransform}ms encode=${tEncode - tSharpen}ms`);
       result.success({
         ok: true,
         width: pw,

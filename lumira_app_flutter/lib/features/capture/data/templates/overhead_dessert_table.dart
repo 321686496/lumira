@@ -15,7 +15,7 @@ const PhotoTemplate overheadDessertTableTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/overhead_dessert_table.png'),
+      TemplateImage(url: 'assets/images/templates/overhead_dessert_table.jpg'),
     ],
     description: '90 度俯拍的甜品桌，蛋糕、马卡龙与茶具整齐铺陈的仪式感画面',
     referenceSource: '样片参考：美食俯拍甜品桌精选；参数参考甜品摄影布光合集',

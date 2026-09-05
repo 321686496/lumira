@@ -15,7 +15,7 @@ const PhotoTemplate overheadBrunchTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/overhead_brunch.png'),
+      TemplateImage(url: 'assets/images/templates/overhead_brunch.jpg'),
     ],
     description: '90 度俯拍的丰盛早午餐，突出咖啡、面包与水果的摆盘构成',
     referenceSource: '样片参考：The Bite Shot 早午餐俯拍；参数参考美食俯拍教程合集',

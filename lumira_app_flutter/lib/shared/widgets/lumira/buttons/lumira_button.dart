@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/theme_tokens.dart';
+import '../../effects/bevel_surface.dart';
 import '../../effects/recessed_surface.dart';
 import '../_internal/lumira_theme_resolver.dart';
 
@@ -63,9 +64,10 @@ class LumiraButton extends ConsumerStatefulWidget {
 
   /// 是否在按压时保持品牌色背景（品牌 CTA，默认 false）。
   ///
-  /// 默认 false：新拟态下主/其他按钮按压时把外凸浮雕切换为凹陷表面（品牌色随之消失）。
-  /// 为 true 时：新拟态主色按钮按压仅「加深品牌色 + 扁平化 + 缩小」，不切换凹陷表面，
-  /// 满足「主色 CTA 保持主色」的诉求（如兑换码页「立即兑换」、场景管理「新建场景」）。
+  /// 默认 false：新拟态下 secondary/ghost 等按钮按压时把外凸浮雕切换为凹陷表面。
+  /// 为 true 时：新拟态主色按钮按压保持品牌色，去掉浮雕阴影并反转内斜边
+  /// （暗上左 / 亮下右）作凹陷反馈。新拟态下 `ButtonVariant.primary` 默认具备
+  /// 相同行为（主色 CTA 保持主色，如兑换码页「立即兑换」、场景管理「新建场景」）。
   final bool keepBrandOnPress;
 
   @override
@@ -139,20 +141,15 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
 
     final radius = (widget.radius ?? appTheme.buttonRadius / 2);
 
-    // 品牌 CTA（keepBrandOnPress）新拟态：纯品牌色顶面 + 内斜边（亮上左/暗下右），
-    // 按压时反转斜边（暗上左/亮下右），颜色不变、不加深。1.5px 实线不发散，
-    // 替代外阴影避免异色按钮悬浮感。
+    // 品牌 CTA（keepBrandOnPress）新拟态：纯品牌色顶面 + 品牌色浮雕外阴影
+    // （凸起浮雕感；brandEmbossShadows 取品牌色系，避免中性灰在金色上同明度）。
+    // 按压时保持主色，仅反转内斜边（暗上左/亮下右）作为凹陷反馈。
     if (isNeu && widget.keepBrandOnPress) {
       visual = ButtonVisual(
         background: tokens.brand,
         foreground: tokens.textInverse,
-        border: Border(
-          top: BorderSide(color: ThemeTokens.brandBevelLight(tokens), width: 1.5),
-          left: BorderSide(color: ThemeTokens.brandBevelLight(tokens), width: 1.5),
-          bottom: BorderSide(color: ThemeTokens.brandBevelDark(tokens), width: 1.5),
-          right: BorderSide(color: ThemeTokens.brandBevelDark(tokens), width: 1.5),
-        ),
-        shadows: const [],
+        border: null,
+        shadows: ThemeTokens.brandEmbossShadows(tokens),
       );
     }
 
@@ -179,15 +176,9 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
       // 新拟态按压态：将外凸浮雕切换为凹陷表面（上/左暗、下/右亮、中心平底），
       // 模拟手指按下去被压进画布的物理反馈。overlay（叠图）场景保持仅按压缩放，
       // 避免在图片上形成脏边（Neumorphism §4）。
-      if (widget.keepBrandOnPress) {
-        // 品牌 CTA 按压：反转内斜边（暗上左 / 亮下右），颜色不变、不加深。
-        border = Border(
-          top: BorderSide(color: ThemeTokens.brandBevelDark(tokens), width: 1.5),
-          left: BorderSide(color: ThemeTokens.brandBevelDark(tokens), width: 1.5),
-          bottom: BorderSide(color: ThemeTokens.brandBevelLight(tokens), width: 1.5),
-          right: BorderSide(color: ThemeTokens.brandBevelLight(tokens), width: 1.5),
-        );
-      } else {
+      // 主色 CTA（primary / keepBrandOnPress）按压保持品牌色，仅反转内斜边
+      // 作凹陷反馈；其余按钮切换为凹陷表面。
+      if (widget.variant != ButtonVariant.primary && !widget.keepBrandOnPress) {
         useRecessedSurface = true;
       }
       gradient = null;
@@ -211,6 +202,14 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
       ),
     );
 
+    // 主色 CTA（primary / keepBrandOnPress，非叠图）新拟态：
+    // 常态用「品牌色顶面 + 浮雕外阴影」凸起胶囊（浮雕感）；按压时保持品牌色，
+    // 去掉阴影并反转内斜边（暗上左/亮下右）作凹陷反馈。
+    // BoxDecoration 不允许圆角 + 非均匀 Border，故内斜边用 BevelRoundedSurface 绘制。
+    final brandCta = isNeu &&
+        (widget.variant == ButtonVariant.primary || widget.keepBrandOnPress) &&
+        !widget.overlay;
+
     Widget content = useRecessedSurface
         ? RecessedSurface(
             tokens: tokens,
@@ -219,17 +218,25 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
             rimFraction: 0.3,
             child: Padding(padding: widget.padding, child: body),
           )
-        : Container(
-            padding: widget.padding,
-            decoration: BoxDecoration(
-              color: gradient == null ? background : null,
-              gradient: gradient,
-              borderRadius: BorderRadius.circular(radius),
-              border: border,
-              boxShadow: shadows,
-            ),
-            child: body,
-          );
+        : (brandCta && _pressed)
+            ? BevelRoundedSurface(
+                fill: background,
+                bevelLight: ThemeTokens.brandBevelDark(tokens),
+                bevelDark: ThemeTokens.brandBevelLight(tokens),
+                borderRadius: radius,
+                child: Padding(padding: widget.padding, child: body),
+              )
+            : Container(
+                padding: widget.padding,
+                decoration: BoxDecoration(
+                  color: gradient == null ? background : null,
+                  gradient: gradient,
+                  borderRadius: BorderRadius.circular(radius),
+                  border: border,
+                  boxShadow: shadows,
+                ),
+                child: body,
+              );
 
     // 按压缩放反馈（disabled 不响应）。`enableHoverScale` 保留为 API 选项，
     // 移动端无 hover 概念，press 反馈始终启用。

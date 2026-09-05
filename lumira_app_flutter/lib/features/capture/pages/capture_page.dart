@@ -10,12 +10,15 @@ import 'package:flutter/services.dart'
     show HapticFeedback, SystemChrome, DeviceOrientation, SystemSound, SystemSoundType;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image/image.dart' as img;
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:screen/screen.dart';
+import 'package:sqflite/sqflite.dart' show getDatabasesPath;
 
 import '../../../core/db/database_provider.dart';
 import '../../../core/services/ohos_image_processor.dart';
@@ -184,6 +187,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 现在改为在 facing 变化时重建 key，强制 RepaintBoundary + CameraAwesomeBuilder 重建。
   GlobalKey _viewfinderCaptureKey = GlobalKey(debugLabel: 'viewfinder');
 
+  /// 已合成取景器（含色彩矩阵 + 前置镜像 + 裁切）的 RepaintBoundary key，
+  /// 用于 OHOS 快门冻结帧捕获（水印动画源，WYSIWYG）。
+  GlobalKey _filteredPreviewKey = GlobalKey(debugLabel: 'filteredPreview');
+
   /// 上一次构建时的 facing，用于检测 facing 变化并重建 captureKey
   String? _lastFacingForKey;
 
@@ -229,6 +236,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
   bool _showWatermarkAnimation = false;
   String? _animationPhotoPath;
   WatermarkTemplate? _animationTemplate;
+  /// 动画源是否已是屏幕空间 WYSIWYG 帧（取景器来源 = true，跳过方向对齐）。
+  bool _animationSourceAligned = false;
   VoidCallback? _onAnimationComplete;
 
   /// OHOS 分阶段拍照早帧订阅：一阶段低质量帧（~672ms）先于成片到达，
@@ -240,10 +249,6 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
   /// 先快后真：当前这次快门的 photoId（提前生成，interim→final→DB→预览升级复用）。
   String? _currentShutterPhotoId;
-
-  /// 当前这次快门是否需要水印动画（回调用实例字段，防连拍/中途开关串值）。
-  bool _currentShouldAnimate = false;
-  WatermarkTemplate? _currentWmTemplate;
 
   /// 角标缩略图的 GlobalKey：水印动画淡出后跳预览页之前，
   /// 需要确保后处理落库完成（读取 finalPath/photoId）。
@@ -849,11 +854,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
         wmTemplate != null &&
         !isChallengeMode;
 
-    // === 先快后真：快门即生成 photoId 并快照本次水印参数（供早帧回调使用） ===
+    // === 先快后真：快门即生成 photoId（供早帧 interim 回调使用） ===
     final photoId = 'photo_${DateTime.now().millisecondsSinceEpoch}';
     _currentShutterPhotoId = photoId;
-    _currentShouldAnimate = shouldAnimateNow;
-    _currentWmTemplate = wmTemplate;
 
     // 立即反馈：白闪 + 角标 processing 态
     setState(() => _shutterTrigger++);
@@ -872,33 +875,37 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
     // OHOS 分阶段拍照：订阅早帧通道（常驻一次）。一阶段低质量帧（~672ms）先于成片
     // capture()（~1.9s）返回到达。
-    // 先快后真：早帧无条件作为 interim 先顶屏（缩略图/预览），有水印时同时触发动画。
-    // _expectingEarlyFrame 标记本次拍摄期望早帧，防止上一帧残留事件误触发动画/interim。
+    // 先快后真：早帧无条件作为 interim 先顶屏（缩略图/预览）。
+    // 水印动画源不再用原生早帧（FAST_MODE 走相册增强链路，与取景器不符），
+    // 改为快门时刻冻结取景器帧（_captureShutterViewfinderFrame，WYSIWYG）。
+    // _expectingEarlyFrame 标记本次拍摄期望早帧，防止上一帧残留事件误触发 interim。
     final isOhos = !isIos && !Platform.isAndroid;
     _expectingEarlyFrame = isOhos;
     if (isOhos) {
       try {
         _earlyFrameSub ??= cameraService.photoEarlyFrames().listen((path) {
-          if (!_expectingEarlyFrame || _showWatermarkAnimation || path.isEmpty) {
+          if (!_expectingEarlyFrame || path.isEmpty) {
             return;
           }
+          // 允许连续转场：interim 分支本地判定，避免「残留早帧误触发动画」的历史问题。
           _expectingEarlyFrame = false;
           final pid = _currentShutterPhotoId;
           debugPrint('[capture] OHOS early frame arrived: $path pid=$pid');
-          // 1) 先快后真：早帧即可见缩略图/预览（interim）
           if (pid != null) {
             ref.read(captureThumbnailProvider.notifier)
                 .setInterimResult(path, photoId: pid);
-          }
-          // 2) 需水印动画时才触发水印定格动画（回调用实例字段，防连拍串值）
-          if (_currentShouldAnimate && _currentWmTemplate != null) {
-            _startWatermarkAnimation(path, _currentWmTemplate!);
           }
         });
       } catch (e) {
         debugPrint('[capture] listen OHOS early frame failed: $e');
       }
     }
+
+    // OHOS：快门即冻结已合成取景器帧作水印动画源（与 iOS 取景器帧直出对齐，
+    // 保证动画内容 = 取景器）。与成片 capture() 并行执行，不阻塞。
+    final shutterFrameFuture = isOhos && shouldAnimateNow && flashMode == CaptureFlashMode.off
+        ? _captureShutterViewfinderFrame()
+        : Future<String?>.value(null);
 
     // 快照当前比例参数（避免连拍中切换比例导致参数不一致）
     final ratioId = ref.read(CaptureState.aspectRatioProvider);
@@ -919,16 +926,18 @@ class _CapturePageState extends ConsumerState<CapturePage>
         CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
 
     try {
-      // === 性能测量（临时，定位 1.5-2s 瓶颈后移除） ===
+      // === P0：动画不等成片 ===
+      // OHOS capture()（框架 photoAvailable 投递，~2s）是快门到可交互的最大延迟。
+      // 先启动拍照 Future 不立即 await，等动画源帧（快门冻结帧/取景器直出帧，
+      // 100-300ms）就绪即播水印动画，成片在后台继续。
       final sw = Stopwatch()..start();
-      final result = await cameraService.capture(
+      final captureFuture = cameraService.capture(
         config: CaptureConfig(
           facing: facing,
           zoomMultiplier: zoom,
           flashMode: _mapFlashMode(flashMode),
         ),
       );
-      debugPrint('[perf] cameraService.capture: ${sw.elapsedMilliseconds}ms');
 
       // 等待取景器帧（编码 100-300ms，与成片拍照并行，通常已就绪）；
       // 失败/无可用帧时回退用成片做动画源。
@@ -939,19 +948,48 @@ class _CapturePageState extends ConsumerState<CapturePage>
         debugPrint('[capture] captureFrameForAnimation failed: $e');
       }
 
-      // === 水印相框入场动画（立即触发） ===
-      // 快门按下即播放动画，使用「动画内容源帧」+ CustomPaint 叠加水印
-      // （与最终渲染水印视觉一致），后处理在队列中并行执行。
+      // OHOS 快门冻结取景器帧（动画源，WYSIWYG），与成片 capture() 并行已完成。
+      String? shutterFramePath;
+      try {
+        shutterFramePath = await shutterFrameFuture;
+      } catch (e) {
+        debugPrint('[capture] shutterFrameForAnimation failed: $e');
+      }
+
+      // === 水印相框入场动画（动画源帧就绪即触发，不等成片） ===
+      // 使用「动画内容源帧」+ CustomPaint 叠加水印（与最终渲染水印视觉一致），
+      // 后处理在队列中并行执行。
       // - iOS 动画源 = 取景器帧直出（快 + 与取景器高度一致）；
-      // - OHOS 动画源 = 分阶段拍照早帧（~672ms 提前触发，无需等成片）；
-      // - 无可用帧 / 闪光模式 / 取景器帧失败 / 早帧未到 → 回退用成片。
-      if (shouldAnimateNow && mounted) {
-        // OHOS 早帧已触发动画（_showWatermarkAnimation 为 true）则跳过，
-        // 成片仅作后处理落库；否则回退用成片做动画源。
-        if (!_showWatermarkAnimation) {
-          _startWatermarkAnimation(
-              animationFramePath ?? result.filePath, wmTemplate);
-        }
+      // - OHOS 动画源 = 快门冻结取景器帧（含色彩矩阵+前置镜像+裁切，WYSIWYG）；
+      // 两者均为屏幕空间帧（已旋转/已镜像），sourceAligned=true 跳过二次对齐。
+      // 注意：此处不消费 _expectingEarlyFrame——成片未返回前早帧仍应送达
+      // （interim 先快后真），等 capture() 返回后再复位。
+      final earlyAnimSource = shutterFramePath ?? animationFramePath;
+      if (shouldAnimateNow &&
+          mounted &&
+          earlyAnimSource != null &&
+          !_showWatermarkAnimation) {
+        _startWatermarkAnimation(
+          earlyAnimSource,
+          wmTemplate,
+          sourceAligned: true,
+        );
+      }
+
+      // 等待成片返回（动画已开播，后台完成）。
+      final result = await captureFuture;
+      debugPrint('[perf] cameraService.capture: ${sw.elapsedMilliseconds}ms');
+
+      // 回退：无动画源帧（闪光模式/取景器帧捕捉失败）且动画尚未启动 →
+      // 用成片启动（成片是原始照片，需要方向对齐，sourceAligned=false）。
+      if (shouldAnimateNow && mounted && !_showWatermarkAnimation) {
+        _startWatermarkAnimation(
+          result.filePath,
+          wmTemplate,
+          sourceAligned: false,
+        );
+      }
+      if (shouldAnimateNow) {
         _expectingEarlyFrame = false;
       }
 
@@ -1038,8 +1076,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
         params.isPortrait &&
         // 拉腿尚未在 OHOS 原生 processJpeg 实现，开拉腿时走 Dart 管线应用。
         params.postProcess.legStretch == 0 &&
-        // 磨皮/暗角/颗粒/Clarity 已全部由 OHOS 原生 C++ 实现（矩阵含 clarity、
-        // 锐化→颗粒→磨皮→暗角 逐像素），与慢管线同序同语义，故不再回退 Dart。
+        // 磨皮/暗角/颗粒/Clarity 已全部由 OHOS 原生 C++ 实现（clarity 除矩阵内对比度
+        // 折叠外另有独立中频 pass；锐化→清晰度→颗粒→磨皮→暗角 逐像素），与慢管线同序同语义，故不再回退 Dart。
         // 仅自定义裁剪（需几何裁窗，原生 processJpeg 用 center-cover 近似）仍回退 Dart。
         params.postProcess.customCropRect == null;
     bool nativeFastDone = false;
@@ -1057,6 +1095,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
           // 拍摄成片锐化严格用用户/模板真实值，禁止代码层强制最小锐化。
           // 防糊由系统层解决：OHOS 8.2MP 档位 + PhotoQualityPrioritization.HIGH_QUALITY。
           sharpen: params.postProcess.sharpen,
+          clarity: params.postProcess.color.clarity,
           smoothStrength: params.postProcess.smoothStrength,
           vignette: params.postProcess.vignette,
           grain: params.postProcess.grain,
@@ -1376,19 +1415,93 @@ class _CapturePageState extends ConsumerState<CapturePage>
     }
   }
 
+  /// OHOS 快门冻结取景器帧：快门瞬间对「已合成取景器」toImage，作水印动画源。
+  /// 取景器已含 ColorFiltered 色彩矩阵 + 前置镜像 + 比例裁切（WYSIWYG），
+  /// 因此动画内容与取景器一致。返回 PNG 文件路径；失败返回 null（上层回退成片）。
+  ///
+  /// 仅捕获相机画面本身（filteredCamera），不含构图线/剪影/对焦框等 UI 叠层，
+  /// 避免动画源被调试元素污染。
+  Future<String?> _captureShutterViewfinderFrame() async {
+    final boundary = _filteredPreviewKey.currentContext?.findRenderObject();
+    if (boundary is! RenderRepaintBoundary) {
+      debugPrint('[capture] shutterFrame: RepaintBoundary 不可用');
+      return null;
+    }
+    try {
+      final sw = Stopwatch()..start();
+      final uiImage = await boundary.toImage();
+      final byteData =
+          await uiImage.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return null;
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      String? chosen;
+      String? lastErr;
+      for (final base in await _shutterFrameBases()) {
+        try {
+          final photosDir = Directory(p.join(base, 'photos'));
+          if (!await photosDir.exists()) {
+            await photosDir.create(recursive: true);
+          }
+          chosen = p.join(photosDir.path, 'shutter_frame_$ts.png');
+          final bytes = byteData.buffer
+              .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes);
+          await File(chosen).writeAsBytes(bytes, flush: true);
+          break;
+        } catch (e) {
+          lastErr = e.toString();
+        }
+      }
+      final path = chosen;
+      if (path == null) {
+        debugPrint('[capture] shutterFrame 写入失败: $lastErr');
+        return null;
+      }
+      debugPrint('[capture] shutterFrame: ${sw.elapsedMilliseconds}ms $path');
+      return path;
+    } catch (e) {
+      debugPrint('[capture] shutterFrame capture failed: $e');
+      return null;
+    }
+  }
+
+  /// 快门冻结帧的候选持久目录基址（依次尝试，与拍照路径一致，避免写 tmp 丢失）。
+  Future<List<String>> _shutterFrameBases() async {
+    final bases = <String>[];
+    try {
+      bases.add(await getDatabasesPath());
+    } catch (e) {
+      debugPrint('[capture] shutterFrame getDatabasesPath 不可用: $e');
+    }
+    try {
+      bases.add((await getApplicationDocumentsDirectory()).path);
+    } catch (e) {
+      debugPrint('[capture] shutterFrame getApplicationDocumentsDirectory 不可用: $e');
+    }
+    return bases;
+  }
+
   /// 触发水印定格动画（用指定「动画内容源帧」路径 + 水印模板）。
   /// 动画淡出后跳转拍摄预览页；后处理为异步，需等最终照片落库完成
   /// 后才带上 finalPath 打开预览页（见 [_goToPreviewWhenReady]）。
   ///
   /// - iOS：动画源 = 取景器帧直出（快 + WYSIWYG），闪光模式回退用成片；
-  /// - OHOS：动画源 = 分阶段拍照早帧（~672ms 提前触发），早帧未到回退用成片。
+  /// - OHOS：动画源 = 快门冻结取景器帧（含色彩矩阵+前置镜像+裁切，WYSIWYG），
+  ///   取景器帧失败回退用成片。
+  ///
+  /// [sourceAligned]：动画源是否已是屏幕空间 WYSIWYG 帧（已旋转/已镜像）。
+  /// 取景器来源帧为 true（overlay 跳过方向对齐，避免双重镜像/旋转）；
+  /// 回退用原始成片时为 false（overlay 按设备方向 + 前置镜像对齐）。
   void _startWatermarkAnimation(
-      String photoPath, WatermarkTemplate template) {
+    String photoPath,
+    WatermarkTemplate template, {
+    required bool sourceAligned,
+  }) {
     if (!mounted) return;
     setState(() {
       _showWatermarkAnimation = true;
       _animationPhotoPath = photoPath;
       _animationTemplate = template;
+      _animationSourceAligned = sourceAligned;
     });
     _onAnimationComplete = () {
       if (!mounted) return;
@@ -1659,6 +1772,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
         MediaQuery.of(context).size.height >= MediaQuery.of(context).size.width;
     if (_lastFacingForKey != facing) {
       _viewfinderCaptureKey = GlobalKey(debugLabel: 'viewfinder_$facing');
+      _filteredPreviewKey = GlobalKey(debugLabel: 'filteredPreview_$facing');
       _lastFacingForKey = facing;
     }
 
@@ -1876,6 +1990,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
             rebuildKey: _cameraRebuildKey,
             onZoomChanged: _onZoomChanged,
             rawCaptureKey: _viewfinderCaptureKey,
+            previewCaptureKey: _filteredPreviewKey,
           ),
 
           // 1.5 试用模式水印遮罩（铺在取景器上方，不可点击穿透）
@@ -2027,6 +2142,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
                 watermarkTemplate: _animationTemplate!,
                 isFront: facing == 'front',
                 isPortrait: isPortrait,
+                // 取景器来源帧已 WYSIWYG 对齐，跳过 overlay 二次旋转/镜像。
+                sourceAligned: _animationSourceAligned,
                 onAnimationComplete: _onAnimationComplete ?? () {},
               ),
             ),
@@ -2085,11 +2202,13 @@ class _ViewfinderArea extends ConsumerWidget {
     required this.rebuildKey,
     required this.onZoomChanged,
     this.rawCaptureKey,
+    this.previewCaptureKey,
   });
 
   final int rebuildKey;
   final ValueChanged<double>? onZoomChanged;
   final GlobalKey? rawCaptureKey;
+  final GlobalKey? previewCaptureKey;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -2140,6 +2259,7 @@ class _ViewfinderArea extends ConsumerWidget {
               onZoomChanged: onZoomChanged,
               previewFit: CameraPreviewFit.cover,
               rawCaptureKey: rawCaptureKey,
+              previewCaptureKey: previewCaptureKey,
             ),
           ),
         ),
@@ -2152,6 +2272,7 @@ class _ViewfinderArea extends ConsumerWidget {
       facing: facing,
       onZoomChanged: onZoomChanged,
       rawCaptureKey: rawCaptureKey,
+      previewCaptureKey: previewCaptureKey,
       screenSize: screenSize,
     );
   }
@@ -2165,6 +2286,7 @@ class _FloatingViewfinder extends ConsumerStatefulWidget {
     required this.facing,
     required this.onZoomChanged,
     required this.rawCaptureKey,
+    required this.previewCaptureKey,
     required this.screenSize,
   });
 
@@ -2172,6 +2294,7 @@ class _FloatingViewfinder extends ConsumerStatefulWidget {
   final String facing;
   final ValueChanged<double>? onZoomChanged;
   final GlobalKey? rawCaptureKey;
+  final GlobalKey? previewCaptureKey;
   final Size screenSize;
 
   @override
@@ -2271,6 +2394,7 @@ class _FloatingViewfinderState extends ConsumerState<_FloatingViewfinder> {
                   onZoomChanged: widget.onZoomChanged,
                   previewFit: CameraPreviewFit.cover,
                   rawCaptureKey: widget.rawCaptureKey,
+                  previewCaptureKey: widget.previewCaptureKey,
                 ),
               ),
             ),

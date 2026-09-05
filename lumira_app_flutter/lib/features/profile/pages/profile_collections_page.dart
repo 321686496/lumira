@@ -146,14 +146,15 @@ class _CreateButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 品牌 CTA 新拟态内斜边：纯品牌色顶面 + 内斜边（亮上左/暗下右），
-    // 按压时反转斜边（暗上左/亮下右），1.5px 实线不发散，无外阴影避免悬浮感。
+    // 品牌 CTA 新拟态：常态「品牌色 + 品牌浮雕外阴影」凸起，按压保持主色并
+    // 反转内斜边（暗上左 / 亮下右）作凹陷反馈。
     return Padding(
       padding: const EdgeInsets.all(8),
       child: PressableRecess(
         onTap: () => GoRouter.of(context).push(RouteNames.profileCollectionEdit),
         borderRadius: 9999,
         raisedFill: tokens.brand,
+        raisedShadow: ThemeTokens.brandEmbossShadows(tokens),
         bevelLight: ThemeTokens.brandBevelLight(tokens),
         bevelDark: ThemeTokens.brandBevelDark(tokens),
         child: Padding(

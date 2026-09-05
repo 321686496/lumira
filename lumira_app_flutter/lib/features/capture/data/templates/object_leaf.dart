@@ -15,7 +15,7 @@ const PhotoTemplate objectLeafTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/object_leaf.png'),
+      TemplateImage(url: 'assets/images/templates/object_leaf.jpg'),
     ],
     description: '微距放大枯叶的脉络与肌理，呈现时间留下的织密纹路',
     referenceSource: '样片参考：枯叶纹理微距作品；参数参考自然纹理细节合集',

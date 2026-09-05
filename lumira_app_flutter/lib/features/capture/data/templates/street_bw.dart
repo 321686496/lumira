@@ -38,7 +38,7 @@ const PhotoTemplate streetBwTemplate = PhotoTemplate(
   poses: [
     Pose(
       name: '封面·斑马线独行',
-      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/street_bw_pose1.png'),
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/street_bw_pose1.webp'),
       position: Position(x: 0.48, y: 0.63),
       scale: 1.79,
       rotation: 0,

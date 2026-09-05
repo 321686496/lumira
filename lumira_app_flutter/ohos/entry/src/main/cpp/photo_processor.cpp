@@ -11,7 +11,8 @@
  *                matrix: Float64Array(20), sharpen: number, mirror: boolean,
  *                smooth: number (0-100 磨皮强度，0=关闭),
  *                vignette: number (0-100 暗角强度，0=关闭),
- *                grain: number (0-100 颗粒强度，0=关闭)) : ArrayBuffer
+ *                grain: number (0-100 颗粒强度，0=关闭),
+ *                clarity: number (-100..100 清晰度，0=关闭；负值柔化)) : ArrayBuffer
  *   swapRgba(rgba: Uint8Array, byteLen: number) : void   // 原地 R/B 对调（水印用）
  *
  * 磨皮（smooth>0）：用「频率分离削细节 + 肤色掩膜 + 结构门控」在【全分辨率】RGBA 缓冲上做
@@ -57,10 +58,12 @@ static inline uint8_t bc(double v) {
 }
 
 // ── 分离式高斯模糊（作用于 RGBA，仅平滑 RGB，不碰 A）──
-// rgba / dst 同尺寸。radius：2..8。σ = radius/2。
-static void gaussianBlurRgba(const uint8_t* rgba, int w, int h, int radius, uint8_t* dst) {
+// rgba / dst 同尺寸。radius：2..8。σ = radius/2（磨皮历史语义）；
+// sigmaOverride > 0 时用覆盖值（clarity 用 radius×2/3 = Dart image 包同款 σ，保证频带一致）。
+static void gaussianBlurRgba(const uint8_t* rgba, int w, int h, int radius, uint8_t* dst,
+                             double sigmaOverride = 0.0) {
   const int k = 2 * radius + 1;
-  const double sigma = radius / 2.0;
+  const double sigma = sigmaOverride > 0.0 ? sigmaOverride : radius / 2.0;
   double* wgt = (double*)malloc((size_t)k * sizeof(double));
   if (!wgt) { memcpy(dst, rgba, (size_t)w * (size_t)h * 4); return; }
   double sw = 0.0;
@@ -327,11 +330,39 @@ static void applyGrain(uint8_t* rgba, int w, int h, int strength) {
 
 // 由 ArkTS 侧执行，匹配旧实现：mirror 取源、矩阵、R/B 复原写回（R/B 复原为补偿
 // createPixelMap(RGBA_8888) + ImagePacker 把缓冲 R/B 解释对调的硬件怪癖）
+// ── 清晰度（中频局部对比：orig + (orig − 高斯模糊)×sign×amount，原地修改）──
+// 与 Dart applyPerPixelEffectsImg 的 Clarity 分支同源：amount=(|v|/100)×0.6，
+// 正值增强局部对比、负值柔化。模糊核 σ 与 Dart image 包 gaussianBlur(radius:3)
+// 一致（σ = radius×2/3 = 2.0），保证 OHOS 原生快路径与 Dart 慢管线成片视觉一致
+//（修复「清晰度与原来的效果不一致」：原实现只有矩阵里的对比度近似，缺中频 pass）。
+static void applyClarity(uint8_t* rgba, int w, int h, double clarity) {
+  if (clarity == 0.0) return;
+  double av = std::fabs(clarity) / 100.0;
+  if (av > 1.0) av = 1.0;
+  const double amount = av * 0.6;
+  const double sign = clarity > 0.0 ? 1.0 : -1.0;
+  uint8_t* blurred = (uint8_t*)malloc((size_t)w * (size_t)h * 4);
+  if (!blurred) return;
+  gaussianBlurRgba(rgba, w, h, 3, blurred, 3.0 * 2.0 / 3.0);
+  const size_t nPix = (size_t)w * (size_t)h;
+  for (size_t i = 0; i < nPix; i++) {
+    uint8_t* p = rgba + i * 4;
+    const uint8_t* b = blurred + i * 4;
+    for (int c = 0; c < 3; ++c) {
+      const double v = p[c] + (p[c] - b[c]) * sign * amount;
+      if (v > 255.0) p[c] = 255;
+      else if (v < 0.0) p[c] = 0;
+      else p[c] = (uint8_t)llround(v);
+    }
+  }
+  free(blurred);
+}
+
 static napi_value ProcessRgba(napi_env env, napi_callback_info info) {
-  size_t argc = 9;
-  napi_value argv[9];
+  size_t argc = 10;
+  napi_value argv[10];
   napi_status status = napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
-  if (status != napi_ok || argc < 9) {
+  if (status != napi_ok || argc < 10) {
     return nullptr;
   }
 
@@ -396,6 +427,12 @@ static napi_value ProcessRgba(napi_env env, napi_callback_info info) {
   if (grain < 0) grain = 0;
   if (grain > 100) grain = 100;
 
+  // ── 清晰度（-100..100，0=关闭；负值柔化，与 Dart 慢管线符号语义一致）──
+  double clarity = 0.0;
+  napi_get_value_double(env, argv[9], &clarity);
+  if (clarity > 100.0) clarity = 100.0;
+  if (clarity < -100.0) clarity = -100.0;
+
   const size_t outLen = (size_t)n * 4;
   const uint8_t* src = (const uint8_t*)srcData;
 
@@ -427,19 +464,23 @@ static napi_value ProcessRgba(napi_env env, napi_callback_info info) {
   }
 
   // ── Pass 2：边缘自适应锐化（Unsharp 死区版，仅锐化超阈值边缘，平坦区原样）──
-  // 效果顺序与 Dart 慢管线（CaptureWorker）完全一致：矩阵 → 锐化 → 颗粒 → 磨皮 → 暗角
-  // （clarity 已折进色彩矩阵，无需单独 pass）；这样 OHOS 原生快路径与慢管线成片视觉一致。
+  // 效果顺序与 Dart 慢管线（CaptureWorker）完全一致：矩阵 → 锐化 → 清晰度 → 颗粒 → 磨皮 → 暗角
+  //（clarity 除矩阵内的对比度折叠外另有独立中频 pass——与 Dart 慢管线双重应用语义一致）。
   uint8_t* final = out;
   if (sharpen > 0) {
     // 亮度域死区 Unsharp（与预览 FragmentShader 同一公式）：
     //   luma = 0.299R+0.587G+0.114B；lumaBlur = 4 邻域均值；
-    //   diff = luma - lumaBlur；edge = smoothstep(1.0, 2.5, |diff|)；
-    //   amnt = a×(diff>thr ? diff-thr : diff<-thr ? diff+thr : 0)，a=clamp(sharpen/100,0,1.2)
+    //   diff = luma - lumaBlur；edge = smoothstep(0.75, 2.25, |diff|)；
+    //   amnt = a×(diff>thr ? diff-thr : diff<-thr ? diff+thr : 0)，
+    //   a = clamp(sharpen/100×6.0, 0, 6.0)
     // 亮度方向统一增益 → 色相不变、平坦区不放大颗粒；死区 1.0 让锐化重新咬合真实边缘。
-    double a = (double)sharpen / 100.0;
-    if (a > 1.2) a = 1.2; if (a < 0.0) a = 0.0;
-    const double thr = 1.0;    // 死区下界（0-255 亮度差）
-    const double e0 = 1.0, e1v = 2.5; // 边缘门控 smoothstep 区间
+    // 2026-09-05 强度修正：统一死区版后 a 上限仅 1.0，软边缘增益 ~5-12/255，
+    // 用户「拉满无感」（真机反馈）；二次修正 ×6.0 + 死区 0.75/门控(0.75,2.25)
+    // 对比 +120%，62 档 +59%，低值仍平滑渐进），死区与边缘门控保留防噪/防光晕。
+    double a = (double)sharpen / 100.0 * 6.0;
+    if (a > 6.0) a = 6.0; if (a < 0.0) a = 0.0;
+    const double thr = 0.75;   // 死区下界（0-255 亮度差）
+    const double e0 = 0.75, e1v = 2.25; // 边缘门控 smoothstep 区间
     uint8_t* conv = (uint8_t*)malloc(outLen);
     if (!conv) { free(out); return nullptr; }
     for (int oy = 0; oy < height; ++oy) {
@@ -480,6 +521,9 @@ static napi_value ProcessRgba(napi_env env, napi_callback_info info) {
     free(out);
     final = conv;
   }
+
+  // ── Pass 2.5：清晰度（中频局部对比，原地；与 Dart 慢管线同序：锐化→清晰度→颗粒）──
+  applyClarity(final, width, height, clarity);
 
   // ── Pass 3：颗粒（逐像素加性噪声，原地）──
   applyGrain(final, width, height, grain);

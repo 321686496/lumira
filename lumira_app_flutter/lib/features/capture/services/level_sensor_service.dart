@@ -142,6 +142,13 @@ class LevelSensorService {
     HoldOrientation? last;
     return StreamTransformer.fromHandlers(
       handleData: (List<double> a, EventSink<HoldOrientation> sink) {
+        // 坐标系（2026-09-05 按官方文档核实）：OHOS @ohos.sensor 加速度计与
+        // Android/iOS 一致 —— X 轴沿屏幕短边（宽，右为正）、Y 轴沿屏幕长边（高，
+        // 上为正）、Z 轴垂直屏幕向外。因此竖持时 |y|≈9.8、|x|≈0，
+        // `portrait = |y| >= |x|` 即为正确判定，**不要做任何 x/y 对调**：
+        // 此前误加的 OHOS 轴对调曾把竖持判成横持（isPortrait=false），
+        // 导致成片被旋 270°、拍照回退慢速 Dart 管线（4991ms）。
+        // （与同文件 _smoothingTransformer 供水平仪的未对调轴约定保持一致。）
         final x = a[0].abs();
         final y = a[1].abs();
         final z = a[2].abs();
@@ -153,8 +160,14 @@ class LevelSensorService {
         final portrait = y >= x;
         var quarterTurns = 0;
         if (!portrait) {
-          // 横屏：按 [x] 正负分辨左右。如果真机观感旋转方向相反，把 1/3 对调即可。
+          // 横屏：按 [a0] 正负分辨左右。如果真机观感旋转方向相反，把 1/3 对调即可。
           quarterTurns = a[0] > 0 ? 1 : 3;
+        }
+        // 首帧诊断：打印原始轴值，用于真机/新机型核对轴约定（竖持时应见 |a1|≈9.8）。
+        if (last == null) {
+          final fmt = (double v) => v.toStringAsFixed(2);
+          debugPrint('[level] accel(raw)=${fmt(a[0])},${fmt(a[1])},${fmt(a[2])} '
+              '=> portrait=$portrait');
         }
         final orientation =
             HoldOrientation(portrait: portrait, quarterTurns: quarterTurns);

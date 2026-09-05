@@ -15,7 +15,7 @@ const PhotoTemplate objectWatchTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/object_watch.png'),
+      TemplateImage(url: 'assets/images/templates/object_watch.jpg'),
     ],
     description: '微距拍摄手表表盘的精细做工，指针、刻度和金属反光的质感',
     referenceSource: '样片参考：手表表盘微距作品；参数参考产品微距布光合集',

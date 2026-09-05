@@ -16,7 +16,7 @@ const PhotoTemplate neonPortraitTemplate = PhotoTemplate(
     tagIds: [],
     price: 20,
     images: [
-      TemplateImage(url: 'assets/images/templates/neon_portrait_1.png'),
+      TemplateImage(url: 'assets/images/templates/neon_portrait_1.jpg'),
     ],
     description: '这是一套专为雨夜繁华街头设计的赛博港风人像模板。场景选取霓虹灯牌密集的湿润街道，利用地面反光增强氛围。光线以背景高饱和霓虹为主，主体需正面补光以从暗背景中剥离。穿搭建议黑色系露肤度适中的吊带或外套，营造冷艳疏离感。适合喜欢电影感、夜景街拍及情绪大片的用户。',
     referenceSource: '样片 EXIF: 赛博朋克人像作品集；参数参考 500px Neon Portrait 专题',
@@ -38,7 +38,7 @@ const PhotoTemplate neonPortraitTemplate = PhotoTemplate(
   poses: [
     Pose(
       name: '封面·侧身回眸',
-      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/neon_portrait_pose1.png'),
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/neon_portrait_pose1.webp'),
       position: Position(x: 0.5, y: 0.5),
       scale: 2.5,
       rotation: 0,

@@ -33,6 +33,9 @@ import { ArkTSUtils, Decimal } from '@kit.ArkTS'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import { display } from '@kit.ArkUI'
 import { CameraDeviceChangeListener } from '../sensors/CameraDeviceChangeListener'
+// 取景器实时特效 GPU 管线（libpreview_fx.so）：相机预览流→GL 着色器→Flutter Texture。
+// 数值语义与 iOS PreviewEffectProcessor 一致（磨皮/锐化/颗粒/暗角/色彩矩阵 WYSIWYG）。
+import previewFx from 'libpreview_fx.so'
 
 export enum CaptureMode {
   PHOTO = 'PHOTO',
@@ -105,6 +108,11 @@ export class CameraState implements StreamHandler {
   private _photoEarlyFrameListener: PhotoEarlyFrameStreamListener | null = null
   private videoFd: number | undefined = undefined
   private degree: number = 0;
+  // 重力传感器常驻订阅标记（订阅中 degree 由回调持续刷新缓存）。
+  private _degreeSubscribed: boolean = false
+  // 取景器实时特效管线：相机预览写入 FX 消费端 surface（OH_NativeImage），
+  // 渲染线程 GL 处理后输出到 Flutter 纹理 surface。0 = 未创建/失败（直写回退）。
+  private previewFxSurfaceId: number = 0
   private previewProfile: camera.Profile | undefined = undefined
   private cameraPosition: camera.CameraPosition | undefined = undefined
   private _cameraDeviceChangeListener: CameraDeviceChangeListener | undefined = undefined
@@ -174,6 +182,9 @@ export class CameraState implements StreamHandler {
   async initCamera(): Promise<boolean> {
     return this.lock_.lockAsync(async () => {
       await this.releaseCamera()
+      // 重力传感器常驻订阅：持续缓存设备旋转角，takePhoto 关键路径
+      // 不再等待一次性传感器读数（sensor.once 从发起到回包可达数十至数百 ms）。
+      this.startDegreeSensor()
       // 获取相机管理器实例
       if (!this.cameraManager) {
         this.cameraManager = this.getCameraManagerFn();
@@ -294,9 +305,11 @@ export class CameraState implements StreamHandler {
       // 提交会话配置
       await this.session.commitConfig();
 
-      // 拍照画质优先策略（API 21+）：单段式拍照默认"速度优先"，系统为降快门时延会在 ISP 侧
-      // 牺牲画质（降噪涂抹/细节丢失），是 OHOS 端成片偏糊的系统侧主因之一。此处显式切到
-      // HIGH_QUALITY，让系统按画质优先出图；设备不支持或 API < 21 时保持默认，行为与现状一致。
+      // 拍照画质优先策略（API 21+）：显式切回 HIGH_QUALITY。
+      // 2026-09-05 实测：去掉 HIGH_QUALITY（系统默认速度优先）后 capture 仍 ~2.0s
+      // （与 HIGH_QUALITY 的 ~2.2s 基本持平）—— 该延迟是 OHOS 框架 photoAvailable
+      // 投递延迟，与画质模式无关。既然速度无收益，按用户已确认决策保留画质优先，
+      // 清晰度不因速度优化被牺牲。
       if (deviceInfo.sdkApiVersion >= 21 && this.photoOutput) {
         try {
           if (this.photoOutput.isPhotoQualityPrioritizationSupported(camera.PhotoQualityPrioritization.HIGH_QUALITY)) {
@@ -406,7 +419,29 @@ export class CameraState implements StreamHandler {
       `preview=${previewW}x${previewH} total=${photoProfilesArray.length} maxPixels=${maxPixels}`);
 
     // 创建预览流输出。
-    this.previewOutput = this.cameraManager!.createPreviewOutput(this.previewProfile, this.surfaceId?.toString());
+    // 取景器实时特效 GPU 管线：预览流写入 FX 消费端（OH_NativeImage），渲染线程
+    // 经 GL 着色器（色彩矩阵→锐化→颗粒→磨皮→暗角）输出到 Flutter 纹理 surface；
+    // 顶点着色器按 OH_NativeImage_GetTransformMatrixV2 的矩阵采样（含相机预览
+    // 旋转与 GL 翻转，与引擎直写路径同约定）。
+    // 输出窗口几何必须与 Dart 侧 Texture widget 纵横比一致：getEffectivPreviewSize
+    // 在「竖屏 + 相机 orientation 90/270」时交换宽高，此处同规则交换，否则画面被拉伸。
+    // 创建失败（返回 0）时回退相机直写 Flutter surface 的旧路径
+    // （仅色彩矩阵由 Dart ColorFiltered 预览，细节参数仅成片生效）。
+    const camOrientation = this.cameraDevice?.cameraOrientation
+    const displayRot = this.getDisplayRotation()
+    const swapForPortrait = displayRot !== display.Orientation.LANDSCAPE &&
+      displayRot !== display.Orientation.LANDSCAPE_INVERTED &&
+      (camOrientation === camera.ImageRotation.ROTATION_90 ||
+        camOrientation === camera.ImageRotation.ROTATION_270)
+    const fxOutWidth = swapForPortrait ? this.previewProfile!!.size.height
+      : this.previewProfile!!.size.width
+    const fxOutHeight = swapForPortrait ? this.previewProfile!!.size.width
+      : this.previewProfile!!.size.height
+    this.previewFxSurfaceId = previewFx.createPreviewFx(this.surfaceId, fxOutWidth, fxOutHeight,
+      this.previewProfile!!.size.width, this.previewProfile!!.size.height)
+    const previewSurface: string = this.previewFxSurfaceId > 0
+      ? this.previewFxSurfaceId.toString() : this.surfaceId?.toString()
+    this.previewOutput = this.cameraManager!.createPreviewOutput(this.previewProfile, previewSurface);
     if (this.previewOutput === undefined) {
       Logger.error(TAG, 'Failed to create the preview stream.');
       return false;
@@ -828,10 +863,48 @@ export class CameraState implements StreamHandler {
   }
 
   /**
+   * 更新取景器实时特效参数（色彩矩阵 + 锐化/磨皮/暗角/颗粒）。
+   *
+   * 数值语义与 iOS PreviewEffectProcessor.updateEffects 一致：
+   * - matrix：Flutter 20 元素 ColorFilter（恒等时传 null → 着色器跳过矩阵 pass）
+   * - vignette/smooth/sharpen/grain：0..100 原始强度（原生侧按 iOS 同曲线折算）
+   *
+   * 管线未创建（录像模式/初始化竞态/创建失败回退）时原生侧安静忽略。
+   */
+  updatePreviewEffects(hasMatrix: boolean, matrix: number[] | null, vignette: number,
+    smooth: number, sharpen: number, grain: number): void {
+    try {
+      if (hasMatrix && matrix !== null && matrix !== undefined && matrix.length >= 20) {
+        const m = new Float64Array(20)
+        for (let i = 0; i < 20; i++) {
+          m[i] = matrix[i]
+        }
+        previewFx.updatePreviewFxParams(true, m, vignette, smooth, sharpen, grain)
+      } else {
+        previewFx.updatePreviewFxParams(false, null, vignette, smooth, sharpen, grain)
+      }
+    } catch (error) {
+      Logger.error(TAG, `updatePreviewEffects fail: ${JSON.stringify(error)}`)
+    }
+  }
+
+  /**
    * 释放会话及其相关参数
    */
   async releaseCamera(): Promise<void> {
     Logger.info(TAG, 'releaseCamera is called');
+
+    // 相机释放时停止重力传感器常驻订阅（与相机生命周期一致）。
+    this.stopDegreeSensor()
+
+    // 销毁取景器实时特效 GPU 管线（含渲染线程/GL/EGL/NativeImage 全链资源）。
+    // initCamera 首步即 releaseCamera，故相机重建（切镜头/切比例/折叠等）路径统一在此收敛。
+    try {
+      previewFx.destroyPreviewFx()
+      this.previewFxSurfaceId = 0
+    } catch (error) {
+      Logger.error(TAG, `destroyPreviewFx fail: ${JSON.stringify(error)}`)
+    }
 
     try {
       await this.session?.stop();
@@ -1434,12 +1507,60 @@ export class CameraState implements StreamHandler {
   }
 
   private async getCurrentDeviceDegree(): Promise<number> {
+    // 常驻订阅已就绪：直接返回缓存角（快门关键路径零等待）。
+    // 缓存仅在有效读数（非 0）时更新，平放（z 主导）保留上次有效方向，
+    // 与原 getGravity()===0 时回退 this.degree 的语义一致。
+    if (this._degreeSubscribed) {
+      return this.degree
+    }
     let deviceDegree: number = await this.getGravity();
     deviceDegree = deviceDegree === 0 ? this.degree : deviceDegree;
     if (deviceDegree !== this.degree) {
       this.degree = deviceDegree;
     }
     return deviceDegree;
+  }
+
+  /**
+   * 重力传感器常驻订阅：持续更新 [degree] 缓存。
+   * takePhoto/startVideo 等关键路径改读缓存，消除 sensor.once 的
+   * 单次读数等待（数十至数百 ms 快门延迟的固定组成部分）。
+   */
+  private startDegreeSensor(): void {
+    if (this._degreeSubscribed) {
+      return
+    }
+    if (!canIUse('SystemCapability.Sensors.Sensor')) {
+      Logger.info(TAG, 'degree sensor: SystemCapability.Sensors.Sensor unavailable')
+      return
+    }
+    try {
+      sensor.on(sensor.SensorId.GRAVITY, (data: sensor.GravityResponse) => {
+        const d = this.getRealData(data)
+        // 0 = 平放/无效读数（getRealData 对 z 主导姿态返回 0），保留上次有效方向。
+        if (d !== 0) {
+          this.degree = d
+        }
+      })
+      this._degreeSubscribed = true
+      Logger.info(TAG, 'degree sensor: subscribed (continuous cache)')
+    } catch (error) {
+      let err = error as BusinessError
+      Logger.error(TAG, `degree sensor on failed, code=${err.code}`)
+    }
+  }
+
+  private stopDegreeSensor(): void {
+    if (!this._degreeSubscribed) {
+      return
+    }
+    try {
+      sensor.off(sensor.SensorId.GRAVITY)
+    } catch (error) {
+      let err = error as BusinessError
+      Logger.error(TAG, `degree sensor off failed, code=${err.code}`)
+    }
+    this._degreeSubscribed = false
   }
 
   private async getGravity(): Promise<number> {

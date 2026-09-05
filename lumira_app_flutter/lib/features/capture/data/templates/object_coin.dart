@@ -15,7 +15,7 @@ const PhotoTemplate objectCoinTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/object_coin.png'),
+      TemplateImage(url: 'assets/images/templates/object_coin.jpg'),
     ],
     description: '微距放大老硬币的币面纹样、刻字与岁月包浆，复古质感浓厚',
     referenceSource: '样片参考：硬币收藏微距作品；参数参考古物微距曝光合集',

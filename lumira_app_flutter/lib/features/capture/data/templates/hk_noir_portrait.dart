@@ -16,10 +16,10 @@ const PhotoTemplate hkNoirPortraitTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/hk_noir_portrait_1.png'),
-      TemplateImage(url: 'assets/images/templates/hk_noir_portrait_2.png'),
-      TemplateImage(url: 'assets/images/templates/hk_noir_portrait_3.png'),
-      TemplateImage(url: 'assets/images/templates/hk_noir_portrait_4.png'),
+      TemplateImage(url: 'assets/images/templates/hk_noir_portrait_1.jpg'),
+      TemplateImage(url: 'assets/images/templates/hk_noir_portrait_2.jpg'),
+      TemplateImage(url: 'assets/images/templates/hk_noir_portrait_3.jpg'),
+      TemplateImage(url: 'assets/images/templates/hk_noir_portrait_4.jpg'),
     ],
     description: '这是一组极具电影质感的夜景情绪人像模板。场景设定在深夜的城市街角或高架桥下，利用粗糙的水泥墙面作为背景。光线采用强烈的冷暖对比：主光源为屏幕侧上方的暖黄色硬光（模拟路灯），背景辅以青蓝色的环境冷光与远处的霓虹散景。穿搭建议黑色宽松斜肩卫衣搭配豹纹长裤，营造慵懒、叛逆又带点颓废的都市夜归人氛围。适合喜欢港风、赛博朋克或情绪片风格的用户，在夜晚有单一强光源的街头拍摄。',
     referenceSource: '小红书港风夜景教程；王家卫电影风格；醒图/美图秀秀港风滤镜',
@@ -41,7 +41,7 @@ const PhotoTemplate hkNoirPortraitTemplate = PhotoTemplate(
   poses: [
     Pose(
       name: '封面·倚墙持瓶',
-      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/hk_noir_portrait_pose1.png'),
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/hk_noir_portrait_pose1.webp'),
       position: Position(x: 0.5, y: 0.5),
       scale: 2.5,
       rotation: 0,
@@ -50,7 +50,7 @@ const PhotoTemplate hkNoirPortraitTemplate = PhotoTemplate(
     ),
     Pose(
       name: '附加·坐姿低眉',
-      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/hk_noir_portrait_pose2.png'),
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/hk_noir_portrait_pose2.webp'),
       position: Position(x: 0.5, y: 0.5),
       scale: 2.5,
       rotation: 0,
@@ -68,7 +68,7 @@ const PhotoTemplate hkNoirPortraitTemplate = PhotoTemplate(
     ),
     Pose(
       name: '附加·侧身回眸',
-      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/hk_noir_portrait_pose4.png'),
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/hk_noir_portrait_pose4.webp'),
       position: Position(x: 0.5, y: 0.5),
       scale: 2.5,
       rotation: 0,

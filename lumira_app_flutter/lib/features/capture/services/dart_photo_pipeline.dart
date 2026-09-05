@@ -638,7 +638,8 @@ img.Image applyColorMatrixImg(img.Image image, List<double> m) {
 /// 从 PhotoPostProcessor._applyPerPixelEffects 移植，去掉 ui.Image ↔ img.Image 转换。
 ///
 /// 统一算法规格（与 OHOS C++ / 预览 FragmentShader 同源）：
-/// - 锐化：亮度域死区 Unsharp（lumaBlur=4 邻域均值，死区 thr=1，edge=smoothstep(1,2.5))，
+/// - 锐化：亮度域死区 Unsharp（lumaBlur=4 邻域均值，死区 thr=0.75，edge=smoothstep(0.75,2.25)，
+///   a=sharpen/100×6.0 上限 6.0 —— 2026-09-05 二次修正对齐 iOS 相册锐化量级），
 ///   仅亮度方向增益 → 色相不变、平坦区不放大颗粒、避免 halo。
 /// - 颗粒：预置 128×128 tile + 双线性 + 幅度随亮度（阴影弱、高光强，胶片感），
 ///   固定 offset (13,29) → 与预览/水印/成片一致。
@@ -649,10 +650,13 @@ void applyPerPixelEffectsImg(
   required int grain,
 }) {
   // Sharpen（亮度域死区 Unsharp）
+  // 2026-09-05 二次强度修正：a=v/100×6.0（上限 6.0）、死区 0.75、门控 (0.75,2.25)，
+  // 与 OHOS C++ photo_processor.cpp Pass 2 / iOS PreviewEffectProcessor /
+  // OHOS preview_fx.cpp 四端同步 —— ×2.5 版真机反馈「与原相册锐化不一致太轻」。
   if (sharpen > 0) {
-    final double a = (sharpen / 100.0).clamp(0.0, 1.2).toDouble();
-    const thr = 1.0; // 死区下界（0-255 亮度差）
-    const e0 = 1.0, e1v = 2.5;
+    final double a = (sharpen / 100.0 * 6.0).clamp(0.0, 6.0).toDouble();
+    const thr = 0.75; // 死区下界（0-255 亮度差）
+    const e0 = 0.75, e1v = 2.25;
     final w = image.width, h = image.height;
     final luma = Float64List(w * h);
     final lumaBlur = Float64List(w * h);

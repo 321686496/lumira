@@ -10,12 +10,14 @@
 
 // 统一效果内核：在一遍内完成 锐化(亮度死区Unsharp)→颗粒(tile+亮度)→磨皮(频率分离+肤色掩膜+结构门控)→暗角。
 // 数值语义与 OHOS C++ bake（photo_processor.cpp）及预览 FragmentShader 一致（颜色按 0..1，阈值/幅度相应折算）：
-//   - 锐化：diff=luma−4邻域均值，死区 thr=1/255，amnt=a×(diff±thr)，乘 smoothstep(1/255,2.5/255,|diff|)
+//   - 锐化：diff=luma−4邻域均值，死区 thr=0.75/255，amnt=a×(diff±thr)，乘 smoothstep(0.75/255,2.25/255,|diff|)
 //   - 颗粒：128×128 预置 tile 双线性采样（固定 offset 13/128,29/128），幅度=grains×24/255×mix(0.35,1.0,smoothstep(0.05,0.85,luma))
-//   - 磨皮：YCbCr 肤色概率(BT.601, 0..255 区间折算 0..1) × 结构门控，out=base+detail×(1−removal)
+//   - 磨皮（频率分离）：低频底 base=blur sampler（applyParams 里 CIGaussianBlur 预渲染的矩阵后整图高斯），
+//     detail=rgb−base，out=base+detail×(1−removal)，removal=baseRemove×肤色概率×(1−结构门控)，
+//     曲线与成片 SkinSmoother/photo_processor.cpp 一致（baseRemove=0.5s+0.04，edge=(6+6s)..×2.5）
 //   - 暗角：factor=1−vigS×smoothstep(0.45,1.0,dn)，dn=length(归一径向)/√2
 static NSString *const kPreviewBeautyKernelString = @" \n"
-  "kernel vec4 previewBeauty(sampler image, sampler noise, float sharpenA, float vigS, float smoothS, float grainOn) {\n"
+  "kernel vec4 previewBeauty(sampler image, sampler noise, sampler blur, float sharpenA, float vigS, float smoothS, float grainOn) {\n"
   "  vec2 p = samplerTransform(image, destCoord());\n"
   "  vec2 tsp = samplerSize(image);\n"
   "  vec4 c = sample(image, p);\n"
@@ -30,11 +32,11 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   "             + dot(sample(image, cp+vec2(-1.0,0.0)).rgb, lum)\n"
   "             + dot(sample(image, cp+vec2( 1.0,0.0)).rgb, lum) ) * 0.25;\n"
   "  float diff = l0 - mn;\n"
-  "  float thr = 1.0/255.0;\n"
+  "  float thr = 0.75/255.0;\n"
   "  float amnt = 0.0;\n"
   "  if (diff > thr) amnt = sharpenA * (diff - thr);\n"
   "  else if (diff < -thr) amnt = sharpenA * (diff + thr);\n"
-  "  float edge = smoothstep(1.0/255.0, 2.5/255.0, abs(diff));\n"
+  "  float edge = smoothstep(0.75/255.0, 2.25/255.0, abs(diff));\n"
   "  rgb += amnt * edge;\n"
   "\n"
   "  // 2) 颗粒：预计算 tile + 幅度随亮度（杜绝每帧 CIRandomGenerator 的滞后）\n"
@@ -46,13 +48,10 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   "    rgb += (g*2.0 - 1.0) * amp;\n"
   "  }\n"
   "\n"
-  "  // 3) 磨皮：频率分离 + YCbCr 肤色 + 结构门控（5-tap 低通近似，不整图模糊）\n"
+  "  // 3) 磨皮（频率分离）：低频底=blur（矩阵后整图高斯，applyParams 预渲染），\n"
+  "  // detail=rgb−base；YCbCr 肤色掩膜（放宽区间）+ 结构门控。\n"
   "  if (smoothS > 0.0) {\n"
-  "    vec3 sU = sample(image, cp+vec2(0.0,-1.0)).rgb;\n"
-  "    vec3 sD = sample(image, cp+vec2(0.0, 1.0)).rgb;\n"
-  "    vec3 sL = sample(image, cp+vec2(-1.0,0.0)).rgb;\n"
-  "    vec3 sR = sample(image, cp+vec2( 1.0,0.0)).rgb;\n"
-  "    vec3 base = (rgb*4.0 + sU + sD + sL + sR) / 8.0;\n"
+  "    vec3 base = sample(blur, destCoord()).rgb;\n"
   "    vec3 det = rgb - base;\n"
   "    float margin = max(max(abs(det.r), abs(det.g)), abs(det.b));\n"
   "    float y  = dot(rgb, lum);\n"
@@ -136,9 +135,15 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
 
 - (void)updateEffects:(PreviewEffectsParams)params {
   dispatch_async(_gpuQueue, ^{
+    BOOL wasActive = self->_active;
     self->_params = params;
     self->_active = params.hasMatrix || params.hasVignette || params.hasSmooth
                   || params.hasSharpen || params.hasGrain;
+    // 效果全部关闭时立即清残留成帧（render: 停用路径亦兜底每帧清理）。
+    if (wasActive && !self->_active) {
+      CVPixelBufferRef stale = atomic_exchange(&self->_publishedBuffer, NULL);
+      if (stale != NULL) CFRelease(stale);
+    }
   });
 }
 
@@ -146,7 +151,16 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
 
 - (void)render:(CVPixelBufferRef _Nonnull)input {
   if (input == NULL) return;
-  if (!_active) return; // 直通：不投递 GPU，取景器直接用原始帧
+  if (!_active) {
+    // 直通：不投递 GPU，取景器直接用原始帧。同时清掉残留成帧——
+    // copyDisplayBuffer 已改为「非消费式」：成帧会被反复返回直到新帧发布，
+    // 停用后若不清，取景器将一直显示最后一张处理帧（画面冻结）。
+    dispatch_async(_gpuQueue, ^{
+      CVPixelBufferRef stale = atomic_exchange(&self->_publishedBuffer, NULL);
+      if (stale != NULL) CFRelease(stale);
+    });
+    return;
+  }
 
   // 忙碌则丢弃本帧（保持队列不积压、帧率平滑；显示保持上一帧）。
   bool expected = false;
@@ -203,15 +217,37 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   }
 
   // 统一内核：锐化 + 颗粒 + 磨皮 + 暗角 单 pass（无空间效果时直通，零 GPU 开销）。
-  double sharpenA = (_params.hasSharpen && _params.sharpen > 0) ? fmin(_params.sharpen / 100.0, 1.2) : 0.0;
+  // 2026-09-05 二次强度修正（真机仍反馈「太轻、与原相册不一致」）：
+  //   - 响应曲线 a = v/100×6.0（上限 6.0，原 ×2.5）；
+  //   - 死区 thr 1.0→0.75、边缘门控 smoothstep(1,2.5)→(0.75,2.25)——解锁
+  //     软纹理带（diff 1~4/255 正是「让照片看起来更锐」的频段，旧参数几乎全灭）；
+  //   - 满档软边缘(diff=3)增益 5→13.5/255、强边缘(diff=30) 72→175/255，
+  //     对齐 iOS 相册锐化的量级。与 Dart applyPerPixelEffectsImg / OHOS C++
+  //     photo_processor.cpp / preview_fx.cpp 四端同步，保证预览==成片。
+  double sharpenA = (_params.hasSharpen && _params.sharpen > 0) ? fmin(_params.sharpen / 100.0 * 6.0, 6.0) : 0.0;
   double vigS     = (_params.hasVignette && _params.vignette > 0) ? _params.vignette / 100.0 : 0.0;
   double smoothS  = (_params.hasSmooth && _params.smooth > 0) ? _params.smooth / 100.0 : 0.0;
   double grainS   = (_params.hasGrain && _params.grain > 0) ? _params.grain / 100.0 : 0.0;
 
+  // 磨皮频率分离的低频底图（base）：矩阵后整图高斯（CIGaussianBlur，GPU）。
+  // clamp 防边缘透黑、crop 回原 extent 与 destCoord() 对齐。σ 随强度 3..8px
+  //（预览像素）——与成片「降采样 1/3 + 高斯 radius 2..5」的低频频段在预览
+  // 分辨率下等效对齐（成片 12MP 的低频核映射到预览 ~1MP 后取稍强一档，
+  // 保证磨皮在取景器中可见；removal/门控曲线仍与成片严格一致）。
+  CIImage *blurImg = nil;
+  if (smoothS > 0) {
+    const CGFloat sigma = 3.0 + 5.0 * smoothS;
+    CIImage *clamped = [result imageByClampingToExtent];
+    CIImage *blurred = [clamped imageByApplyingFilter:@"CIGaussianBlur"
+                                withInputParameters:@{ @"inputRadius": @(sigma) }];
+    blurImg = [blurred imageByCroppingToRect:result.extent];
+  }
+
   if ((sharpenA > 0 || vigS > 0 || smoothS > 0 || grainS > 0) && _beautyKernel) {
     CIImage *noise = _noiseTile ?: result;
+    // blur 缺席时传 result 自身（smoothS==0 不进磨皮分支，参数占位而已）。
     result = [_beautyKernel applyWithExtent:input.extent roiCallback:nil
-                                   arguments:@[ result, noise,
+                                   arguments:@[ result, noise, blurImg ?: result,
                                                 @(sharpenA), @(vigS), @(smoothS), @(grainS) ]];
   }
 
@@ -261,9 +297,19 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
 #pragma mark - Display buffer
 
 - (CVPixelBufferRef _Nullable)copyDisplayBuffer {
+  // 【非消费式读取】光栅线程每帧（显示刷新率 60-120Hz）都会调用本方法，而成帧
+  // 发布率仅为相机帧率（≤30Hz）。若消费式取走（换空），两次发布之间会返回 NULL，
+  // 调用方（CameraPreview.copyPixelBuffer）将回落到「未处理的原始帧」→ 处理帧/
+  // 原始帧逐帧交替显示 = 取景器闪烁（清晰度等强对比效果下尤其明显）。
+  // 改为：原子取走所有权 → 为引擎 retain 一份 → 原子放回；若期间发布了新成帧
+  // （放回失败），释放本次取走的所有权（新帧保留在槽内，引擎那份 retain 仍有效）。
   CVPixelBufferRef buf = atomic_exchange(&_publishedBuffer, NULL);
   if (buf == NULL) return NULL;
-  // 取得所有权，调用方负责 CFRelease。
+  CFRetain(buf);
+  CVPixelBufferRef expected = NULL;
+  if (!atomic_compare_exchange_strong(&_publishedBuffer, &expected, buf)) {
+    CFRelease(buf);
+  }
   return buf;
 }
 

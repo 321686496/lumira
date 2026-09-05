@@ -55,7 +55,7 @@ void main() {
       id: 'tut_general_premium',
       title: '如何拍出高级感',
       subtitle: '留白与克制',
-      coverImage: 'assets/images/tutorials/cover_tut_general_premium.png',
+      coverImage: 'assets/images/tutorials/cover_tut_general_premium.jpg',
       category: 'general',
       readMinutes: '3分钟',
       tags: ['高级感', '留白'],
@@ -474,7 +474,7 @@ class TutorialContent {
       id: 'tut_general_premium',
       title: '如何拍出高级感',
       subtitle: '留白与克制，比华丽更耐看',
-      coverImage: 'assets/images/tutorials/cover_tut_general_premium.png',
+      coverImage: 'assets/images/tutorials/cover_tut_general_premium.jpg',
       category: 'general',
       readMinutes: '3分钟',
       tags: ['高级感', '留白'],
@@ -487,7 +487,7 @@ class TutorialContent {
         TutorialStep(
           title: '统一色调',
           body: '让画面主体颜色不超过 3 个，同色系更显质感。',
-          imageAsset: 'assets/images/tutorials/step_tut_general_premium_1.png',
+          imageAsset: 'assets/images/tutorials/step_tut_general_premium_1.jpg',
         ),
         TutorialStep(
           title: '留出呼吸感',
@@ -530,7 +530,7 @@ class TutorialContent {
       id: 'tut_general_angle',
       title: '找好角度，照片就赢了一半',
       subtitle: '同一个场景，角度不同天差地别',
-      coverImage: 'assets/images/tutorials/cover_tut_general_angle.png',
+      coverImage: 'assets/images/tutorials/cover_tut_general_angle.jpg',
       category: 'general',
       readMinutes: '2分钟',
       tags: ['角度', '构图'],
@@ -543,7 +543,7 @@ class TutorialContent {
         TutorialStep(
           title: '微微仰拍',
           body: '拍人像时镜头略低于视线，显高显精神。',
-          imageAsset: 'assets/images/tutorials/step_tut_general_angle_1.png',
+          imageAsset: 'assets/images/tutorials/step_tut_general_angle_1.jpg',
         ),
         TutorialStep(
           title: '俯拍看全貌',
@@ -614,7 +614,7 @@ class TutorialContent {
       id: 'tut_general_color',
       title: '用色彩讲故事',
       subtitle: '色温、色调、配色，都在悄悄说话',
-      coverImage: 'assets/images/tutorials/cover_tut_general_color.png',
+      coverImage: 'assets/images/tutorials/cover_tut_general_color.jpg',
       category: 'general',
       readMinutes: '3分钟',
       tags: ['色彩', '配色'],
@@ -627,7 +627,7 @@ class TutorialContent {
         TutorialStep(
           title: '相邻色和谐',
           body: '同色系、相邻色搭配最安全，最出氛围。',
-          imageAsset: 'assets/images/tutorials/step_tut_general_color_1.png',
+          imageAsset: 'assets/images/tutorials/step_tut_general_color_1.jpg',
         ),
         TutorialStep(
           title: '一点撞色点睛',
@@ -644,7 +644,7 @@ class TutorialContent {
       id: 'tut_portrait_window',
       title: '窗边人像：把光框进画里',
       subtitle: '一扇窗，一个天然柔光箱',
-      coverImage: 'assets/images/tutorials/cover_tut_portrait_window.png',
+      coverImage: 'assets/images/tutorials/cover_tut_portrait_window.jpg',
       category: 'portrait',
       readMinutes: '3分钟',
       tags: ['人像', '窗光'],
@@ -657,7 +657,7 @@ class TutorialContent {
         TutorialStep(
           title: '眼神里留高光',
           body: '让眼睛里映出窗光，眼睛立刻有神。',
-          imageAsset: 'assets/images/tutorials/step_tut_portrait_window_1.png',
+          imageAsset: 'assets/images/tutorials/step_tut_portrait_window_1.jpg',
         ),
         TutorialStep(
           title: '用窗框做前景',
@@ -672,7 +672,7 @@ class TutorialContent {
       id: 'tut_portrait_backlight',
       title: '逆光人像：镀一层金边',
       subtitle: '发丝光与轮廓光，浪漫感拉满',
-      coverImage: 'assets/images/tutorials/cover_tut_portrait_backlight.png',
+      coverImage: 'assets/images/tutorials/cover_tut_portrait_backlight.jpg',
       category: 'portrait',
       readMinutes: '3分钟',
       tags: ['人像', '逆光'],
@@ -685,7 +685,7 @@ class TutorialContent {
         TutorialStep(
           title: '点测光对准脸部边缘',
           body: '保留发丝金边，脸部也不会死黑。',
-          imageAsset: 'assets/images/tutorials/step_tut_portrait_backlight_1.png',
+          imageAsset: 'assets/images/tutorials/step_tut_portrait_backlight_1.jpg',
         ),
         TutorialStep(
           title: '加一点点补光',
@@ -715,7 +715,7 @@ class TutorialContent {
         TutorialStep(
           title: '侧光看纹理',
           body: '黄金时刻的侧光让山峦、沙丘的纹理最立体。',
-          imageAsset: 'assets/images/tutorials/step_tut_landscape_golden_1.png',
+          imageAsset: 'assets/images/tutorials/step_tut_landscape_golden_1.jpg',
         ),
         TutorialStep(
           title: '留出天空',
@@ -730,7 +730,7 @@ class TutorialContent {
       id: 'tut_landscape_leading',
       title: '引导线构图：让视线去旅行',
       subtitle: '路、栏杆、河流，都是天然的导游',
-      coverImage: 'assets/images/tutorials/cover_tut_landscape_leading.png',
+      coverImage: 'assets/images/tutorials/cover_tut_landscape_leading.jpg',
       category: 'landscape',
       readMinutes: '2分钟',
       tags: ['风光', '构图'],
@@ -743,7 +743,7 @@ class TutorialContent {
         TutorialStep(
           title: '线从画面一角进入',
           body: '引导线斜着进入画面，比横平竖直更有张力。',
-          imageAsset: 'assets/images/tutorials/step_tut_landscape_leading_1.png',
+          imageAsset: 'assets/images/tutorials/step_tut_landscape_leading_1.jpg',
         ),
         TutorialStep(
           title: '线指向主体',
@@ -760,7 +760,7 @@ class TutorialContent {
       id: 'tut_food_flatlay',
       title: '俯拍平铺：美食摆盘的艺术',
       subtitle: '从上往下看，餐桌上全是构图',
-      coverImage: 'assets/images/tutorials/cover_tut_food_flatlay.png',
+      coverImage: 'assets/images/tutorials/cover_tut_food_flatlay.jpg',
       category: 'food',
       readMinutes: '2分钟',
       tags: ['美食', '俯拍'],
@@ -773,7 +773,7 @@ class TutorialContent {
         TutorialStep(
           title: '餐具当画框',
           body: '盘子、杯子、餐巾，都是天然的构图元素。',
-          imageAsset: 'assets/images/tutorials/step_tut_food_flatlay_1.png',
+          imageAsset: 'assets/images/tutorials/step_tut_food_flatlay_1.jpg',
         ),
         TutorialStep(
           title: '留一点"吃过的痕迹"',
@@ -788,7 +788,7 @@ class TutorialContent {
       id: 'tut_food_natural',
       title: '自然光美食：窗边就是天然柔光箱',
       subtitle: '不用打灯，一扇窗拍出美食大片',
-      coverImage: 'assets/images/tutorials/cover_tut_food_natural.png',
+      coverImage: 'assets/images/tutorials/cover_tut_food_natural.jpg',
       category: 'food',
       readMinutes: '2分钟',
       tags: ['美食', '自然光'],
@@ -801,7 +801,7 @@ class TutorialContent {
         TutorialStep(
           title: '白纸补阴影',
           body: '暗面放一张白纸/纸巾，反光填暗。',
-          imageAsset: 'assets/images/tutorials/step_tut_food_natural_1.png',
+          imageAsset: 'assets/images/tutorials/step_tut_food_natural_1.jpg',
         ),
         TutorialStep(
           title: '别开闪光灯',
@@ -818,7 +818,7 @@ class TutorialContent {
       id: 'tut_street_decisive',
       title: '决定性瞬间：街头摄影的抓拍',
       subtitle: '按下快门的那一刻，就是故事',
-      coverImage: 'assets/images/tutorials/cover_tut_street_decisive.png',
+      coverImage: 'assets/images/tutorials/cover_tut_street_decisive.jpg',
       category: 'street',
       readMinutes: '3分钟',
       tags: ['街拍', '抓拍'],
@@ -831,7 +831,7 @@ class TutorialContent {
         TutorialStep(
           title: '预对焦',
           body: '先对焦到预期人物出现的位置，人来了直接拍。',
-          imageAsset: 'assets/images/tutorials/step_tut_street_decisive_1.png',
+          imageAsset: 'assets/images/tutorials/step_tut_street_decisive_1.jpg',
         ),
         TutorialStep(
           title: '连拍不心疼',
@@ -846,7 +846,7 @@ class TutorialContent {
       id: 'tut_street_shadow',
       title: '街头光影：在明暗交界处按快门',
       subtitle: '一束光洒下来，平凡街道变成舞台',
-      coverImage: 'assets/images/tutorials/cover_tut_street_shadow.png',
+      coverImage: 'assets/images/tutorials/cover_tut_street_shadow.jpg',
       category: 'street',
       readMinutes: '2分钟',
       tags: ['街拍', '光影'],
@@ -859,7 +859,7 @@ class TutorialContent {
         TutorialStep(
           title: '等一个人走进光里',
           body: '人物进入光带的一瞬间按下快门。',
-          imageAsset: 'assets/images/tutorials/step_tut_street_shadow_1.png',
+          imageAsset: 'assets/images/tutorials/step_tut_street_shadow_1.jpg',
         ),
         TutorialStep(
           title: '拍影子也精彩',
@@ -876,7 +876,7 @@ class TutorialContent {
       id: 'tut_night_bluetime',
       title: '蓝调时刻：天黑后的第一抹浪漫',
       subtitle: '日落后的 20 分钟，天空是克莱因蓝',
-      coverImage: 'assets/images/tutorials/cover_tut_night_bluetime.png',
+      coverImage: 'assets/images/tutorials/cover_tut_night_bluetime.jpg',
       category: 'night',
       readMinutes: '3分钟',
       tags: ['夜景', '蓝调'],
@@ -889,7 +889,7 @@ class TutorialContent {
         TutorialStep(
           title: '找路灯当点缀',
           body: '暖色灯光和蓝调天空是天生一对。',
-          imageAsset: 'assets/images/tutorials/step_tut_night_bluetime_1.png',
+          imageAsset: 'assets/images/tutorials/step_tut_night_bluetime_1.jpg',
         ),
         TutorialStep(
           title: '手机要稳住',
@@ -904,7 +904,7 @@ class TutorialContent {
       id: 'tut_night_neon',
       title: '霓虹人像：把夜色穿在身上',
       subtitle: '彩色霓虹灯，是最便宜的影棚灯',
-      coverImage: 'assets/images/tutorials/cover_tut_night_neon.png',
+      coverImage: 'assets/images/tutorials/cover_tut_night_neon.jpg',
       category: 'night',
       readMinutes: '2分钟',
       tags: ['夜景', '人像'],
@@ -917,7 +917,7 @@ class TutorialContent {
         TutorialStep(
           title: '脸要朝向光源',
           body: '保证脸有一盏主光，不然会变成剪影。',
-          imageAsset: 'assets/images/tutorials/step_tut_night_neon_1.png',
+          imageAsset: 'assets/images/tutorials/step_tut_night_neon_1.jpg',
         ),
         TutorialStep(
           title: '加一点冷调',
@@ -934,7 +934,7 @@ class TutorialContent {
       id: 'tut_macro_detail',
       title: '微距入门：看见另一个世界',
       subtitle: '把镜头贴近，平凡之物皆是宇宙',
-      coverImage: 'assets/images/tutorials/cover_tut_macro_detail.png',
+      coverImage: 'assets/images/tutorials/cover_tut_macro_detail.jpg',
       category: 'macro',
       readMinutes: '2分钟',
       tags: ['微距', '细节'],
@@ -962,7 +962,7 @@ class TutorialContent {
       id: 'tut_macro_flower',
       title: '花卉微距：拍出晨露的呼吸',
       subtitle: '花蕊、露珠、绒毛，微观世界的美',
-      coverImage: 'assets/images/tutorials/cover_tut_macro_flower.png',
+      coverImage: 'assets/images/tutorials/cover_tut_macro_flower.jpg',
       category: 'macro',
       readMinutes: '2分钟',
       tags: ['微距', '花卉'],
@@ -975,7 +975,7 @@ class TutorialContent {
         TutorialStep(
           title: '侧光拍质感',
           body: '侧逆光下，花瓣绒毛、露珠都会发光。',
-          imageAsset: 'assets/images/tutorials/step_tut_macro_flower_1.png',
+          imageAsset: 'assets/images/tutorials/step_tut_macro_flower_1.jpg',
         ),
         TutorialStep(
           title: '对焦花蕊',
@@ -992,7 +992,7 @@ class TutorialContent {
       id: 'tut_still_minimal',
       title: '极简静物：少即是多',
       subtitle: '一个主体，一块背景，一束光',
-      coverImage: 'assets/images/tutorials/cover_tut_still_minimal.png',
+      coverImage: 'assets/images/tutorials/cover_tut_still_minimal.jpg',
       category: 'still-life',
       readMinutes: '2分钟',
       tags: ['静物', '极简'],
@@ -1020,7 +1020,7 @@ class TutorialContent {
       id: 'tut_still_warm',
       title: '温暖静物：阳光是最好的滤镜',
       subtitle: '午后斜阳，把物件镀成蜜糖色',
-      coverImage: 'assets/images/tutorials/cover_tut_still_warm.png',
+      coverImage: 'assets/images/tutorials/cover_tut_still_warm.jpg',
       category: 'still-life',
       readMinutes: '2分钟',
       tags: ['静物', '暖调'],
@@ -1033,7 +1033,7 @@ class TutorialContent {
         TutorialStep(
           title: '把光斑拍进画面',
           body: '桌面的光斑是静物摄影的高级感来源。',
-          imageAsset: 'assets/images/tutorials/step_tut_still_warm_1.png',
+          imageAsset: 'assets/images/tutorials/step_tut_still_warm_1.jpg',
         ),
         TutorialStep(
           title: '同色系摆件',

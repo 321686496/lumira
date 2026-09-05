@@ -16,7 +16,7 @@ const PhotoTemplate starryMilkywayTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/starry_milkyway.png'),
+      TemplateImage(url: 'assets/images/templates/starry_milkyway.jpg'),
     ],
     description: '这是一套专为高海拔/低光害地区设计的银河全景拍摄模板。画面以壮丽的雪山主峰为视觉锚点，上方覆盖完整的银河拱桥，下方保留暗调前景与湖面反光。采用超广角横构图，强调天地辽阔感。光线依赖自然星光与地平线微弱的暖色气辉，整体色调冷峻深邃，点缀星云紫红与地平线橙黄。适合天文摄影爱好者、户外探险者及追求极致风光大片的人群。需配合三脚架与长曝光技术（或App夜景模式）实现。',
     shortDesc: '亿万星辰垂落雪峰之巅，银河如瀑横跨天际，静谧浩瀚，一眼万年🌌',

@@ -16,10 +16,10 @@ const PhotoTemplate elegantLadyPortraitTemplate = PhotoTemplate(
     tagIds: [],
     price: 60,
     images: [
-      TemplateImage(url: 'assets/images/templates/elegant_lady_portrait_1.png'),
-      TemplateImage(url: 'assets/images/templates/elegant_lady_portrait_2.png'),
-      TemplateImage(url: 'assets/images/templates/elegant_lady_portrait_3.png'),
-      TemplateImage(url: 'assets/images/templates/elegant_lady_portrait_4.png'),
+      TemplateImage(url: 'assets/images/templates/elegant_lady_portrait_1.jpg'),
+      TemplateImage(url: 'assets/images/templates/elegant_lady_portrait_2.jpg'),
+      TemplateImage(url: 'assets/images/templates/elegant_lady_portrait_3.jpg'),
+      TemplateImage(url: 'assets/images/templates/elegant_lady_portrait_4.jpg'),
     ],
     description: '都市建筑外墙户外人像模板，利用午后硬调自然光拍摄，穿搭为交叉扭结针织上衣+垂感阔腿长裤，手拿外套做道具，包含站立回眸、侧身、静坐多组姿势，适合轻熟气质女生，晴天下午户外建筑墙面场景使用。',
     shortDesc: '秋日午后金阳洒落，温柔知性，演绎慵懒高级都市感🍂',
@@ -68,7 +68,7 @@ const PhotoTemplate elegantLadyPortraitTemplate = PhotoTemplate(
     ),
     Pose(
       name: '行走动态抓拍',
-      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/elegant_lady_portrait_pose4.png'),
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/elegant_lady_portrait_pose4.webp'),
       position: Position(x: 0.5, y: 0.5),
       scale: 2.5,
       rotation: 0,

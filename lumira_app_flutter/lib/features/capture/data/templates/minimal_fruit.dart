@@ -15,7 +15,7 @@ const PhotoTemplate minimalFruitTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/minimal_fruit.png'),
+      TemplateImage(url: 'assets/images/templates/minimal_fruit.jpg'),
     ],
     description: '少量水果以极简方式摆放的静物，干净背景与柔和色彩传递宁静',
     referenceSource: '样片参考：极简果盘静物摄影；参数参考食物色彩极简合集',

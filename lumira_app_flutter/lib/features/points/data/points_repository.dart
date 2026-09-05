@@ -75,9 +75,9 @@ final pointsBalanceProvider = FutureProvider.autoDispose<PointsBalance>(
   },
 );
 
-/// 积分流水预览（钱包页「积分流水」卡片；明细页自行管理全量加载）
+/// 积分流水预览（钱包页「积分流水」卡片只展示最近 10 条；明细页自行管理全量加载）
 final pointsRecentTransactionsProvider =
     FutureProvider.autoDispose<PointsTransactions>((ref) async {
   final repo = await ref.watch(pointsRepositoryProvider.future);
-  return repo.listTransactions(limit: 50, offset: 0);
+  return repo.listTransactions(limit: 10, offset: 0);
 });

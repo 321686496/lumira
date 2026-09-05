@@ -1,14 +1,10 @@
 import 'dart:async';
 import 'dart:io' show Platform;
-import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:camerawesome/camerawesome_plugin.dart'
     show CamerawesomePlugin;
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
-import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
@@ -23,7 +19,6 @@ import 'package:lumira_app_flutter/features/templates/widgets/pose_silhouette.da
 import '../data/capture_state.dart';
 import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
-import '../services/preview_beauty_shader.dart';
 
 /// 将 EditorFormPostProcess 转换为 domain PostProcess（用于 fromPostProcess）
 ///
@@ -85,6 +80,7 @@ class CameraPreview extends ConsumerWidget {
     this.formOverride,
     this.previewFit = CameraPreviewFit.cover,
     this.rawCaptureKey,
+    this.previewCaptureKey,
   });
 
   /// 缩放回调（传入真实倍数，1.0 = 1x），由外部（缩放轮盘等）触发。
@@ -111,6 +107,12 @@ class CameraPreview extends ConsumerWidget {
   /// 然后在每张滤镜卡片中套用对应 ColorFilter 显示效果预览。
   /// 为 null 时不包裹 RepaintBoundary（兼容不需要捕获的场景）。
   final GlobalKey? rawCaptureKey;
+
+  /// 用于捕获「已合成取景器」的 RepaintBoundary key（含 ColorFiltered 色彩矩阵 +
+  /// 前置镜像 + 比例裁切，即用户最终所见，WYSIWYG）。
+  /// OHOS 水印动画源改用它：快门瞬间 `boundary.toImage()` 冻结取景器当前帧，
+  /// 替代原生高增强链路早帧，使动画内容 = 取景器。为 null 时不包裹。
+  final GlobalKey? previewCaptureKey;
 
   /// 对焦反馈层（[_FocusOverlay]）状态驱动 key：单击对焦 / 长按锁定回调
   /// 通过它显示金色对焦框与「AE/AF 锁定」标签。
@@ -168,6 +170,10 @@ class CameraPreview extends ConsumerWidget {
               onReady: () => _onCameraReady(ref, flashMode, facing),
               onTapFocus: (position, previewSize) {
                 final overlay = _focusKey.currentState;
+                // 诊断：真机确认为何点击对焦不生效（F4）
+                debugPrint('[capture] onTapFocus tapped pos=$position '
+                    'size=$previewSize overlayLocked=${overlay?.isLocked} '
+                    'platform=${Platform.operatingSystem}');
                 // 锁定状态下单击其他位置 → 先解除锁定，再对新触点重新对焦（iPhone 行为）
                 if (overlay?.isLocked == true) {
                   cameraService.setFocusAndExposureLock(locked: false);
@@ -209,9 +215,9 @@ class CameraPreview extends ConsumerWidget {
       onLongPressEnd: () {
         // 锁定常驻，抬手不隐藏（避免动画闪烁）
       },
-      child: Platform.isIOS
-          // iOS：锐化/磨皮/暗角/颗粒 + 色彩矩阵改由原生 GPU 逐帧渲染
-          //（_PostEffectSync 把参数推给 PreviewEffectProcessor），
+      child: Platform.isIOS || Platform.operatingSystem == 'ohos'
+          // iOS/OHOS：锐化/磨皮/暗角/颗粒 + 色彩矩阵改由原生 GPU 逐帧渲染
+          //（_PostEffectSync 把参数推给 PreviewEffectProcessor / libpreview_fx.so），
           // 取景器 == 成片通道，因此不再叠加 Dart ColorFiltered（避免双重矩阵）。
           // rawMode 时 enabled=false → 推全零参数关闭原生处理，恢复原始取景。
           ? _PostEffectSync(
@@ -219,12 +225,9 @@ class CameraPreview extends ConsumerWidget {
               post: effectivePost,
               child: cameraBody,
             )
-          // Android/OHOS：传统上仅实时呈现色彩矩阵（ColorFiltered）。OHOS 已升级为
-          // 真视图层逐帧美颜（锐化/磨皮/暗角/颗粒 FragmentShader 单 pass，铺垫在色彩矩阵之上
-          // 的 ColorFiltered → capture → shader），见 _LiveBeautyLayer。
-          // 引擎不支持 shader 或仅色彩矩阵时，安全回退到纯 ColorFiltered（不伪造预览、不拖帧）。
+          // Android：仅实时呈现色彩矩阵（ColorFiltered）；细节参数仅作用于成片。
           : applyFilter
-              ? _buildOhosLivePreview(effectivePost, cameraBody)
+              ? _buildAndroidLivePreview(effectivePost, cameraBody)
               : cameraBody,
     );
 
@@ -302,10 +305,17 @@ class CameraPreview extends ConsumerWidget {
           )
         : const SizedBox.shrink();
 
+    // 已合成取景器（含 ColorFiltered 色彩矩阵 + 前置镜像 + 比例裁切），用于
+    // OHOS 快门冻结帧捕获（水印动画源，WYSIWYG）。previewCaptureKey 非 null 时
+    // 用 RepaintBoundary 包裹，供快门时刻 boundary.toImage() 冻结当前帧。
+    final composedPreview = previewCaptureKey != null
+        ? RepaintBoundary(key: previewCaptureKey, child: filteredCamera)
+        : filteredCamera;
+
     return Stack(
       fit: StackFit.expand,
       children: [
-        filteredCamera,
+        composedPreview,
         compositionOverlay,
         silhouetteOverlay,
         // 对焦反馈层：GlobalKey 不能同时充当 ValueKey，因此用 KeyedSubtree 包一层。
@@ -745,12 +755,13 @@ class _LockBadge extends StatelessWidget {
   }
 }
 
-/// iOS 取景器逐帧效果同步器。
+/// iOS/OHOS 取景器逐帧效果同步器。
 ///
 /// 监听 [PostProcess] 变化（微节流 16ms 去抖），把完整色彩矩阵 + 锐化/磨皮/
-/// 暗角/颗粒参数推给原生 `PreviewEffectProcessor`（GPU 逐帧渲染），使取景器
-/// 实时呈现与成片一致的细节效果（WYSIWYG）。仅 iOS 生效（调用方已按平台分支，
-/// Android/OHOS 不走本组件，仍用 Dart ColorFiltered 矩阵叠加）。
+/// 暗角/颗粒参数推给原生 GPU 管线（iOS `PreviewEffectProcessor` /
+/// OHOS `libpreview_fx.so`），使取景器实时呈现与成片一致的细节效果
+/// （WYSIWYG）。调用方已按平台分支，Android 不走本组件
+/// （仍用 Dart ColorFiltered 矩阵叠加）。
 class _PostEffectSync extends StatefulWidget {
   const _PostEffectSync({
     required this.enabled,
@@ -829,170 +840,18 @@ class _PostEffectSyncState extends State<_PostEffectSync> {
   Widget build(BuildContext context) => widget.child;
 }
 
-/// OHOS 取景器实时预览包装：有空间效果且引擎支持 shader 时用 [_LiveBeautyLayer] 做
-/// 真视图层逐帧美颜；否则回退纯 ColorFiltered 色彩矩阵（保持既有观感，不伪造、不拖帧）。
-Widget _buildOhosLivePreview(PostProcess post, Widget child) {
-  if (Platform.operatingSystem == 'ohos' &&
-      PreviewBeautyShader.hasSpatialEffects(post)) {
-    return _LiveBeautyLayer(post: post, rawChild: child);
-  }
-  return ColorFiltered(colorFilter: fromPostProcess(post), child: child);
-}
-
-/// OHOS 真视图层逐帧美颜层。
+/// Android 取景器实时预览包装：仅实时呈现色彩矩阵（ColorFiltered）。
 ///
-/// 结构：RepaintBoundary 内叠 ColorFiltered 色彩矩阵 → Ticker 按 30fps 捕获
-/// （kPreviewScale 降采样）→ preview_beauty.frag 单 pass（锐化+颗粒+磨皮+暗角）→
-/// 覆盖显示。全程 GPU、异步、按帧忙丢弃；单帧超预算自动降采样，重试失败则停 Ticker
-/// 回退到纯 ColorFiltered —— 硬约束：取景器绝不卡顿/掉帧。
-class _LiveBeautyLayer extends StatefulWidget {
-  const _LiveBeautyLayer({required this.post, required this.rawChild});
-
-  final PostProcess post;
-  final Widget rawChild;
-
-  @override
-  State<_LiveBeautyLayer> createState() => _LiveBeautyLayerState();
-}
-
-class _LiveBeautyLayerState extends State<_LiveBeautyLayer>
-    with SingleTickerProviderStateMixin {
-  static const double _kMinScale = 0.20;
-  static const double _kMaxScale = 0.30;
-
-  final GlobalKey _repaintKey = GlobalKey();
-  Ticker? _ticker;
-  bool _ready = false;
-  bool _capturing = false;
-  double _scale = _kMaxScale;
-  ui.Image? _processed;
-  int _failCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _init();
-  }
-
-  Future<void> _init() async {
-    await PreviewBeautyShader.ensureInit();
-    if (!mounted) {
-      debugPrint('[preview-beauty] _LiveBeautyLayer._init: unmounted, abort');
-      return;
-    }
-    if (PreviewBeautyShader.program == null) {
-      // program 加载失败（OHOS 引擎可能不支持 FragmentProgram / 资产未打包），
-      // 无 Ticker → 无空间效果，降级为纯 ColorFiltered（不伪造预览、不拖帧）。
-      debugPrint('[preview-beauty] _LiveBeautyLayer shader program==null, '
-          '降级纯色彩矩阵（空间效果不可见）');
-    }
-    setState(() => _ready = true);
-    if (PreviewBeautyShader.program != null) {
-      _ticker = createTicker(_onTick)..start();
-      debugPrint('[preview-beauty] _LiveBeautyLayer shader OK, ticker started '
-          '(noise=${PreviewBeautyShader.noiseTile == null ? 'NULL' : 'ok'})');
-    }
-  }
-
-  void _onTick(Duration elapsed) {
-    if (!_ready || _capturing) return;
-    final boundary = _repaintKey.currentContext?.findRenderObject();
-    if (boundary is! RenderRepaintBoundary) return;
-    if (!boundary.hasSize || boundary.debugNeedsPaint) return;
-    _capturing = true;
-    final sw = Stopwatch()..start();
-    boundary
-        .toImage(pixelRatio: _scale)
-        .then((img) async {
-          final out = await PreviewBeautyShader.render(img, post: widget.post);
-          img.dispose();
-          if (!mounted) {
-            out?.dispose();
-            return;
-          }
-          if (out == null) {
-            // render 失败（程序可用但渲染不可用）：累计 5 次停 Ticker。
-            debugPrint('[preview-beauty] render 返回 null（frame ${_failCount + 1}）');
-            if (++_failCount >= 5) _ticker?.stop();
-          } else {
-            _adaptScale(sw.elapsedMilliseconds);
-            setState(() {
-              _processed?.dispose();
-              _processed = out;
-            });
-            _failCount = 0;
-          }
-        })
-        .catchError((Object e) {
-          // 捕获/渲染失败：累计 5 次则停 Ticker，回退纯 ColorFiltered（避免空转拖帧）。
-          debugPrint('[preview-beauty] capture/render 异常: $e');
-          if (++_failCount >= 5) {
-            _ticker?.stop();
-          }
-        })
-        .whenComplete(() => _capturing = false);
-  }
-
-  /// 自适应保帧：单帧 Capture+Render 超 33ms 自动降采样；回落后提升。
-  void _adaptScale(int ms) {
-    if (ms > 33) {
-      _scale = math.max(_kMinScale, _scale - 0.05);
-    } else if (ms < 16 && _scale < _kMaxScale) {
-      _scale = math.min(_kMaxScale, _scale + 0.02);
-    }
-  }
-
-  @override
-  void dispose() {
-    _ticker?.dispose();
-    _processed?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // 注意：base（相机预览）必须保持可命中，否则取景器的单击对焦/长按锁定
-    // 等手势会被吞掉 —— 只有叠加的 shader 处理帧才忽略指针（避免挡手势）。
-    final base = ColorFiltered(
-      colorFilter: fromPostProcess(widget.post),
-      child: widget.rawChild,
-    );
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        RepaintBoundary(key: _repaintKey, child: base),
-        if (_processed != null)
-          IgnorePointer(
-            child: CustomPaint(
-              isComplex: true,
-              painter: _BeautyPainter(_processed!),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-/// 把 shader 处理后的帧拉伸铺满取景器。
-class _BeautyPainter extends CustomPainter {
-  _BeautyPainter(this.image);
-  final ui.Image image;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawImageRect(
-      image,
-      Rect.fromLTWH(
-          0, 0, image.width.toDouble(), image.height.toDouble()),
-      Offset.zero & size,
-      Paint()..filterQuality = FilterQuality.medium,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_BeautyPainter oldDelegate) =>
-      !identical(oldDelegate.image, image);
-}
+/// 2026-09-05 停用「真视图层逐帧美颜」（_LiveBeautyLayer，已删除）：
+/// Dart 层 Ticker 逐帧 RepaintBoundary.toImage 读回在 OHOS 上单帧需数百 ms
+/// （快门冻结帧实测 455ms@1.0x，叠加层按 DPR 级采样更慢），取景器沦为幻灯片；
+/// 且 shader 半径-1 的 5-tap 磨皮核在预览分辨率下视觉不可感知（成片的
+/// 频率分离磨皮才可见）。回退纯 ColorFiltered：色彩/亮度等矩阵效果仍实时预览，
+/// 磨皮/锐化/颗粒/暗角仅作用于成片。2026-09-05 起 OHOS 改由原生 GPU 管线
+/// （libpreview_fx.so：预览流→GL 着色器→Flutter Texture）接管全部实时特效
+/// （见 _PostEffectSync），本包装仅剩 Android 使用。
+Widget _buildAndroidLivePreview(PostProcess post, Widget child) =>
+    ColorFiltered(colorFilter: fromPostProcess(post), child: child);
 
 /// 判断 20 元素 ColorMatrix 是否为恒等（无任何色彩调整）。
 bool _isIdentityMatrix(List<double> m) {

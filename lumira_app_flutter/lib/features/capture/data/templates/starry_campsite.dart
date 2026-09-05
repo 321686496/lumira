@@ -16,7 +16,7 @@ const PhotoTemplate starryCampsiteTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/starry_campsite.png'),
+      TemplateImage(url: 'assets/images/templates/starry_campsite.jpg'),
     ],
     description: "这是一套专为夜景星空露营设计的风景模板。画面以壮丽的银河为顶幕，连绵雪山为远景，前景布置精致的Bell Tent（钟形帐篷）与篝火营地。核心视觉在于极致的冷暖对比：深邃蓝紫的夜空与地面金黄温暖的灯火形成强烈反差。适用于户外爱好者、旅行摄影师，在晴朗无月的夜晚，于高海拔或光污染极少的山区复刻此景。造型重点在于营造'精致野奢'感，通过多点暖光源（马灯、篝火、帐篷内透光）点亮暗部细节。",
     shortDesc: '星河垂落山巅，帐篷暖光如豆，篝火跃动间治愈所有孤独，是逃离城市的极致浪漫🏕️✨',

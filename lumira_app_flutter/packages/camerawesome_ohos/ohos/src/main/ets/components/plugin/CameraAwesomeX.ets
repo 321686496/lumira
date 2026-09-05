@@ -20,6 +20,10 @@ import {
   EventChannel,
   FlutterPlugin,
   FlutterPluginBinding,
+  MethodCall,
+  MethodCallHandler,
+  MethodChannel,
+  MethodResult,
   TextureRegistry
 } from '@ohos/flutter_ohos';
 import { AnalysisImageConverter } from '../cameraX/AnalysisImageConverter';
@@ -54,7 +58,8 @@ import window from '@ohos.window';
 const TAG: string = 'CameraAwesomeX';
 
 /** CameraAwesomeX **/
-export default class CameraAwesomeX extends CameraInterface implements FlutterPlugin, AbilityAware {
+export default class CameraAwesomeX extends CameraInterface
+  implements FlutterPlugin, AbilityAware, MethodCallHandler {
   uiAbility: UIAbility | undefined = undefined
   binding: FlutterPluginBinding | undefined = undefined
   textureRegistry: TextureRegistry | null = null
@@ -73,6 +78,15 @@ export default class CameraAwesomeX extends CameraInterface implements FlutterPl
   private photoEarlyFrameStreamListener: PhotoEarlyFrameStreamListener = new PhotoEarlyFrameStreamListener()
   private lastWindowStatusType: window.WindowStatusType | undefined = undefined
   private displayRotation: number = 0;
+  // 取景器实时特效通道（camerawesome/preview_effects）：Dart 侧 _PostEffectSync 推送
+  // 色彩矩阵 + 磨皮/锐化/暗角/颗粒参数。相机重建（切镜头/折叠等）后由
+  // applyPreviewEffects() 重放最近一次参数（管线随相机重建，参数不重放会回零）。
+  private previewEffectsChannel: MethodChannel | undefined = undefined
+  private lastEffectsMatrix: number[] | null = null
+  private lastEffectsVignette: number = 0
+  private lastEffectsSmooth: number = 0
+  private lastEffectsSharpen: number = 0
+  private lastEffectsGrain: number = 0
   // 监听折叠屏状态
   private foldStatusCallback =
     (err: BusinessError, info: camera.FoldStatusInfo): void => this.registerFoldStatusChanged(err, info);
@@ -115,6 +129,8 @@ export default class CameraAwesomeX extends CameraInterface implements FlutterPl
 
       // 初始化相机
       await this.cameraState.initCamera()
+      // 相机重建后重放最近一次取景器特效参数（FX 管线随相机重建，不重放会回零）
+      this.applyPreviewEffects()
       // 设置滤镜
       this.cameraState.colorMatrix = this.colorMatrix
 
@@ -278,6 +294,7 @@ export default class CameraAwesomeX extends CameraInterface implements FlutterPl
       this.cameraState.sensor = sensor
       this.cameraState.aspectRatio = AspectRatio.RATIO_4_3
       await this.cameraState!!.initCamera()
+      this.applyPreviewEffects()
     }
   }
 
@@ -479,6 +496,47 @@ export default class CameraAwesomeX extends CameraInterface implements FlutterPl
     new EventChannel(binding.getBinaryMessenger(), "camerawesome/photo_early_frame").setStreamHandler(
       this.photoEarlyFrameStreamListener
     )
+    // 取景器实时特效（与 iOS 共用 camerawesome/preview_effects 通道语义）
+    this.previewEffectsChannel = new MethodChannel(binding.getBinaryMessenger(),
+      "camerawesome/preview_effects")
+    this.previewEffectsChannel.setMethodCallHandler(this)
+  }
+
+  /**
+   * camerawesome/preview_effects：setPreviewEffects（Dart 侧 _PostEffectSync 调用）。
+   * 参数语义与 iOS PreviewEffectProcessor 一致：matrix 为 Flutter 20 元素
+   * ColorFilter（恒等时 null），vignette/smooth/sharpen/grain 为 0..100。
+   */
+  onMethodCall(call: MethodCall, result: MethodResult): void {
+    switch (call.method) {
+      case 'setPreviewEffects': {
+        const matrix = call.argument('matrix') as number[] | null
+        const vignette: number = call.argument('vignette') ?? 0
+        const smooth: number = call.argument('smooth') ?? 0
+        const sharpen: number = call.argument('sharpen') ?? 0
+        const grain: number = call.argument('grain') ?? 0
+        this.lastEffectsMatrix = matrix ?? null
+        this.lastEffectsVignette = vignette
+        this.lastEffectsSmooth = smooth
+        this.lastEffectsSharpen = sharpen
+        this.lastEffectsGrain = grain
+        this.applyPreviewEffects()
+        result.success(true)
+        break
+      }
+      default:
+        result.notImplemented()
+        break
+    }
+  }
+
+  /** 把最近一次特效参数下发给相机（管线随 initCamera 重建后需重放）。 */
+  private applyPreviewEffects(): void {
+    const hasMatrix = this.lastEffectsMatrix !== null && this.lastEffectsMatrix !== undefined
+      && this.lastEffectsMatrix.length >= 20
+    this.cameraState?.updatePreviewEffects(hasMatrix, this.lastEffectsMatrix,
+      this.lastEffectsVignette, this.lastEffectsSmooth, this.lastEffectsSharpen,
+      this.lastEffectsGrain)
   }
 
   private displayOnChange() {
@@ -512,6 +570,7 @@ export default class CameraAwesomeX extends CameraInterface implements FlutterPl
     Logger.debug(TAG, `registerFoldStatusChanged foldStatusInfo : ${foldStatusInfo.foldStatus}`);
     this.cameraState?.initCamera().then(async () => {
       this.rotationChanged();
+      this.applyPreviewEffects();
     }).catch((error: Any) => {
       Logger.debug(TAG, 'initCamera error');
     });
@@ -519,6 +578,8 @@ export default class CameraAwesomeX extends CameraInterface implements FlutterPl
 
   onDetachedFromEngine(binding: FlutterPluginBinding): void {
     Logger.debug(TAG, `onDetachedFromEngine is called`);
+    this.previewEffectsChannel?.setMethodCallHandler(null)
+    this.previewEffectsChannel = undefined
     this.binding = undefined
   }
 

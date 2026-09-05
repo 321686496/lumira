@@ -16,7 +16,7 @@ const PhotoTemplate geometricFacadeTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/geometric_facade.png'),
+      TemplateImage(url: 'assets/images/templates/geometric_facade.jpg'),
     ],
     description: '这是一套面向现代主义/极简建筑外立面的黑白摄影模板。画面以大面积留白的混凝土或涂料墙面为底，依靠强烈直射阳光在建筑体块转折处投下边缘锐利的硬阴影，形成强烈的明暗几何分割。横向贯通的黑色长条窗带与局部竖向凹凸肌理构成节奏感。适合拍摄美术馆、办公楼、极简住宅等具有干净体块与重复元素的建筑。无需人物，靠构图与光影本身说话；建议晴天正午前后拍摄以获得最硬的阴影边缘。',
     shortDesc: '纯白立面被烈日切出锐利对角阴影，竖向线条与黑色窗带交织成冷静秩序，高级灰调里藏着建筑的呼吸感🏛️',

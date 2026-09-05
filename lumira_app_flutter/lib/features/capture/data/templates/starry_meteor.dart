@@ -16,7 +16,7 @@ const PhotoTemplate starryMeteorTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/starry_meteor.png'),
+      TemplateImage(url: 'assets/images/templates/starry_meteor.jpg'),
     ],
     description: '大远景星空夜景模板。以连绵山脊剪影为前景底边，左侧银河带纵向贯穿、右侧明亮流星斜向划过形成对角呼应，地平线处城市暖光晕染与冷调夜空形成冷暖对比。需长曝光+三脚架固定机位拍摄（真机无法自动长曝光，需手动设置或借助专业模式，本模板以夜色LUT+颗粒+暗角近似模拟星夜质感）。适合天文爱好者、户外露营、追求宇宙浪漫氛围的创作者。',
     shortDesc: '深蓝夜幕下银河垂落，一道绿尾流星划破寂静山脊，地平线暖光微漾，浩瀚治愈又带着宇宙的浪漫孤寂🌌✨',

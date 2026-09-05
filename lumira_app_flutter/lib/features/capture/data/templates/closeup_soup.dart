@@ -16,7 +16,7 @@ const PhotoTemplate closeupSoupTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/closeup_soup.png'),
+      TemplateImage(url: 'assets/images/templates/closeup_soup.jpg'),
     ],
     description: '美食静物拍摄模板，适用于面馆居酒屋桌面实拍，柔和暖环境光捕捉面食热气，突出面条汤面质感，背景虚化交代餐厅环境，适合拍摄热汤面、日式简餐类食物。',
     referenceSource: '样片参考：美食特写蒸汽摄影精选；参数参考热气特写曝光合集',

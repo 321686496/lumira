@@ -16,7 +16,7 @@ const PhotoTemplate closeupPizzaTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/closeup_pizza.png'),
+      TemplateImage(url: 'assets/images/templates/closeup_pizza.jpg'),
     ],
     description: '美食静物拍摄模板，拍摄被铲起一块的玛格丽特披萨，使用侧上方柔和暖光，突出芝士拉丝流动质感，适合室内餐桌美食拍摄，还原食物诱人的食欲氛围。',
     shortDesc: '暖光裹挟芝士拉丝，烟火美味瞬间，满满治愈食欲感🍕',

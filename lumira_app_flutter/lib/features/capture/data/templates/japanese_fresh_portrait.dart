@@ -16,7 +16,7 @@ const PhotoTemplate japaneseFreshPortraitTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/japanese_fresh_portrait_1.png'),
+      TemplateImage(url: 'assets/images/templates/japanese_fresh_portrait_1.jpg'),
       TemplateImage(url: 'assets/images/templates/japanese_fresh_portrait_2.png'),
       TemplateImage(url: 'assets/images/templates/japanese_fresh_portrait_3.png'),
     ],
@@ -40,7 +40,7 @@ const PhotoTemplate japaneseFreshPortraitTemplate = PhotoTemplate(
   poses: [
     Pose(
       name: '封面·林间抚发',
-      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/japanese_fresh_portrait_pose1.png'),
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/japanese_fresh_portrait_pose1.webp'),
       position: Position(x: 0.5, y: 0.5),
       scale: 2.5,
       rotation: 0,
@@ -49,7 +49,7 @@ const PhotoTemplate japaneseFreshPortraitTemplate = PhotoTemplate(
     ),
     Pose(
       name: '附加·持花侧坐',
-      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/japanese_fresh_portrait_pose2.png'),
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/japanese_fresh_portrait_pose2.webp'),
       position: Position(x: 0.5, y: 0.5),
       scale: 2.5,
       rotation: 0,
@@ -58,7 +58,7 @@ const PhotoTemplate japaneseFreshPortraitTemplate = PhotoTemplate(
     ),
     Pose(
       name: '附加·阳光回眸',
-      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/japanese_fresh_portrait_pose3.png'),
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/japanese_fresh_portrait_pose3.webp'),
       position: Position(x: 0.5, y: 0.5),
       scale: 2.5,
       rotation: 0,

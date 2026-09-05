@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import 'bevel_surface.dart';
 import 'recessed_surface.dart';
 
 /// 包一层「按压时凹陷」的反馈外壳。
@@ -94,33 +95,27 @@ class _PressableRecessState extends ConsumerState<PressableRecess> {
 
     Widget content;
     if (isNeu && fill != null && hasBevel) {
-      // 内斜边模式：常态「亮上左 + 暗下右」、按压「暗上左 + 亮下右」反转，
-      // 1.5px 实线不发散，替代外阴影避免异色按钮悬浮感。
-      content = Container(
-        decoration: BoxDecoration(
-          color: fill,
-          borderRadius: BorderRadius.circular(widget.borderRadius),
-          border: Border(
-            top: BorderSide(
-              color: _pressed ? widget.bevelDark! : widget.bevelLight!,
-              width: 1.5,
-            ),
-            left: BorderSide(
-              color: _pressed ? widget.bevelDark! : widget.bevelLight!,
-              width: 1.5,
-            ),
-            bottom: BorderSide(
-              color: _pressed ? widget.bevelLight! : widget.bevelDark!,
-              width: 1.5,
-            ),
-            right: BorderSide(
-              color: _pressed ? widget.bevelLight! : widget.bevelDark!,
-              width: 1.5,
-            ),
+      // 品牌 CTA 内斜边模式：常态用「填充色 + 浮雕外阴影」的凸起胶囊（浮雕感，
+      // 品牌 CTA 调用方传 raisedShadow: brandEmbossShadows）；按压时保持填充色，
+      // 去掉阴影并反转内斜边（暗上左 / 亮下右）作凹陷反馈。
+      if (_pressed) {
+        content = BevelRoundedSurface(
+          fill: fill,
+          bevelLight: widget.bevelDark!,
+          bevelDark: widget.bevelLight!,
+          borderRadius: widget.borderRadius,
+          child: widget.child,
+        );
+      } else {
+        content = Container(
+          decoration: BoxDecoration(
+            color: fill,
+            borderRadius: BorderRadius.circular(widget.borderRadius),
+            boxShadow: widget.raisedShadow ?? tokens.shadowConvexSubtle,
           ),
-        ),
-        child: widget.child,
-      );
+          child: widget.child,
+        );
+      }
     } else if (isNeu && fill != null && _pressed) {
       // 按压态：填充色凹陷表面（上/左暗、下/右亮、中心平底）
       content = RecessedSurface(

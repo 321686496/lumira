@@ -467,7 +467,7 @@ class AcademyContent {
       ],
       tips: ['光源角度约45度，高于头顶', '暗面三角形光斑是标志', '不要过度补光，保留明暗对比'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'assets/images/templates/elegant_lady_portrait.png',
+        imageUrl: 'assets/images/templates/elegant_lady_portrait_1.jpg',
         name: '知性优雅轻熟女', desc: '用「知性优雅轻熟女」练习伦勃朗光', badge: '付费',
       ),
       knowledgeCardIds: ['kc_01', 'kc_02'],
@@ -506,7 +506,7 @@ class AcademyContent {
       ],
       tips: ['不要直说「笑一下」，用故事和情境引导情绪', '眼神方向决定情绪走向：直视强烈、侧望含蓄', '给模特一个动作（如整理头发），更易抓到自然瞬间'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'assets/images/templates/french_lazy_portrait.png',
+        imageUrl: 'assets/images/templates/french_lazy_portrait.jpg',
         name: '法式慵懒高雅', desc: '用「法式慵懒高雅」练习情绪表达', badge: '付费',
       ),
       knowledgeCardIds: ['kc_01'],
@@ -623,7 +623,7 @@ class AcademyContent {
       ],
       tips: ['画面色彩控制在 3-4 种以内，避免杂乱', '互补色搭配时降低饱和度，避免刺眼', '背景色与主体色拉开明度差，主体更突出'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'assets/images/templates/morandi_minimal_portrait.png',
+        imageUrl: 'assets/images/templates/morandi_minimal_portrait.jpg',
         name: '莫兰迪高级冷淡', desc: '用「莫兰迪高级冷淡」练习色彩', badge: '付费',
       ),
       knowledgeCardIds: ['kc_06'],
@@ -662,7 +662,7 @@ class AcademyContent {
       ],
       tips: ['降低曝光补偿，让暗部更黑、亮部更亮', '蹲下低角度拍摄，光影对比更强烈', '善用雨后水洼的反光，画面更丰富'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'assets/images/templates/neon_city_portrait.png',
+        imageUrl: 'assets/images/templates/neon_city_portrait.jpg',
         name: '夜景霓虹人像', desc: '用「夜景霓虹人像」练习光影', badge: '付费',
       ),
       knowledgeCardIds: ['kc_07', 'kc_08'],
@@ -701,7 +701,7 @@ class AcademyContent {
       ],
       tips: ['先确定风格，再选择服装、场景、道具', '色调统一比单张好看更重要，组照要有「家族感」', '后期色调可以参考电影截图或老照片'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'assets/images/templates/anime_dream_portrait.png',
+        imageUrl: 'assets/images/templates/anime_dream_portrait.jpg',
         name: '动漫温柔青', desc: '用「动漫温柔青」练习风格化', badge: '付费',
       ),
       knowledgeCardIds: ['kc_01', 'kc_06'],
@@ -818,7 +818,7 @@ class AcademyContent {
       ],
       tips: ['先确定主题和故事线，再出门拍摄', '组照要有不同景别：远景、中景、特写', '开头和结尾照片最重要，决定整组的基调'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'assets/images/templates/hk_noir_portrait.png',
+        imageUrl: 'assets/images/templates/hk_noir_portrait.jpg',
         name: '港风夜景人像', desc: '用「港风夜景人像」练习叙事', badge: '付费',
       ),
       knowledgeCardIds: ['kc_07', 'kc_08'],

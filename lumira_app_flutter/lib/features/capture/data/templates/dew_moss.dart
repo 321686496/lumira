@@ -16,9 +16,9 @@ const PhotoTemplate dewMossTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/dew_moss_1.png'),
-      TemplateImage(url: 'assets/images/templates/dew_moss_2.png'),
-      TemplateImage(url: 'assets/images/templates/dew_moss_3.png'),
+      TemplateImage(url: 'assets/images/templates/dew_moss_1.jpg'),
+      TemplateImage(url: 'assets/images/templates/dew_moss_2.jpg'),
+      TemplateImage(url: 'assets/images/templates/dew_moss_3.jpg'),
     ],
     description: '静物微距模板，拍摄雨后清晨苔藓与水珠，使用侧逆晨光勾勒水珠通透高光，突出苔藓细密肌理与水珠晶莹质感，适合户外林间、潮湿石头苔藓场景拍摄。',
     shortDesc: '林间晨露凝于青苔，微光通透，感受微观森林的治愈力量🌱',

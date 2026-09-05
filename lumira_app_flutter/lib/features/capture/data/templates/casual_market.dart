@@ -16,7 +16,7 @@ const PhotoTemplate casualMarketTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/casual_market.png'),
+      TemplateImage(url: 'assets/images/templates/casual_market.jpg'),
     ],
     description: '纪实感环境人像模板，以传统市集菜摊为场景，主角站在画面中部偏左整理新鲜蔬菜，采用平视近距离抓拍，利用棚顶缝隙透入的偏暖自然光和摊位灯形成柔中带硬的生活光影。人物适合穿深色碎花衬衫、围裙等朴素日常服装，前景用蔬菜形成自然层次，适合喜欢市井纪实、生活感街拍与自然抓拍氛围的用户。',
     shortDesc: '暖光落在热闹菜摊间，低头挑菜、轻声交谈，满满都是鲜活松弛的市井烟火气🥬✨',

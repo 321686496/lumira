@@ -361,9 +361,12 @@ class CamerawesomePlugin {
     return CameraInterface().setWhiteBalance(mode, k);
   }
 
-  /// 更新取景器逐帧效果（iOS 原生 GPU 实时预览）。参数源自 Dart effectivePost：
+  /// 更新取景器逐帧效果（iOS/OHOS 原生 GPU 实时预览）。参数源自 Dart effectivePost：
   /// matrix 为 Flutter ColorFilter 20 元素（含白平衡温度折叠，全屏均匀）；vignette/
-  /// smooth/sharpen/grain 为 0..100 强度（0 = 关闭）。仅在 iOS 生效，Android 为 no-op。
+  /// smooth/sharpen/grain 为 0..100 强度（0 = 关闭）。
+  /// - iOS：PreviewEffectProcessor（CoreImage 逐帧渲染）
+  /// - OHOS：libpreview_fx.so（相机预览流→GL 着色器→Flutter Texture）
+  /// - Android：no-op
   static Future<void> updatePreviewEffects({
     List<double>? matrix,
     double vignette = 0,
@@ -371,7 +374,9 @@ class CamerawesomePlugin {
     double sharpen = 0,
     double grain = 0,
   }) {
-    if (!Platform.isIOS) return Future.value();
+    if (!Platform.isIOS && Platform.operatingSystem != 'ohos') {
+      return Future.value();
+    }
     return _previewEffectsChannel.invokeMethod<void>('setPreviewEffects', {
       'matrix': matrix,
       'vignette': vignette,

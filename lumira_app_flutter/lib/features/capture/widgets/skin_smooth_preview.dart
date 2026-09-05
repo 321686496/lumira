@@ -1,6 +1,10 @@
+import 'dart:io' show Platform;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+
+import '../services/preview_beauty_shader.dart'
+    show loadFragmentProgramFromCandidates;
 
 /// 磨皮实时预览渲染组件：用 FragmentShader 逐片元磨皮。
 ///
@@ -145,7 +149,11 @@ class _ShaderCanvasState extends State<_ShaderCanvas> {
       final loader = widget.loadProgram;
       final result = loader != null
           ? await loader()
-          : await ui.FragmentProgram.fromAsset('shaders/skin_smooth.frag');
+          : await loadFragmentProgramFromCandidates(
+              Platform.operatingSystem == 'ohos'
+                  ? ['assets/shaders/skin_smooth.frag', 'shaders/skin_smooth.frag']
+                  : ['shaders/skin_smooth.frag'],
+            );
       prog = result is ui.FragmentProgram ? result : null;
     } catch (_) {
       prog = null; // 加载异常 → 降级

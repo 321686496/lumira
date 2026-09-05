@@ -16,7 +16,7 @@ const PhotoTemplate animeDreamPortraitTemplate = PhotoTemplate(
     tagIds: [],
     price: 20,
     images: [
-      TemplateImage(url: 'assets/images/templates/anime_dream_portrait.png'),
+      TemplateImage(url: 'assets/images/templates/anime_dream_portrait.jpg'),
     ],
     description: '户外晴天草坪人像模板，低机位仰拍捕捉背对镜头跳跃瞬间，利用澄澈蓝天大留白，搭配浅色系洛丽塔风裙装，适合夏日晴天拍摄元气自由感的少女写真。',
     referenceSource: '小红书梦境滤镜教程；宫崎骏动漫感；晴天户外人像',

@@ -8,7 +8,7 @@ void main() {
       id: 'tut_general_premium',
       title: '如何拍出高级感',
       subtitle: '留白与克制',
-      coverImage: 'assets/images/tutorials/cover_tut_general_premium.png',
+      coverImage: 'assets/images/tutorials/cover_tut_general_premium.jpg',
       category: 'general',
       readMinutes: '3分钟',
       tags: ['高级感', '留白'],

@@ -41,7 +41,7 @@ const PhotoTemplate sweetGirlPortraitTemplate = PhotoTemplate(
   poses: [
     Pose(
       name: '封面·提裙微笑',
-      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/sweet_girl_portrait_pose1.png'),
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/sweet_girl_portrait_pose1.webp'),
       position: Position(x: 0.49, y: 0.46),
       scale: 2.5,
       rotation: 0,
@@ -50,7 +50,7 @@ const PhotoTemplate sweetGirlPortraitTemplate = PhotoTemplate(
     ),
     Pose(
       name: '附加·自拍比耶',
-      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/sweet_girl_portrait_pose2.png'),
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/sweet_girl_portrait_pose2.webp'),
       position: Position(x: 0.42, y: 0.5),
       scale: 2.04,
       rotation: 0,
@@ -59,7 +59,7 @@ const PhotoTemplate sweetGirlPortraitTemplate = PhotoTemplate(
     ),
     Pose(
       name: '附加·脸颊比心',
-      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/sweet_girl_portrait_pose3.png'),
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/sweet_girl_portrait_pose3.webp'),
       position: Position(x: 0.49, y: 0.4),
       scale: 2.25,
       rotation: 0,

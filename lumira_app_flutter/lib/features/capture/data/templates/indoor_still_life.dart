@@ -16,7 +16,7 @@ const PhotoTemplate indoorStillLifeTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/indoor_still_life_1.png'),
+      TemplateImage(url: 'assets/images/templates/indoor_still_life_1.jpg'),
       TemplateImage(url: 'assets/images/templates/indoor_still_life_2.jpg'),
     ],
     description: "本模板包含两组极简静物拍摄方案。图一为'暖调大面积留白'风格，利用纯色暖墙与浅木桌，将小巧瓶花置于右下三分点，营造极致空灵的呼吸感；图二为'午后侧光质感'风格，利用窗边硬侧光勾勒陶瓷杯与亚麻布的纹理，干花点缀增添侘寂氛围。适合拍摄家居小物、咖啡茶饮、手作器皿，传达宁静、慢生活的治愈情绪。",

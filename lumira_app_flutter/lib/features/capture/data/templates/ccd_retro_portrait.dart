@@ -16,7 +16,7 @@ const PhotoTemplate ccdRetroPortraitTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/ccd_retro_portrait.png'),
+      TemplateImage(url: 'assets/images/templates/ccd_retro_portrait.jpg'),
     ],
     description: '城市街头金时刻纪实人像模板，捕捉女生行走瞬间，侧逆光暖调光影，简约休闲日常穿搭，利用环境虚化前景烘托主体，适合日常出行街拍，记录松弛自然的行走动态。',
     shortDesc: '落日金辉漫洒老街，步履从容，慵懒松弛的城市氛围感✨',
@@ -38,7 +38,7 @@ const PhotoTemplate ccdRetroPortraitTemplate = PhotoTemplate(
   poses: [
     Pose(
       name: '行走动态主姿势',
-      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/ccd_retro_portrait_pose1.png'),
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/ccd_retro_portrait_pose1.webp'),
       position: Position(x: 0.5, y: 0.5),
       scale: 2.5,
       rotation: 0,

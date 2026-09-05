@@ -95,8 +95,8 @@ class OhosImageProcessor {
 
   /// OHOS 单次原生拍照后处理：解码→几何变换→色彩矩阵→磨皮→锐化→JPEG硬编码→写文件。
   ///
-  /// 只要「带暂未原生实现的复杂效果（暗角/颗粒/Clarity）」时为 false，
-  /// 调用方走现有 GPU+isolate 管线；本方法负责原生产出"底片"。开水印时底片随后由
+  /// 暗角/颗粒/清晰度已全部由原生 C++ 实现（矩阵含 clarity 对比度折叠 + 独立中频
+  /// pass，与 Dart 慢管线同序同语义）。本方法负责原生产出"底片"。开水印时底片随后由
   /// 调用方用原生解码+水印渲染+原生编码合成（见 capture_page 水印分支），因此
   /// 水印不再导致回退慢管线。磨皮已由原生 C++ 全分辨率实现（肤色掩膜+边缘保护，
   /// 非皮肤保留原值），不再导致回退。失败一律返回 false 并由调用方回退原有管线，
@@ -104,6 +104,7 @@ class OhosImageProcessor {
   ///
   /// - [matrix]：20 元素 ColorMatrix（由 `composePostProcessMatrix` 产出，保证与取景器一致）
   /// - [sharpen]：锐化值（0 表示不锐化；严格使用用户/模板真实值，应用层不做强制下限）
+  /// - [clarity]：清晰度 -100..100（null/0 表示关闭；负值柔化。与 Dart 慢管线双重应用语义一致）
   /// - [smoothStrength]：磨皮强度 0-100（0 表示不磨皮）
   /// - [vignette]：暗角强度 0-100（0 表示不施加暗角）
   /// - [grain]：颗粒强度 0-100（0 表示不施加颗粒）
@@ -120,6 +121,7 @@ class OhosImageProcessor {
     required bool isFront,
     required List<double> matrix,
     required int sharpen,
+    double? clarity,
     int smoothStrength = 0,
     int vignette = 0,
     int grain = 0,
@@ -138,6 +140,7 @@ class OhosImageProcessor {
           'isFront': isFront,
           'matrix': matrix,
           'sharpen': sharpen,
+          'clarity': (clarity ?? 0).clamp(-100.0, 100.0),
           'smooth': smoothStrength.clamp(0, 100),
           'vignette': vignette.clamp(0, 100),
           'grain': grain.clamp(0, 100),

@@ -38,7 +38,7 @@ const PhotoTemplate filmVintageTemplate = PhotoTemplate(
   poses: [
     Pose(
       name: '行走抓拍主姿势',
-      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/film_vintage_pose1.png'),
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/film_vintage_pose1.jpg'),
       position: Position(x: 0.5, y: 0.5),
       scale: 2.5,
       rotation: 0,

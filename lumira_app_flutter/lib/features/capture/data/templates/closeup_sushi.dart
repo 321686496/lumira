@@ -16,7 +16,7 @@ const PhotoTemplate closeupSushiTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/closeup_sushi.png'),
+      TemplateImage(url: 'assets/images/templates/closeup_sushi.jpg'),
     ],
     description: '美食静物拍摄模板，适用于日料握寿司菜品拍摄，侧方柔和暖光塑造鱼肉通透肌理，深色哑光餐盘搭配原木桌面，突出生鱼食材新鲜质感，适合探店、美食记录使用；画面无人物、无手部出镜。',
     shortDesc: '暖调居酒屋光影，鱼肉鲜润通透，高级日式料理静物氛围感🍣',

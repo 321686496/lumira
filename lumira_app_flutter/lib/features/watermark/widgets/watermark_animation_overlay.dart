@@ -37,6 +37,13 @@ class WatermarkAnimationOverlay extends StatefulWidget {
   final WatermarkTemplate watermarkTemplate;
   final bool isFront;
   final bool isPortrait;
+
+  /// 动画源是否已是屏幕空间 WYSIWYG 帧（取景器来源：OHOS 快门冻结帧 /
+  /// iOS video 帧直出，已物理竖屏 + 已前置镜像）。
+  /// true：跳过 [_alignOrientation]，避免对已对齐帧二次旋转/镜像
+  /// （OHOS 前置双重镜像 bug 的根因）；
+  /// false：成片回退源（原始照片），按设备方向 + 前置镜像对齐。
+  final bool sourceAligned;
   final VoidCallback onAnimationComplete;
 
   const WatermarkAnimationOverlay({
@@ -45,6 +52,7 @@ class WatermarkAnimationOverlay extends StatefulWidget {
     required this.watermarkTemplate,
     required this.isFront,
     required this.isPortrait,
+    this.sourceAligned = false,
     required this.onAnimationComplete,
   });
 
@@ -175,7 +183,7 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
     }
   }
 
-  /// 快速路径：解码原片 → 方向对齐 → 立即显示。
+  /// 快速路径：解码原片 → 方向对齐（仅原始成片源）→ 立即显示。
   Future<void> _prepBase() async {
     ui.Image? decoded;
     try {
@@ -183,7 +191,7 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
       decoded = await _decodeSource();
       if (decoded == null) throw Exception('decode failed');
 
-      final aligned = await _alignOrientation(decoded);
+      final aligned = await _alignIfNeeded(decoded);
       if (aligned != decoded) {
         decoded.dispose();
         decoded = aligned;
@@ -217,7 +225,7 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
       source = await _decodeSource();
       if (source == null) throw Exception('decode failed');
 
-      final aligned = await _alignOrientation(source);
+      final aligned = await _alignIfNeeded(source);
       if (aligned != source) {
         source.dispose();
         source = aligned;
@@ -283,6 +291,14 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
     final result = await picture.toImage(nw, nh);
     picture.dispose();
     return result;
+  }
+
+  /// 按 [WatermarkAnimationOverlay.sourceAligned] 决定是否做方向对齐。
+  /// 取景器来源帧（快门冻结帧/video 帧直出）已是屏幕空间 WYSIWYG，
+  /// 跳过对齐；原始成片源才走 [_alignOrientation]。
+  Future<ui.Image> _alignIfNeeded(ui.Image src) async {
+    if (widget.sourceAligned) return src;
+    return _alignOrientation(src);
   }
 
   /// 与后处理管线 `PhotoPostProcessor._alignOrientation` 一致的方向对齐。

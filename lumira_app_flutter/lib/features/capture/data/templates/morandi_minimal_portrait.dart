@@ -16,7 +16,7 @@ const PhotoTemplate morandiMinimalPortraitTemplate = PhotoTemplate(
     tagIds: [],
     price: 60,
     images: [
-      TemplateImage(url: 'assets/images/templates/morandi_minimal_portrait.png'),
+      TemplateImage(url: 'assets/images/templates/morandi_minimal_portrait.jpg'),
     ],
     description: '这是一套主打极简高级感的半身人像模板。采用大面积低饱和灰绿色背景，配合柔和的漫射光，营造出静谧、内敛且富有质感的视觉氛围。穿搭上选择同色系莫兰迪灰/米色V领垂坠感上衣，强调面料的哑光质地与线条的流畅。妆容清透自然，保留皮肤真实纹理。适合追求清冷气质、职场形象照或艺术写真的用户，在室内窗边或纯色背景前即可复刻。',
     referenceSource: '莫兰迪色系人像；轻熟女知性风；小红书极简人像教程',

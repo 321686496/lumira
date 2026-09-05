@@ -10,6 +10,7 @@ import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart' as pp;
 
 import 'dart_photo_pipeline.dart' show applyLegStretchImg, applyPerPixelEffectsImg;
+import 'preview_beauty_shader.dart' show loadFragmentProgramFromCandidates;
 import 'skin_smooth_shader.dart';
 import 'skin_smoother.dart';
 import '../data/capture_state.dart';
@@ -235,8 +236,11 @@ class PhotoPostProcessor {
         ui.FragmentProgram? program;
         try {
           // 载荷失败/渲染异常一律回退 CPU 路径，不抛出、不阻塞成片。
-          program = await ui.FragmentProgram.fromAsset(
-              'shaders/skin_smooth.frag');
+          program = await loadFragmentProgramFromCandidates(
+            Platform.operatingSystem == 'ohos'
+                ? ['assets/shaders/skin_smooth.frag', 'shaders/skin_smooth.frag']
+                : ['shaders/skin_smooth.frag'],
+          );
         } catch (_) {
           program = null;
         }

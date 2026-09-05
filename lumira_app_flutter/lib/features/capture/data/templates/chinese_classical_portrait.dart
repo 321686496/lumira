@@ -16,7 +16,7 @@ const PhotoTemplate chineseClassicalPortraitTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/chinese_classical_portrait.png'),
+      TemplateImage(url: 'assets/images/templates/chinese_classical_portrait.jpg'),
     ],
     description: '人物全身古风汉服人像，江南古典园林亭台场景，利用午后侧方柔和自然光，浅青竹纹宋制汉服搭配团扇道具，回眸回望镜头，营造含蓄清冷的东方古典氛围感，适合汉服爱好者拍摄。',
     referenceSource: '小红书古风人像教程；莫兰迪冷色调风格；汉服摄影套图',

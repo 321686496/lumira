@@ -15,7 +15,7 @@ const PhotoTemplate minimalBookTemplate = PhotoTemplate(
     tagIds: [],
     price: 0,
     images: [
-      TemplateImage(url: 'assets/images/templates/minimal_book.png'),
+      TemplateImage(url: 'assets/images/templates/minimal_book.jpg'),
     ],
     description: '单本极简风格书籍置于干净背景上的静物，突出留白与质感的宁静',
     referenceSource: '样片参考：极简书籍静物摄影；参数参考留白构图合集',
