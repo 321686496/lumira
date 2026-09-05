@@ -1,0 +1,113 @@
+// lib/features/capture/data/templates/japanese_fresh_portrait.dart
+import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
+
+/// 日系小清新模板（japanese_fresh 子风格）
+/// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 3
+const PhotoTemplate japaneseFreshPortraitTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'japanese_fresh_portrait',
+    name: '日系清新回眸人像',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'fresh_healing', style: 'japanese_fresh', subStyle: 'japanese_fresh', method: 'seven_body'),
+    tags: ['人像', '日系', '小清新', '空气感', '低对比'],
+    tagIds: [],
+    price: 0,
+    images: [
+      TemplateImage(url: 'assets/images/templates/japanese_fresh_portrait_1.jpg'),
+      TemplateImage(url: 'assets/images/templates/japanese_fresh_portrait_2.png'),
+      TemplateImage(url: 'assets/images/templates/japanese_fresh_portrait_3.png'),
+    ],
+    description: '这是一套主打夏日清新森系风格的户外/室内人像模板。利用强烈的自然逆光勾勒发丝金边，配合正面柔和补光打造通透无瑕的奶油肌质感。穿搭以蓝白格纹吊带裙为主，搭配浅棕微卷长发，营造慵懒随性的少女氛围。适合春夏季节晴朗天气拍摄，尤其推荐在树荫下或明亮窗边取景，通过大光圈虚化背景突出主体，成片色调明亮低对比，充满呼吸感与氧气感。',
+    referenceSource: '小红书日系小清新教程；日系写真风格；轻颜/醒图清新滤镜',
+    shortDesc: '林间碎金洒落发梢，蓝白格裙摇曳生姿，清透氧气感拉满，是夏日午后最治愈的松弛瞬间🌿💙',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['day'],
+    ),
+  ),
+  composition: Composition(
+    overlayType: 'rule_of_thirds',
+    gridType: 'thirds',
+    subjectFrame: SubjectFrame(x: 0.25, y: 0.1, w: 0.55, h: 0.85),
+    opacity: 0.25,
+    aspectRatio: '2:3',
+    description: '竖构图半身至七分身人像。机位平视或略低5°仰拍以增加亲切感。主体占据画面垂直方向的中上部约70%，头顶留白约1/5，底部裁切至腰部或大腿中部。背景采用大光圈虚化处理，环境占比约30%-40%，主要用于交代氛围（树林绿意或室内窗景）而不抢夺主体注意力。主体框大致位于 x:0.25, y:0.1, w:0.55, h:0.85。',
+  ),
+  poses: [
+    Pose(
+      name: '封面·林间抚发',
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/japanese_fresh_portrait_pose1.webp'),
+      position: Position(x: 0.5, y: 0.5),
+      scale: 2.5,
+      rotation: 0,
+      description: '人物位于画面中央偏右，身体侧向屏幕左约45°，面部几乎正对镜头（微偏屏幕右-15°）。右手抬起轻抚头顶右侧发丝，手肘向外打开，手指自然弯曲放松；左臂自然下垂于身侧不可见。重心落在双腿中间，肩线平稳。头颈微微向屏幕右倾斜+5°，下巴微收。视线直视镜头，表情平静略带懵懂，嘴唇微张。整体呈现一种不经意被抓拍的松弛感。',
+      cameraDirection: 'back',
+    ),
+    Pose(
+      name: '附加·持花侧坐',
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/japanese_fresh_portrait_pose2.webp'),
+      position: Position(x: 0.5, y: 0.5),
+      scale: 2.5,
+      rotation: 0,
+      description: '人物位于画面右侧，身体侧向屏幕左约90°，面部转向镜头约-45°。双手捧着一束蓝色绣球花置于画面左侧前景，手臂自然弯曲支撑。坐姿，背部挺直微前倾，露出肩背线条。头颈向屏幕左微倾-5°，面带甜美微笑，嘴角上扬，眼神柔和看向镜头。光线从屏幕右上方打入，在肩膀和头发上形成高光。',
+      cameraDirection: 'back',
+    ),
+    Pose(
+      name: '附加·阳光回眸',
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/japanese_fresh_portrait_pose3.webp'),
+      position: Position(x: 0.5, y: 0.5),
+      scale: 2.5,
+      rotation: 0,
+      description: '人物位于画面中央，身体背对镜头侧向屏幕左约135°，面部大幅度回转朝向镜头约-160°（经典回眸）。双臂自然下垂或微微向后摆动，未在画面主要区域展示手部动作。重心略微前倾，呈现动态行走中回头的瞬间。头颈向屏幕右倾斜+10°，笑容灿烂露齿，眼睛弯成月牙状，情绪高昂愉悦。强烈的逆光从屏幕后方打来，发丝边缘发光。',
+      cameraDirection: 'back',
+    ),
+  ],
+  camera: CameraParams(
+    exposureCompensation: 0.7,
+    isoMode: 'auto',
+    iso: 100,
+    shutterSpeed: '1/200',
+    whiteBalance: 'daylight',
+    whiteBalanceK: 5600,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensSuggestion: 'main',
+    lensType: '主摄镜头',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '主光为强烈的自然逆光/侧逆光，从屏幕后方及右上方射入，形成明显的发丝轮廓光和肩部高光；正面需补充柔和散射光（反光板或补光灯）以提亮面部阴影，避免脸部过暗。光质偏软但方向性强，光比约为1:3（面部:背景高光）。阴影落在面部屏幕左侧及颈部，边缘柔和过渡。',
+    shootingDistance: '1.5-2.5m',
+    background: '户外选择枝叶茂密的林荫道，阳光透过树叶形成斑驳光斑；室内选择靠近落地窗的位置，窗外有绿植或明亮天空，窗帘半透柔化光线。',
+    props: ['蓝色绣球花束', '白色蕾丝织物（可选，用于图2前景遮挡或铺垫）'],
+    bestTime: '09:00-11:00 或 15:00-17:00',
+    tips: [
+      '必须使用逆光拍摄：让太阳或强光源位于人物身后，勾勒出头发和肩膀的金边轮廓。',
+      '正面补光关键：由于逆光会导致面部欠曝，务必开启App内置补光灯或携带反光板，从屏幕正前方距离人物0.5-1米处补光，强度调至中等，确保肤色白皙通透。',
+      '曝光补偿：建议EV +0.7至+1.0，宁可背景轻微过曝也要保证人物面部明亮，营造\'空气感\'。',
+      '景深控制：真机无法物理调节大光圈，请尽量让人物远离背景（至少2米以上），并靠近镜头拍摄，后期依靠smoothStrength和vignette模拟浅景深效果。',
+      '引导模特：图1强调静态的凝视与手部互动；图2强调道具与环境的融合；图3强调动态捕捉，让模特走动中突然回头大笑，抓拍最自然的瞬间。',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '2:3',
+    color: PostProcessColor(
+      brightness: 8,
+      contrast: -10,
+      saturation: -5,
+      temperature: 2,
+      tint: 3,
+      highlights: -15,
+      shadows: 20,
+    ),
+    smoothStrength: 45,
+    sharpen: 15,
+    vignette: 18,
+    grain: 12,
+    lut: 'japanese_fresh',
+    fillLight: FillLightParams(enabled: true, color: 4294967295, intensity: 0.65),
+  ),
+);
