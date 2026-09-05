@@ -21,5 +21,13 @@ outputs/
 # Debug / CI build logs
 debuglog.txt
 
+# OHOS 构建临时产物（根目录），严禁入库
+.tmp_flutter_har.bin
+*.har.bin
+
+# 本地瘦身工具 / 一次性备份 bundle（不入库）
+_tools/
+_backup_*.bundle
+
 # Vendored plugin lockfile (library style: lockfile not tracked)
 lumira_app_flutter/packages/camerawesome/pubspec.lock
