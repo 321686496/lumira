@@ -97,10 +97,13 @@ class ThemeTokens {
 
   /// 品牌色「凸起浮雕」外阴影（用于金色 CTA 按钮常态）。
   ///
-  /// 复现 neumorphic `shadowConvex` 的双向浮雕，但阴影色调取自**品牌色本身**：
-  /// 右下暗影用「品牌色加深(压暗)」、左上亮影用「品牌浅色提亮(偏白)」。这样叠在
-  /// 金色/品牌背景上时仍能看出突出的浮雕边，而不是用中性灰 `shadowConvexBrand`(
-  /// 默认 `#B7BFB0`)——那在金色上是同明度、几乎看不见，导致主色按钮常态「看不出浮雕」。
+  /// 复现 neumorphic `shadowConvex` 的双向浮雕，右下暗影取「品牌色加深(压暗)」，
+  /// 保证在品牌金色顶面边缘有清晰明暗落差。左上亮影必须**比画布更亮**才能读出
+  /// 「左上受光」的方向性浮雕——因此直接取各主题自己的高光色
+  /// （`shadowConvex[1]`：亮色主题=纯白、暗色主题=比画布微亮的暖灰），
+  /// 与全站新拟态卡片同一套光源语言。此前用 `lerp(brandLight, white, .5)`
+  /// ≈ #EADABC，比暖白画布 #FAF7F2 更暗，左上实际是「压暗」而非高光，
+  /// 方向性光源消失导致主色按钮常态看不出浮雕。
   static List<BoxShadow> brandEmbossShadows(ThemeTokens t) => [
         BoxShadow(
           color: Color.lerp(t.brand, Colors.black, 0.30)!,
@@ -108,11 +111,29 @@ class ThemeTokens {
           blurRadius: 12,
         ),
         BoxShadow(
-          color: Color.lerp(t.brandLight, Colors.white, 0.5)!,
+          color: t.shadowConvex[1].color,
           offset: const Offset(-5, -5),
           blurRadius: 12,
         ),
       ];
+
+  /// 品牌色「凸起浮雕」顶面渐变（用于金色 CTA 按钮常态，配合 [brandEmbossShadows]）。
+  ///
+  /// 新拟态浮雕的本质是「受光曲面被光雕出凸起」：均匀色块 + 投影只能读作
+  /// 「悬浮在页面上方的实体按钮」（Material 阴影语义），读不出浮雕感。
+  /// 顶面自身必须带方向性明暗——145°（左上受光 → 右下背光）三段微渐变：
+  /// 品牌浅色微提亮 → 品牌色 → 品牌色微压暗，模拟鼓起曲面的受光过渡。
+  /// 明度跨度刻意克制（~10%），保持金色纯度、不显塑料光泽。
+  static LinearGradient brandEmbossGradient(ThemeTokens t) => LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color.lerp(t.brandLight, Colors.white, 0.22)!,
+          t.brand,
+          Color.lerp(t.brand, t.brandDeep, 0.42)!,
+        ],
+        stops: const [0.0, 0.45, 1.0],
+      );
 
   /// 品牌色凹陷表面用的内影色调：左上暗、右下亮，均取品牌色系。
   static Color brandRecessDark(ThemeTokens t) =>
@@ -120,14 +141,6 @@ class ThemeTokens {
 
   static Color brandRecessLight(ThemeTokens t) =>
       Color.lerp(t.brandLight, Colors.white, 0.55)!;
-
-  /// 品牌色内斜边亮色（用于上/左边，品牌色提亮）。
-  static Color brandBevelLight(ThemeTokens t) =>
-      Color.lerp(t.brand, Colors.white, 0.35)!;
-
-  /// 品牌色内斜边暗色（用于下/右边，品牌色压暗）。
-  static Color brandBevelDark(ThemeTokens t) =>
-      Color.lerp(t.brand, Colors.black, 0.22)!;
 
   static ThemeTokens of(ThemeKey theme) {
     switch (theme) {

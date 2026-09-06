@@ -26,7 +26,9 @@ import '../data/profile_content_mock_data.dart';
 /// Plan A Task A5：替换 `ProfileContentMockData.customTemplates`（deprecated）
 /// 作为 My Templates 页的数据源。`TemplatesEditorPage._onSave` 保存模板后
 /// 通过 `ref.invalidate(customTemplatesProvider)` 触发刷新。
-final customTemplatesProvider = FutureProvider<List<CustomTemplate>>((ref) async {
+/// autoDispose：页面为独立路由，退出即释放，重新进入自动拉取最新自定义模板。
+final customTemplatesProvider =
+    FutureProvider.autoDispose<List<CustomTemplate>>((ref) async {
   final dao = await ref.watch(templatesDaoProvider.future);
   final records = await dao.getCustomOnly();
   return records.map(_recordToCustomTemplate).toList();

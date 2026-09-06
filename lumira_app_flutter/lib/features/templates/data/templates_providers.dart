@@ -167,7 +167,9 @@ final recommendedBuiltinTemplatesProvider =
 
 /// 已收藏的模板 id 集合（收藏状态 UI 的唯一数据源）。
 /// 收藏/取消后 `ref.invalidate(favoriteTemplateIdsProvider)` 触发重建。
-final favoriteTemplateIdsProvider = FutureProvider<Set<String>>((ref) async {
+/// autoDispose：页面退出（路由弹出、无监听者）即释放，重新进入时自动拉取最新收藏。
+final favoriteTemplateIdsProvider =
+    FutureProvider.autoDispose<Set<String>>((ref) async {
   final dao = await ref.watch(templatesFavoriteDaoProvider.future);
   final ids = await dao.getFavoriteIds();
   return ids.toSet();
@@ -178,7 +180,9 @@ final favoriteTemplateIdsProvider = FutureProvider<Set<String>>((ref) async {
 /// 排序交给 DAO 的 CreatedAt DESC；按有序收藏 id 命中 builtin/remote/custom 全池记录，
 /// 转成「我的收藏」页的网格卡片项。模板已删除时静默跳过。
 /// `isCustom` 按 `source == 'custom'` 判定（与 getCustomOnly 口径一致）。
-final favoriteTemplatesProvider = FutureProvider<List<AllTemplateItem>>((ref) async {
+/// autoDispose：收藏页为独立路由，退出即释放，重新进入自动刷新最新收藏列表。
+final favoriteTemplatesProvider =
+    FutureProvider.autoDispose<List<AllTemplateItem>>((ref) async {
   final dao = await ref.watch(templatesDaoProvider.future);
   final favDao = await ref.watch(templatesFavoriteDaoProvider.future);
   final orderedIds = await favDao.getFavoriteIds();

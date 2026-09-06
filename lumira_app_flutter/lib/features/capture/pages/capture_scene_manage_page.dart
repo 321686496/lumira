@@ -581,15 +581,16 @@ class _BrandCtaButtonState extends ConsumerState<_BrandCtaButton> {
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(appThemeProvider).tokens;
-    // 主色 CTA 新拟态：常态「品牌色 + 品牌浮雕外阴影」凸起，按压保持主色并
-    // 反转内斜边（暗上左 / 亮下右）作凹陷反馈。
+    // 主色 CTA 新拟态：常态「品牌色 + 品牌浮雕外阴影」凸起，按压保持主色切换为
+    // 品牌色系凹陷表面（recessDark/recessLight 品牌内影）。
     return PressableRecess(
       onTap: widget.onTap,
       borderRadius: 9999,
       raisedFill: tokens.brand,
       raisedShadow: ThemeTokens.brandEmbossShadows(tokens),
-      bevelLight: ThemeTokens.brandBevelLight(tokens),
-      bevelDark: ThemeTokens.brandBevelDark(tokens),
+      raisedGradient: ThemeTokens.brandEmbossGradient(tokens),
+      recessDark: ThemeTokens.brandRecessDark(tokens),
+      recessLight: ThemeTokens.brandRecessLight(tokens),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
         child: widget.child,

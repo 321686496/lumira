@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import 'bevel_surface.dart';
 import 'recessed_surface.dart';
 
 /// 包一层「按压时凹陷」的反馈外壳。
@@ -23,10 +22,9 @@ class PressableRecess extends ConsumerStatefulWidget {
     this.behavior = HitTestBehavior.opaque,
     this.raisedFill,
     this.raisedShadow,
+    this.raisedGradient,
     this.recessDark,
     this.recessLight,
-    this.bevelLight,
-    this.bevelDark,
   });
 
   /// 点击回调
@@ -54,19 +52,19 @@ class PressableRecess extends ConsumerStatefulWidget {
   final Color? raisedFill;
 
   /// 常态凸起胶囊使用的外浮雕阴影，默认 [ThemeTokens.shadowConvexSubtle]。
+  /// 品牌 CTA 传 [ThemeTokens.brandEmbossShadows]。
   final List<BoxShadow>? raisedShadow;
 
-  /// 按压凹陷表面时覆盖内影色调（默认用 `shadowConcave`；品牌 CTA 传品牌色）。
+  /// 常态凸起胶囊的顶面渐变（可选）。品牌 CTA 传
+  /// [ThemeTokens.brandEmbossGradient]：均匀色块 + 投影会读作「悬浮实体」，
+  /// 145° 受光曲面微渐变（左上受光 → 右下背光）才读得出「从画布鼓起」的浮雕。
+  final LinearGradient? raisedGradient;
+
+  /// 按压凹陷表面时覆盖内影色调（默认用 `shadowConcave` 中性影）。
+  /// 品牌 CTA 必须传品牌色系（[ThemeTokens.brandRecessDark] /
+  /// [ThemeTokens.brandRecessLight]），避免中性灰在金色表面糊出脏边。
   final Color? recessDark;
   final Color? recessLight;
-
-  /// 内斜边亮色（用于品牌按钮常态上/左边）。与 [bevelDark] 同时设置时，
-  /// 常态用「亮上左 + 暗下右」内斜边，按压用「暗上左 + 亮下右」反转内斜边，
-  /// 替代外阴影浮雕，避免异色按钮悬浮感。
-  final Color? bevelLight;
-
-  /// 内斜边暗色（用于品牌按钮常态下/右边）。
-  final Color? bevelDark;
 
   @override
   ConsumerState<PressableRecess> createState() => _PressableRecessState();
@@ -91,33 +89,10 @@ class _PressableRecessState extends ConsumerState<PressableRecess> {
     final isNeu = appTheme.style == UIStyle.neumorphic;
     final fill = widget.raisedFill;
 
-    final hasBevel = widget.bevelLight != null && widget.bevelDark != null;
-
     Widget content;
-    if (isNeu && fill != null && hasBevel) {
-      // 品牌 CTA 内斜边模式：常态用「填充色 + 浮雕外阴影」的凸起胶囊（浮雕感，
-      // 品牌 CTA 调用方传 raisedShadow: brandEmbossShadows）；按压时保持填充色，
-      // 去掉阴影并反转内斜边（暗上左 / 亮下右）作凹陷反馈。
-      if (_pressed) {
-        content = BevelRoundedSurface(
-          fill: fill,
-          bevelLight: widget.bevelDark!,
-          bevelDark: widget.bevelLight!,
-          borderRadius: widget.borderRadius,
-          child: widget.child,
-        );
-      } else {
-        content = Container(
-          decoration: BoxDecoration(
-            color: fill,
-            borderRadius: BorderRadius.circular(widget.borderRadius),
-            boxShadow: widget.raisedShadow ?? tokens.shadowConvexSubtle,
-          ),
-          child: widget.child,
-        );
-      }
-    } else if (isNeu && fill != null && _pressed) {
-      // 按压态：填充色凹陷表面（上/左暗、下/右亮、中心平底）
+    if (isNeu && fill != null && _pressed) {
+      // 按压态：填充色凹陷表面（上/左暗、下/右亮、中心平底）。
+      // 品牌 CTA 由调用方传 recessDark/recessLight 品牌色系内影，按压保持主色。
       content = RecessedSurface(
         tokens: tokens,
         borderRadius: widget.borderRadius,
@@ -129,10 +104,11 @@ class _PressableRecessState extends ConsumerState<PressableRecess> {
         child: widget.child,
       );
     } else if (isNeu && fill != null) {
-      // 常态：填充色凸起胶囊（浮雕外阴影），按下时再切换为凹陷
+      // 常态：填充色凸起胶囊（浮雕外阴影 + 可选受光曲面渐变），按下时切换为凹陷
       content = Container(
         decoration: BoxDecoration(
-          color: fill,
+          color: widget.raisedGradient == null ? fill : null,
+          gradient: widget.raisedGradient,
           borderRadius: BorderRadius.circular(widget.borderRadius),
           boxShadow: widget.raisedShadow ?? tokens.shadowConvexSubtle,
         ),

@@ -186,11 +186,15 @@ class AppThemeData {
           background: tokens.brand,
           foreground: tokens.textInverse,
           border: null,
-          // 新拟态主按钮常态：用品牌色调的浮雕外阴影（而非中性灰 shadowConvexBrand，
-          // 后者在品牌金上同明度、看不清浮雕），让金色 CTA 常态有清晰的凸起层次。
+          // 新拟态主按钮常态：品牌色调浮雕外阴影 + 145° 顶面受光曲面微渐变，
+          // 二者共同读出「从画布鼓起」的浮雕感；纯色 + 投影只会读作悬浮按钮。
+          // 中性灰 shadowConvexBrand 在品牌金上同明度、看不清浮雕，故不用。
           shadows: style == UIStyle.neumorphic
               ? ThemeTokens.brandEmbossShadows(tokens)
               : const [],
+          gradient: style == UIStyle.neumorphic
+              ? ThemeTokens.brandEmbossGradient(tokens)
+              : null,
         );
       case ButtonVariant.secondary:
         switch (style) {

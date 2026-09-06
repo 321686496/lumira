@@ -146,8 +146,8 @@ class _CreateButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 品牌 CTA 新拟态：常态「品牌色 + 品牌浮雕外阴影」凸起，按压保持主色并
-    // 反转内斜边（暗上左 / 亮下右）作凹陷反馈。
+    // 品牌 CTA 新拟态：常态「品牌色 + 品牌浮雕外阴影」凸起，按压保持主色切换为
+    // 品牌色系凹陷表面（recessDark/recessLight 品牌内影）。
     return Padding(
       padding: const EdgeInsets.all(8),
       child: PressableRecess(
@@ -155,8 +155,9 @@ class _CreateButton extends StatelessWidget {
         borderRadius: 9999,
         raisedFill: tokens.brand,
         raisedShadow: ThemeTokens.brandEmbossShadows(tokens),
-        bevelLight: ThemeTokens.brandBevelLight(tokens),
-        bevelDark: ThemeTokens.brandBevelDark(tokens),
+        raisedGradient: ThemeTokens.brandEmbossGradient(tokens),
+        recessDark: ThemeTokens.brandRecessDark(tokens),
+        recessLight: ThemeTokens.brandRecessLight(tokens),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: Text(

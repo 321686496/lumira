@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/theme_tokens.dart';
-import '../../effects/bevel_surface.dart';
 import '../../effects/recessed_surface.dart';
 import '../_internal/lumira_theme_resolver.dart';
 
@@ -65,8 +64,8 @@ class LumiraButton extends ConsumerStatefulWidget {
   /// 是否在按压时保持品牌色背景（品牌 CTA，默认 false）。
   ///
   /// 默认 false：新拟态下 secondary/ghost 等按钮按压时把外凸浮雕切换为凹陷表面。
-  /// 为 true 时：新拟态主色按钮按压保持品牌色，去掉浮雕阴影并反转内斜边
-  /// （暗上左 / 亮下右）作凹陷反馈。新拟态下 `ButtonVariant.primary` 默认具备
+  /// 为 true 时：新拟态主色按钮按压保持品牌色底面，切换为品牌色系凹陷内影
+  /// （brandRecessDark/Light）作凹陷反馈。新拟态下 `ButtonVariant.primary` 默认具备
   /// 相同行为（主色 CTA 保持主色，如兑换码页「立即兑换」、场景管理「新建场景」）。
   final bool keepBrandOnPress;
 
@@ -141,15 +140,16 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
 
     final radius = (widget.radius ?? appTheme.buttonRadius / 2);
 
-    // 品牌 CTA（keepBrandOnPress）新拟态：纯品牌色顶面 + 品牌色浮雕外阴影
-    // （凸起浮雕感；brandEmbossShadows 取品牌色系，避免中性灰在金色上同明度）。
-    // 按压时保持主色，仅反转内斜边（暗上左/亮下右）作为凹陷反馈。
+    // 品牌 CTA（keepBrandOnPress）新拟态：品牌色顶面受光曲面渐变 + 品牌色浮雕外阴影
+    // （凸起浮雕感；brandEmbossShadows 右下取品牌色加深、左上取主题高光）。
+    // 按压时保持品牌色底面，切换为品牌色系凹陷内影作凹陷反馈。
     if (isNeu && widget.keepBrandOnPress) {
       visual = ButtonVisual(
         background: tokens.brand,
         foreground: tokens.textInverse,
         border: null,
         shadows: ThemeTokens.brandEmbossShadows(tokens),
+        gradient: ThemeTokens.brandEmbossGradient(tokens),
       );
     }
 
@@ -176,8 +176,8 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
       // 新拟态按压态：将外凸浮雕切换为凹陷表面（上/左暗、下/右亮、中心平底），
       // 模拟手指按下去被压进画布的物理反馈。overlay（叠图）场景保持仅按压缩放，
       // 避免在图片上形成脏边（Neumorphism §4）。
-      // 主色 CTA（primary / keepBrandOnPress）按压保持品牌色，仅反转内斜边
-      // 作凹陷反馈；其余按钮切换为凹陷表面。
+      // 主色 CTA（primary / keepBrandOnPress）按压同样切凹陷表面，但凹陷底色
+      // 保持品牌色、内影用品牌色系（brandRecessDark/Light），满足「按压保持主色」。
       if (widget.variant != ButtonVariant.primary && !widget.keepBrandOnPress) {
         useRecessedSurface = true;
       }
@@ -203,9 +203,9 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
     );
 
     // 主色 CTA（primary / keepBrandOnPress，非叠图）新拟态：
-    // 常态用「品牌色顶面 + 浮雕外阴影」凸起胶囊（浮雕感）；按压时保持品牌色，
-    // 去掉阴影并反转内斜边（暗上左/亮下右）作凹陷反馈。
-    // BoxDecoration 不允许圆角 + 非均匀 Border，故内斜边用 BevelRoundedSurface 绘制。
+    // 常态用「品牌色顶面 + 品牌浮雕外阴影」凸起胶囊（浮雕感）；按压时保持品牌色
+    // 底面，切换为品牌色系凹陷表面（上/左暗、下/右亮内影）作清晰的按压凹陷反馈。
+    // 此前用 1.5px 反转内斜边发丝线，与填充色明度差仅 ±20%，小胶囊上几乎不可见。
     final brandCta = isNeu &&
         (widget.variant == ButtonVariant.primary || widget.keepBrandOnPress) &&
         !widget.overlay;
@@ -219,11 +219,14 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
             child: Padding(padding: widget.padding, child: body),
           )
         : (brandCta && _pressed)
-            ? BevelRoundedSurface(
-                fill: background,
-                bevelLight: ThemeTokens.brandBevelDark(tokens),
-                bevelDark: ThemeTokens.brandBevelLight(tokens),
+            ? RecessedSurface(
+                tokens: tokens,
                 borderRadius: radius,
+                depth: 0.68,
+                rimFraction: 0.3,
+                color: background,
+                recessDark: ThemeTokens.brandRecessDark(tokens),
+                recessLight: ThemeTokens.brandRecessLight(tokens),
                 child: Padding(padding: widget.padding, child: body),
               )
             : Container(

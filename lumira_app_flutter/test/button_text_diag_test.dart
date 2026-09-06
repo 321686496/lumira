@@ -6,7 +6,6 @@ import 'package:lumira_app_flutter/core/theme/app_theme.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/shared/widgets/lumira/buttons/lumira_button.dart';
-import 'package:lumira_app_flutter/shared/widgets/effects/bevel_surface.dart';
 import 'package:lumira_app_flutter/shared/widgets/effects/pressable_recess.dart';
 import 'package:lumira_app_flutter/shared/widgets/effects/recessed_surface.dart';
 
@@ -51,8 +50,9 @@ void main() {
                       onTap: () {},
                       borderRadius: 9999,
                       raisedFill: tokens.brand,
-                      bevelLight: ThemeTokens.brandBevelLight(tokens),
-                      bevelDark: ThemeTokens.brandBevelDark(tokens),
+                      raisedShadow: ThemeTokens.brandEmbossShadows(tokens),
+                      recessDark: ThemeTokens.brandRecessDark(tokens),
+                      recessLight: ThemeTokens.brandRecessLight(tokens),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
@@ -111,17 +111,23 @@ void main() {
   testWidgets('主色按钮按压态保持主色（新拟态）', (tester) async {
     await pumpButton(tester,
         style: UIStyle.neumorphic, theme: ThemeKey.warmWhite);
+    final tokens = ThemeTokens.of(ThemeKey.warmWhite);
 
     final finder = find.byType(LumiraButton).first;
     final center = tester.getCenter(finder);
     final gesture = await tester.startGesture(center);
     await tester.pump();
 
-    // primary 按压：不切换凹陷表面，保持品牌色 + 反转内斜边
-    expect(find.byType(RecessedSurface), findsNothing,
-        reason: '主色按钮按压不应切换为凹陷表面');
-    expect(find.byType(BevelRoundedSurface), findsOneWidget,
-        reason: '主色按钮按压应使用反转内斜边');
+    // primary 按压：切换为品牌色凹陷表面（保持品牌色底 + 品牌色系内影）
+    final recessed = find.byType(RecessedSurface);
+    expect(recessed, findsWidgets,
+        reason: '主色按钮按压应切换为凹陷表面');
+    expect(tester.widget<RecessedSurface>(recessed.first).color,
+        tokens.brand,
+        reason: '凹陷表面底色应保持品牌色');
+    expect(tester.widget<RecessedSurface>(recessed.first).recessDark,
+        ThemeTokens.brandRecessDark(tokens),
+        reason: '凹陷内影应使用品牌色系');
     expect(find.text('LumiraButton主色'), findsOneWidget,
         reason: '按压时文字仍应显示');
 
