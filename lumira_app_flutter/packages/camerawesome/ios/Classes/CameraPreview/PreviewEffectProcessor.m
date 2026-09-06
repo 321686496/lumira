@@ -9,39 +9,62 @@
 #import <Metal/Metal.h>
 
 // 统一效果内核：在一遍内完成 锐化(亮度死区Unsharp)→颗粒(tile+亮度)→磨皮(频率分离+肤色掩膜+结构门控)→暗角。
-// 数值语义与 OHOS C++ bake（photo_processor.cpp）及预览 FragmentShader 一致（颜色按 0..1，阈值/幅度相应折算）：
+// 数值语义与 OHOS C++ bake（photo_processor.cpp）及预览 FragmentShader 一致（颜色按 0..1，阈值/幅度相应折算）。
+//
+// 坐标体系（2026-09-06 重写，吸取两次失败教训）：
+//   - 所有 sample() 一律经 samplerTransform(s, destCoord()±offset) 取「sampler 像素坐标」。
+//     9c0355a1 曾直接 sample(image, destCoord())，真机 DAG 带变换（clean aperture/方向元数据）时
+//     采样越界 → 全黑回退（ecfd0dde），故采样必须走 samplerTransform。
+//   - 所有几何归一（暗角径向、颗粒分块、邻域钳制）改用 destCoord() 相对「显式传入的输出 extent」
+//     （vec4 outExtent = origin.x, origin.y, width, height）计算像素坐标/UV：
+//     destCoord() 必然落在输出 extent 内，归一结果数学上封闭，不依赖 samplerSize（此前
+//     samplerSize 与 samplerTransform 可能不一致 → 暗角整图变暗、颗粒采样错位）。
+//     该数学与 OHOS preview_fx.cpp 的 vQuad/vUV·uSize 逐项等价。
+//   - applyWithExtent 必须带 ROI 回调（此前 roiCallback:nil 是 1:1 假设）：
+//     · image（index 0）：锐化邻域 ±1 输出像素 → 回调对输出 rect 外扩 2px；
+//     · noise（index 1）：内核在任意输出位置都可能采样 [0,128)² → 回调恒返回噪声 tile 全 extent
+//       （此前 1:1 假设下，输出区域一旦不在 (0,0,128,128) 附近，噪声输入区域为空 →
+//        sample 返回黑 → rgb += (0×2−1)×amp → 取景器整体压暗且无颗粒纹理，即本 Bug）；
+//     · blur（index 2）：1:1 采样 → 返回原 rect。
+//
+// 数值语义对齐（颜色按 0..1，阈值/幅度相应折算，与 OHOS C++ bake/预览 FragmentShader 一致）：
 //   - 锐化：diff=luma−4邻域均值，死区 thr=0.75/255，amnt=a×(diff±thr)，乘 smoothstep(0.75/255,2.25/255,|diff|)
 //   - 颗粒：128×128 预置 tile 双线性采样（固定 offset 13/128,29/128），幅度=grains×24/255×mix(0.35,1.0,smoothstep(0.05,0.85,luma))
-//   - 磨皮（频率分离）：低频底 base=blur sampler（applyParams 里 CIGaussianBlur 预渲染的矩阵后整图高斯），
+//   - 磨皮（频率分离）：低频底 base=blur sampler（applyParams 里 CIGaussianBlur 预渲染的矩阵后整图高斯，
+//     经 samplerTransform(blur, destCoord()) 采样——旧代码直接 sample(blur, destCoord()) 把工作坐标
+//     当 sampler 坐标，DAG 带变换时取到黑 → 磨皮区域被压暗），
 //     detail=rgb−base，out=base+detail×(1−removal)，removal=baseRemove×肤色概率×(1−结构门控)，
 //     曲线与成片 SkinSmoother/photo_processor.cpp 一致（baseRemove=0.5s+0.04，edge=(6+6s)..×2.5）
 //   - 暗角：factor=1−vigS×smoothstep(0.45,1.0,dn)，dn=length(归一径向)/√2
 static NSString *const kPreviewBeautyKernelString = @" \n"
-  "kernel vec4 previewBeauty(sampler image, sampler noise, sampler blur, float sharpenA, float vigS, float smoothS, float grainOn) {\n"
-  "  vec2 p = samplerTransform(image, destCoord());\n"
-  "  vec2 tsp = samplerSize(image);\n"
-  "  vec4 c = sample(image, p);\n"
+  "kernel vec4 previewBeauty(sampler image, sampler noise, sampler blur, vec4 outExtent, float sharpenA, float vigS, float smoothS, float grainOn) {\n"
+  "  vec2 dc = destCoord();\n"
+  "  vec2 px = dc - outExtent.xy;\n"    // 输出空间像素坐标 [0,w)×[0,h)
+  "  vec2 sz = outExtent.zw;\n"
+  "  vec4 c = sample(image, samplerTransform(image, dc));\n"
   "  vec3 rgb = c.rgb;\n"
   "  const vec3 lum = vec3(0.299, 0.587, 0.114);\n"
-  "  vec2 cp = clamp(p, vec2(1.0), tsp - vec2(1.0));\n"
   "\n"
-  "  // 1) 锐化：亮度域死区 Unsharp\n"
-  "  float l0 = dot(rgb, lum);\n"
-  "  float mn = ( dot(sample(image, cp+vec2(0.0,-1.0)).rgb, lum)\n"
-  "             + dot(sample(image, cp+vec2(0.0, 1.0)).rgb, lum)\n"
-  "             + dot(sample(image, cp+vec2(-1.0,0.0)).rgb, lum)\n"
-  "             + dot(sample(image, cp+vec2( 1.0,0.0)).rgb, lum) ) * 0.25;\n"
-  "  float diff = l0 - mn;\n"
-  "  float thr = 0.75/255.0;\n"
-  "  float amnt = 0.0;\n"
-  "  if (diff > thr) amnt = sharpenA * (diff - thr);\n"
-  "  else if (diff < -thr) amnt = sharpenA * (diff + thr);\n"
-  "  float edge = smoothstep(0.75/255.0, 2.25/255.0, abs(diff));\n"
-  "  rgb += amnt * edge;\n"
+  "  // 1) 锐化：亮度域死区 Unsharp（邻域 = 输出像素 ±1，同样经 samplerTransform）\n"
+  "  if (sharpenA > 0.0) {\n"
+  "    vec2 dcC = clamp(dc, outExtent.xy + vec2(1.0), outExtent.xy + sz - vec2(1.0));\n"
+  "    float l0 = dot(rgb, lum);\n"
+  "    float mn = ( dot(sample(image, samplerTransform(image, dcC + vec2(0.0,-1.0))).rgb, lum)\n"
+  "               + dot(sample(image, samplerTransform(image, dcC + vec2(0.0, 1.0))).rgb, lum)\n"
+  "               + dot(sample(image, samplerTransform(image, dcC + vec2(-1.0,0.0))).rgb, lum)\n"
+  "               + dot(sample(image, samplerTransform(image, dcC + vec2( 1.0,0.0))).rgb, lum) ) * 0.25;\n"
+  "    float diff = l0 - mn;\n"
+  "    float thr = 0.75/255.0;\n"
+  "    float amnt = 0.0;\n"
+  "    if (diff > thr) amnt = sharpenA * (diff - thr);\n"
+  "    else if (diff < -thr) amnt = sharpenA * (diff + thr);\n"
+  "    float edge = smoothstep(0.75/255.0, 2.25/255.0, abs(diff));\n"
+  "    rgb += amnt * edge;\n"
+  "  }\n"
   "\n"
-  "  // 2) 颗粒：预计算 tile + 幅度随亮度（杜绝每帧 CIRandomGenerator 的滞后）\n"
+  "  // 2) 颗粒：预计算 tile + 幅度随亮度（分块用输出像素坐标，与 OHOS 一致）\n"
   "  if (grainOn > 0.0) {\n"
-  "    vec2 nuv = vec2( fract(p.x * (1.0/128.0) + (13.0/128.0)), fract(p.y * (1.0/128.0) + (29.0/128.0)) ) * 128.0;\n"
+  "    vec2 nuv = vec2( fract(px.x * (1.0/128.0) + (13.0/128.0)), fract(px.y * (1.0/128.0) + (29.0/128.0)) ) * 128.0;\n"
   "    float g = sample(noise, nuv).r;              // 0..1，双线性\n"
   "    float ls = mix(0.35, 1.0, smoothstep(0.05, 0.85, dot(rgb, lum)));\n"
   "    float amp = grainOn * (24.0/255.0) * ls;\n"
@@ -51,7 +74,7 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   "  // 3) 磨皮（频率分离）：低频底=blur（矩阵后整图高斯，applyParams 预渲染），\n"
   "  // detail=rgb−base；YCbCr 肤色掩膜（放宽区间）+ 结构门控。\n"
   "  if (smoothS > 0.0) {\n"
-  "    vec3 base = sample(blur, destCoord()).rgb;\n"
+  "    vec3 base = sample(blur, samplerTransform(blur, dc)).rgb;\n"
   "    vec3 det = rgb - base;\n"
   "    float margin = max(max(abs(det.r), abs(det.g)), abs(det.b));\n"
   "    float y  = dot(rgb, lum);\n"
@@ -68,9 +91,10 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   "    rgb = base + det * (1.0 - removal);\n"
   "  }\n"
   "\n"
-  "  // 4) 暗角：单一解析式（预览==成片逐像素一致）\n"
+  "  // 4) 暗角：uv 归一径向（与 OHOS vUV 公式逐项一致，中心不动、边缘压暗）\n"
   "  if (vigS > 0.0) {\n"
-  "    vec2 d2 = vec2((2.0*p.x - tsp.x)/tsp.x, (2.0*p.y - tsp.y)/tsp.y);\n"
+  "    vec2 uv = px / sz;\n"
+  "    vec2 d2 = vec2(2.0*uv.x - 1.0, 2.0*uv.y - 1.0);\n"
   "    float dn = length(d2) * 0.70710678;\n"
   "    float ff = 1.0 - vigS * smoothstep(0.45, 1.0, dn);\n"
   "    rgb *= ff;\n"
@@ -104,14 +128,27 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   self = [super init];
   if (self) {
     _gpuQueue = dispatch_queue_create("camerawesome.preview_effects.gpu", DISPATCH_QUEUE_SERIAL);
+    // 【色彩空间根因修复】工作色域显式设为 γ 编码的 deviceRGB：
+    // CIContext options:nil 的默认工作色域是 linear sRGB，导致
+    //   1) CIColorMatrix 把为 γ 空间设计的对比度矩阵（枢轴 0.5）作用到 linear 值上
+    //      → 对比度拉满时 mid-gray(linear 0.214) 被大幅推离枢轴 → 效果夸张
+    //      （OHOS GL/Dart 成片均在 γ 空间字节上运算，故 OHOS 正常、iOS 异常）；
+    //   2) 内核的 0..255 折算阈值（锐化死区、YCbCr 肤色区间）拿到 linear 值，语义错位。
+    // working == output == deviceRGB（近似 sRGB γ）后整条链路零转换，字节直进直出，
+    // 与 OHOS preview_fx（texture2D 返回 sRGB 字节）/ Dart 成片（ui.ColorFilter.matrix）
+    // 的 γ 空间语义完全对齐。
+    _workingColorSpace = CGColorSpaceCreateDeviceRGB();
+    NSDictionary *contextOptions = @{
+      (id)kCIContextWorkingColorSpace : (__bridge id)_workingColorSpace,
+      (id)kCIContextOutputColorSpace : (__bridge id)_workingColorSpace,
+    };
     id<MTLDevice> metalDevice = MTLCreateSystemDefaultDevice();
     if (metalDevice != nil) {
-      _ciContext = [CIContext contextWithMTLDevice:metalDevice options:nil];
+      _ciContext = [CIContext contextWithMTLDevice:metalDevice options:contextOptions];
     }
     if (_ciContext == nil) {
-      _ciContext = [CIContext contextWithOptions:nil];
+      _ciContext = [CIContext contextWithOptions:contextOptions];
     }
-    _workingColorSpace = CGColorSpaceCreateDeviceRGB();
     _beautyKernel = [CIKernel kernelWithString:kPreviewBeautyKernelString];
     _noiseTile = [self makeNoiseTile];
     atomic_init(&_publishedBuffer, NULL);
@@ -179,7 +216,12 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
 
 /// 在 _gpuQueue 上同步执行渲染并发布成帧。
 - (void)renderSync:(CVPixelBufferRef)input {
-  CIImage *image = [CIImage imageWithCVPixelBuffer:input];
+  // 输入缓冲显式按 deviceRGB 解释（kCIImageColorSpace 覆盖缓冲自带标签）：
+  // 相机 BGRA 帧若带 P3/709 标签，默认会被转换到工作色域；而 WYSIWYG 直出成片
+  // （captureVideoFrameToJpegAtPath）与 Flutter 纹理显示都把同一批字节当 sRGB 直读。
+  // 强制同色域解释保证「取景器效果 == 成片 == 字节级一致」，杜绝隐藏转换。
+  CIImage *image = [CIImage imageWithCVPixelBuffer:input
+                                          options:@{(id)kCIImageColorSpace : (__bridge id)_workingColorSpace}];
   if (image == NULL) return;
 
   CGFloat w = CVPixelBufferGetWidth(input);
@@ -224,15 +266,18 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   double vigS     = (_params.hasVignette && _params.vignette > 0) ? _params.vignette / 100.0 : 0.0;
   double smoothS  = (_params.hasSmooth && _params.smooth > 0) ? _params.smooth / 100.0 : 0.0;
   double grainS   = (_params.hasGrain && _params.grain > 0) ? _params.grain / 100.0 : 0.0;
+  // 噪声 tile 构建失败（malloc 失败的病态路径）时禁用颗粒，避免采样未定义区域。
+  if (_noiseTile == nil) grainS = 0.0;
 
   // 磨皮频率分离的低频底图（base）：矩阵后整图高斯（CIGaussianBlur，GPU）。
-  // clamp 防边缘透黑、crop 回原 extent 与 destCoord() 对齐。σ 随强度 3..8px
-  //（预览像素）——与成片「降采样 1/3 + 高斯 radius 2..5」的低频频段在预览
-  // 分辨率下等效对齐（成片 12MP 的低频核映射到预览 ~1MP 后取稍强一档，
-  // 保证磨皮在取景器中可见；removal/门控曲线仍与成片严格一致）。
+  // clamp 防边缘透黑、crop 回原 extent 与 destCoord() 对齐。
+  // σ 随强度 9..24px（预览像素）——OHOS 的低频底在 1/3 分辨率 FBO 里做高斯再
+  // 双线性升采样回全分辨率（升采样本身即一次低通），其等效低频核在全预览分辨率
+  // 约 3 倍于「3..8px」；原 σ 在 iOS 全分辨取景器上只滤掉高频细节，base≈rgb，
+  // 磨皮不可感知（真机反馈「磨皮没效果」）。removal/门控曲线仍与成片严格一致。
   CIImage *blurImg = nil;
   if (smoothS > 0) {
-    const CGFloat sigma = 3.0 + 5.0 * smoothS;
+    const CGFloat sigma = 9.0 + 15.0 * smoothS;
     CIImage *clamped = [result imageByClampingToExtent];
     CIImage *blurred = [clamped imageByApplyingFilter:@"CIGaussianBlur"
                                 withInputParameters:@{ @"inputRadius": @(sigma) }];
@@ -240,10 +285,31 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   }
 
   if ((sharpenA > 0 || vigS > 0 || smoothS > 0 || grainS > 0) && _beautyKernel) {
+    const CGRect extent = input.extent;
+    const BOOL hasNoise = (_noiseTile != nil);
     CIImage *noise = _noiseTile ?: result;
+    const CGRect noiseExtent = hasNoise ? _noiseTile.extent : CGRectNull;
     // blur 缺席时传 result 自身（smoothS==0 不进磨皮分支，参数占位而已）。
-    result = [_beautyKernel applyWithExtent:input.extent roiCallback:nil
+    // outExtent（vec4 = origin.x/origin.y/width/height）：内核用它把 destCoord()
+    // 归一为输出像素坐标/UV（几何基准唯一可信来源，与 OHOS vUV·uSize 等价）。
+    // ROI 回调（此前 roiCallback:nil 的 1:1 假设是取景器压暗的根因之一）：
+    //   index 0（image）：锐化邻域 ±1 输出像素 → 外扩 2px 覆盖邻域采样；
+    //   index 1（noise）：任意输出位置都可能采样 [0,128)² → 恒返回噪声 tile 全 extent，
+    //                     否则输出区域不在 tile 附近时噪声输入区域为空 → 采样返回黑
+    //                     → rgb += (0×2−1)×amp → 整图压暗且无颗粒纹理；
+    //   index 2（blur）：1:1 采样 → 返回原 rect。
+    result = [_beautyKernel applyWithExtent:extent
+                                 roiCallback:^CGRect(int index, CGRect rect) {
+                                   if (index == 0) return CGRectInset(rect, -2.0, -2.0);
+                                   if (index == 1) {
+                                     // tile 缺失时 noise 参数退化为 result（grainS 已被置 0，
+                                     // 内核不会采样它），按 1:1+外扩 返回安全区域。
+                                     return hasNoise ? noiseExtent : CGRectInset(rect, -2.0, -2.0);
+                                   }
+                                   return rect;
+                                 }
                                    arguments:@[ result, noise, blurImg ?: result,
+                                                [CIVector vectorWithCGRect:extent],
                                                 @(sharpenA), @(vigS), @(smoothS), @(grainS) ]];
   }
 
