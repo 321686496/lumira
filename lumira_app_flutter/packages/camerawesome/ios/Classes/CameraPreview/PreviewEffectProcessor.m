@@ -39,28 +39,34 @@
 //   锐化 diff / 颗粒 tile 密度 / 磨皮 σ 三者与成片逐项同尺度，且每帧 GPU 处理量降 ~9 倍。
 static const CGFloat kPreviewWorkLongSide = 1280.0;
 
-// 数值语义对齐（颜色按 0..1，阈值/幅度相应折算，与 OHOS C++ bake/预览 FragmentShader 一致）：
-//   - 锐化：diff=luma−4邻域均值，死区 thr=0.75/255，amnt=a×(diff±thr)，乘 smoothstep(0.75/255,2.25/255,|diff|)
-//   - 颗粒：128×128 预置 tile 双线性采样（固定 offset 13/128,29/128，tap 相位 u×128−0.5
-//     与成片 Dart applyPerPixelEffectsImg 完全一致——相邻两 texel 50/50 混合；此前整数
-//     坐标=单 texel，颗粒比成片粗糙且幅度强 ~40%），
-//     幅度=grains×24/255×mix(0.35,1.0,smoothstep(0.05,0.85,luma))
-//   - 磨皮（频率分离）：低频底 base=blur sampler（applyParams 里 CIGaussianBlur 预渲染的矩阵后整图高斯，
-//     经 samplerTransform(blur, destCoord()) 采样——旧代码直接 sample(blur, destCoord()) 把工作坐标
-//     当 sampler 坐标，DAG 带变换时取到黑 → 磨皮区域被压暗），
-//     detail=rgb−base，out=base+detail×(1−removal)，removal=baseRemove×肤色概率×(1−结构门控)，
-//     曲线与成片 SkinSmoother/photo_processor.cpp 一致（baseRemove=0.5s+0.04，edge=(6+6s)..×2.5）
-//   - 暗角：factor=1−vigS×smoothstep(0.45,1.0,dn)，dn=length(归一径向)/√2
+// ⚠️ kernel 源码内严禁任何非 ASCII 字符（中文注释、全角括号、±、−、×、→ 等）：
+// CIKernel 编译器遇到非 ASCII 直接编译失败 → kernelWithString: 返回 nil →
+// 锐化/颗粒/磨皮/暗角整体静默失效且无任何报错（真机「调参无变化」的根因，
+// 2026-09-06 确认）。所有解释写在本 ObjC 注释块，kernel 字符串只保留纯代码。
+//
+// 数值语义（与 OHOS C++ bake / Dart 成片一致，颜色按 0..1，阈值按 0..255 折算）：
+//   1) 锐化：luma 域死区 Unsharp。diff = luma − 4邻域均值；thr = 0.75/255；
+//      amnt = a×(diff∓thr)；edge = smoothstep(0.75/255, 2.25/255, |diff|)。
+//      a = v/100×2.5（上限 2.5）：iOS WYSIWYG 成片源是 video 帧（自带降噪、偏软），
+//      相邻像素 diff 普遍落在死区附近，a=1.2 时增益被死区吃掉（拉满无感）；
+//      OHOS 成片源是 8.2MP 高质量照片帧（边缘硬）保持 1.2 不变。
+//      （2026-09-05 future-optimizations 登记的 2.5x 响应曲线在 iOS 侧落地。）
+//   2) 颗粒：128×128 预置 tile，tap 相位 fract(px/128+off)×128−0.5 双线性
+//      （与成片 Dart applyPerPixelEffectsImg 的 xp=u×128−0.5 完全一致），
+//      幅度 = grainOn×24/255×mix(0.35,1.0,smoothstep(0.05,0.85,luma))。
+//   3) 磨皮（频率分离）：base = blur sampler（applyParams 里 CIGaussianBlur
+//      预渲染的矩阵后整图高斯，经 samplerTransform 采样），detail = rgb−base，
+//      out = base+detail×(1−removal)，removal = baseRemove×肤色概率×(1−结构门控)，
+//      baseRemove=0.5s+0.04，edge=(6+6s)/255..×2.5。
+//   4) 暗角：factor = 1−vigS×smoothstep(0.45,1.0,dn)，dn = length(归一径向)/√2。
 static NSString *const kPreviewBeautyKernelString = @" \n"
   "kernel vec4 previewBeauty(sampler image, sampler noise, sampler blur, vec4 outExtent, float sharpenA, float vigS, float smoothS, float grainOn) {\n"
   "  vec2 dc = destCoord();\n"
-  "  vec2 px = dc - outExtent.xy;\n"    // 输出空间像素坐标 [0,w)×[0,h)
+  "  vec2 px = dc - outExtent.xy;\n"
   "  vec2 sz = outExtent.zw;\n"
   "  vec4 c = sample(image, samplerTransform(image, dc));\n"
   "  vec3 rgb = c.rgb;\n"
-  "  const vec3 lum = vec3(0.299, 0.587, 0.114);\n"
-  "\n"
-  "  // 1) 锐化：亮度域死区 Unsharp（邻域 = 输出像素 ±1，同样经 samplerTransform）\n"
+  "  vec3 lum = vec3(0.299, 0.587, 0.114);\n"
   "  if (sharpenA > 0.0) {\n"
   "    vec2 dcC = clamp(dc, outExtent.xy + vec2(1.0), outExtent.xy + sz - vec2(1.0));\n"
   "    float l0 = dot(rgb, lum);\n"
@@ -71,27 +77,18 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   "    float diff = l0 - mn;\n"
   "    float thr = 0.75/255.0;\n"
   "    float amnt = 0.0;\n"
-  "    if (diff > thr) amnt = sharpenA * (diff - thr);\n"
-  "    else if (diff < -thr) amnt = sharpenA * (diff + thr);\n"
+  "    if (diff > thr) { amnt = sharpenA * (diff - thr); }\n"
+  "    else if (diff < -thr) { amnt = sharpenA * (diff + thr); }\n"
   "    float edge = smoothstep(0.75/255.0, 2.25/255.0, abs(diff));\n"
   "    rgb += amnt * edge;\n"
   "  }\n"
-  "\n"
-  "  // 2) 颗粒：预计算 tile + 幅度随亮度（分块用输出像素坐标，与 OHOS 一致）\n"
-  "  // tap 相位 −0.5：对齐成片 Dart applyPerPixelEffectsImg 的 xp=u×128−0.5 双线性\n"
-  "  //（相邻两 texel 50/50 混合）。此前整数坐标=单 texel 采样，颗粒比成片更粗糙、\n"
-  "  // 幅度强 ~40%（无平均衰减）且图案错半格。边界处 CI clamp 与成片 wrap 有\n"
-  "  // 1px/128 周期差异，视觉不可察。\n"
   "  if (grainOn > 0.0) {\n"
   "    vec2 nuv = vec2( fract(px.x * (1.0/128.0) + (13.0/128.0)), fract(px.y * (1.0/128.0) + (29.0/128.0)) ) * 128.0 - vec2(0.5);\n"
-  "    float g = sample(noise, nuv).r;              // 0..1，双线性（−0.5 相位=成片同款）\n"
+  "    float g = sample(noise, nuv).r;\n"
   "    float ls = mix(0.35, 1.0, smoothstep(0.05, 0.85, dot(rgb, lum)));\n"
   "    float amp = grainOn * (24.0/255.0) * ls;\n"
   "    rgb += (g*2.0 - 1.0) * amp;\n"
   "  }\n"
-  "\n"
-  "  // 3) 磨皮（频率分离）：低频底=blur（矩阵后整图高斯，applyParams 预渲染），\n"
-  "  // detail=rgb−base；YCbCr 肤色掩膜（放宽区间）+ 结构门控。\n"
   "  if (smoothS > 0.0) {\n"
   "    vec3 base = sample(blur, samplerTransform(blur, dc)).rgb;\n"
   "    vec3 det = rgb - base;\n"
@@ -109,8 +106,6 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   "    float removal = clamp(baseRemove * skin * (1.0 - sc), 0.0, 1.0);\n"
   "    rgb = base + det * (1.0 - removal);\n"
   "  }\n"
-  "\n"
-  "  // 4) 暗角：uv 归一径向（与 OHOS vUV 公式逐项一致，中心不动、边缘压暗）\n"
   "  if (vigS > 0.0) {\n"
   "    vec2 uv = px / sz;\n"
   "    vec2 d2 = vec2(2.0*uv.x - 1.0, 2.0*uv.y - 1.0);\n"
@@ -118,7 +113,6 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   "    float ff = 1.0 - vigS * smoothstep(0.45, 1.0, dn);\n"
   "    rgb *= ff;\n"
   "  }\n"
-  "\n"
   "  return vec4(rgb, c.a);\n"
   "}\n";
 
@@ -169,6 +163,11 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
       _ciContext = [CIContext contextWithOptions:contextOptions];
     }
     _beautyKernel = [CIKernel kernelWithString:kPreviewBeautyKernelString];
+    // 编译失败必须显式暴露：kernel 死掉时锐化/颗粒/磨皮/暗角整体静默失效，
+    // 之前无任何症状（仅「调参无变化」），这条日志是唯一的真机诊断入口。
+    if (_beautyKernel == nil) {
+      NSLog(@"[PreviewEffectProcessor] FATAL: beauty kernel compile FAILED, all spatial effects disabled");
+    }
     _noiseTile = [self makeNoiseTile];
     atomic_init(&_publishedBuffer, NULL);
     atomic_init(&_busy, false);
@@ -293,10 +292,12 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   }
 
   // 统一内核：锐化 + 颗粒 + 磨皮 + 暗角 单 pass（无空间效果时直通，零 GPU 开销）。
-  // 强度回到规格 a = v/100×1.2（上限 1.2）。此前被全局提到 ×6.0 造成真机「效果太重」，
-  // 现与 Dart applyPerPixelEffectsImg / OHOS C++ photo_processor.cpp / preview_fx.cpp
-  // 三端同步回调到规格；死区 0.75、门控 (0.75,2.25) 不变，保证预览==成片==双端。
-  double sharpenA = (_params.hasSharpen && _params.sharpen > 0) ? fmin(_params.sharpen / 100.0 * 1.2, 1.2) : 0.0;
+  // 锐化强度 a = v/100×2.5（上限 2.5）：iOS WYSIWYG 成片源是 video 帧（自带降噪、
+  // 偏软），相邻像素 diff 普遍落在死区附近，a=1.2 增益被死区吃掉（真机拉满无感）；
+  // OHOS 成片源是 8.2MP 高质量照片帧（边缘硬）保持 1.2。与 Dart 成片
+  // applyPerPixelEffectsImg 同步 2.5（WYSIWYG 铁律：预览==成片），死区 0.75、
+  // 门控 (0.75,2.25) 不变。
+  double sharpenA = (_params.hasSharpen && _params.sharpen > 0) ? fmin(_params.sharpen / 100.0 * 2.5, 2.5) : 0.0;
   double vigS     = (_params.hasVignette && _params.vignette > 0) ? _params.vignette / 100.0 : 0.0;
   double smoothS  = (_params.hasSmooth && _params.smooth > 0) ? _params.smooth / 100.0 : 0.0;
   double grainS   = (_params.hasGrain && _params.grain > 0) ? _params.grain / 100.0 : 0.0;

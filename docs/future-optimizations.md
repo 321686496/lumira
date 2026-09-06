@@ -269,9 +269,9 @@
 ### P2 · resetAll 可选复位延迟拍照时长
 
 - **模块**：拍摄（capture_state.dart 的 CaptureState.resetAll）
-- **优化点**：esetAll 重置了 zoomProvider/spectRatioProvider 等相机 UI 状态，但未重置新加的 delayTimerProvider（保留上次用户所选时长）。
-- **背景/动机**：当前设计未要求；保留已选时长属合理 UX（跨会话持续）。若希望跟随返回拍摄页复位，只需在 esetAll 补 delayTimerProvider = 0，成本极低。
-- **目标状态**：按产品语义决定是否在 esetAll 一并复位延迟档位。
+- **优化点**：resetAll 重置了 zoomProvider/aspectRatioProvider 等相机 UI 状态，但未重置新加的 delayTimerProvider（保留上次用户所选时长）。
+- **背景/动机**：当前设计未要求；保留已选时长属合理 UX（跨会话持续）。若希望跟随返回拍摄页复位，只需在 resetAll 补 delayTimerProvider = 0，成本极低。
+- **目标状态**：按产品语义决定是否在 resetAll 一并复位延迟档位。
 - **状态**：⏳ 待优化
 
 ### P2 · 倒计时节拍跟随快门声开关
@@ -293,9 +293,9 @@
 ### P2 · 延迟拍照菜单 4 风格自适应
 
 - **模块**：拍摄（widgets/delay_timer_button.dart）
-- **优化点**：DelayTimerButton 的菜单/胶囊为 iOS 风格硬编码（暗底  xFF141416、菜单  xFF26262A、白字、强调色  xFFC9A96E），当前不随 4 套 UI 风格/主题变化（符合设计 brief 的「叠相机浮层的 iOS 风格」规定，且 iOS 浮层本就主题无感）。
+- **优化点**：DelayTimerButton 的菜单/胶囊为 iOS 风格硬编码（暗底 0xFF141416、菜单 0xFF26262A、白字、强调色 0xFFC9A96E），当前不随 4 套 UI 风格/主题变化（符合设计 brief 的「叠相机浮层的 iOS 风格」规定，且 iOS 浮层本就主题无感）。
 - **背景/动机**：后续若希望延迟按钮在多风格下表现一致，需要接入 token。
-- **目标状态**：按需从 ppThemeProvider 派生菜单/胶囊配色，或在 4 风格下均采用 iOS 统一浮层观感并弱化当前无用的 	heme_controller 依赖残留情况。
+- **目标状态**：按需从 appThemeProvider 派生菜单/胶囊配色，或在 4 风格下均采用 iOS 统一浮层观感并弱化当前无用的 theme_controller 依赖残留情况。
 - **状态**：⏳ 待优化
 
 
@@ -314,8 +314,8 @@
 ### P2 · 成片锐化/磨皮强度补偿（HDR 区间与预览感知度对齐）
 
 - **模块**：拍摄 · 成片链（OHOS C++ photo_processor.cpp / Dart dart_photo_pipeline.dart / iOS PreviewEffectProcessor.m）
-- **优化点**：2026-09-05 将锐化响应曲线上限从 a=1.0 提到 a=2.5（软边缘增益 ~5-12/255 → ×2.5，三端同步）；磨皮因 5-tap 内核分辨率语义限制，成片与预览的感知强度仍存在差异。
-- **背景/动机**：真机反馈「锐化拉满无感」，实测统一死区版软边缘增益过低；强度已修正但尚未在真机复核成片观感（ETS processJpeg 日志已补 sharpen/grain 参数透传打印）。
+- **优化点**：2026-09-05 将锐化响应曲线上限从 a=1.0 提到 a=2.5（软边缘增益 ~5-12/255 → ×2.5，三端同步）；磨皮因 5-tap 内核分辨率语义限制，成片与预览的感知强度仍存在差异。2026-09-06 修正为按端分化：iOS（成片源是自带降噪的 video 软帧，a=1.2 拉满无感）取景器内核与 Dart 成片均落地 a=2.5；OHOS（成片源是 8.2MP 高质量照片帧，边缘硬）原生管线保持 a=1.2。
+- **背景/动机**：真机反馈「锐化拉满无感」，实测统一死区版软边缘增益过低；强度已修正但尚未在真机复核成片观感（ETS processJpeg 日志已补 sharpen/grain 参数透传打印）。另发现 iOS 取景器锐化/颗粒/磨皮/暗角整体静默失效的根因：CIKernel 源码字符串内含非 ASCII 字符（中文注释）导致编译失败、kernelWithString: 返回 nil——已清理为纯 ASCII 并补编译失败日志。
 - **目标状态**：下次真机验证 2.5x 响应曲线成片观感；按需微调磨皮强度/核半径与颗粒幅度，使各参数拉满时成片有明显但不过度的效果。
 - **状态**：🔄 进行中
 
