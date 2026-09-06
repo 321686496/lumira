@@ -27,9 +27,24 @@
 //        sample 返回黑 → rgb += (0×2−1)×amp → 取景器整体压暗且无颗粒纹理，即本 Bug）；
 //     · blur（index 2）：1:1 采样 → 返回原 rect。
 //
+// 工作分辨率（2026-09-06 锐化/颗粒根因修复）：效果不在 sensor-native 全分辨率帧上执行，
+// 而是先降采样到长边 kPreviewWorkLongSide（= 成片默认档 maxDim 1280）。理由：
+//   Photo preset 下 videoDataOutput 直出 ~12MP 帧（如 3024×4032），在全分辨率上：
+//   ① ±1px 锐化邻域 diff 极小（sensor 边缘跨越 3-6px），且显示端 3.2x 下采样把高频
+//      增益平均掉 →「锐化拉满与没拉看不出区别」；
+//   ② 128px 颗粒 tile 在 4032 长边平铺 31.5 次 vs 成片 1280 长边 10 次 → 颗粒视觉
+//      尺寸/密度与成片差 ~3 倍 →「取景器颗粒与成片不同」；
+//   ③ 磨皮 σ=9+15s 等效到显示尺度仅 0.4x。
+//   降到与成片同尺度（竖屏 3:4 = 960×1280，成片效果恰在 maxDim 档上执行）后，
+//   锐化 diff / 颗粒 tile 密度 / 磨皮 σ 三者与成片逐项同尺度，且每帧 GPU 处理量降 ~9 倍。
+static const CGFloat kPreviewWorkLongSide = 1280.0;
+
 // 数值语义对齐（颜色按 0..1，阈值/幅度相应折算，与 OHOS C++ bake/预览 FragmentShader 一致）：
 //   - 锐化：diff=luma−4邻域均值，死区 thr=0.75/255，amnt=a×(diff±thr)，乘 smoothstep(0.75/255,2.25/255,|diff|)
-//   - 颗粒：128×128 预置 tile 双线性采样（固定 offset 13/128,29/128），幅度=grains×24/255×mix(0.35,1.0,smoothstep(0.05,0.85,luma))
+//   - 颗粒：128×128 预置 tile 双线性采样（固定 offset 13/128,29/128，tap 相位 u×128−0.5
+//     与成片 Dart applyPerPixelEffectsImg 完全一致——相邻两 texel 50/50 混合；此前整数
+//     坐标=单 texel，颗粒比成片粗糙且幅度强 ~40%），
+//     幅度=grains×24/255×mix(0.35,1.0,smoothstep(0.05,0.85,luma))
 //   - 磨皮（频率分离）：低频底 base=blur sampler（applyParams 里 CIGaussianBlur 预渲染的矩阵后整图高斯，
 //     经 samplerTransform(blur, destCoord()) 采样——旧代码直接 sample(blur, destCoord()) 把工作坐标
 //     当 sampler 坐标，DAG 带变换时取到黑 → 磨皮区域被压暗），
@@ -63,9 +78,13 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   "  }\n"
   "\n"
   "  // 2) 颗粒：预计算 tile + 幅度随亮度（分块用输出像素坐标，与 OHOS 一致）\n"
+  "  // tap 相位 −0.5：对齐成片 Dart applyPerPixelEffectsImg 的 xp=u×128−0.5 双线性\n"
+  "  //（相邻两 texel 50/50 混合）。此前整数坐标=单 texel 采样，颗粒比成片更粗糙、\n"
+  "  // 幅度强 ~40%（无平均衰减）且图案错半格。边界处 CI clamp 与成片 wrap 有\n"
+  "  // 1px/128 周期差异，视觉不可察。\n"
   "  if (grainOn > 0.0) {\n"
-  "    vec2 nuv = vec2( fract(px.x * (1.0/128.0) + (13.0/128.0)), fract(px.y * (1.0/128.0) + (29.0/128.0)) ) * 128.0;\n"
-  "    float g = sample(noise, nuv).r;              // 0..1，双线性\n"
+  "    vec2 nuv = vec2( fract(px.x * (1.0/128.0) + (13.0/128.0)), fract(px.y * (1.0/128.0) + (29.0/128.0)) ) * 128.0 - vec2(0.5);\n"
+  "    float g = sample(noise, nuv).r;              // 0..1，双线性（−0.5 相位=成片同款）\n"
   "    float ls = mix(0.35, 1.0, smoothstep(0.05, 0.85, dot(rgb, lum)));\n"
   "    float amp = grainOn * (24.0/255.0) * ls;\n"
   "    rgb += (g*2.0 - 1.0) * amp;\n"
@@ -226,6 +245,21 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
 
   CGFloat w = CVPixelBufferGetWidth(input);
   CGFloat h = CVPixelBufferGetHeight(input);
+
+  // 【工作分辨率】长边 cap 到 kPreviewWorkLongSide（= 成片默认档 maxDim 1280），
+  // 效果与成片（maxDim 尺寸上执行）同尺度——详见文件头 kPreviewWorkLongSide 注释。
+  // scale 统一比例（不变形），crop 到整数 rect 保证 extent 与输出 buffer 尺寸一致
+  //（浮点误差 ≤1e-13px 的边缘透明不可见）。
+  if (MAX(w, h) > kPreviewWorkLongSide) {
+    const CGFloat s = kPreviewWorkLongSide / MAX(w, h);
+    image = [image imageByApplyingTransform:CGAffineTransformMakeScale(s, s)];
+    const CGFloat tw = round(w * s);
+    const CGFloat th = round(h * s);
+    image = [image imageByCroppingToRect:CGRectMake(0, 0, tw, th)];
+    w = tw;
+    h = th;
+  }
+
   CGFloat longSide = MAX(w, h);
 
   CIImage *result = [self applyParams:image longSide:longSide];
@@ -271,10 +305,10 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
 
   // 磨皮频率分离的低频底图（base）：矩阵后整图高斯（CIGaussianBlur，GPU）。
   // clamp 防边缘透黑、crop 回原 extent 与 destCoord() 对齐。
-  // σ 随强度 9..24px（预览像素）——OHOS 的低频底在 1/3 分辨率 FBO 里做高斯再
-  // 双线性升采样回全分辨率（升采样本身即一次低通），其等效低频核在全预览分辨率
-  // 约 3 倍于「3..8px」；原 σ 在 iOS 全分辨取景器上只滤掉高频细节，base≈rgb，
-  // 磨皮不可感知（真机反馈「磨皮没效果」）。removal/门控曲线仍与成片严格一致。
+  // σ 随强度 9..24px（工作分辨率像素 = 成片 maxDim 尺度）：成片 SkinSmoother 在
+  // 960×1280 图上做频率分离低频底，预览工作分辨率与之同尺度 → σ 语义直接对齐
+  //（此前在 12MP 全分辨率帧上用同一 σ，等效到成片尺度仅 0.4x，磨皮偏弱）。
+  // removal/门控曲线与成片严格一致。
   CIImage *blurImg = nil;
   if (smoothS > 0) {
     const CGFloat sigma = 9.0 + 15.0 * smoothS;
