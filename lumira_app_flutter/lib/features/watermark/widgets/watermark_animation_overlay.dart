@@ -38,10 +38,10 @@ class WatermarkAnimationOverlay extends StatefulWidget {
   final bool isFront;
   final bool isPortrait;
 
-  /// 动画源是否已是屏幕空间 WYSIWYG 帧（取景器来源：OHOS 快门冻结帧 /
-  /// iOS video 帧直出，已物理竖屏 + 已前置镜像）。
+  /// 动画源是否已是屏幕空间 WYSIWYG 帧（iOS/OHOS 快门冻结取景器截图，
+  /// 已物理竖屏 + 已前置镜像 + 已含色彩滤镜）。
   /// true：跳过 [_alignOrientation]，避免对已对齐帧二次旋转/镜像
-  /// （OHOS 前置双重镜像 bug 的根因）；
+  /// （前置双重镜像 bug 的根因）；
   /// false：成片回退源（原始照片），按设备方向 + 前置镜像对齐。
   final bool sourceAligned;
   final VoidCallback onAnimationComplete;
@@ -307,7 +307,10 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
     final deviceIsPortrait = widget.isPortrait;
     final needRotate = (deviceIsPortrait && jpegIsLandscape) ||
         (!deviceIsPortrait && !jpegIsLandscape);
-    final needMirror = widget.isFront;
+    // 前置镜像仅在「sensor-native 横屏像素」时补做：竖屏像素的前置 JPEG
+    // （iOS WYSIWYG video 帧直出 / OHOS 相册增强成品）已是镜像结果，
+    // 再镜像会双重水平翻转。与 capture_page._applyColorMatrixOnGpu 同规则。
+    final needMirror = widget.isFront && jpegIsLandscape;
     if (!needRotate && !needMirror) return src;
 
     final int rotation;

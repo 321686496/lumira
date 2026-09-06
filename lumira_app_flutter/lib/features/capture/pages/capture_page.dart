@@ -862,16 +862,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
     setState(() => _shutterTrigger++);
     ref.read(captureThumbnailProvider.notifier).startCapture(photoId: photoId);
 
-    // iOS：快门瞬间双路并行 —— 取景器帧直出（水印动画源，快 + WYSIWYG）
-    // 与 photoOutput 成片（质量优先）并行执行，互不阻塞。
+    // 快门冻结帧动画源：iOS/OHOS 统一用 RepaintBoundary 截图（含色彩矩阵 +
+    // 前置镜像 + 裁切，与取景器 100% 一致）。此前 iOS 用原生 video 帧直出
+    // （captureFrameForAnimation）作动画源：该帧不含 Flutter ColorFiltered
+    // 滤镜效果，动画内容与取景器不一致，故弃用、双端统一走屏幕空间截图。
     // 取景器帧捕捉不到瞬时闪光，闪光模式（on/auto/torch）动画源回退用成片。
-    // OHOS：captureFrameForAnimation 返回 null，改由「分阶段拍照早帧」提前触发动画
-    //   （见下方 photoEarlyFrames 订阅）；Android 动画源回退用成片（原生硬解码）。
+    // Android 动画源回退用成片（原生硬解码）。
     final isIos = Platform.isIOS;
-    final useViewfinderFrame = isIos && flashMode == CaptureFlashMode.off;
-    final animationFrameFuture = shouldAnimateNow && useViewfinderFrame
-        ? cameraService.captureFrameForAnimation()
-        : Future<String?>.value(null);
 
     // OHOS 分阶段拍照：订阅早帧通道（常驻一次）。一阶段低质量帧（~672ms）先于成片
     // capture()（~1.9s）返回到达。
@@ -901,9 +898,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
       }
     }
 
-    // OHOS：快门即冻结已合成取景器帧作水印动画源（与 iOS 取景器帧直出对齐，
-    // 保证动画内容 = 取景器）。与成片 capture() 并行执行，不阻塞。
-    final shutterFrameFuture = isOhos && shouldAnimateNow && flashMode == CaptureFlashMode.off
+    // iOS/OHOS：快门即冻结已合成取景器帧作水印动画源（RepaintBoundary 截图，
+    // 含色彩矩阵 + 前置镜像 + 裁切，保证动画内容 = 取景器所见）。
+    // 与成片 capture() 并行执行，不阻塞。
+    final shutterFrameFuture = shouldAnimateNow && flashMode == CaptureFlashMode.off
         ? _captureShutterViewfinderFrame()
         : Future<String?>.value(null);
 
@@ -939,16 +937,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
         ),
       );
 
-      // 等待取景器帧（编码 100-300ms，与成片拍照并行，通常已就绪）；
-      // 失败/无可用帧时回退用成片做动画源。
-      String? animationFramePath;
-      try {
-        animationFramePath = await animationFrameFuture;
-      } catch (e) {
-        debugPrint('[capture] captureFrameForAnimation failed: $e');
-      }
-
-      // OHOS 快门冻结取景器帧（动画源，WYSIWYG），与成片 capture() 并行已完成。
+      // 快门冻结取景器帧（动画源，WYSIWYG），与成片 capture() 并行已完成。
+      // 编码 100-300ms，失败/无可用帧时回退用成片做动画源。
       String? shutterFramePath;
       try {
         shutterFramePath = await shutterFrameFuture;
@@ -959,12 +949,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
       // === 水印相框入场动画（动画源帧就绪即触发，不等成片） ===
       // 使用「动画内容源帧」+ CustomPaint 叠加水印（与最终渲染水印视觉一致），
       // 后处理在队列中并行执行。
-      // - iOS 动画源 = 取景器帧直出（快 + 与取景器高度一致）；
-      // - OHOS 动画源 = 快门冻结取景器帧（含色彩矩阵+前置镜像+裁切，WYSIWYG）；
-      // 两者均为屏幕空间帧（已旋转/已镜像），sourceAligned=true 跳过二次对齐。
+      // - iOS/OHOS 动画源 = 快门冻结取景器帧（RepaintBoundary 截图，
+      //   含色彩矩阵+前置镜像+裁切，WYSIWYG）；
+      // 屏幕空间帧（已旋转/已镜像），sourceAligned=true 跳过二次对齐。
       // 注意：此处不消费 _expectingEarlyFrame——成片未返回前早帧仍应送达
       // （interim 先快后真），等 capture() 返回后再复位。
-      final earlyAnimSource = shutterFramePath ?? animationFramePath;
+      final earlyAnimSource = shutterFramePath;
       if (shouldAnimateNow &&
           mounted &&
           earlyAnimSource != null &&
@@ -1484,9 +1474,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 动画淡出后跳转拍摄预览页；后处理为异步，需等最终照片落库完成
   /// 后才带上 finalPath 打开预览页（见 [_goToPreviewWhenReady]）。
   ///
-  /// - iOS：动画源 = 取景器帧直出（快 + WYSIWYG），闪光模式回退用成片；
-  /// - OHOS：动画源 = 快门冻结取景器帧（含色彩矩阵+前置镜像+裁切，WYSIWYG），
-  ///   取景器帧失败回退用成片。
+  /// - iOS/OHOS：动画源 = 快门冻结取景器帧（RepaintBoundary 截图，
+  ///   含色彩矩阵+前置镜像+裁切，WYSIWYG），闪光模式/截图失败回退用成片。
   ///
   /// [sourceAligned]：动画源是否已是屏幕空间 WYSIWYG 帧（已旋转/已镜像）。
   /// 取景器来源帧为 true（overlay 跳过方向对齐，避免双重镜像/旋转）；
@@ -4699,7 +4688,13 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
     final jpegIsLandscape = srcImage.width > srcImage.height;
     final needRotate = (params.isPortrait && jpegIsLandscape) ||
         (!params.isPortrait && !jpegIsLandscape);
-    final needMirror = params.isFront;
+    // 前置镜像仅在「sensor-native 横屏像素」时补做：
+    // - iOS WYSIWYG（video 帧直出，isWysiwyg=true）：连接 videoMirrored=Front
+    //   已镜像、且已物理竖屏（videoOrientation=Portrait）→ 再镜像=双重水平翻转；
+    // - iOS photoOutput 回退 / OHOS photoAvailable 直出：横屏未镜像像素 → 需补镜像。
+    // 竖屏像素（w<=h）的前置 JPEG 只可能来自「已镜像」管线，横屏像素只可能未镜像，
+    // 故按像素方向即可区分，无需依赖 isWysiwyg 标志（还能覆盖原生回退路径）。
+    final needMirror = params.isFront && jpegIsLandscape;
     final alignRotation = needRotate ? (params.isPortrait ? 90 : 270) : 0;
 
     // 计算输出尺寸（基于 targetRatio，限制最大边为默认分辨率档位的 maxDim）

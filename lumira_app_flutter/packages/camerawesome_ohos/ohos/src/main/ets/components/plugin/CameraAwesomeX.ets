@@ -198,10 +198,12 @@ export default class CameraAwesomeX extends CameraInterface
   takePhoto(path: string, result: Result<boolean>): void {
     Logger.debug(TAG, `takePhoto is called`);
     // 优先走 photoAvailable 直出路径（原始 JPEG，绕过系统相册增强，避免拍照偏黄）。
+    // path/result 经 photoPathResult 入队（连拍 FIFO 保序）；增强兜底回调改为
+    // 接收「队列配对的本帧 path/result」，不再闭包捕获——连拍时闭包会被后一次
+    // 调用覆盖，导致增强图写错路径/错误回调（部分照片内容错位、方向异常）。
     this.cameraState!!.photoPathResult = { path: path, result: result }
-    // 保留相册路径作为回退（photoPathResult 触发过一次后即复位，不影响本路径）
-    this.cameraState!!.handlePhotoCb = async (photoAsset: photoAccessHelper.PhotoAsset) => {
-      await this.cameraState?.saveCameraPhoto(path, photoAsset, result)
+    this.cameraState!!.handlePhotoCb = async (photoAsset: photoAccessHelper.PhotoAsset, p: string, r: Result<boolean>) => {
+      await this.cameraState?.saveCameraPhoto(p, photoAsset, r)
     }
     this.cameraState?.takePhoto()
   }

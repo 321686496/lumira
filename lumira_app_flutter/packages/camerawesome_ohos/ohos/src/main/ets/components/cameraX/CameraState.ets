@@ -60,6 +60,18 @@ export interface PhotoPathResult {
   result: Result<boolean>
 }
 
+// 单次拍照请求的连拍安全上下文（FIFO 队列元素）。
+// 原单槽位状态（_photoPath/_photoResult/_photoDirectDone）在连拍时会被后一次
+// takePhoto 覆盖：photoAvailable 帧写错路径、photoAssetAvailable 与错误的
+// path/result 配对，部分照片回退相册增强管线且内容错位/方向异常。
+// 队列化后每帧事件按拍照发起顺序与各自 ctx 配对。
+export interface PhotoCaptureContext {
+  path: string
+  result: Result<boolean>
+  // photoAvailable 已直出写盘成功标记，同帧 photoAssetAvailable 据此跳过增强回退
+  directDone: boolean
+}
+
 const TAG: string = 'CameraState'
 
 export class CameraState implements StreamHandler {
@@ -93,14 +105,16 @@ export class CameraState implements StreamHandler {
   private photoProfilesArray: Array<camera.Profile> | undefined = undefined
   private _colorMatrix: Array<number> = []
   private _imageAnalysisBuilder: ImageAnalysisBuilder | undefined = undefined
-  // 拍照结果监听
-  private _handlePhotoCb: (photoAsset: photoAccessHelper.PhotoAsset) => void = () => {
+  // 拍照结果监听（photoAssetAvailable 增强兜底时调用，按队列配对的本帧
+  // path/result 落盘，不由注入方闭包捕获——连拍时闭包会被后一次调用覆盖）
+  private _handlePhotoCb: (photoAsset: photoAccessHelper.PhotoAsset, path: string, result: Result<boolean>) => void = () => {
   }
-  // 拍照原始帧写盘路径与结果（photoAvailable 直出路径，绕过系统相册增强管线）
-  private _photoPath: string | undefined = undefined
-  private _photoResult: Result<boolean> | undefined = undefined
-  // photoAvailable 已直出写盘成功标记，photoAssetAvailable 同帧应跳过避免重复/覆盖
-  private _photoDirectDone: boolean = false
+  // 连拍安全的拍照请求队列（替代原单槽位 _photoPath/_photoResult/_photoDirectDone）：
+  // - directQueue 供 photoAvailable 逐帧消费（直出原始 JPEG 写盘）；
+  // - assetQueue 供 photoAssetAvailable 逐帧消费（直出失败的帧走增强兜底）。
+  // 两通道各自按拍照发起顺序保序，与框架事件到达的交错顺序无关。
+  private _photoDirectQueue: PhotoCaptureContext[] = []
+  private _photoAssetQueue: PhotoCaptureContext[] = []
   // 分阶段拍照：一阶段低质量帧（水印动画源）数据请求 id 与早帧监听器引用。
   // 每次拍照复位，防止上一帧残留导致本帧早帧请求被误跳过。
   private _earlyFrameRequestId: string | undefined = undefined
@@ -928,7 +942,25 @@ export class CameraState implements StreamHandler {
       this.photoOutput?.off("captureStartWithInfo");
       this.photoOutput?.off("frameShutter");
       this.photoOutput?.off("captureEnd");
+      this.photoOutput?.off("photoAvailable");
       this.photoOutput?.off("photoAssetAvailable");
+
+      // 相机释放：清空未完成的拍照请求队列，快速失败等待中的 Dart 回调
+      // （连拍中途切镜头/释放时避免 future 挂到 10s 超时）。
+      // 两通道共享同一 ctx 引用，用 Set 去重后统一回调。
+      const pendingCtx = new Set<PhotoCaptureContext>()
+      while (this._photoDirectQueue.length > 0) {
+        pendingCtx.add(this._photoDirectQueue.shift()!)
+      }
+      while (this._photoAssetQueue.length > 0) {
+        pendingCtx.add(this._photoAssetQueue.shift()!)
+      }
+      if (pendingCtx.size > 0) {
+        Logger.info(TAG, `releaseCamera: fail ${pendingCtx.size} pending capture(s)`);
+        for (const c of pendingCtx) {
+          c.result.success(false)
+        }
+      }
 
       await this.photoOutput?.release();
     } catch (error) {
@@ -1025,8 +1057,8 @@ export class CameraState implements StreamHandler {
       mirror: this.cameraPosition === camera.CameraPosition.CAMERA_POSITION_FRONT ? this._mirrorFrontCamera : false,
       rotation: this.getPhotoRotation(degree)
     };
-    // 每次拍摄前复位直出标记，避免上一帧残留状态导致本帧被误跳过/误覆盖。
-    this._photoDirectDone = false
+    // 直出标记改为 per-capture（photoPathResult 入队的 ctx.directDone），
+    // 连拍时各帧互不干扰，无需在每次拍摄前复位单槽位标记。
     // 复位分阶段拍照早帧请求 id，允许本帧重新发起 FAST_MODE 早帧交付。
     this._earlyFrameRequestId = undefined
 
@@ -1075,49 +1107,53 @@ export class CameraState implements StreamHandler {
       });
       // 拍照原始帧直出（绕过系统相册增强管线，避免"取景器正常、拍照偏黄"）。
       // photoAvailable 返回相机原始 JPEG buffer，直接写盘，不经过相册色彩增强。
+      // 连拍安全：从 directQueue 出队本帧的请求上下文，写盘路径/回调与发起
+      // 顺序一一配对，后一次 takePhoto 不再覆盖前一次的单槽位状态。
       this.photoOutput!!.on('photoAvailable',
         (err: BusinessError, photo: camera.Photo) => {
           Logger.info(TAG, 'photoAvailable begin');
           Logger.info(TAG, `[perf-cam] photoAvailable begin elapsed=${Date.now() - takePhotoStartAt}ms`);
+          const ctx = this._photoDirectQueue.shift()
+          if (ctx === undefined) {
+            Logger.error(TAG, 'photoAvailable: no pending capture request, skip');
+            return
+          }
           if (err && err.code !== 0) {
             Logger.error(TAG, `photoAvailable error: ${err.code}`);
-            this._photoResult?.success(false)
+            ctx.result.success(false)
             return
           }
           if (!photo || !photo.main) {
             Logger.error(TAG, 'photoAvailable: photo or photo.main is null');
-            this._photoResult?.success(false)
+            ctx.result.success(false)
             return
           }
           const imageObj = photo.main
           // 同步置位直出标记（在任何异步回调之前），确保同帧 photoAssetAvailable 被跳过，
           // 不会用相册增强图覆盖原始 JPEG。仅在写盘失败时复位以允许增强图回退。
-          this._photoDirectDone = true
+          ctx.directDone = true
           imageObj.getComponent(image.ComponentType.JPEG,
             (errCode: BusinessError, component: image.Component) => {
               Logger.info(TAG, `[perf-cam] getComponent(jpeg) cb elapsed=${Date.now() - takePhotoStartAt}ms`);
-              if (!errCode && component && component.byteBuffer && this._photoPath) {
+              if (!errCode && component && component.byteBuffer) {
                 try {
                   const buffer = component.byteBuffer as ArrayBuffer
-                  const file = fileIo.openSync(this._photoPath!, fileIo.OpenMode.CREATE | fileIo.OpenMode.READ_WRITE)
+                  const file = fileIo.openSync(ctx.path, fileIo.OpenMode.CREATE | fileIo.OpenMode.READ_WRITE)
                   const written = fileIo.writeSync(file.fd, buffer)
                   fileIo.closeSync(file)
-                  Logger.info(TAG, `photoAvailable: saved raw JPEG bytes=${written} elapsed=${Date.now() - takePhotoStartAt}ms to ${this._photoPath}`)
-                  this._photoResult?.success(true)
+                  Logger.info(TAG, `photoAvailable: saved raw JPEG bytes=${written} elapsed=${Date.now() - takePhotoStartAt}ms to ${ctx.path}`)
+                  ctx.result.success(true)
                 } catch (e) {
                   Logger.error(TAG, `photoAvailable save failed: ${JSON.stringify(e)}`)
-                  this._photoDirectDone = false
-                  this._photoResult?.success(false)
+                  ctx.directDone = false
+                  ctx.result.success(false)
                 }
               } else {
-                Logger.error(TAG, `photoAvailable getComponent failed: code=${errCode?.code}, path=${this._photoPath}`)
-                this._photoDirectDone = false
-                this._photoResult?.success(false)
+                Logger.error(TAG, `photoAvailable getComponent failed: code=${errCode?.code}, path=${ctx.path}`)
+                ctx.directDone = false
+                ctx.result.success(false)
               }
               imageObj.release()
-              // 复位参数
-              this._photoPath = undefined
-              this._photoResult = undefined
             });
         });
 
@@ -1128,19 +1164,25 @@ export class CameraState implements StreamHandler {
             Logger.error(TAG, 'photo is err');
             return;
           }
+          // 连拍安全：从 assetQueue 出队本帧的请求上下文（与 photoAvailable 的
+          // directQueue 各自保序），直出/增强判定与本帧 ctx 配对。
+          const ctx = this._photoAssetQueue.shift()
+          if (ctx === undefined) {
+            Logger.error(TAG, 'photoAssetAvailable: no pending capture request, skip');
+            return;
+          }
           // 若 photoAvailable 已直出写盘（原始 JPEG，绕过相册色彩增强），
           // 则跳过相册增强图的 saveCameraPhoto，避免其异步回调覆盖直出文件。
-          // 仅当直出失败（_photoDirectDone 为 false）时才走增强图回退。
-          if (this._photoDirectDone) {
+          // 仅当直出失败（ctx.directDone 为 false）时才走增强图回退。
+          if (ctx.directDone) {
             // 分阶段拍照：成片已由 photoAvailable 直出，另发起 FAST_MODE 早帧交付，
             // 一阶段低质量图（~672ms）作为水印动画源提前送达 Dart 触发动画，
             // 二阶段全质量图因成片已写出而跳过。
             Logger.info(TAG, 'photoAssetAvailable: raw JPEG written, request early anim frame');
             this.requestEarlyFrameForAnimation(photoAsset);
-            this._photoDirectDone = false
             return;
           }
-          this._handlePhotoCb(photoAsset);
+          this._handlePhotoCb(photoAsset, ctx.path, ctx.result);
         });
     } catch (err) {
       Logger.error(TAG, 'photoOutputCallBack error');
@@ -1460,13 +1502,17 @@ export class CameraState implements StreamHandler {
     return this._aspectRatio
   }
 
-  public set handlePhotoCb(value: (photoAsset: photoAccessHelper.PhotoAsset) => void) {
+  public set handlePhotoCb(value: (photoAsset: photoAccessHelper.PhotoAsset, path: string, result: Result<boolean>) => void) {
     this._handlePhotoCb = value
   }
 
   public set photoPathResult(value: PhotoPathResult) {
-    this._photoPath = value.path
-    this._photoResult = value.result
+    // 连拍安全：每次拍照入队独立的请求上下文（两通道共享同一引用），
+    // photoAvailable / photoAssetAvailable 各自从对应队列按序消费，
+    // 后一次 takePhoto 不再覆盖前一次的路径/回调。
+    const ctx: PhotoCaptureContext = { path: value.path, result: value.result, directDone: false }
+    this._photoDirectQueue.push(ctx)
+    this._photoAssetQueue.push(ctx)
   }
 
   // 分阶段拍照早帧监听器引用（由插件在 initCamera 时注入，Dart 订阅通道后才非空）

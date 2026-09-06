@@ -490,7 +490,10 @@ class PhotoPostProcessor {
     final deviceIsPortrait = isPortrait;
     final needRotate = (deviceIsPortrait && jpegIsLandscape) ||
         (!deviceIsPortrait && !jpegIsLandscape);
-    final needMirror = facing == 'front';
+    // 前置镜像仅在「sensor-native 横屏像素」时补做：竖屏像素的前置 JPEG
+    // （iOS WYSIWYG video 帧直出 / OHOS 相册增强成品）已是镜像结果，
+    // 再镜像会双重水平翻转。与 capture_page._applyColorMatrixOnGpu 同规则。
+    final needMirror = facing == 'front' && jpegIsLandscape;
     if (!needRotate && !needMirror) return src;
 
     final int rotation;
