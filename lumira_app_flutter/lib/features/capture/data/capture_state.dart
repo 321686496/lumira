@@ -188,6 +188,14 @@ class CaptureState {
               debugPrint('[capture] allTemplatesProvider: remote detail fetch failed for ${r.id}: $e');
             }
           }
+          // 拉取失败但仍带内容（composition/postProcess 非空）的远程模板 → 保留以复用参数；
+          // 仅剩 meta、无任何内容（composition 与 postProcess 均为空）的存根 → 跳过。
+          // 避免把空参数存根混进缓存，否则拍摄页会把它当成「完整模板」而显示空参数 /
+          // 造成应用不生效；该模板在缓存中缺失，会让 originalTemplateProvider 走按需拉取重试。
+          if (r.composition.isEmpty && r.postProcess.isEmpty) {
+            debugPrint('[capture] allTemplatesProvider: skip contentless stub ${r.id}');
+            continue;
+          }
           customAndRemoteTemplates.add(TemplateMapper.toPhotoTemplate(r));
         } catch (e) {
           debugPrint('[capture] allTemplatesProvider: skipping malformed template ${r.id}: $e');
@@ -203,7 +211,12 @@ class CaptureState {
 
   /// 模板缓存（ID → PhotoTemplate）
   /// 从 allTemplatesProvider 结果构建 Map，供 originalTemplateProvider 快速查找
-  /// 降级策略：加载中时仅含系统模板
+  /// 降级策略：
+  /// - 首次加载中（无历史数据）→ 仅系统模板（同步基线）
+  /// - 刷新/出错（已有历史数据，如进入拍摄页时 remoteTemplatesSyncProvider 被
+  ///   invalidate 触发 allTemplatesProvider 重算、或某次拉取失败）→ **保留上一次
+  ///   完整结果**，而不是瞬时回归为仅系统模板。否则正在使用的远程/自定义模板会被误判为
+  ///   「未加载」，原模板同步拉取后旧模板消失，导致参数闪动 / 短暂显示空参数。
   static final templateCacheProvider =
       Provider<Map<String, PhotoTemplate>>((ref) {
     final asyncValue = ref.watch(allTemplatesProvider);
@@ -215,7 +228,14 @@ class CaptureState {
       data: (templates) => {
         for (final t in templates) t.meta.id: t
       },
-      orElse: () => systemMap,
+      orElse: () {
+        // AsyncValue 在刷新/出错期间携带 previousValue，可通过 .value 取到。
+        final retained = asyncValue.value;
+        if (retained != null && retained.isNotEmpty) {
+          return {for (final t in retained) t.meta.id: t};
+        }
+        return systemMap;
+      },
     );
   });
 
@@ -295,31 +315,37 @@ class CaptureState {
 
   /// 原始模板（只读，派生自 currentTemplateIdProvider）
   /// 先查 TemplateRegistry（系统模板，同步快路径）
-  /// 未找到 → 查 templateCacheProvider（含自定义模板的运行时缓存）
-  /// 仍未找到或 silhouette 为空 → 若为远程模板（srv_ 前缀），按需拉取详情
+  /// 未找到 → 查 templateCacheProvider（含自定义模板的运行时缓存，加载中会保留上次完整值）
+  /// 仍未找到且为远程模板（srv_ 前缀）→ 按需拉取详情
   static final originalTemplateProvider = Provider<PhotoTemplate?>((ref) {
     final id = ref.watch(currentTemplateIdProvider);
     if (id == null) return null;
     // 快路径：系统模板（同步）
     final builtin = TemplateRegistry.getTemplate(id);
     if (builtin != null) return builtin;
-    // 慢路径：自定义/远程模板（从预加载缓存读取）
+    // 慢路径：本地自定义 / 已缓存完整的远程模板（从预加载缓存读取）
     final cached = ref.watch(templateCacheProvider)[id];
-    // 缓存中有完整模板（silhouette 非 none）→ 直接返回
-    if (cached != null && cached.pose.silhouette.data != 'none') {
-      return cached;
-    }
-    // 远程模板未在缓存中或 silhouette 为空时，按需拉取详情
-    // remoteTemplateDetailProvider 会 fetchDetail → upsert DAO → 返回 PhotoTemplate
-    // 拉取完成后此 Provider 自动重新评估（因为 watch 了 family provider）
+    // 命中缓存即模板已含完整内容、可直接使用：
+    // - 自定义模板：内容完整，直接返回；
+    // - 远程模板：allTemplatesProvider 只把「已拉取到完整内容」的远程模板放入缓存
+    //   （无内容存根会被跳过），因此命中缓存即表示内容完整，直接返回。
+    // 注意：不再用 silhouette.data != 'none' 作为「完整」判据。剪影是可选项，很多线上
+    // 模板本身没有剪影图（silhouette='none'）但参数完整；旧判据会把这类「本地已缓存完整
+    // 参数」的模板误判为不完整，导致每次都要额外走一次网络按需拉取，拉取期间旧值不稳定
+    // 且失败时回退到空参数存根 → 表现为模板参数未生效 / 前几秒参数闪动。
+    if (cached != null) return cached;
+    // 远程模板未在缓存中（首次进入 / 拉取失败被跳过 / 同步尚未完成）时按需拉取详情。
+    // remoteTemplateDetailProvider 会 fetchDetail → upsert DAO → 返回 PhotoTemplate，
+    // 拉取完成后本 Provider 因 watch 该 family provider 自动重新评估。
+    // 加载/出错期间返回 null（而非不完整的 meta 存根）——拍摄页此时不会套用错误的空参数。
     if (id.startsWith('srv_')) {
       final asyncDetail = ref.watch(remoteTemplateDetailProvider(id));
       return asyncDetail.maybeWhen(
-        data: (tpl) => tpl ?? cached,
-        orElse: () => cached,
+        data: (tpl) => tpl,
+        orElse: () => null,
       );
     }
-    return cached;
+    return null;
   });
 
   /// 可编辑模板副本（参数面板的所有修改都写到这里）

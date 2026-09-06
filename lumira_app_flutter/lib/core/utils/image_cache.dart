@@ -188,6 +188,66 @@ class ImageCacheUtil {
     await Future.wait(List.generate(workers, (_) => worker()));
   }
 
+  /// 定向失效单个 URL 的缓存（内存 + 磁盘）。
+  ///
+  /// 用于线上资源变更/删除时精准清除旧字节缓存，避免已失效的图片继续被展示。
+  /// 在途下载（_inflight）也会被取消，下次请求会真正回源。
+  static Future<void> invalidate(String url) async {
+    if (url.isEmpty) return;
+    _removeMemoryEntry(url);
+    if (_memoryTotalBytes < 0) _memoryTotalBytes = 0;
+    _inflight.remove(url);
+    try {
+      final dir = await _getCacheDir();
+      final file = File('${dir.path}/${_urlToHash(url)}');
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (_) {
+      // 磁盘缓存删除失败不影响后续（内存已清，下次会重新下载覆盖）
+    }
+  }
+
+  /// 定向失效一组 URL 的缓存（内存 + 磁盘）。
+  ///
+  /// 用于模板同步后一次性清理该模板的封面/效果图/剪影等所有图片资源缓存。
+  static Future<void> invalidateMany(Iterable<String> urls) async {
+    final unique = urls.where((u) => u.isNotEmpty).toSet().toList();
+    if (unique.isEmpty) return;
+    for (final u in unique) {
+      _removeMemoryEntry(u);
+      _inflight.remove(u);
+    }
+    _recomputeMemoryBytes();
+    try {
+      final dir = await _getCacheDir();
+      for (final u in unique) {
+        final file = File('${dir.path}/${_urlToHash(u)}');
+        if (await file.exists()) {
+          try {
+            await file.delete();
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+
+  /// 从内存缓存中移除单个 URL（并同步维护总量/顺序）。
+  static void _removeMemoryEntry(String url) {
+    final removed = _memoryCache.remove(url);
+    if (removed != null) _memoryTotalBytes -= removed.length;
+    _memoryOrder.remove(url);
+  }
+
+  /// 重新计算内存缓存总量，防止增量维护产生漂移。
+  static void _recomputeMemoryBytes() {
+    var total = 0;
+    for (final b in _memoryCache.values) {
+      total += b.length;
+    }
+    _memoryTotalBytes = total;
+  }
+
   /// 清除所有缓存
   static Future<void> clearCache() async {
     _memoryCache.clear();

@@ -21,6 +21,7 @@ import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/db/seeders/builtin_data_seeder.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/utils/image_cache.dart';
 import '../../capture/domain/photo_template.dart';
 import '../services/template_mapper.dart';
 import 'remote_templates_repository.dart';
@@ -86,6 +87,9 @@ final remoteCategoriesSyncProvider = FutureProvider<void>((ref) async {
 final remoteTemplatesSyncProvider = FutureProvider<void>((ref) async {
   final repo = await ref.watch(remoteTemplatesRepositoryProvider.future);
   final dao = await ref.watch(templatesDaoProvider.future);
+  // 快照同步前的本地 remote 模板，用于比对 updatedAt 与识别已下架模板，
+  // 从而在下文定向失效旧图片缓存（此时旧记录尚未被 upsert/prune 覆盖）。
+  final before = await dao.getRemote();
   final resp = await repo.list();
   // 阶段 1: upsert 远端 meta 到 sqflite（5 段 JSON 设为 '{}'，详情按需拉取）
   for (final meta in resp.templates) {
@@ -95,7 +99,58 @@ final remoteTemplatesSyncProvider = FutureProvider<void>((ref) async {
   // 阶段 2: 删除本地 source='remote' 但已不在后端列表的模板（已下架/已删除）
   final validIds = resp.templates.map((t) => t.id).toSet();
   await dao.pruneRemoteTemplates(validIds);
+  // 阶段 3: 定向失效本地图片缓存（ImageCacheUtil 以 URL 为 key 且永不回源校验，
+  // 线上模板图片一旦变更/删除，本地会长期展示陈旧字节）。
+  // - 已下架/已删除的模板：失效其全部图片 URL（内存+磁盘），释放陈旧缓存
+  // - 仍在下发但 updatedAt 变化的模板：后台已修改，失效其旧 URL，下次渲染回源拿新图
+  final remoteUpdatedById = {
+    for (final t in resp.templates) t.id: t.updatedAt * 1000,
+  };
+  final staleUrls = <String>{};
+  for (final local in before) {
+    final isDown = !validIds.contains(local.id);
+    final changed =
+        !isDown && remoteUpdatedById[local.id] != local.updatedAt;
+    if (isDown || changed) {
+      staleUrls.addAll(_templateImageUrls(local));
+    }
+  }
+  if (staleUrls.isNotEmpty) {
+    await ImageCacheUtil.invalidateMany(staleUrls);
+  }
 });
+
+/// 收集 [record] 引用的所有网络图片 URL（封面/效果图/http 剪影），已规范化，
+/// 与 [ImageCacheUtil] 的缓存 key 对齐，用于同步后定向失效。
+Set<String> _templateImageUrls(TemplateRecord record) {
+  final urls = <String>{};
+  void add(String? raw) {
+    if (raw == null || raw.isEmpty || raw == 'none') return;
+    if (!raw.startsWith('http://') && !raw.startsWith('https://')) return;
+    urls.add(TemplateMapper.normalizeAssetUrl(raw));
+  }
+
+  add(record.cover);
+  for (final img in record.images ?? const <TemplateImage>[]) {
+    add(img.url);
+  }
+  // 剪影（多姿势 List 或旧单姿势 Map；仅收集 http 型剪影图 URL）
+  final poses = <dynamic>[];
+  final rawPose = record.pose;
+  if (rawPose is List) {
+    poses.addAll(rawPose);
+  } else if (rawPose is Map) {
+    poses.add(rawPose);
+  }
+  for (final p in poses) {
+    if (p is! Map) continue;
+    final sil = p['silhouette'];
+    if (sil is! Map) continue;
+    add(sil['data'] as String?);
+    add(sil['url'] as String?);
+  }
+  return urls;
+}
 
 /// 按需拉取单个远程模板完整内容 → upsert 到 sqflite → 返回 PhotoTemplate。
 ///
