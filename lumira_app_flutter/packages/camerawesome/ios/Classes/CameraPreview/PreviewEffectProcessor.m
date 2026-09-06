@@ -47,13 +47,17 @@ static const CGFloat kPreviewWorkLongSide = 1280.0;
 // 数值语义（与 OHOS C++ bake / Dart 成片一致，颜色按 0..1，阈值按 0..255 折算）：
 //   1) 锐化：luma 域死区 Unsharp。diff = luma − 4邻域均值；thr = 0.75/255；
 //      amnt = a×(diff∓thr)；edge = smoothstep(0.75/255, 2.25/255, |diff|)。
-//      a = v/100×2.5（上限 2.5）：iOS WYSIWYG 成片源是 video 帧（自带降噪、偏软），
-//      相邻像素 diff 普遍落在死区附近，a=1.2 时增益被死区吃掉（拉满无感）；
-//      OHOS 成片源是 8.2MP 高质量照片帧（边缘硬）保持 1.2 不变。
-//      （2026-09-05 future-optimizations 登记的 2.5x 响应曲线在 iOS 侧落地。）
+//      a = v/100×6.0（上限 6.0，四端统一）：a=6.0 是 OHOS 同步前的原始值，
+//      也是真机观感「锐化明显可感知」的校准点；2026-09-06 曾误回调 1.2/2.5，
+//      真机实测拉满无感（硬边缘增益仅 1-2%/255 级别，人眼不可察），恢复 6.0。
+//      死区 0.75、门控 (0.75,2.25) 不变。
 //   2) 颗粒：128×128 预置 tile，tap 相位 fract(px/128+off)×128−0.5 双线性
 //      （与成片 Dart applyPerPixelEffectsImg 的 xp=u×128−0.5 完全一致），
 //      幅度 = grainOn×24/255×mix(0.35,1.0,smoothstep(0.05,0.85,luma))。
+//      ⚠️ nuv 必须 clamp 到 [0,127]：−0.5 相位使 fract<0.5/128 处 nuv∈[−0.5,0)，
+//      落在 tile extent 外——Core Image 对 extent 外采样返回「透明黑」而非边缘延伸
+//      （这正是 imageByClampingToExtent 存在的意义），g=0 → rgb += (0×2−1)×amp
+//      → 每个 128px 周期出现 1px 暗线（真机观感「几条黑线」，2026-09-06 确认）。
 //   3) 磨皮（频率分离）：base = blur sampler（applyParams 里 CIGaussianBlur
 //      预渲染的矩阵后整图高斯，经 samplerTransform 采样），detail = rgb−base，
 //      out = base+detail×(1−removal)，removal = baseRemove×肤色概率×(1−结构门控)，
@@ -84,6 +88,7 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   "  }\n"
   "  if (grainOn > 0.0) {\n"
   "    vec2 nuv = vec2( fract(px.x * (1.0/128.0) + (13.0/128.0)), fract(px.y * (1.0/128.0) + (29.0/128.0)) ) * 128.0 - vec2(0.5);\n"
+  "    nuv = clamp(nuv, vec2(0.0), vec2(127.0));\n"
   "    float g = sample(noise, nuv).r;\n"
   "    float ls = mix(0.35, 1.0, smoothstep(0.05, 0.85, dot(rgb, lum)));\n"
   "    float amp = grainOn * (24.0/255.0) * ls;\n"
@@ -292,12 +297,12 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   }
 
   // 统一内核：锐化 + 颗粒 + 磨皮 + 暗角 单 pass（无空间效果时直通，零 GPU 开销）。
-  // 锐化强度 a = v/100×2.5（上限 2.5）：iOS WYSIWYG 成片源是 video 帧（自带降噪、
-  // 偏软），相邻像素 diff 普遍落在死区附近，a=1.2 增益被死区吃掉（真机拉满无感）；
-  // OHOS 成片源是 8.2MP 高质量照片帧（边缘硬）保持 1.2。与 Dart 成片
-  // applyPerPixelEffectsImg 同步 2.5（WYSIWYG 铁律：预览==成片），死区 0.75、
-  // 门控 (0.75,2.25) 不变。
-  double sharpenA = (_params.hasSharpen && _params.sharpen > 0) ? fmin(_params.sharpen / 100.0 * 2.5, 2.5) : 0.0;
+  // 锐化强度 a = v/100×6.0（上限 6.0，四端统一）：6.0 是 OHOS 同步前的原始值，
+  // 真机观感校准点（「锐化明显可感知」）。2026-09-06 曾误回调 1.2/2.5——真机实测
+  // 拉满无感（硬边缘增益仅 1-2%/255 级别）；恢复 6.0 与 Dart 成片
+  // applyPerPixelEffectsImg / OHOS photo_processor.cpp / preview_fx.cpp 同步。
+  // 死区 0.75、门控 (0.75,2.25) 不变。
+  double sharpenA = (_params.hasSharpen && _params.sharpen > 0) ? fmin(_params.sharpen / 100.0 * 6.0, 6.0) : 0.0;
   double vigS     = (_params.hasVignette && _params.vignette > 0) ? _params.vignette / 100.0 : 0.0;
   double smoothS  = (_params.hasSmooth && _params.smooth > 0) ? _params.smooth / 100.0 : 0.0;
   double grainS   = (_params.hasGrain && _params.grain > 0) ? _params.grain / 100.0 : 0.0;
@@ -368,24 +373,31 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
                                          @"inputBiasVector": bias }];
 }
 
-/// 预计算 128×128 单通道颗粒 tile（固定 LCG 种子，与 OHOS C++/预览 shader 同分布）。
+/// 预计算 128×128 颗粒 tile（固定 LCG 种子，与 OHOS C++/预览 shader 同分布）。
 /// 每进程构建一次并复用，替代逐帧 CIRandomGenerator → 消灭取景器卡顿，且离线复用。
+/// ⚠️ 用 RGBA8 + deviceRGB 而非 R8 + DeviceGray：R8 灰度纹理在工作色域（RGB）上
+/// 采样时 Core Image 需要插入灰度→RGB 转换 pass（kernel 编译修复后真机实测颗粒
+/// 开启掉帧的嫌疑成本之一）；RGBA8 与工作色域零转换，采样即用。kernel 取 .r 通道。
 - (CIImage *)makeNoiseTile {
   const size_t tex = 128;
-  const size_t bytes = tex * tex;
+  const size_t bytes = tex * tex * 4;
   uint8_t *buf = (uint8_t *)malloc(bytes);
   if (!buf) return nil;
   uint32_t seed = 0x85EBCA6Bu;
-  for (size_t i = 0; i < bytes; ++i) {
+  for (size_t i = 0; i < tex * tex; ++i) {
     seed = seed * 1664525u + 1013904223u;
     const double rnd = (double)((seed >> 8) & 0xFFFFu) * (1.0 / 65535.0); // 0..1
-    buf[i] = (uint8_t)llround(rnd * 255.0);
+    const uint8_t v = (uint8_t)llround(rnd * 255.0);
+    buf[i * 4 + 0] = v;
+    buf[i * 4 + 1] = v;
+    buf[i * 4 + 2] = v;
+    buf[i * 4 + 3] = 255;
   }
-  CGColorSpaceRef cs = CGColorSpaceCreateDeviceGray();
+  CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
   CIImage *img = [CIImage imageWithBitmapData:[NSData dataWithBytesNoCopy:buf length:bytes freeWhenDone:YES]
-                                     bytesPerRow:tex
+                                     bytesPerRow:tex * 4
                                             size:CGSizeMake(tex, tex)
-                                          format:kCIFormatR8
+                                          format:kCIFormatRGBA8
                                       colorSpace:cs];
   CGColorSpaceRelease(cs);
   return img;

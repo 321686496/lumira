@@ -650,15 +650,14 @@ void applyPerPixelEffectsImg(
   required int grain,
 }) {
   // Sharpen（亮度域死区 Unsharp）
-  // iOS 侧强度 a=v/100×2.5（上限 2.5）：WYSIWYG 成片源是 video 帧（自带降噪、
-  // 偏软），相邻像素 diff 普遍落在死区附近，a=1.2 增益被死区吃掉（真机拉满
-  // 无感）；OHOS 成片源是 8.2MP 高质量照片帧（边缘硬），原生管线保持 1.2。
-  // 与 iOS 取景器 PreviewEffectProcessor 同步 2.5（WYSIWYG 铁律：预览==成片）。
-  // 历史注：曾全局 ×6.0 造成「效果太重」，2.5 是 2026-09-05 future-optimizations
-  // 登记的响应曲线（1.2 无感与 6.0 过重之间的平衡点）。
-  // 死区 0.75、门控 (0.75,2.25) 不变。
+  // 强度 a=v/100×6.0（上限 6.0，四端统一）：6.0 是 OHOS 同步前的原始值，真机
+  // 观感校准点（「锐化明显可感知」）。2026-09-06 曾误回调 1.2/2.5——真机实测
+  // 拉满无感（硬边缘增益仅 1-2%/255 级别，人眼不可察），恢复 6.0。与 iOS 取景器
+  // PreviewEffectProcessor / OHOS photo_processor.cpp / preview_fx.cpp 同步。
+  // 历史注：曾全局 ×6.0 时代用户反馈「效果过重」实为 kernel 坐标 bug 叠加所致，
+  // kernel 修复后纯 6.0 即正常锐化观感。死区 0.75、门控 (0.75,2.25) 不变。
   if (sharpen > 0) {
-    final double a = (sharpen / 100.0 * 2.5).clamp(0.0, 2.5).toDouble();
+    final double a = (sharpen / 100.0 * 6.0).clamp(0.0, 6.0).toDouble();
     const thr = 0.75; // 死区下界（0-255 亮度差）
     const e0 = 0.75, e1v = 2.25;
     final w = image.width, h = image.height;
