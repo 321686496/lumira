@@ -217,14 +217,10 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   }
 
   // 统一内核：锐化 + 颗粒 + 磨皮 + 暗角 单 pass（无空间效果时直通，零 GPU 开销）。
-  // 2026-09-05 二次强度修正（真机仍反馈「太轻、与原相册不一致」）：
-  //   - 响应曲线 a = v/100×6.0（上限 6.0，原 ×2.5）；
-  //   - 死区 thr 1.0→0.75、边缘门控 smoothstep(1,2.5)→(0.75,2.25)——解锁
-  //     软纹理带（diff 1~4/255 正是「让照片看起来更锐」的频段，旧参数几乎全灭）；
-  //   - 满档软边缘(diff=3)增益 5→13.5/255、强边缘(diff=30) 72→175/255，
-  //     对齐 iOS 相册锐化的量级。与 Dart applyPerPixelEffectsImg / OHOS C++
-  //     photo_processor.cpp / preview_fx.cpp 四端同步，保证预览==成片。
-  double sharpenA = (_params.hasSharpen && _params.sharpen > 0) ? fmin(_params.sharpen / 100.0 * 6.0, 6.0) : 0.0;
+  // 强度回到规格 a = v/100×1.2（上限 1.2）。此前被全局提到 ×6.0 造成真机「效果太重」，
+  // 现与 Dart applyPerPixelEffectsImg / OHOS C++ photo_processor.cpp / preview_fx.cpp
+  // 三端同步回调到规格；死区 0.75、门控 (0.75,2.25) 不变，保证预览==成片==双端。
+  double sharpenA = (_params.hasSharpen && _params.sharpen > 0) ? fmin(_params.sharpen / 100.0 * 1.2, 1.2) : 0.0;
   double vigS     = (_params.hasVignette && _params.vignette > 0) ? _params.vignette / 100.0 : 0.0;
   double smoothS  = (_params.hasSmooth && _params.smooth > 0) ? _params.smooth / 100.0 : 0.0;
   double grainS   = (_params.hasGrain && _params.grain > 0) ? _params.grain / 100.0 : 0.0;

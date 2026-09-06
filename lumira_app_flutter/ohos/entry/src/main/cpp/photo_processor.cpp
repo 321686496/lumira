@@ -472,13 +472,13 @@ static napi_value ProcessRgba(napi_env env, napi_callback_info info) {
     //   luma = 0.299R+0.587G+0.114B；lumaBlur = 4 邻域均值；
     //   diff = luma - lumaBlur；edge = smoothstep(0.75, 2.25, |diff|)；
     //   amnt = a×(diff>thr ? diff-thr : diff<-thr ? diff+thr : 0)，
-    //   a = clamp(sharpen/100×6.0, 0, 6.0)
-    // 亮度方向统一增益 → 色相不变、平坦区不放大颗粒；死区 1.0 让锐化重新咬合真实边缘。
-    // 2026-09-05 强度修正：统一死区版后 a 上限仅 1.0，软边缘增益 ~5-12/255，
-    // 用户「拉满无感」（真机反馈）；二次修正 ×6.0 + 死区 0.75/门控(0.75,2.25)
-    // 对比 +120%，62 档 +59%，低值仍平滑渐进），死区与边缘门控保留防噪/防光晕。
-    double a = (double)sharpen / 100.0 * 6.0;
-    if (a > 6.0) a = 6.0; if (a < 0.0) a = 0.0;
+    //   a = clamp(sharpen/100×1.2, 0, 1.2)
+    // 亮度方向统一增益 → 色相不变、平坦区不放大颗粒；死区 0.75 让锐化咬合真实边缘。
+    // 强度回到规格 a=v/100×1.2（上限 1.2）：此前被全局提到 ×6.0 造成真机「效果太重」，
+    // 现与 Dart applyPerPixelEffectsImg / iOS PreviewEffectProcessor / preview_fx
+    // 三端同步回调到规格 a=clamp(sharpen/100, 0, 1.2)；死区(0.75)与门控(0.75,2.25)不变。
+    double a = (double)sharpen / 100.0 * 1.2;
+    if (a > 1.2) a = 1.2; if (a < 0.0) a = 0.0;
     const double thr = 0.75;   // 死区下界（0-255 亮度差）
     const double e0 = 0.75, e1v = 2.25; // 边缘门控 smoothstep 区间
     uint8_t* conv = (uint8_t*)malloc(outLen);

@@ -650,11 +650,11 @@ void applyPerPixelEffectsImg(
   required int grain,
 }) {
   // Sharpen（亮度域死区 Unsharp）
-  // 2026-09-05 二次强度修正：a=v/100×6.0（上限 6.0）、死区 0.75、门控 (0.75,2.25)，
-  // 与 OHOS C++ photo_processor.cpp Pass 2 / iOS PreviewEffectProcessor /
-  // OHOS preview_fx.cpp 四端同步 —— ×2.5 版真机反馈「与原相册锐化不一致太轻」。
+  // 强度回到规格值 a=v/100×1.2（上限 1.2）：此前被全局提到 ×6.0 造成「效果太重」，
+  // 现与 OHOS photo_processor.cpp / iOS PreviewEffectProcessor / OHOS preview_fx
+  // 三端同步回调到规格 a=clamp(sharpen/100, 0, 1.2)，死区 0.75、门控 (0.75,2.25) 不变。
   if (sharpen > 0) {
-    final double a = (sharpen / 100.0 * 6.0).clamp(0.0, 6.0).toDouble();
+    final double a = (sharpen / 100.0 * 1.2).clamp(0.0, 1.2).toDouble();
     const thr = 0.75; // 死区下界（0-255 亮度差）
     const e0 = 0.75, e1v = 2.25;
     final w = image.width, h = image.height;
@@ -962,29 +962,30 @@ LegStretchBytes legStretchRgba(
   return LegStretchBytes(bytes: out, height: outH);
 }
 
-/// 暗角：径向渐变暗化四角（仅 vignette > 0 时调用）
+/// 暗角：径向边缘压暗（仅 vignette > 0 时调用）。
+///
+/// 通用于 OHOS C++ `applyVignette` 与 iOS 预览内核的同一条公式，保证
+/// 成片==预览==双端：
+///   dn = length(dx,dy)/sqrt(2)，dx=(x+0.5-cx)/cx（-1..1，cx=宽/2）
+///   factor = 1 − s·smoothstep(0.45, 1.0, dn)，s=vignette/100
+/// 中心(dn≈0)不动、越靠边越暗、对角(dn≈1)最深。
 void applyVignetteImg(img.Image image, {required int vignette}) {
   if (vignette <= 0) return;
-  final strength = (vignette / 100.0).clamp(0.0, 1.0) * 0.6;
-  final centerX = image.width / 2;
-  final centerY = image.height / 2;
-  // 对角线距离的平方
-  final maxDistSq = centerX * centerX + centerY * centerY;
+  final double s = (vignette / 100.0).clamp(0.0, 1.0).toDouble();
+  const e0 = 0.45, e1 = 1.0;             // 暗角起止区间（归一径向）
+  final invMax = 1.0 / math.sqrt(2.0);   // 对角归一化
+  final hw = image.width / 2.0, hh = image.height / 2.0;
 
   for (final p in image) {
-    final dx = p.x - centerX;
-    final dy = p.y - centerY;
-    final distSq = dx * dx + dy * dy;
-    // 距离比例 0-1（中心=0，四角=1）
-    final ratio = distSq / maxDistSq;
-    // 仅在 ratio > 0.3 时开始暗化（中心 30% 区域不受影响）
-    if (ratio > 0.3) {
-      final darken = ((ratio - 0.3) / 0.7) * strength;
-      p
-        ..r = (p.r * (1 - darken)).clamp(0, 255)
-        ..g = (p.g * (1 - darken)).clamp(0, 255)
-        ..b = (p.b * (1 - darken)).clamp(0, 255);
-    }
+    final dy = (p.y + 0.5 - hh) / hh;    // -1..1
+    final dx = (p.x + 0.5 - hw) / hw;    // -1..1
+    final dn = math.sqrt(dx * dx + dy * dy) * invMax; // 0..~1
+    final t = ((dn - e0) / (e1 - e0)).clamp(0.0, 1.0).toDouble();
+    final factor = 1.0 - s * (t * t * (3.0 - 2.0 * t)); // 1 - s·smoothstep
+    p
+      ..r = (p.r * factor).clamp(0, 255)
+      ..g = (p.g * factor).clamp(0, 255)
+      ..b = (p.b * factor).clamp(0, 255);
   }
 }
 

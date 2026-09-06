@@ -31,7 +31,7 @@
  *                         vignette: number, smooth: number,
  *                         sharpen: number, grain: number): void
  *     更新效果参数（vignette/smooth/sharpen/grain 为 0..100 原始强度，
- *     模块内部按 iOS 同一曲线折算：锐化 a=v/100*6.0，其余 v/100）。
+ *     模块内部按规格同一曲线折算：锐化 a=v/100×1.2，其余 v/100）。
  *   destroyPreviewFx(): void — 停渲染线程并释放全部资源。
  *
  * 线程模型：全部 GL/NativeImage/EGL 资源都创建、使用、销毁于渲染线程
@@ -67,7 +67,7 @@ struct FxParams {
   float mR1[4];   // 第 1 行
   float mR2[4];   // 第 2 行
   float bias[3];  // 偏移列（m4/m9/m14，按 0..255 语义 → 着色器内 /255）
-  float sharpen;  // 0..6.0（已折算）
+  float sharpen;  // 0..1.2（已折算）
   float smooth;   // 0..1
   float vignette; // 0..1
   float grain;    // 0..1
@@ -177,7 +177,7 @@ const char* kFragmentShader =
     "uniform float uHasMatrix;\n"
     "uniform vec2 uTexel;\n"    // 1/宽, 1/高
     "uniform vec2 uSize;\n"     // 宽, 高（像素）
-    "uniform float uSharpen;\n" // 0..6.0
+    "uniform float uSharpen;\n" // 0..1.2
     "uniform float uVig;\n"     // 0..1
     "uniform float uSmooth;\n"  // 0..1
     "uniform float uGrain;\n"   // 0..1
@@ -946,13 +946,14 @@ static napi_value UpdatePreviewFxParams(napi_env env, napi_callback_info info) {
   napi_get_value_double(env, args[3], &smooth);
   napi_get_value_double(env, args[4], &sharpen);
   napi_get_value_double(env, args[5], &grain);
-  // 折算曲线与 iOS applyParams 完全一致（锐化 ×2.5 上限 2.5，其余 /100）。
+  // 折算曲线与 iOS applyParams 完全一致（锐化 ×1.2 上限 1.2，其余 /100）。
   p.vignette = (float)(vig / 100.0);
   p.smooth = (float)(smooth / 100.0);
-  // 2026-09-05 二次强度修正（对齐 iOS 相册锐化量级）：a=v/100×6.0，
-  // 死区/门控同步收紧至 (0.75, 2.25)，四端与 photo_processor.cpp / Dart 管线一致。
-  p.sharpen = (float)(sharpen / 100.0 * 6.0);
-  if (p.sharpen > 6.0f) p.sharpen = 6.0f;
+  // 强度回到规格 a=v/100×1.2（上限 1.2）：此前被全局提到 ×6.0 造成真机「效果太重」，
+  // 现与 photo_processor.cpp / Dart applyPerPixelEffectsImg / iOS PreviewEffectProcessor
+  // 三端同步回调到规格；死区(0.75)/门控(0.75,2.25)不变。
+  p.sharpen = (float)(sharpen / 100.0 * 1.2);
+  if (p.sharpen > 1.2f) p.sharpen = 1.2f;
   if (p.sharpen < 0.0f) p.sharpen = 0.0f;
   p.grain = (float)(grain / 100.0);
 
