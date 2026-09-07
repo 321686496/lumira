@@ -3223,6 +3223,46 @@ class _Step3Pose extends StatelessWidget {
   }
 }
 
+/// 内置剪影图标：根据 silhouetteKey 渲染实际的剪影图片
+class _BuiltinSilhouetteIcon extends StatelessWidget {
+  const _BuiltinSilhouetteIcon({
+    required this.silhouetteKey,
+    required this.size,
+    required this.color,
+  });
+
+  final String silhouetteKey;
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final assetPath = BuiltinSilhouettes.assetMap[silhouetteKey];
+    if (assetPath == null || assetPath.isEmpty) {
+      return Icon(
+        Icons.person_outline,
+        size: size,
+        color: color,
+      );
+    }
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Image.asset(
+        assetPath,
+        fit: BoxFit.contain,
+        color: color,
+        errorBuilder: (_, __, ___) => Icon(
+          Icons.person_outline,
+          size: size,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
 class _BuiltinSilhouetteThumbnails extends ConsumerWidget {
   const _BuiltinSilhouetteThumbnails({
     required this.tokens,
@@ -3246,19 +3286,27 @@ class _BuiltinSilhouetteThumbnails extends ConsumerWidget {
         itemBuilder: (context, index) {
           final key = index == 0 ? 'none' : kBuiltinSilhouetteKeys[index - 1];
           final active = selectedKey == key;
+          final iconColor = active
+              ? (isNeumorphic ? tokens.brandText : tokens.brandDeep)
+              : tokens.textSecondary;
           final contentColumn = Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                key == 'none' ? Icons.close : Icons.person_outline,
-                size: 32,
-                color: active
-                    ? (isNeumorphic ? tokens.brandText : tokens.brandDeep)
-                    : tokens.textSecondary,
-              ),
+              if (key == 'none')
+                Icon(
+                  Icons.close,
+                  size: 32,
+                  color: iconColor,
+                )
+              else
+                _BuiltinSilhouetteIcon(
+                  silhouetteKey: key,
+                  size: 32,
+                  color: iconColor,
+                ),
               const SizedBox(height: 4),
               Text(
-                key,
+                key == 'none' ? '无' : BuiltinSilhouettes.getFriendlyName(key),
                 style: TextStyle(
                   fontSize: 9,
                   color: tokens.textTertiary,

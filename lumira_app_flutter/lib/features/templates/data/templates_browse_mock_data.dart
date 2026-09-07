@@ -229,6 +229,7 @@ class TemplateDetail {
     this.description = '',
     this.ambience,
     this.updatedAt = 0,
+    this.createdAt = 0,
   });
 
   final String id;
@@ -243,6 +244,8 @@ class TemplateDetail {
   final RemoteTemplateAmbienceDto? ambience;
   /// 后端更新时间戳（毫秒，详情展示用）。
   final int updatedAt;
+  /// 模板发布时间戳（毫秒，详情展示用；内置/旧模板为 0 时详情页隐藏）。
+  final int createdAt;
 
   /// 完整分类路径的分级扩展字段（四级分类，spec-4level）。
   /// - majorStyle：大风格（L2，如 emotional）
@@ -316,6 +319,7 @@ class TemplateDetail {
       description: description,
       ambience: ambience,
       updatedAt: updatedAt,
+      createdAt: createdAt,
     );
   }
 }
@@ -1683,6 +1687,7 @@ class TemplatesBrowseMockData {
       description: tpl.meta.description,
       ambience: tpl.meta.ambience,
       updatedAt: tpl.meta.updatedAt,
+      createdAt: tpl.meta.createdAt,
       majorStyle: cls.majorStyle.isNotEmpty
           ? cls.majorStyle
           : (cls.style.isEmpty ? null : cls.style),

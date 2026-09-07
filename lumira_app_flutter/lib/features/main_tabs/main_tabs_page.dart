@@ -7,6 +7,8 @@ import '../../core/network/api_error.dart';
 import '../../core/theme/theme_controller.dart';
 import '../../features/invite/data/invite_models.dart';
 import '../../features/invite/data/invite_repository.dart';
+import '../../features/invite/widgets/invite_bind_success_sheet.dart';
+import '../home/widgets/scan_qr_page.dart';
 import '../../shared/widgets/lumira/lumira.dart';
 import '../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../challenge/pages/challenge_page.dart';
@@ -200,6 +202,7 @@ class _FirstUseInviteSheet extends ConsumerStatefulWidget {
 class _FirstUseInviteSheetState extends ConsumerState<_FirstUseInviteSheet> {
   final TextEditingController _codeController = TextEditingController();
   bool _submitting = false;
+  bool _scanning = false;
 
   @override
   void dispose() {
@@ -220,20 +223,44 @@ class _FirstUseInviteSheetState extends ConsumerState<_FirstUseInviteSheet> {
       final repo = await ref.read(inviteRepositoryProvider.future);
       final resp = await repo.activate(ActivateInviteRequest(inviteCode: code));
       if (!mounted) return;
-      final msg = resp.rewards != null
-          ? '邀请码已激活，解锁 ${resp.rewards!.items.length} 项奖励'
-          : '邀请码已激活';
-      Navigator.of(context).pop();
-      _toast(msg, toastContext);
+      // 绑定成功：弹窗展示达成条件与「达成后」可获得的奖励明细
+      await showInviteBindSuccessSheet(
+        context,
+        conditionText:
+            resp.condition ?? '绑定成功后，完成首次拍照/成片，你与好友将各得 30 积分奖励',
+        rewards: resp.achievableRewards,
+        inviterDeviceId: resp.inviterDeviceId,
+      );
+      if (!mounted) return;
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
       _toast('激活失败：${e.message}', toastContext);
     } catch (_) {
       if (!mounted) return;
+      // 未知错误不误报成功（此前这里兜底显示「绑定成功」误导用户）
       setState(() => _submitting = false);
-      _toast('绑定成功', toastContext);
-      Navigator.of(context).pop();
+      _toast('绑定失败，请稍后重试', toastContext);
+    }
+  }
+
+  /// 扫码识别邀请码并回填输入框
+  Future<void> _scanCode() async {
+    if (_scanning) return;
+    setState(() => _scanning = true);
+    try {
+      final text = await Navigator.of(context).push<String>(
+        MaterialPageRoute(builder: (_) => const ScanQrPage()),
+      );
+      if (!mounted) return;
+      if (text != null && text.trim().isNotEmpty) {
+        _codeController.text = text.trim();
+      }
+    } finally {
+      if (mounted) setState(() => _scanning = false);
     }
   }
 
@@ -253,7 +280,11 @@ class _FirstUseInviteSheetState extends ConsumerState<_FirstUseInviteSheet> {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
 
-    return SafeArea(
+    // 键盘弹出时把弹窗整体上移到键盘上方，避免被软键盘遮挡
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: SafeArea(
       child: Container(
         margin: const EdgeInsets.all(16),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
@@ -282,8 +313,8 @@ class _FirstUseInviteSheetState extends ConsumerState<_FirstUseInviteSheet> {
               ),
               const SizedBox(height: 8),
               Text(
-                '输入好友的邀请码，绑定成功后双方各得积分奖励。'
-                '仅新设备首次使用时开放，可随时跳过。',
+                '输入好友的邀请码，绑定后完成首次拍照/成片，'
+                '你和好友即可各得积分奖励。仅新设备首次使用时开放，可随时跳过。',
                 style: TextStyle(
                   fontSize: 13,
                   color: tokens.textTertiary,
@@ -294,6 +325,10 @@ class _FirstUseInviteSheetState extends ConsumerState<_FirstUseInviteSheet> {
               LumiraTextField(
                 controller: _codeController,
                 hintText: '粘贴好友的邀请码...',
+                suffixIcon: IconButton(
+                  onPressed: _scanning ? null : _scanCode,
+                  icon: const Icon(Icons.qr_code_scanner, size: 20),
+                ),
               ),
               const SizedBox(height: 14),
               LumiraButton(
@@ -318,6 +353,7 @@ class _FirstUseInviteSheetState extends ConsumerState<_FirstUseInviteSheet> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

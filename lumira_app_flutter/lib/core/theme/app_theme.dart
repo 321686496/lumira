@@ -92,11 +92,11 @@ class AppThemeData {
     }
   }
 
-  /// 输入框圆角（rpx）。neumorphic:12 / flat:8 / glass:12 / female:24
+  /// 输入框圆角（rpx）。neumorphic:20 / flat:8 / glass:12 / female:24
   double get inputRadius {
     switch (style) {
       case UIStyle.neumorphic:
-        return 12;
+        return 20;
       case UIStyle.flat:
         return 8;
       case UIStyle.glass:

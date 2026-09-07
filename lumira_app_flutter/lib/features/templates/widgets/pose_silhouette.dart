@@ -137,7 +137,7 @@ class PoseSilhouette extends StatelessWidget {
         );
 
       case 'svg':
-        final parsed = _SilhouetteSvgParser.parse(silhouetteData);
+        final parsed = SilhouetteSvgParser.parse(silhouetteData);
         if (parsed == null) {
           return Icon(
             Icons.brush_outlined,
@@ -149,7 +149,7 @@ class PoseSilhouette extends StatelessWidget {
           width: double.infinity,
           height: double.infinity,
           child: CustomPaint(
-            painter: _SilhouetteSvgPainter(
+            painter: SilhouetteSvgPainter(
               paths: parsed.paths,
               viewBox: parsed.viewBox,
               color: effectiveColor,
@@ -265,12 +265,12 @@ class SilhouetteLayer extends StatelessWidget {
 ///         stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 /// </svg>
 /// ```
-class _SilhouetteSvgParser {
-  static _ParsedSvg? parse(String svg) {
+class SilhouetteSvgParser {
+  static ParsedSvg? parse(String svg) {
     if (svg.isEmpty || !svg.contains('<svg')) return null;
 
-    final viewBox = _parseViewBox(svg) ?? const _Rect(0, 0, 300, 480);
-    final paths = <_ParsedPath>[];
+    final viewBox = _parseViewBox(svg) ?? const SvgRect(0, 0, 300, 480);
+    final paths = <ParsedPath>[];
 
     // 简单正则提取所有 <path .../> 元素
     final pathRegex = RegExp(r'<path\b[^>]*?/>', caseSensitive: false);
@@ -280,17 +280,17 @@ class _SilhouetteSvgParser {
       if (d == null) continue;
       final strokeWidth =
           double.tryParse(_attr(pathXml, 'stroke-width') ?? '') ?? 8.0;
-      paths.add(_ParsedPath(
+      paths.add(ParsedPath(
         d: d,
         strokeWidth: strokeWidth,
       ));
     }
 
     if (paths.isEmpty) return null;
-    return _ParsedSvg(viewBox: viewBox, paths: paths);
+    return ParsedSvg(viewBox: viewBox, paths: paths);
   }
 
-  static _Rect? _parseViewBox(String svg) {
+  static SvgRect? _parseViewBox(String svg) {
     final match = RegExp(r'viewBox="([^"]+)"').firstMatch(svg);
     if (match == null) return null;
     final parts = match.group(1)!.split(RegExp(r'[\s,]+'));
@@ -299,7 +299,7 @@ class _SilhouetteSvgParser {
     final y = double.tryParse(parts[1]) ?? 0;
     final w = double.tryParse(parts[2]) ?? 300;
     final h = double.tryParse(parts[3]) ?? 480;
-    return _Rect(x, y, w, h);
+    return SvgRect(x, y, w, h);
   }
 
   static String? _attr(String xml, String name) {
@@ -308,24 +308,24 @@ class _SilhouetteSvgParser {
   }
 }
 
-class _Rect {
+class SvgRect {
   final double x;
   final double y;
   final double width;
   final double height;
-  const _Rect(this.x, this.y, this.width, this.height);
+  const SvgRect(this.x, this.y, this.width, this.height);
 }
 
-class _ParsedPath {
+class ParsedPath {
   final String d;
   final double strokeWidth;
-  const _ParsedPath({required this.d, required this.strokeWidth});
+  const ParsedPath({required this.d, required this.strokeWidth});
 }
 
-class _ParsedSvg {
-  final _Rect viewBox;
-  final List<_ParsedPath> paths;
-  const _ParsedSvg({required this.viewBox, required this.paths});
+class ParsedSvg {
+  final SvgRect viewBox;
+  final List<ParsedPath> paths;
+  const ParsedSvg({required this.viewBox, required this.paths});
 }
 
 /// 将 SVG path 数据转换为 flutter Path 对象
@@ -355,15 +355,15 @@ Path _buildPathFromD(String d) {
   return path;
 }
 
-class _SilhouetteSvgPainter extends CustomPainter {
-  _SilhouetteSvgPainter({
+class SilhouetteSvgPainter extends CustomPainter {
+  SilhouetteSvgPainter({
     required this.paths,
     required this.viewBox,
     required this.color,
   });
 
-  final List<_ParsedPath> paths;
-  final _Rect viewBox;
+  final List<ParsedPath> paths;
+  final SvgRect viewBox;
   final Color color;
 
   @override
@@ -394,7 +394,7 @@ class _SilhouetteSvgPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _SilhouetteSvgPainter oldDelegate) {
+  bool shouldRepaint(covariant SilhouetteSvgPainter oldDelegate) {
     return oldDelegate.color != color ||
         oldDelegate.viewBox.width != viewBox.width ||
         oldDelegate.viewBox.height != viewBox.height ||

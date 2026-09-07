@@ -76,6 +76,83 @@ class SettingsDao {
     return ThemeKey.warmWhite;
   }
 
+  /// 读取跟随系统开关（user_settings.follow_system，默认 false=关闭）
+  Future<bool> getFollowSystem() async {
+    final rows = await _db.query(
+      Tables.userSettings,
+      columns: [Tables.colFollowSystem],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return false;
+    return (rows.first[Tables.colFollowSystem] as int?) == 1;
+  }
+
+  /// 保存跟随系统开关
+  Future<void> setFollowSystem(bool value) async {
+    await _db.update(
+      Tables.userSettings,
+      {
+        Tables.colFollowSystem: value ? 1 : 0,
+        Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+  }
+
+  /// 读取系统深色模式主题（user_settings.theme_key_dark，默认 ink）
+  Future<ThemeKey> getDarkThemeKey() async {
+    final rows = await _db.query(
+      Tables.userSettings,
+      columns: [Tables.colThemeKeyDark],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return ThemeKey.ink;
+    final raw = rows.first[Tables.colThemeKeyDark] as String?;
+    return _parseThemeKey(raw);
+  }
+
+  /// 保存系统深色模式主题
+  Future<void> setDarkThemeKey(ThemeKey key) async {
+    await _db.update(
+      Tables.userSettings,
+      {
+        Tables.colThemeKeyDark: key.name,
+        Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+  }
+
+  /// 读取系统浅色模式主题（user_settings.theme_key_light，默认 warmWhite）
+  Future<ThemeKey> getLightThemeKey() async {
+    final rows = await _db.query(
+      Tables.userSettings,
+      columns: [Tables.colThemeKeyLight],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return ThemeKey.warmWhite;
+    final raw = rows.first[Tables.colThemeKeyLight] as String?;
+    return _parseThemeKey(raw);
+  }
+
+  /// 保存系统浅色模式主题
+  Future<void> setLightThemeKey(ThemeKey key) async {
+    await _db.update(
+      Tables.userSettings,
+      {
+        Tables.colThemeKeyLight: key.name,
+        Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+  }
+
   /// 按枚举名解析 UI 风格，非法值回退默认
   UIStyle _parseUiStyle(String? raw) {
     for (final s in UIStyle.values) {

@@ -9,7 +9,7 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/buttons/lumira_button.dart';
-import '../../../shared/widgets/lumira/buttons/lumira_icon_button.dart';
+import '../../../shared/widgets/lumira/feedback/lumira_toast.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/watermark_providers.dart';
 import '../models/watermark_settings.dart';
@@ -17,8 +17,14 @@ import '../models/watermark_template.dart';
 import '../widgets/watermark_preview.dart';
 
 /// 水印管理页：合并展示预置 + 自定义水印模板，支持单列 / 双列布局切换
-/// （经 [setWatermarkManageLayout] 持久化），卡片缩略图以真实照片为底、
-/// 叠加水印元素预览。支持选择 / 新建 / 编辑 / 复制 / 删除。
+/// （经 [setWatermarkManageLayout] 持久化）。
+///
+/// 重构要点：
+/// - 顶部信息区：标题 + 模板计数 + 「当前使用」水印名 + 单列/双列分段控件
+/// - 卡片以真实照片为底、叠加水印元素预览；选中态品牌描边 + 角标
+/// - 操作菜单统一走 [LumiraPopupMenuButton]（8 主题 × 4 风格自适应），
+///   复制 / 删除给出 Toast 反馈
+/// - 无自定义模板时展示「新建自定义水印」引导卡
 class WatermarkManagePage extends ConsumerStatefulWidget {
   const WatermarkManagePage({super.key, this.showPhotoBackground = true});
 
@@ -47,17 +53,6 @@ class _WatermarkManagePageState extends ConsumerState<WatermarkManagePage> {
     return const AssetImage(_samplePhoto);
   }
 
-  void _onToggleLayout() {
-    final container = ProviderScope.containerOf(context, listen: false);
-    final current = ref.read(watermarkSettingsProvider).manageLayout;
-    setWatermarkManageLayout(
-      container,
-      current == WatermarkManageLayout.grid
-          ? WatermarkManageLayout.list
-          : WatermarkManageLayout.grid,
-    );
-  }
-
   void _onNew() {
     context.push(RouteNames.profileSettingsWatermarkEdit);
   }
@@ -74,6 +69,9 @@ class _WatermarkManagePageState extends ConsumerState<WatermarkManagePage> {
     setWatermarkActive(container, template.id);
     if (context.canPop()) {
       context.pop();
+    } else {
+      // 独立进入本页（非设置页跳转）时给出选中反馈。
+      LumiraToast.show(context, '已切换水印：${template.name}');
     }
   }
 
@@ -96,6 +94,7 @@ class _WatermarkManagePageState extends ConsumerState<WatermarkManagePage> {
         copy,
         ...ref.read(customWatermarksProvider),
       ];
+      LumiraToast.show(context, '已复制「${copy.name}」');
     } catch (e) {
       debugPrint('[watermark-manage] copy template failed: $e');
     }
@@ -149,6 +148,7 @@ class _WatermarkManagePageState extends ConsumerState<WatermarkManagePage> {
           .read(customWatermarksProvider)
           .where((t) => t.id != template.id)
           .toList();
+      LumiraToast.show(context, '已删除「${template.name}」');
     } catch (e) {
       debugPrint('[watermark-manage] delete template failed: $e');
     }
@@ -168,6 +168,13 @@ class _WatermarkManagePageState extends ConsumerState<WatermarkManagePage> {
     }
   }
 
+  void _setLayout(WatermarkManageLayout layout) {
+    setWatermarkManageLayout(
+      ProviderScope.containerOf(context, listen: false),
+      layout,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
@@ -180,6 +187,7 @@ class _WatermarkManagePageState extends ConsumerState<WatermarkManagePage> {
     final activeId = settings.activeTemplateId;
     final layout = settings.manageLayout;
     final isGrid = layout == WatermarkManageLayout.grid;
+    final activeName = _activeName(templates, activeId);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -188,14 +196,6 @@ class _WatermarkManagePageState extends ConsumerState<WatermarkManagePage> {
         title: '水印管理',
         transparent: true,
         actions: [
-          LumiraIconButton(
-            key: const ValueKey('watermark-layout-toggle'),
-            icon: isGrid ? Icons.view_agenda : Icons.grid_view,
-            variant: LumiraIconButtonVariant.filled,
-            color: tokens.brandText,
-            onPressed: _onToggleLayout,
-          ),
-          const SizedBox(width: 6),
           LumiraButton(
             variant: ButtonVariant.primary,
             onPressed: _onNew,
@@ -207,44 +207,154 @@ class _WatermarkManagePageState extends ConsumerState<WatermarkManagePage> {
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(child: _layoutHeader(tokens, layout, style)),
+            SliverToBoxAdapter(
+              child: _infoHeader(
+                tokens,
+                style,
+                layout,
+                templates.length,
+                activeName,
+              ),
+            ),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 2, 16, 32),
               sliver: isGrid
                   ? _buildGrid(templates, activeId, tokens)
                   : _buildList(templates, activeId, tokens),
             ),
+            // 无自定义模板时给出新建引导（预置模板常驻，列表不会完全为空）
+            if (customs.isEmpty)
+              SliverToBoxAdapter(child: _emptyCustomHint(tokens)),
           ],
         ),
       ),
     );
   }
 
-  Widget _layoutHeader(
-    ThemeTokens tokens, WatermarkManageLayout layout, UIStyle style) {
+  String _activeName(List<WatermarkTemplate> templates, String? activeId) {
+    if (activeId == null) return '未选择';
+    for (final t in templates) {
+      if (t.id == activeId) return t.name;
+    }
+    return '未选择';
+  }
+
+  /// 顶部信息区：标题 + 计数 + 当前使用水印名 + 布局分段控件。
+  Widget _infoHeader(
+    ThemeTokens tokens,
+    UIStyle style,
+    WatermarkManageLayout layout,
+    int total,
+    String activeName,
+  ) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            '模板',
-            style: TextStyle(
-              fontSize: 13,
-              color: tokens.textSecondary,
-              fontWeight: FontWeight.w500,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '水印模板',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: tokens.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: tokens.brandSubtle,
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Text(
+                        '$total',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.brandText,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  '当前使用「$activeName」',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, color: tokens.textSecondary),
+                ),
+              ],
             ),
           ),
-          const Spacer(),
+          const SizedBox(width: 12),
           _LayoutSegments(
             value: layout,
-            onChanged: (next) => setWatermarkManageLayout(
-              ProviderScope.containerOf(context, listen: false),
-              next,
-            ),
+            onChanged: _setLayout,
             tokens: tokens,
             style: style,
           ),
         ],
+      ),
+    );
+  }
+
+  /// 无自定义模板时的引导卡：点击进入新建水印。
+  Widget _emptyCustomHint(ThemeTokens tokens) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+      child: NeuCard(
+        onTap: _onNew,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: tokens.brandSubtle,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.auto_awesome,
+                  size: 18, color: tokens.brandText),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '还没有自定义水印',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '点此创作你的专属水印',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: tokens.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, size: 20, color: tokens.textTertiary),
+          ],
+        ),
       ),
     );
   }
@@ -259,7 +369,7 @@ class _WatermarkManagePageState extends ConsumerState<WatermarkManagePage> {
         crossAxisCount: 2,
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
-        mainAxisExtent: 256,
+        mainAxisExtent: 224,
       ),
       delegate: SliverChildBuilderDelegate(
         (context, index) {
@@ -337,9 +447,19 @@ class _LayoutSegments extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _seg(Icons.view_agenda, WatermarkManageLayout.list, radius),
+          _seg(
+            Icons.view_agenda,
+            WatermarkManageLayout.list,
+            radius,
+            const ValueKey('watermark-layout-list'),
+          ),
           const SizedBox(width: 3),
-          _seg(Icons.grid_view, WatermarkManageLayout.grid, radius),
+          _seg(
+            Icons.grid_view,
+            WatermarkManageLayout.grid,
+            radius,
+            const ValueKey('watermark-layout-grid'),
+          ),
         ],
       ),
     );
@@ -349,6 +469,7 @@ class _LayoutSegments extends StatelessWidget {
     IconData icon,
     WatermarkManageLayout layout,
     double radius,
+    Key key,
   ) {
     final active = value == layout;
     final List<BoxShadow> shadow = active
@@ -365,6 +486,7 @@ class _LayoutSegments extends StatelessWidget {
                 : const [])
         : const [];
     return GestureDetector(
+      key: key,
       onTap: () => onChanged(layout),
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
@@ -407,8 +529,8 @@ class _LayoutSegments extends StatelessWidget {
   }
 }
 
-/// 双列网格卡片：照片底缩略 + 名称 + 类型标签 + 使用中角标 / ⋮ 菜单。
-/// 整张卡片可点选（底层铺满透明命中区），菜单按钮叠在上层、独立处理点击不与选中冲突。
+/// 双列网格卡片：照片底缩略 + 名称 + 类型标签 + 元素数 / 使用中状态 + ⋮ 菜单。
+/// 照片与信息区可点选；⋮ 菜单为独立顶层节点，不与选中冲突。
 class _GridCard extends StatelessWidget {
   const _GridCard({
     required this.template,
@@ -434,65 +556,67 @@ class _GridCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         child: Stack(
           children: [
-            // 整卡内容可点选：选中心路由手势直接包裹内容区（菜单为独立顶层节点，不与选中冲突）
+            // 可点选区域：照片 + 名称 + 状态行（菜单为独立顶层节点，不与选中冲突）
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onSelect,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                    // 缩略图 + 使用中角标
-                    Stack(
-                      children: [
-                        WatermarkPreview(
-                          template: template,
-                          width: double.infinity,
-                          height: 150,
-                          background: background,
+                  // 缩略图 + 使用中角标
+                  Stack(
+                    children: [
+                      WatermarkPreview(
+                        template: template,
+                        width: double.infinity,
+                        height: 150,
+                        background: background,
+                      ),
+                      if (selected)
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: _UsingCheck(tokens: tokens),
                         ),
-                        if (selected)
-                          Positioned(
-                            top: 7,
-                            right: 7,
-                            child: _UsingCheck(tokens: tokens),
+                    ],
+                  ),
+                  const SizedBox(height: 9),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          template.name,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: tokens.textPrimary,
                           ),
-                      ],
-                    ),
-                    const SizedBox(height: 9),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            template.name,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: tokens.textPrimary,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        _TypeTag(type: template.type, tokens: tokens),
-                      ],
+                      ),
+                      _TypeTag(type: template.type, tokens: tokens),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  // 状态行：使用中（品牌色）/ 元素数量（弱化）
+                  Text(
+                    selected ? '使用中' : '${template.elements.length} 个元素',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                      color:
+                          selected ? tokens.brandText : tokens.textTertiary,
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        if (selected)
-                          _UsingLabel(tokens: tokens)
-                        else
-                          const SizedBox.shrink(),
-                      ],
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            // ⋮ 菜单：独立叠加在卡片右下角，命中优先且不触发选中
+            ),
+            // 操作按钮组：直接外露（编辑 / 复制 / 删除），独立顶层节点，命中优先且不触发选中
             Positioned(
-              bottom: 4,
-              right: 6,
-              child: _MenuButton(
+              bottom: 0,
+              right: 0,
+              child: _CardActions(
                 isCustom: template.type == WatermarkTemplateType.custom,
                 tokens: tokens,
                 onAction: onMenuAction,
@@ -544,31 +668,34 @@ class _ListCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         child: Stack(
           children: [
-            // 整卡内容可点选：命中手势包裹内容区（菜单独立顶层节点不与选中冲突）
+            // 可点选区域：左侧照片 + 右侧信息（右侧预留菜单空间）
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onSelect,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                    Stack(
-                      children: [
-                        WatermarkPreview(
-                          template: template,
-                          width: 96,
-                          height: 124,
-                          background: background,
+                  Stack(
+                    children: [
+                      WatermarkPreview(
+                        template: template,
+                        width: 92,
+                        height: 120,
+                        background: background,
+                      ),
+                      if (selected)
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: _UsingCheck(tokens: tokens),
                         ),
-                        if (selected)
-                          Positioned(
-                            top: 6,
-                            right: 6,
-                            child: _UsingCheck(tokens: tokens),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
+                    ],
+                  ),
+                  const SizedBox(width: 14),
+                  // 右侧预留操作按钮组宽度，避免名称/信息被按钮遮挡
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 88),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
@@ -587,27 +714,36 @@ class _ListCard extends StatelessWidget {
                           Row(
                             children: [
                               _TypeTag(type: template.type, tokens: tokens),
-                              const SizedBox(width: 10),
-                              if (selected) _UsingLabel(tokens: tokens),
+                              if (selected) ...[
+                                const SizedBox(width: 10),
+                                _UsingLabel(tokens: tokens),
+                              ],
                             ],
+                          ),
+                          const SizedBox(height: 7),
+                          Text(
+                            '${template.elements.length} 个元素'
+                            ' · ${_shortDate(template.createdAt)}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: tokens.textTertiary,
+                            ),
                           ),
                         ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            // ⋮ 菜单：独立叠加在卡片右侧中部，命中优先且不触发选中
+            ),
+            // 操作按钮组：直接外露（编辑 / 复制 / 删除），独立顶层节点，命中优先且不触发选中
             Positioned(
-              right: 4,
-              top: 0,
               bottom: 0,
-              child: Center(
-                child: _MenuButton(
-                  isCustom: template.type == WatermarkTemplateType.custom,
-                  tokens: tokens,
-                  onAction: onMenuAction,
-                ),
+              right: 0,
+              child: _CardActions(
+                isCustom: template.type == WatermarkTemplateType.custom,
+                tokens: tokens,
+                onAction: onMenuAction,
               ),
             ),
           ],
@@ -626,6 +762,13 @@ class _ListCard extends StatelessWidget {
       );
     }
     return card;
+  }
+
+  String _shortDate(DateTime time) {
+    final y = time.year.toString().padLeft(4, '0');
+    final m = time.month.toString().padLeft(2, '0');
+    final d = time.day.toString().padLeft(2, '0');
+    return '$y.$m.$d';
   }
 }
 
@@ -674,7 +817,7 @@ class _UsingCheck extends StatelessWidget {
   }
 }
 
-/// 使用中状态标签：底部信息区的小字「使用中」。
+/// 使用中状态标签：列表信息区的小字「使用中」。
 class _UsingLabel extends StatelessWidget {
   const _UsingLabel({required this.tokens});
   final ThemeTokens tokens;
@@ -692,9 +835,10 @@ class _UsingLabel extends StatelessWidget {
   }
 }
 
-/// 卡片右上 ⋮ 菜单：编辑（全部）/ 复制 / 删除（自定义专属）
-class _MenuButton extends StatelessWidget {
-  const _MenuButton({
+/// 卡片操作按钮组：编辑（全部模板）/ 复制 / 删除（自定义专属）直接外露，
+/// 替代原先「更多」菜单（预置模板菜单只有一个编辑项，入口冗余）。
+class _CardActions extends StatelessWidget {
+  const _CardActions({
     required this.isCustom,
     required this.tokens,
     required this.onAction,
@@ -706,19 +850,46 @@ class _MenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      icon: Icon(Icons.more_vert, color: tokens.textSecondary, size: 20),
-      onSelected: onAction,
-      itemBuilder: (context) => [
-        const PopupMenuItem(value: 'edit', child: Text('编辑')),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _actionBtn(
+          Icons.edit_outlined,
+          'edit',
+          tokens.textSecondary,
+        ),
         if (isCustom) ...[
-          const PopupMenuItem(value: 'copy', child: Text('复制')),
-          PopupMenuItem(
-            value: 'delete',
-            child: Text('删除', style: TextStyle(color: tokens.danger)),
+          const SizedBox(width: 4),
+          _actionBtn(
+            Icons.copy_outlined,
+            'copy',
+            tokens.textSecondary,
+          ),
+          const SizedBox(width: 4),
+          _actionBtn(
+            Icons.delete_outline,
+            'delete',
+            tokens.danger,
           ),
         ],
       ],
+    );
+  }
+
+  Widget _actionBtn(IconData icon, String action, Color color) {
+    return GestureDetector(
+      onTap: () => onAction(action),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 26,
+        height: 26,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: tokens.surfaceAlt,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, size: 15, color: color),
+      ),
     );
   }
 }

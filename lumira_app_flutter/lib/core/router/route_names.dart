@@ -55,7 +55,6 @@ class RouteNames {
   static const String profileGrowth = '/profile/growth';
   static const String profileGrowthCalendar = '/profile/growth/calendar';
   static const String profileInvite = '/profile/invite';
-  static const String profileShareCode = '/profile/share-code';
   static const String profileAcademy = '/profile/academy';
   static const String profileAcademyDetail = '/profile/academy-detail';
   static const String profileAcademyKnowledge = '/profile/academy-knowledge';

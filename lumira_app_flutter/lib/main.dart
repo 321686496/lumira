@@ -14,6 +14,7 @@ import 'core/network/api_client.dart';
 import 'core/router/route_names.dart';
 import 'core/services/deep_link_service.dart';
 import 'core/theme/theme_controller.dart';
+import 'core/theme/system_brightness_watcher.dart';
 import 'core/utils/safe_share.dart';
 import 'core/utils/share_reporter.dart';
 import 'features/capture/data/capture_state.dart';
@@ -38,11 +39,13 @@ class MyApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
     final appTheme = ref.watch(appThemeProvider);
 
-    return MaterialApp.router(
-      title: '如画 Lumira',
-      debugShowCheckedModeBanner: false,
-      theme: appTheme.toThemeData(),
-      routerConfig: router,
+    return SystemBrightnessWatcher(
+      child: MaterialApp.router(
+        title: '如画 Lumira',
+        debugShowCheckedModeBanner: false,
+        theme: appTheme.toThemeData(),
+        routerConfig: router,
+      ),
     );
   }
 }

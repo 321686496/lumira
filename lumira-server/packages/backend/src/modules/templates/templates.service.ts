@@ -471,6 +471,7 @@ const TEMPLATE_META_SELECT = {
   imagesJson: templates.imagesJson,
   shortDesc: templates.shortDesc,
   sortOrder: templates.sortOrder,
+  createdAt: templates.createdAt,
   updatedAt: templates.updatedAt,
 } as const;
 
@@ -503,6 +504,7 @@ export function rowToMeta(row: TemplateMetaRow): RemoteTemplateMeta {
     ambience: parseAmbience(row.ambienceJson),
     shortDesc: row.shortDesc ?? '',
     sortOrder: row.sortOrder,
+    createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
 }

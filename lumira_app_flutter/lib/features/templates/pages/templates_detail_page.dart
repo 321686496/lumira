@@ -2012,6 +2012,8 @@ class _MetaInfoCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final labels = AmbienceLabel.labelsFor(template.ambience);
+    final publishText = _formatDate(template.createdAt);
+    final hasPublish = publishText.isNotEmpty;
     final updatedText = _formatDate(template.updatedAt);
     final hasUpdatedAt = updatedText.isNotEmpty;
     final hasShortDesc = template.shortDesc.isNotEmpty;
@@ -2021,7 +2023,8 @@ class _MetaInfoCard extends ConsumerWidget {
     if (!hasShortDesc &&
         !hasLongDesc &&
         labels.isEmpty &&
-        !hasUpdatedAt) {
+        !hasUpdatedAt &&
+        !hasPublish) {
       return const SizedBox.shrink();
     }
 
@@ -2060,10 +2063,13 @@ class _MetaInfoCard extends ConsumerWidget {
                 const SizedBox(height: 12),
                 AmbienceBadges(ambience: template.ambience, tokens: tokens),
               ],
-              if (hasUpdatedAt) ...[
+              if (hasUpdatedAt || hasPublish) ...[
                 const SizedBox(height: 12),
                 Text(
-                  '更新于 $updatedText',
+                  [
+                    if (hasPublish) '发布于 $publishText',
+                    if (hasUpdatedAt) '更新于 $updatedText',
+                  ].join('  ·  '),
                   style: TextStyle(
                     fontSize: 11,
                     color: tokens.textTertiary,

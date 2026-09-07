@@ -97,6 +97,8 @@ export interface RemoteTemplateMeta {
   /** 短简介（≤10字） */
   shortDesc: string;
   sortOrder: number;
+  /** 模板发布时间（epoch 秒，详情页展示用；对应 templates.created_at） */
+  createdAt: number;
   updatedAt: number;
 }
 

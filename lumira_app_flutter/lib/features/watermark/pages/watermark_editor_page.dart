@@ -148,7 +148,7 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
       // 新建空白模板（模板模式 + templateId == null）。
       _template = _newBlankTemplate();
     } else {
-      _template = _deepCopyTemplate(source);
+      _template = _copyForEdit(source);
     }
   }
 
@@ -175,13 +175,19 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     );
   }
 
-  WatermarkTemplate _deepCopyTemplate(WatermarkTemplate source) {
+  /// 载入待编辑模板。
+  ///
+  /// - 编辑**自定义**模板：原地编辑（保留 id / 名称 / 创建时间），保存时按 id
+  ///   覆盖原记录，避免"编辑一次生成一个副本"。
+  /// - 编辑**预置**模板：另存为新的自定义模板（预置不可覆盖）。
+  WatermarkTemplate _copyForEdit(WatermarkTemplate source) {
+    final isCustom = source.type == WatermarkTemplateType.custom;
     final now = DateTime.now();
     return WatermarkTemplate(
-      id: 'custom_${now.millisecondsSinceEpoch}',
-      name: source.name.isEmpty ? '自定义水印' : '${source.name}（副本）',
+      id: isCustom ? source.id : 'custom_${now.millisecondsSinceEpoch}',
+      name: source.name.isEmpty ? '自定义水印' : source.name,
       type: WatermarkTemplateType.custom,
-      createdAt: now,
+      createdAt: isCustom ? source.createdAt : now,
       elements:
           source.elements.map((e) => e.copyWith(id: _nextId())).toList(),
       // WatermarkFrame 为不可变对象，可直接共享引用。
@@ -324,16 +330,29 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     final container = ProviderScope.containerOf(context, listen: false);
     try {
       final dao = await ref.read(watermarkDaoProvider.future);
+      // insert 使用 ConflictAlgorithm.replace：同 id 即原地覆盖（编辑自定义水印），
+      // 新 id 则追加（新建 / 编辑预置另存）。
       await dao.insert(_template);
-      ref.read(customWatermarksProvider.notifier).state = [
-        ...ref.read(customWatermarksProvider),
-        _template,
-      ];
+      ref.read(customWatermarksProvider.notifier).state =
+          _mergeSavedTemplate(ref.read(customWatermarksProvider), _template);
     } catch (e) {
       debugPrint('[watermark-editor] persist custom template failed: $e');
     }
     setWatermarkActive(container, _template.id);
     if (mounted) Navigator.of(context).maybePop();
+  }
+
+  /// 将保存后的模板并入自定义列表：同 id 原地替换（保持原位置），否则插入最前。
+  List<WatermarkTemplate> _mergeSavedTemplate(
+    List<WatermarkTemplate> current,
+    WatermarkTemplate saved,
+  ) {
+    final exists = current.any((t) => t.id == saved.id);
+    if (!exists) return [saved, ...current];
+    return [
+      for (final t in current)
+        if (t.id == saved.id) saved else t,
+    ];
   }
 
   Future<void> _saveApply() async {
@@ -559,9 +578,17 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     );
   }
 
+  /// 编辑器标题：应用模式「添加水印」；编辑已有模板「编辑水印」；
+  /// 新建空白模板（templateId 为空）显示「自定义水印」，明确创建入口身份。
+  String get _editorTitle {
+    if (_isApplyMode) return '添加水印';
+    if (widget.templateId != null) return '编辑水印';
+    return '自定义水印';
+  }
+
   Widget _buildNav(ThemeTokens tokens) {
     return LumiraNav(
-      title: _isApplyMode ? '添加水印' : '编辑水印',
+      title: _editorTitle,
       leading: GestureDetector(
         onTap: _cancel,
         behavior: HitTestBehavior.opaque,

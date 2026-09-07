@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -56,7 +56,7 @@ import '../features/profile/pages/profile_growth_page.dart';
 import '../features/profile/pages/growth_calendar_page.dart';
 import '../features/profile/pages/profile_notifications_page.dart';
 import '../features/profile/pages/profile_invite_page.dart';
-import '../features/profile/pages/profile_share_code_page.dart';
+import '../features/profile/pages/reward_center_page.dart';
 import '../features/profile/pages/profile_my_templates_page.dart';
 import '../features/profile/pages/profile_settings_page.dart';
 import '../features/profile/pages/profile_settings_cache_page.dart';
@@ -65,7 +65,6 @@ import '../features/profile/feedback/pages/feedback_page.dart';
 import '../features/profile/pages/profile_theme_page.dart';
 import '../features/points/pages/points_wallet_page.dart';
 import '../features/points/pages/points_transactions_page.dart';
-import '../features/redeem/pages/redeem_page.dart';
 import '../features/rewards/pages/rewards_page.dart';
 import '../features/scenes/pages/scenes_page.dart';
 import '../features/tags/pages/my_tags_page.dart';
@@ -542,11 +541,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             ProfileInvitePage(presetCode: state.queryParams['code']),
       ),
       GoRoute(
-        path: RouteNames.profileShareCode,
-        name: 'profileShareCode',
-        builder: (context, state) => const ProfileShareCodePage(),
-      ),
-      GoRoute(
         path: RouteNames.profileAcademy,
         name: 'profileAcademy',
         builder: (context, state) => const AcademyPage(),
@@ -685,7 +679,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.profileRedeem,
         name: 'profileRedeem',
-        builder: (context, state) => const RedeemPage(),
+        builder: (context, state) => const RewardCenterPage(),
       ),
 
       // === 积分 / 邀请 ===
