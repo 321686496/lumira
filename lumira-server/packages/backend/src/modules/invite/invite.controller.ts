@@ -31,6 +31,12 @@ export class InviteController {
     );
   }
 
+  // 新用户首次完成拍照/成片后调用：建立/结算邀请达成（幂等）
+  @Post('complete')
+  async complete(@DeviceId() deviceId: string) {
+    return this.inviteService.completeInvite(deviceId);
+  }
+
   @Get('stats')
   async getStats(@DeviceId() deviceId: string) {
     return this.inviteService.getInviteStats(deviceId);

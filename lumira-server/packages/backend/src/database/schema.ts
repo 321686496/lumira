@@ -1,4 +1,4 @@
-// lumira-server/packages/backend/src/database/schema.ts
+﻿// lumira-server/packages/backend/src/database/schema.ts
 
 import { sql } from 'drizzle-orm';
 import { mysqlTable, text, int, bigint, longtext, uniqueIndex, varchar, index } from 'drizzle-orm/mysql-core';
@@ -46,6 +46,9 @@ export const inviteRecords = mysqlTable('invite_records', {
   inviteCode: text('invite_code').notNull(),
   channel: text('channel').notNull().default('direct'),
   activatedAt: int('activated_at').notNull(),
+  // 邀请达成状态：pending=已绑定待新用户首次成片；success=新用户已首次成片，邀请成立
+  status: text('status').notNull().default('pending'),
+  achievedAt: int('achieved_at'),
   inviterIp: text('inviter_ip'),
   inviteeIp: text('invitee_ip'),
 });
