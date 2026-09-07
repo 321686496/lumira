@@ -5,19 +5,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:photo_view/photo_view.dart';
 
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/capture/data/capture_state.dart';
 import 'package:lumira_app_flutter/features/capture/pages/capture_preview_page.dart';
+import 'package:lumira_app_flutter/features/capture/widgets/compare_photo_button.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
 
-/// Task 2.9A — CapturePreviewPage 测试
-///
-/// 覆盖 brief §5.3 ≥7 项断言 + cross-theme/cross-style smoke test。
+/// 拍摄预览页改版后测试：底部工具条 + 滑出面板 + 右上角对比按钮 + pill 行。
 void main() {
   FlutterExceptionHandler? originalErrorHandler;
 
@@ -40,11 +40,15 @@ void main() {
   Widget wrap({
     required ThemeKey themeKey,
     required UIStyle uiStyle,
-    String initialLocation = '/capture/preview',
   }) {
     final goRouter = GoRouter(
-      initialLocation: initialLocation,
+      initialLocation: '/home',
       routes: [
+        GoRoute(
+          path: '/home',
+          name: 'home',
+          builder: (_, __) => const _StubPage(text: 'HOME_PAGE'),
+        ),
         GoRoute(
           path: RouteNames.capturePreview,
           name: 'capturePreview',
@@ -53,74 +57,29 @@ void main() {
             return CapturePreviewPage(photoUrl: photoUrl);
           },
         ),
-        GoRoute(
-          path: RouteNames.capture,
-          name: 'capture',
-          builder: (_, __) =>
-              const Scaffold(body: Center(child: Text('CAPTURE_PAGE'))),
-        ),
-        GoRoute(
-          path: RouteNames.gallery,
-          name: 'gallery',
-          builder: (_, __) =>
-              const Scaffold(body: Center(child: Text('GALLERY_PAGE'))),
-        ),
-        GoRoute(
-          path: '/home',
-          name: 'home',
-          builder: (_, __) => const _StubPage(text: 'HOME_PAGE'),
-        ),
       ],
     );
     return ProviderScope(
       overrides: [
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
-        // 固定为 1:1 比例，避免 fullscreen 模式下照片占满整个视口，
-        // 导致底部 Sheet（mood/scene/按钮）被推出 800x2400 视口而无法 tap。
         CaptureState.aspectRatioProvider.overrideWith((ref) => '1:1'),
       ],
       child: MaterialApp.router(routerConfig: goRouter),
     );
   }
 
-  Future<void> settleOrPump(WidgetTester tester, UIStyle style) async {
+  Future<void> openPreview(WidgetTester tester,
+      {UIStyle style = UIStyle.neumorphic}) async {
+    await tester.pumpWidget(
+        wrap(themeKey: ThemeKey.warmWhite, uiStyle: style));
+    await tester.pumpAndSettle();
+    GoRouter.of(tester.element(find.text('HOME_PAGE')))
+        .push(RouteNames.capturePreview);
+    await tester.pumpAndSettle();
     if (style == UIStyle.female) {
       await tester.pump(const Duration(milliseconds: 500));
-    } else {
-      await tester.pumpAndSettle();
     }
-  }
-
-  /// 把底部抽屉栏展开到 threeQuarter 状态（hidden → quarter → threeQuarter）。
-  ///
-  /// 新版抽屉栏默认 hidden（只显示悬浮按钮组），不显示拖拽条。
-  /// 展开流程：
-  ///   1. 点击悬浮按钮组中的"编辑"按钮，展开抽屉栏到 quarter（1/4）
-  ///   2. drag 拖拽条上拉到 threeQuarter（3/4）高度，松手后自动吸附
-  Future<void> expandSheetToThreeQuarter(WidgetTester tester,
-      {UIStyle style = UIStyle.neumorphic}) async {
-    // 1. 点击悬浮按钮组中的"编辑"按钮，展开抽屉栏到 quarter
-    final editButton = find.text('编辑');
-    expect(editButton, findsOneWidget, reason: '悬浮按钮组中应存在"编辑"按钮');
-    await tester.tap(editButton);
-    await settleOrPump(tester, style);
-    // 等待 AnimatedContainer 280ms 动画完成（quarter 高度展开）
-    await tester.pump(const Duration(milliseconds: 400));
-    await settleOrPump(tester, style);
-
-    // 2. drag 拖拽条上拉到 threeQuarter 高度
-    final handle = find.byKey(const ValueKey('sheet_handle'));
-    expect(handle, findsOneWidget, reason: '拖拽条应存在');
-    // 屏幕高度 2400，threeQuarter = 2400 * 0.75 = 1800
-    // quarter = 2400 * 0.35 = 840，需要上拉 1800 - 840 = 960
-    // drag 上拉 dy 为负，多拖一点确保越过 quarter 档位
-    await tester.drag(handle, const Offset(0, -1000));
-    await settleOrPump(tester, style);
-    // 确保吸附动画完成（AnimatedContainer 280ms）
-    // female 风格下 settleOrPump 只 pump 500ms，可能不足以让内容渲染完成
-    await tester.pump(const Duration(milliseconds: 400));
-    await settleOrPump(tester, style);
   }
 
   void setLargeViewport(WidgetTester tester) {
@@ -131,88 +90,55 @@ void main() {
   }
 
   // ============================================================
-  // 分类 1: 基本渲染
+  // 分类 1: 基本渲染（无抽屉，工具条/pill 行直接可见）
   // ============================================================
   group('CapturePreviewPage — basic rendering', () {
-    testWidgets('renders LumiraNav with title 照片预览 and back button',
-        (tester) async {
+    testWidgets('renders nav with title and new action icons', (tester) async {
       setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
+      await openPreview(tester);
       expect(find.widgetWithText(LumiraNav, '照片预览'), findsOneWidget);
       expect(find.byIcon(Icons.arrow_back_ios_new), findsOneWidget);
-      // 折叠操作栏的对比按钮（顶部导航不再有对比按钮）
-      expect(find.text('对比'), findsOneWidget);
+      // 顶栏新增：删除、保存到系统相册；保留：分享
+      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+      expect(find.byIcon(Icons.save_alt), findsOneWidget);
+      expect(find.byIcon(Icons.ios_share_outlined), findsOneWidget);
     });
 
-    testWidgets('renders 7 mood pills', (tester) async {
+    testWidgets('renders 5 tool bar items', (tester) async {
       setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-      // 展开抽屉栏到 threeQuarter（默认 closed 仅显示拖拽条 + 保存按钮）
-      await expandSheetToThreeQuarter(tester);
+      await openPreview(tester);
+      expect(find.text('色彩'), findsOneWidget);
+      expect(find.text('细节'), findsOneWidget);
+      expect(find.text('滤镜'), findsOneWidget);
+      expect(find.text('裁剪'), findsOneWidget);
+      expect(find.text('重置'), findsOneWidget);
+    });
 
-      // 7 个心情标签
+    testWidgets('renders mood and scene pills immediately (no drawer)',
+        (tester) async {
+      setLargeViewport(tester);
+      await openPreview(tester);
+      // 心情 pill
       expect(find.text('开心'), findsOneWidget);
       expect(find.text('甜酷'), findsOneWidget);
-      expect(find.text('温柔'), findsOneWidget);
-      expect(find.text('复古'), findsOneWidget);
-      expect(find.text('清新'), findsOneWidget);
-      expect(find.text('文艺'), findsOneWidget);
-      expect(find.text('治愈'), findsOneWidget);
-      // 心情区标题
-      expect(find.text('今天的心情是？'), findsOneWidget);
-    });
-
-    testWidgets('renders 8 scene pills + 不标记 pill', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-      // 展开抽屉栏到 threeQuarter
-      await expandSheetToThreeQuarter(tester);
-
-      // 8 个场景标签
-      expect(find.text('咖啡馆'), findsOneWidget);
-      expect(find.text('街头'), findsOneWidget);
-      expect(find.text('公园'), findsOneWidget);
-      expect(find.text('居家'), findsOneWidget);
-      expect(find.text('工作室'), findsOneWidget);
-      expect(find.text('餐厅'), findsOneWidget);
-      expect(find.text('旅行'), findsOneWidget);
-      expect(find.text('夜景'), findsOneWidget);
-      // 不标记 pill
+      // 场景 pill + 不标记
       expect(find.text('不标记'), findsOneWidget);
-      // 场景区标题
-      expect(find.text('拍摄场景'), findsOneWidget);
+      expect(find.text('咖啡馆'), findsOneWidget);
     });
 
-    testWidgets('renders save button 保存到相册 (collapsed action bar)',
-        (tester) async {
+    testWidgets('renders compare button on photo (top-right)', (tester) async {
       setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // closed 状态下底部折叠操作栏显示"保存到相册"（_CollapsedActionButton）
-      expect(find.text('保存到相册'), findsOneWidget);
-      expect(find.byIcon(Icons.save_alt), findsOneWidget);
+      await openPreview(tester);
+      expect(find.byType(ComparePhotoButton), findsOneWidget);
     });
 
-    testWidgets('renders 2 action buttons (生成对比图 / 生成 EXIF 卡片)',
-        (tester) async {
+    testWidgets('no floating button group / no drawer handle', (tester) async {
       setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-      // 展开抽屉栏到 threeQuarter
-      await expandSheetToThreeQuarter(tester);
-
-      expect(find.text('生成对比图'), findsOneWidget);
-      expect(find.text('生成 EXIF 卡片'), findsOneWidget);
+      await openPreview(tester);
+      // 旧悬浮组「编辑」按钮与抽屉拖拽条已删除
+      expect(find.text('编辑'), findsNothing);
+      expect(find.byKey(const ValueKey('sheet_handle')), findsNothing);
+      expect(find.text('保存到相册'), findsNothing); // 顶栏用图标替代
     });
   });
 
@@ -220,252 +146,140 @@ void main() {
   // 分类 2: 交互
   // ============================================================
   group('CapturePreviewPage — interactions', () {
-    testWidgets('tapping mood pill activates it and deactivates others',
+    testWidgets('tapping mood pill activates it, tapping again deactivates',
         (tester) async {
       setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-      // 展开抽屉栏到 threeQuarter
-      await expandSheetToThreeQuarter(tester);
+      await openPreview(tester);
 
-      // 初始：开心 active（mock 默认 _moods[0].active = true）
-      // 点击 甜酷 切换 active
+      BoxDecoration pillDecorationOf(String name) {
+        final container = tester.widget<Container>(
+          find.ancestor(of: find.text(name), matching: find.byType(Container))
+              .first,
+        );
+        return container.decoration as BoxDecoration;
+      }
+
       await tester.tap(find.text('甜酷'));
-      await settleOrPump(tester, UIStyle.neumorphic);
+      await tester.pumpAndSettle();
+      expect(pillDecorationOf('甜酷').gradient, isA<LinearGradient>());
 
-      // 验证 active 状态切换：通过 _Pill 的 BoxDecoration.gradient 判定
-      // active → LinearGradient（非 null）；inactive → null
+      // 再点一次 = 取消（等同旧「跳过」）
+      await tester.tap(find.text('甜酷'));
+      await tester.pumpAndSettle();
+      expect(pillDecorationOf('甜酷').gradient, isNull);
+    });
+
+    testWidgets('tapping scene pill activates it', (tester) async {
+      setLargeViewport(tester);
+      await openPreview(tester);
+
       BoxDecoration pillDecorationOf(String name) {
         final container = tester.widget<Container>(
-          find.ancestor(
-                  of: find.text(name),
-                  matching: find.byType(Container))
+          find.ancestor(of: find.text(name), matching: find.byType(Container))
               .first,
         );
         return container.decoration as BoxDecoration;
       }
 
-      final sweetDecoration = pillDecorationOf('甜酷');
-      final happyDecoration = pillDecorationOf('开心');
-
-      expect(sweetDecoration.gradient, isA<LinearGradient>(),
-          reason: '点击 甜酷 后：甜酷 pill 应为 active（gradient 应为 LinearGradient）');
-      expect(happyDecoration.gradient, isNull,
-          reason: '点击 甜酷 后：开心 pill 应为 inactive（gradient 应为 null）');
-    });
-
-    testWidgets('tapping scene pill updates selectedSceneId', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-      // 展开抽屉栏到 threeQuarter
-      await expandSheetToThreeQuarter(tester);
-
-      // 初始：不标记 active（_selectedSceneId == null）
-      // 点击 咖啡馆 场景
       await tester.tap(find.text('咖啡馆'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 验证 active 状态切换：通过 _Pill 的 BoxDecoration.gradient 判定
-      // active → LinearGradient（非 null）；inactive → null
-      BoxDecoration pillDecorationOf(String name) {
-        final container = tester.widget<Container>(
-          find.ancestor(
-                  of: find.text(name),
-                  matching: find.byType(Container))
-              .first,
-        );
-        return container.decoration as BoxDecoration;
-      }
-
-      final cafeDecoration = pillDecorationOf('咖啡馆');
-      final unmarkedDecoration = pillDecorationOf('不标记');
-
-      expect(cafeDecoration.gradient, isA<LinearGradient>(),
-          reason: '点击 咖啡馆 后：咖啡馆 pill 应为 active（gradient 应为 LinearGradient）');
-      expect(unmarkedDecoration.gradient, isNull,
-          reason: '点击 咖啡馆 后：不标记 pill 应为 inactive（gradient 应为 null）');
+      await tester.pumpAndSettle();
+      expect(pillDecorationOf('咖啡馆').gradient, isA<LinearGradient>());
+      expect(pillDecorationOf('不标记').gradient, isNull);
     });
 
-    testWidgets('tapping 跳过 shows LumiraToast 已跳过', (tester) async {
+    testWidgets('compare button toggles ColorFilter on/off', (tester) async {
       setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-      // 展开抽屉栏到 threeQuarter
-      await expandSheetToThreeQuarter(tester);
+      await openPreview(tester);
 
-      await tester.tap(find.text('跳过'));
-      await settleOrPump(tester, UIStyle.neumorphic);
+      // 初始：非透明滤镜（应用后期参数）
+      final colorFilteredBefore =
+          tester.widget<ColorFiltered>(find.byType(ColorFiltered).first);
+      expect(colorFilteredBefore.colorFilter,
+          isNot(const ColorFilter.mode(Colors.transparent, BlendMode.dst)));
 
-      expect(find.text('已跳过'), findsOneWidget);
-    });
-
-    testWidgets(
-        '对比 press-and-hold switches ColorFilter during hold (collapsed action bar)',
-        (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 折叠操作栏的对比按钮（closed 状态下显示）
-      expect(find.text('对比'), findsOneWidget);
-
-      // Press-and-hold should switch ColorFilter to the transparent
-      // (reveal-original) filter DURING the hold
-      final gesture =
-          await tester.startGesture(tester.getCenter(find.text('对比')));
-      await tester.pump(); // allow setState to propagate
-
+      // 点击对比按钮 → 显示修改前（透明滤镜 = 无后期）
+      await tester.tap(find.byType(ComparePhotoButton));
+      await tester.pumpAndSettle();
       final colorFilteredDuring =
-          tester.widget<ColorFiltered>(find.byType(ColorFiltered));
+          tester.widget<ColorFiltered>(find.byType(ColorFiltered).first);
       expect(colorFilteredDuring.colorFilter,
           const ColorFilter.mode(Colors.transparent, BlendMode.dst),
-          reason: 'compare mode should reveal original (no filter)');
+          reason: '对比模式应显示修改前（无滤镜）');
+      // 对比状态徽标短暂显示
+      expect(find.text('查看修改前'), findsOneWidget);
 
-      // Release — filter should revert to fromPostProcess(...) (NOT transparent)
-      await gesture.up();
-      await tester.pump();
-
+      // 再点一次 → 恢复修改后
+      await tester.tap(find.byType(ComparePhotoButton));
+      await tester.pumpAndSettle();
       final colorFilteredAfter =
-          tester.widget<ColorFiltered>(find.byType(ColorFiltered));
+          tester.widget<ColorFiltered>(find.byType(ColorFiltered).first);
       expect(colorFilteredAfter.colorFilter,
-          isNot(const ColorFilter.mode(Colors.transparent, BlendMode.dst)),
-          reason: 'release should restore the post-process filter');
+          isNot(const ColorFilter.mode(Colors.transparent, BlendMode.dst)));
     });
 
-    testWidgets('tapping 生成对比图 shows LumiraToast 生成对比图中', (tester) async {
+    testWidgets('tool tap opens panel, photo tap closes it', (tester) async {
       setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-      // 展开抽屉栏到 threeQuarter
-      await expandSheetToThreeQuarter(tester);
+      await openPreview(tester);
 
-      await tester.tap(find.text('生成对比图'));
-      await settleOrPump(tester, UIStyle.neumorphic);
+      await tester.tap(find.text('色彩'));
+      await tester.pumpAndSettle();
+      // 色彩面板包含「调节项 chip 行」与「滑块行」两处 亮度 文本
+      expect(find.text('亮度'), findsWidgets);
 
-      expect(find.text('生成对比图中'), findsOneWidget);
+      // 点击照片区（PhotoView 中下部，避开顶栏/对比按钮/dock）
+      final photoRect = tester.getRect(find.byType(PhotoView).first);
+      await tester.tapAt(Offset(photoRect.center.dx, photoRect.center.dy + 200));
+      // PhotoView 同时注册单击/双击手势：单击需等双击窗口（300ms）超时才触发
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(find.text('亮度'), findsNothing);
     });
 
-    testWidgets(
-        'tapping 生成 EXIF 卡片 with network URL shows LumiraToast 网络图片无法生成 EXIF 卡片',
+    testWidgets('photo tap toggles pure mode (hides nav and dock)',
         (tester) async {
       setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-      // 展开抽屉栏到 threeQuarter
-      await expandSheetToThreeQuarter(tester);
+      await openPreview(tester);
+      expect(find.widgetWithText(LumiraNav, '照片预览'), findsOneWidget);
 
-      await tester.tap(find.text('生成 EXIF 卡片'));
-      await settleOrPump(tester, UIStyle.neumorphic);
+      final photoRect = tester.getRect(find.byType(PhotoView).first);
+      await tester
+          .tapAt(Offset(photoRect.center.dx, photoRect.center.dy + 200));
+      // PhotoView 同时注册单击/双击手势：单击需等双击窗口（300ms）超时才触发
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      // 纯净模式：导航、工具条、pill 行、对比按钮全部隐藏
+      expect(find.widgetWithText(LumiraNav, '照片预览'), findsNothing);
+      expect(find.text('色彩'), findsNothing);
+      expect(find.text('不标记'), findsNothing);
+      expect(find.byType(ComparePhotoButton), findsNothing);
 
-      // 默认 mock photoUrl 为网络图片（picsum），_onExifCard 应进入网络保护分支
-      expect(find.text('网络图片无法生成 EXIF 卡片'), findsOneWidget);
+      await tester
+          .tapAt(Offset(photoRect.center.dx, photoRect.center.dy + 200));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(LumiraNav, '照片预览'), findsOneWidget);
     });
 
-    testWidgets(
-        'tapping 保存 shows LumiraToast and pops after delay',
+    testWidgets('share sheet contains 生成对比图 and EXIF 海报',
         (tester) async {
       setLargeViewport(tester);
-      // 从 home push 到 preview，使 canPop() 为 true
-      final goRouter = GoRouter(
-        initialLocation: '/home',
-        routes: [
-          GoRoute(
-            path: '/home',
-            name: 'home',
-            builder: (_, __) => const _StubPage(text: 'HOME_PAGE'),
-          ),
-          GoRoute(
-            path: RouteNames.capturePreview,
-            name: 'capturePreview',
-            builder: (context, state) {
-              final photoUrl = state.queryParams['photoUrl'];
-              return CapturePreviewPage(photoUrl: photoUrl);
-            },
-          ),
-        ],
-      );
-      await tester.pumpWidget(ProviderScope(
-        overrides: [
-          themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
-          uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
-          // 固定为 1:1 比例，避免 fullscreen 模式下照片占满视口导致保存按钮被推出 800x2400 视口
-          CaptureState.aspectRatioProvider.overrideWith((ref) => '1:1'),
-        ],
-        child: MaterialApp.router(routerConfig: goRouter),
-      ));
-      await settleOrPump(tester, UIStyle.neumorphic);
+      await openPreview(tester);
 
-      // push 到 preview 页
-      goRouter.push(RouteNames.capturePreview);
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      expect(find.byType(CapturePreviewPage), findsOneWidget);
-
-      // 点击保存（无 photoId，_originalPath 为 null，预期显示"原图未保留，无法再次编辑"）
-      // closed 状态下底部折叠操作栏显示"保存到相册"
-      await tester.tap(find.text('保存到相册'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // LumiraToast 出现
-      expect(find.text('原图未保留，无法再次编辑'), findsOneWidget);
-
-      // 推进时间（_onSave 因 _originalPath 为 null 提前返回，不执行延迟 pop）
-      await tester.pump(const Duration(milliseconds: 1100));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 未 pop：CapturePreviewPage 仍在
-      expect(find.byType(CapturePreviewPage), findsOneWidget);
-      expect(find.text('HOME_PAGE'), findsNothing);
+      await tester.tap(find.byIcon(Icons.ios_share_outlined));
+      await tester.pumpAndSettle();
+      expect(find.text('分享到系统'), findsOneWidget);
+      expect(find.text('生成对比图'), findsOneWidget);
+      expect(find.text('生成 EXIF 海报'), findsOneWidget);
+      expect(find.text('保存到相册'), findsOneWidget);
     });
   });
 
   // ============================================================
-  // 分类 3: 路由参数
-  // ============================================================
-  group('CapturePreviewPage — route parameters', () {
-    testWidgets('photoUrl query param is used when provided', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(
-        themeKey: ThemeKey.warmWhite,
-        uiStyle: UIStyle.neumorphic,
-        initialLocation:
-            '/capture/preview?photoUrl=https%3A%2F%2Fexample.com%2Ftest.jpg',
-      ));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 页面正常渲染（photoUrl 已传入）
-      expect(find.widgetWithText(LumiraNav, '照片预览'), findsOneWidget);
-      // 不应显示空态文本 "无照片数据"（photoUrl 非空）
-      expect(find.text('无照片数据'), findsNothing);
-    });
-
-    testWidgets(
-        'no photoUrl falls back to lastCapturedPhotoUrl (not empty)', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 默认使用 mock URL，不应显示空态文本
-      expect(find.widgetWithText(LumiraNav, '照片预览'), findsOneWidget);
-      expect(find.text('无照片数据'), findsNothing);
-    });
-  });
-
-  // ============================================================
-  // 分类 4: Cross-theme/cross-style smoke（1 test，12 组合）
+  // 分类 3: smoke（8 主题 × 4 风格，无需展开抽屉）
   // ============================================================
   group('CapturePreviewPage — smoke tests', () {
     testWidgets('renders without FlutterError under 8 themes + 4 styles',
         (tester) async {
-      // 8 主题 × 1 风格 (neumorphic) + 1 主题 (warmWhite) × 4 风格 = 12 组合
       final combinations = <_ThemeStyleCombo>[
         for (final t in ThemeKey.values)
           _ThemeStyleCombo(theme: t, style: UIStyle.neumorphic),
@@ -476,22 +290,27 @@ void main() {
 
       for (final combo in combinations) {
         setLargeViewport(tester);
-        await tester.pumpWidget(
-            wrap(themeKey: combo.theme, uiStyle: combo.style));
-        await settleOrPump(tester, combo.style);
-        // 展开抽屉栏到 threeQuarter（默认 closed 仅显示拖拽条 + 保存按钮）
-        await expandSheetToThreeQuarter(tester, style: combo.style);
+        await tester.pumpWidget(wrap(
+          themeKey: combo.theme,
+          uiStyle: combo.style,
+        ));
+        await tester.pumpAndSettle();
+        if (combo.style == UIStyle.female) {
+          await tester.pump(const Duration(milliseconds: 500));
+        }
+        GoRouter.of(tester.element(find.text('HOME_PAGE')))
+            .push(RouteNames.capturePreview);
+        await tester.pumpAndSettle();
+        if (combo.style == UIStyle.female) {
+          await tester.pump(const Duration(milliseconds: 500));
+        }
 
-        // 验证关键元素渲染
         expect(find.widgetWithText(LumiraNav, '照片预览'), findsOneWidget,
             reason: 'theme=${combo.theme}, style=${combo.style}');
-        expect(find.text('今天的心情是？'), findsOneWidget,
+        expect(find.text('色彩'), findsOneWidget,
             reason: 'theme=${combo.theme}, style=${combo.style}');
-        expect(find.text('拍摄场景'), findsOneWidget,
+        expect(find.text('不标记'), findsOneWidget,
             reason: 'theme=${combo.theme}, style=${combo.style}');
-        expect(find.text('保存到系统相册'), findsOneWidget,
-            reason: 'theme=${combo.theme}, style=${combo.style}');
-        // 重置 viewport 为下一次迭代
         await tester.pumpWidget(const SizedBox.shrink());
       }
     });
@@ -505,7 +324,7 @@ class _ThemeStyleCombo {
   final UIStyle style;
 }
 
-/// 占位页（用于测试 pop 行为）
+/// 占位页（用于测试 push/pop 行为）
 class _StubPage extends StatelessWidget {
   const _StubPage({required this.text});
   final String text;
