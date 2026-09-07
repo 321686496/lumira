@@ -5,7 +5,7 @@ import '../../../core/theme/theme_tokens.dart';
 /// 共享后处理滑块行：细线轨道（3px）+ 圆形把手（16px，命中区域 24x24）+ 品牌色填充
 /// 用 LayoutBuilder + Stack 实现，支持拖拽（onPanStart + onPanUpdate）。
 ///
-/// 拍摄页（ParamPanel）与预览/后期修图页（PreviewEditPanel）共用此组件，统一两处观感。
+/// 拍摄页（ParamPanel）与预览/后期修图页（PreviewEditToolbar）共用此组件，统一两处观感。
 /// 修复要点：使用绝对位置（details.localPosition.dx）而非增量（delta.dx），
 /// 避免多次 pan 事件共用过时 t 导致拖拽不灵敏；移除重复的轨道 GestureDetector。
 ///
