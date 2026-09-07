@@ -6,7 +6,7 @@ import 'post_process_adjust_panel.dart';
 /// 共享色彩编辑 Tab（受控纯展示）。
 ///
 /// 接收全量 [PostProcess]，UI 只读字段并通过 [onChanged] 回调新的全量值。
-/// 全量↔增量换算由上层负责（PreviewEditPanel 用 deltaOf，ParamPanel 用
+/// 全量↔增量换算由上层负责（PreviewEditToolbar 用 deltaOf，ParamPanel 用
 /// CaptureState.updatePostProcess），本组件不感知 baked 基线。
 class PostProcessColorTab extends StatelessWidget {
   final PostProcess full;
