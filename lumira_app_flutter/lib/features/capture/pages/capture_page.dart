@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data' show ByteData, Uint8List;
-import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByteFormat, ImageFilter, Paint, PictureRecorder, Offset, ImmutableBuffer, ImageDescriptor, PixelFormat;
+import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByteFormat, ImageFilter, Paint, PictureRecorder, Offset, ImmutableBuffer, ImageDescriptor, PixelFormat, instantiateImageCodec;
 
 import 'package:flutter/foundation.dart'
     show compute, defaultTargetPlatform, kDebugMode;
@@ -983,7 +983,30 @@ class _CapturePageState extends ConsumerState<CapturePage>
         _expectingEarlyFrame = false;
       }
 
-      // 后处理异步执行，不阻塞下次 capture 调用（支持连拍）
+      // 【抗手抖-单帧选帧】对成片做清晰度评分（拉普拉斯方差），用于角标渐进预览和
+      // 选帧诊断。防糊由系统层解决（OHOS 8.2MP 档位 + HIGH_QUALITY，project_memory
+      // 硬约束），应用层不据此叠加锐化去模糊。
+      // 【OHOS 性能优化】用主 isolate 的 dart:ui（OS 加速解码）把该帧降采样到
+      // 240px rawRgba 传给 worker 直接评分，避免 worker 纯 Dart 全量解码
+      // 4000px JPEG（每帧 0.3-0.8s，是 OHOS 变慢的主因）。
+      final swScore = Stopwatch()..start();
+      final smallFrames = await _decodeBurstThumbnails([result.filePath]);
+      final scoreResult = await CaptureWorker.instance.scoreFrames(
+        [result.filePath],
+        smallRgba: smallFrames?.rgbaList,
+        smallW: smallFrames?.widthList,
+        smallH: smallFrames?.heightList,
+      );
+      debugPrint('[perf] scoreFrames: ${swScore.elapsedMilliseconds}ms '
+          'score=${scoreResult.bestScore}');
+
+      // 渐进显示：立即把该帧的原图预览放进角标（后处理完成后会替换为成品）
+      if (scoreResult.previewBytes != null) {
+        ref.read(captureThumbnailProvider.notifier)
+            .setQuickResult(scoreResult.previewBytes!);
+      }
+
+      // 仅选中的一帧进入后处理队列（后处理异步执行，不阻塞下次 capture 调用）
       final postProcess = ref.read(CaptureState.effectivePostProcessProvider);
       debugPrint('[capture] postProcess for isolate: '
           'brightness=${postProcess.color.brightness}, '
@@ -1021,6 +1044,49 @@ class _CapturePageState extends ConsumerState<CapturePage>
         duration: const Duration(seconds: 2),
       );
     }
+  }
+
+  /// 连拍帧的 240px 降采样 RGBA 小图（供 worker 评分，避免 worker 纯 Dart 全量解码）。
+  static const int _kBurstThumbDim = 240;
+
+  /// 用 dart:ui（OS 加速解码）把连拍帧降到 [_kBurstThumbDim]px 的 rawRgba。
+  /// 返回 null 表示全部解码失败（调用方会回退到 worker 内自行读文件解码）。
+  /// 返回的字节是"紧凑拷贝"（offset 0、长度精确），保证跨 isolate 传递后
+  /// img.Image.fromBytes(bytes: rgba.buffer) 能正确读取。
+  Future<_BurstThumbnails?> _decodeBurstThumbnails(List<String> paths) async {
+    final sw = Stopwatch()..start();
+    final rgbaList = <Uint8List>[];
+    final widthList = <int>[];
+    final heightList = <int>[];
+    for (final p in paths) {
+      try {
+        final bytes = await File(p).readAsBytes();
+        final codec = await ui.instantiateImageCodec(
+          bytes,
+          targetWidth: _kBurstThumbDim,
+          targetHeight: _kBurstThumbDim,
+        );
+        final frame = await codec.getNextFrame();
+        final image = frame.image;
+        final w = image.width, h = image.height;
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+        codec.dispose();
+        image.dispose();
+        if (byteData == null) throw StateError('toByteData null');
+        rgbaList.add(Uint8List.fromList(
+          byteData.buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes),
+        ));
+        widthList.add(w);
+        heightList.add(h);
+        debugPrint('[capture] burst thumb $p decoded ${w}x${h}, '
+            'rgbaLen=${byteData.lengthInBytes} (expect ${w * h * 4}) target=$_kBurstThumbDim');
+      } catch (e) {
+        debugPrint('[capture] decode burst thumb $p failed: $e');
+      }
+    }
+    debugPrint('[perf] decodeBurstThumbnails x${rgbaList.length}: ${sw.elapsedMilliseconds}ms');
+    if (rgbaList.isEmpty || rgbaList.length != paths.length) return null;
+    return _BurstThumbnails(rgbaList, widthList, heightList);
   }
 
   /// 拍照后处理队列（串行消费，避免 isolate 并发创建开销和内存峰值）
@@ -4305,7 +4371,7 @@ class _CaptureProcessParams {
     required this.isPortrait,
     required this.isFront,
     required this.postProcess,
-    required this.maxDim,
+required this.maxDim,
     required this.decodeDim,
     this.isWysiwyg = false,
   });
@@ -4335,6 +4401,14 @@ class _CaptureProcessParams {
   /// true 时后处理**不**做内容自适应白平衡/ISP 校色，仅叠加与取景器相同的
   /// 用户色彩矩阵（见 _applyColorMatrixOnGpu）。
   final bool isWysiwyg;
+}
+
+/// 连拍帧的 240px 降采样 RGBA 小图集合（并行列表，与路径一一对应）。
+class _BurstThumbnails {
+  const _BurstThumbnails(this.rgbaList, this.widthList, this.heightList);
+  final List<Uint8List> rgbaList;
+  final List<int> widthList;
+  final List<int> heightList;
 }
 
 /// 后处理输出/解码尺寸来源说明：
@@ -4805,7 +4879,7 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
         'toByteData(rawRgba): ${swRgba.elapsedMilliseconds}ms (out=$iOutW x $iOutH)');
     if (byteData == null) return null;
 
-    // 拉腿：成片方向对齐/裁剪后，在导出 rawRgba 前做字节级纵向拉伸，与取景器
+// 拉腿：成片方向对齐/裁剪后，在导出 rawRgba 前做字节级纵向拉伸，与取景器
     // 实时预览（LegStretchPreviewOverlay）一致。此前拍摄管线一直忽略 legStretch
     // （实时预览显示拉长但成片完全没有拉腿效果），此处补齐使成片 WYSIWYG。
     // 注意：函数内已有 double 型 outW/outH（cover 缩放用），此处用 stretchW/H
@@ -4832,7 +4906,7 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
       width: stretchW,
       height: stretchH,
       outputPath: params.inputPath,
-      // 拍摄成片锐化严格使用用户/模板的真实 sharpen 值，禁止代码层强制最小锐化。
+// 拍摄成片锐化严格使用用户/模板的真实 sharpen 值，禁止代码层强制最小锐化。
       // 防糊由系统层解决：OHOS 拍照档位 8.2MP + PhotoQualityPrioritization.HIGH_QUALITY
       //（project_memory 硬约束），应用层不得再叠加锐化补偿。
       sharpen: params.postProcess.sharpen,

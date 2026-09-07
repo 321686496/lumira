@@ -68,10 +68,12 @@ class CaptureThumbnailNotifier extends StateNotifier<CaptureThumbnailState> {
   }
 
   void setFinalResult(String path, String photoId) {
-    state = state.copyWith(
+    // 清空 quickBytes：角标组件优先显示 quickBytes，不清空会导致成品图永远被预览遮挡
+    state = CaptureThumbnailState(
       status: CaptureThumbnailStatus.final_,
       finalPath: path,
       photoId: photoId,
+      captureSeq: state.captureSeq,
     );
   }
 
