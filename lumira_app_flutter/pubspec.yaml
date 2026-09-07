@@ -1,0 +1,208 @@
+name: lumira_app_flutter
+description: 如画 Lumira - 摄影辅助应用（Flutter 版）
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  # 调整：实际环境为 Harmony 兼容 Flutter 3.7.12 / Dart 2.19.6（brief 中 >=3.0.0 <4.0.0 不兼容）
+  sdk: '>=2.19.6 <3.0.0'
+  flutter: '>=3.7.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # iOS 风格图标（CupertinoIcons 字体）
+  cupertino_icons: ^1.0.6
+
+  # 状态管理（brief ^2.5.1 → 调整为兼容 Dart 2.19 的版本）
+  # Fix: 钉定到 2.3.6，避免解析到 2.4.10（其硬依赖 riverpod 2.5.0，2.5.0 使用 @mustBeOverridden 注解，
+  # 需 meta 1.12.0+，与 Harmony 3.7 / Dart 2.19.6 必需的 meta 1.8.0 冲突）
+  flutter_riverpod: 2.3.6
+
+  # 路由（brief ^14.6.1 → 调整为兼容 Dart 2.19 的版本，14.x 需 Dart 3）
+  go_router: ^6.5.7
+
+  # 相机（brief ^2.5.0 → 调整为兼容 Dart 2.19 的版本，2.x 需 Dart 3）
+  # Fix: 改用 CPF-Flutter Harmony 适配版本 camerawesome_ohos 1.0.2（对应原库名 camerawesome 1.4.0）
+  # 来源：https://gitcode.com/CPF-Flutter/docs/blob/main/ThirdpartyLibrarites.md 第 81 行
+  # pub.dev 版本无 ohos 实现，导致 Harmony 端取景器一直转圈；改用 gitcode fork 的 ohos 子目录包
+# Task 0: 从 gitcode fork 本地化为 path 依赖（便于扩展原生白平衡；flutter pub clear 不清本地版）
+  camerawesome_ohos:
+    path: packages/camerawesome_ohos
+
+  # 原版 camerawesome（iOS/Android 用，包名不同于 camerawesome_ohos）
+  # Fix(ios WYSIWYG): 原版 1.4.0 预览 cover 算法有 bug（竖屏纹理永远按高度适配），
+  # 且 iOS 预览流选 16:9 视频 preset 与 4:3 成片视场不一致。改为自建 vendor 包修复，
+  # 见 packages/camerawesome（与原版同版本号，仅打 iOS/预览适配补丁）。
+  camerawesome:
+    path: packages/camerawesome
+
+  # 权限（brief ^12.0.1 → CPF-Flutter 3.7 Harmony 适配版本 10.3.2，11+ 需 Dart 3；未回合上游，见 dependency_overrides）
+  permission_handler: 10.3.2  # Harmony 3.7 适配版本 (CPF-Flutter)
+
+  # 文件选择：iOS/Android 用 file_picker（fork 根包，Dart 2.19 兼容版，见 dependency_overrides）
+  # OHOS 用同 fork 的 ohos 子目录 file_picker_ohos 适配版
+  # (两个包 API 完全一致，通过 FilePickerService 包装器按平台运行时分发)
+  file_picker: 8.0.6
+  file_picker_ohos:
+    git:
+      url: https://gitcode.com/CPF-Flutter/fluttertpc_file_picker.git
+      ref: master
+      path: ohos
+  path_provider: ^2.0.14
+
+  # 本地数据库
+  # CPF-Flutter 鸿蒙适配版 sqflite 2.2.8+4（对应 Flutter 3.7）
+  # 来源：https://gitcode.com/CPF-Flutter/docs/blob/main/ThirdpartyLibrarites.md 第 49 行
+  # pub.dev 版本无 ohos 原生插件，FFI 方案因 .so 重定位类型不兼容已废弃
+  sqflite:
+    git:
+      url: https://gitcode.com/CPF-Flutter/flutter_sqflite.git
+      ref: master
+      path: sqflite
+
+  # 图像处理
+  image: ^4.0.16
+
+  # 系统相机/相册（调用系统能力拍照选图，非 app 内拍摄页）
+  # 已是 transitive 依赖（pubspec.lock 1.0.4），此处提升为直接依赖
+  # OHOS 适配版见 https://gitcode.com/openharmony-sig/flutter_packages/packages/image_picker
+  image_picker: ^1.0.4
+
+  # 保存相册（brief ^3.0.6 → CPF-Flutter 3.7 Harmony 适配版本 3.0.6；已回合上游，使用 pub.dev；精确锁定避免 3.0.7+ 依赖 mime 需 Dart 3.2+）
+  saver_gallery: '3.0.6'  # Harmony 3.7 适配版本 (CPF-Flutter)
+
+  # 屏幕常亮（CPF-Flutter 3.7 Harmony 适配版本 1.1.6；未回合上游，见 dependency_overrides）
+  wakelock_plus: 1.1.6  # Harmony 3.7 适配版本 (CPF-Flutter)
+
+  # 屏幕亮度控制（补光功能：开启时调至最高亮度，关闭时恢复原值）
+  # CPF-Flutter 3.7 Harmony 适配版本 0.0.5；未回合上游，见 dependency_overrides
+  screen: 0.0.5  # Harmony 3.7 适配版本 (CPF-Flutter)
+
+  # 加速度传感器（水平仪功能：Android/iOS 用 sensors_plus，鸿蒙走自研 EventChannel 通道）
+  # 4.0.2：min Dart 2.18，兼容项目 Dart 2.19.6；5.0+ 需 Dart 3。无 ohos 原生实现，
+  # 由 LevelSensorService 按平台运行时分发，OHOS 不调用本包不会 MissingPluginException
+  sensors_plus: 4.0.2
+
+  # 启动屏（brief ^2.4.7 → CPF-Flutter 3.7 Harmony 适配版本 2.3.13；未回合上游，见 dependency_overrides）
+  flutter_native_splash: 2.3.13  # Harmony 3.7 适配版本 (CPF-Flutter)
+
+  # 分享（brief ^12.0.1 → 调整为 ^7.2.2，7.x 兼容 Dart 2.18+，8+ 需 Dart 3.3+）
+  share_plus: ^7.2.2
+
+  # URL 深链接收（仅 Android/iOS 注册原生实现；OHOS 走自研 MethodChannel，见 ohos DeepLinkPlugin）
+  uni_links: ^0.5.1
+
+  # 设备信息（brief ^12.3.0 → CPF-Flutter 3.7 Harmony 适配版本 9.1.2；未回合上游，见 dependency_overrides）
+  device_info_plus: 9.1.2  # Harmony 3.7 适配版本 (CPF-Flutter)
+
+  # 打开外部链接/邮件（mailto 反馈用）。用 pub.dev 版（兼容 Dart 2.19）。
+  # OHOS 端无原生实现时 launchUrl 抛异常，业务层已做 try/catch + 复制兜底。
+  url_launcher: 6.1.11
+
+  # 工具（brief path ^1.9.0 / intl ^0.19.0 → 调整为兼容 Dart 2.19 的版本）
+  path: ^1.8.2
+  intl: ^0.18.0
+
+  # SVG 渲染（brief ^2.0.0 → 调整为兼容 Dart 2.19 的版本，2.x 需 Dart 3）
+  # 用于渲染如画品牌 logo（symbol / wordmark / primary 等矢量资源）
+  flutter_svg: ^1.1.6
+
+  # HTTP 客户端（4.x 末版兼容 Dart 2.19；5.x 需 Dart 3）
+  # 纯 Dart 库，无原生代码，鸿蒙无需 fork
+  dio: 4.0.6
+
+  # 二维码渲染（纯 Dart，Dart 2.19 兼容）
+  qr_flutter: ^4.1.0
+  # 扫码（本地化 fork：CPF-Flutter 鸿蒙适配，源库 qr_code_scanner 0.7.0）
+  # 已合并 android/ios/ohos 三端实现到 packages/qr_code_scanner
+  qr_code_scanner:
+    path: packages/qr_code_scanner
+  # 二维码解码（纯 Dart，无原生插件；用于「从相册选择二维码」识别）
+  # 纯 Dart 实现，兼容 OHOS / Dart 2.19.6，web 端亦可用
+  zxing2: 0.2.0
+  photo_view: 0.14.0
+  # 瀑布流懒加载（Sliver 级，只构建视口+cacheExtent 内卡片，纯 Dart 无原生代码）。
+  # 0.6.x 兼容本项目 Dart 2.19.6 / Flutter 3.7.12；0.7.0 需 Dart 3，故锁 0.6.2。
+  flutter_staggered_grid_view: 0.6.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  # brief ^3.0.0 → 调整为兼容 Dart 2.19 的版本，3.x 需 Dart 3
+  flutter_lints: ^2.0.1
+  # brief ^1.0.3 → 调整为兼容 Dart 2.19 的版本，1.x 需 Dart 3
+  mocktail: ^0.3.0
+  # sqflite 测试支持（in-memory 数据库，无需真实设备）
+  # 仅用于桌面测试环境，HarmonyOS 生产环境使用 CPF-Flutter sqflite 原生插件
+  # 必须与 sqflite 同源（git），否则 pub 会因 sqflite_common 来源冲突报错
+  sqflite_common_ffi:
+    git:
+      url: https://gitcode.com/CPF-Flutter/flutter_sqflite.git
+      ref: master
+      path: sqflite_common_ffi
+
+# Harmony 3.7 适配版本依赖覆盖
+# 来源：https://gitcode.com/CPF-Flutter/docs/blob/main/ThirdpartyLibrarites.md （3.7 推荐版本列）
+# 5 个依赖未回合上游，需通过 gitcode fork 拉取；saver_gallery 已回合上游，使用 pub.dev
+# path / meta 提升至 fork 所需版本（flutter_test SDK 锁定 path 1.8.2 / meta 1.8.0，API 兼容）
+# mime / path_provider / uuid 锁定为 Dart 2.19 兼容版本：saver_gallery 3.0.6 的 ^1.0.5 / ^2.1.3 / ^4.4.0 需 Dart 3+；
+# 1.0.4 / 2.0.14 / 4.2.2 为同主版本下兼容 Dart 2.19 的最新版本，API 稳定，详见 Fix Report
+dependency_overrides:
+  # Task 1.1 注释说明 flutter_test SDK 锁定 path 1.8.2 / meta 1.8.0（API 兼容）
+  # 但 ^1.8.3 / ^1.9.1 caret 约束会解析到 path 1.9.1 / meta 1.19.0（需 Dart 3+），
+  # 在 Dart 2.19.6 上导致 flutter_test 编译失败。
+  # Task 1.2 修正：改为精确版本钉定，与 SDK 锁定值一致。
+  path: 1.8.2
+  meta: 1.8.0
+  js: ^0.6.7
+  mime: '1.0.4'
+  path_provider: '2.0.14'
+  uuid: '4.2.2'
+  screen:
+    git:
+      url: https://gitcode.com/CPF-Flutter/fluttertpc_screen.git
+      ref: master
+  permission_handler:
+    git:
+      url: https://gitcode.com/CPF-Flutter/flutter_permission_handler.git
+      ref: master
+      path: permission_handler
+  # file_picker fork 根包（iOS/Android/Web/MacOS/Windows/Linux 兼容 Dart 2.19）
+  # OHOS 通过同 fork 的 ohos 子目录 file_picker_ohos 提供，业务代码用 FilePickerService 分发
+  file_picker:
+    git:
+      url: https://gitcode.com/CPF-Flutter/fluttertpc_file_picker.git
+      ref: master
+  device_info_plus:
+    git:
+      url: https://gitcode.com/CPF-Flutter/flutter_plus_plugins.git
+      ref: master
+      path: packages/device_info_plus/device_info_plus
+  flutter_native_splash:
+    git:
+      url: https://gitcode.com/CPF-Flutter/fluttertpc_flutter_native_splash.git
+      ref: master
+  wakelock_plus:
+    git:
+      url: https://gitcode.com/CPF-Flutter/fluttertpc_wakelock_plus.git
+      ref: master
+      path: wakelock_plus
+
+flutter:
+  uses-material-design: true
+
+  shaders:
+    - assets/shaders/skin_smooth.frag
+    - assets/shaders/preview_beauty.frag
+    - assets/shaders/edit_detail_effects.frag
+
+  assets:
+    - assets/images/
+    - assets/images/templates/
+    - assets/images/silhouettes/
+    - assets/images/scenes/
+    - assets/images/academy/
+    - assets/images/tutorials/
+    - assets/logos/
