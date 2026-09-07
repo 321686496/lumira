@@ -3,6 +3,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ScenesService } from './scenes.service';
 import { DatabaseService } from '../../database/database.service';
 import { UsageService } from '../usage/usage.service';
+import { RedisService } from '../../common/redis/redis.service';
 
 /** insert/update 的 camelCase 字段名 -> 对应 DB snake_case 列名（select 结果按 DB 列名返回） */
 const DB_KEY_MAP: Record<string, string> = {
@@ -117,7 +118,12 @@ describe('ScenesService', () => {
     const usageService = {
       stats: jest.fn().mockResolvedValue({ items: statsItems }),
     } as unknown as UsageService;
-    return { service: new ScenesService(dbService, usageService), fake, usageService };
+    const redisService = {
+      getJson: jest.fn(async () => null),
+      setJson: jest.fn(async () => undefined),
+      delByPattern: jest.fn(async () => undefined),
+    } as unknown as RedisService;
+    return { service: new ScenesService(dbService, usageService, redisService), fake, usageService };
   }
 
   const activeScene = (id: string, over: Record<string, unknown> = {}) => ({

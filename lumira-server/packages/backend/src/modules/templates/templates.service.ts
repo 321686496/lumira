@@ -1,7 +1,7 @@
 // lumira-server/packages/backend/src/modules/templates/templates.service.ts
 
 import { Injectable, NotFoundException, BadRequestException, ConflictException, HttpException, HttpStatus } from '@nestjs/common';
-import { eq, and, or, gt, asc, desc, sql, inArray, type SQL } from 'drizzle-orm';
+import { eq, and, or, asc, desc, sql, inArray, type SQL } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { ownedTemplates, templatePrices, templates, templateCategories } from '../../database/schema';
 import { PointsService } from '../points/points.service';
@@ -116,11 +116,12 @@ export class TemplatesService {
     if (cached !== null) return cached;
 
     const db = this.dbService.getDb();
-    const rows = await db.select().from(templates)
+    // 列裁剪：只投影 meta 所需列，不把 5 段 longtext 从 MySQL 拉回内存（见 TEMPLATE_META_SELECT）
+    const rows = await db.select(TEMPLATE_META_SELECT).from(templates)
       .where(eq(templates.isActive, 1))
       .orderBy(asc(templates.sortOrder), desc(templates.updatedAt));
 
-    // 全站热度聚合（仅在 base 重建时执行一次）
+    // 全站热度聚合（仅在 base 重建时执行一次；命中 usageStats 30s 缓存则零 DB）
     const stats = await this.usageService.stats('template');
     const statsMap = new Map(stats.items.map((i) => [i.itemId, i]));
 
@@ -144,7 +145,8 @@ export class TemplatesService {
       };
     });
 
-    await this.redisService.setJson(key, base, 120);
+    // 重建成本已因列裁剪 + 热度缓存大幅下降，TTL 从 120s 提升到 300s 降低重建频率
+    await this.redisService.setJson(key, base, 300);
     return base;
   }
 
@@ -153,11 +155,12 @@ export class TemplatesService {
     const rk = `lumira:ratelimit:${deviceId}:templateSearch`;
     const windowSec = 60;
     const limit = 60;
-    const current = (await this.redisService.getJson<number>(rk)) ?? 0;
-    if (current >= limit) {
+    if (!this.redisService.isEnabled()) return; // 降级放行（现状行为）
+    // incrEx 单命令原子自增：并发请求无法绕过计数（第 61 次起返回 429）
+    const cnt = await this.redisService.incrEx(rk, windowSec);
+    if (cnt > limit) {
       throw new HttpException('rate_limited', HttpStatus.TOO_MANY_REQUESTS);
     }
-    await this.redisService.setJson<number>(rk, current + 1, windowSec);
   }
 
   /** 查询设备已拥有的模板 id 列表 */
@@ -358,19 +361,25 @@ export class TemplatesService {
     category?: string,
     subtreeKeys?: string[],
   ): Promise<RemoteTemplateListResponse> {
-    // 缓存 key 含查询参数指纹：不同筛选返回不同结果，避免串缓存；
-    // admin 写入按 pattern `lumira:cache:templateList:*` 全量失效
-    const key = `lumira:cache:templateList:list:${since ?? 0}:${category ?? ''}:${subtreeKeys ? subtreeKeys.join('|') : ''}`;
-    const cached = await this.redisService.getJson<RemoteTemplateListResponse>(key);
-    if (cached !== null) return cached;
+    // 缓存 key 按筛选维度（category × subtree）分 key，不含 since 时间戳 → 键数量从"无界"收敛为"有限组合数"；
+    // 命中后 since 在内存过滤（缓存存的是整份筛选结果）。subtreeKeys 先 sort() 消除客户端顺序不稳定导致的 key 漂移。
+    const scopeKey = `${category ?? ''}:${subtreeKeys ? [...subtreeKeys].sort().join('|') : ''}`;
+    const key = `lumira:cache:templateList:list:${scopeKey}`;
+    const result = await this.redisService.getJson<RemoteTemplateListResponse>(key);
+    if (result !== null) {
+      // 命中：since 在内存过滤
+      let templates = result.templates;
+      if (since !== undefined && !Number.isNaN(since)) {
+        templates = templates.filter((m) => m.updatedAt > since);
+      }
+      return { templates, serverUpdatedAt: result.serverUpdatedAt };
+    }
 
     const db = this.dbService.getDb();
 
-    // 构建条件：isActive=1 + 可选 since + 可选 category / 可选 subtree 集合
+    // 未命中：构建整份筛选列表（条件不含 since），并计算
+    //   serverUpdatedAt = 源列表 max(updatedAt)（不代表 since 过滤后的子集，保证增量拉取不漏数据）
     const conditions = [eq(templates.isActive, 1)];
-    if (since !== undefined && !Number.isNaN(since)) {
-      conditions.push(gt(templates.updatedAt, since));
-    }
     if (subtreeKeys && subtreeKeys.length > 0) {
       // 子树集合匹配：任一 classification 字段命中集合即算（含 category 直接命中）
       const keyList = sql.join(subtreeKeys.map((k) => sql`${k}`), sql`, `) as SQL;
@@ -387,7 +396,8 @@ export class TemplatesService {
       conditions.push(eq(templates.category, category));
     }
 
-    const rows = await db.select().from(templates)
+    // 列裁剪：只投影 meta 所需列，不拉 5 段 longtext（subtree 的 JSON_EXTRACT 过滤仅在重建时执行一次）
+    const rows = await db.select(TEMPLATE_META_SELECT).from(templates)
       .where(and(...conditions))
       .orderBy(asc(templates.sortOrder), desc(templates.updatedAt));
 
@@ -396,9 +406,14 @@ export class TemplatesService {
       ? metas.reduce((max, m) => Math.max(max, m.updatedAt), 0)
       : Math.floor(Date.now() / 1000);
 
-    const result: RemoteTemplateListResponse = { templates: metas, serverUpdatedAt };
-    await this.redisService.setJson(key, result, 600);
-    return result;
+    const cached: RemoteTemplateListResponse = { templates: metas, serverUpdatedAt };
+    await this.redisService.setJson(key, cached, 600);
+
+    // 响应仍按 since 过滤子集（与缓存命中路径语义一致），serverUpdatedAt 用源列表 max
+    if (since !== undefined && !Number.isNaN(since)) {
+      return { templates: metas.filter((m) => m.updatedAt > since), serverUpdatedAt };
+    }
+    return cached;
   }
 
   /** 客户端拉取单个模板完整内容（5 段）*/
@@ -424,7 +439,35 @@ export class TemplatesService {
 type TemplateRow = typeof templates.$inferSelect;
 type CategoryRow = typeof templateCategories.$inferSelect;
 
-export function rowToMeta(row: TemplateRow): RemoteTemplateMeta {
+/**
+ * meta 类查询（list / search base）的列投影：只拉 rowToMeta 需要的列，
+ * 不把 composition/pose/camera/scene_guide/post_process/ambience 等 longtext 大列从 MySQL 拉回内存再丢弃。
+ * detail 查询（有 600s 缓存）仍用全列。
+ */
+const TEMPLATE_META_SELECT = {
+  id: templates.id,
+  name: templates.name,
+  author: templates.author,
+  version: templates.version,
+  category: templates.category,
+  price: templates.price,
+  coverUrl: templates.coverUrl,
+  description: templates.description,
+  referenceSource: templates.referenceSource,
+  tagsJson: templates.tagsJson,
+  tagIdsJson: templates.tagIdsJson,
+  classificationJson: templates.classificationJson,
+  ambienceJson: templates.ambienceJson,
+  imagesJson: templates.imagesJson,
+  shortDesc: templates.shortDesc,
+  sortOrder: templates.sortOrder,
+  updatedAt: templates.updatedAt,
+} as const;
+
+/** rowToMeta 入参类型：meta 投影行的子集（TemplateRow 全行可赋值给该类型） */
+type TemplateMetaRow = Pick<TemplateRow, keyof typeof TEMPLATE_META_SELECT>;
+
+export function rowToMeta(row: TemplateMetaRow): RemoteTemplateMeta {
   const coverUrl = buildAssetUrl(row.coverUrl);
   // images: 优先 images_json；为空数组时由 coverUrl 派生单元素（兼容旧数据）
   const parsedImages = safeParseImagesArray(row.imagesJson).map((img) => ({

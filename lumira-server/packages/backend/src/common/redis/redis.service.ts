@@ -78,6 +78,22 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * 原子自增 + 首次自增时设置过期时间（限流用，避免 get+set 两步非原子被并发绕过）。
+   * Redis 不可用时返回 0（降级放行）。
+   */
+  async incrEx(key: string, seconds: number): Promise<number> {
+    if (!this.client) return 0;
+    try {
+      const cnt = await this.client.incr(key);
+      if (cnt === 1) await this.client.expire(key, seconds);
+      return cnt;
+    } catch (err) {
+      this.logger.verbose(`incrEx failed for ${key}: ${(err as Error).message}`);
+      return 0;
+    }
+  }
+
   async onModuleDestroy(): Promise<void> {
     if (this.client) await this.client.quit();
   }

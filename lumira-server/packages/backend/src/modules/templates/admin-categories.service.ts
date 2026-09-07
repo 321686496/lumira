@@ -8,6 +8,7 @@ import { templateCategories, templates } from '../../database/schema';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { rowToCategory } from './templates.service';
+import { ThumbsService } from './thumbs.service';
 import { STORAGE_ADAPTER } from '../../common/storage/storage.provider';
 import type { StorageAdapter } from '../../common/storage/storage-adapter.interface';
 import { RedisService } from '../../common/redis/redis.service';
@@ -43,6 +44,7 @@ export class AdminCategoriesService {
     private readonly dbService: DatabaseService,
     @Inject(STORAGE_ADAPTER) private readonly storage: StorageAdapter,
     private readonly redisService: RedisService,
+    private readonly thumbs: ThumbsService,
   ) {}
 
   /** 分类变更后统一失效内容缓存 */
@@ -130,6 +132,10 @@ export class AdminCategoriesService {
     });
 
     await this.invalidateCategoryCaches();
+    // 上传了图标 → 预生成缩略图（生成成本从读链路挪到写链路）
+    if (icon) {
+      await this.thumbs.preGenerate(meta.key);
+    }
     return this.getByKeyAndParent(meta.key, parentKey);
   }
 
@@ -169,6 +175,11 @@ export class AdminCategoriesService {
       .where(eq(templateCategories.id, existing.id));
 
     await this.invalidateCategoryCaches();
+    // icon 变更 → 先清旧宽度缩略图残留，再按新图标预生成
+    if (icon) {
+      this.thumbs.clearCache(key);
+      await this.thumbs.preGenerate(key);
+    }
     return this.getByKeyAndParent(key, parentKey);
   }
 
@@ -210,6 +221,8 @@ export class AdminCategoriesService {
 
     await db.delete(templateCategories).where(eq(templateCategories.id, existing.id));
     await this.storage.deleteByDir('categories', key);
+    // 同步清理缩略图缓存目录
+    this.thumbs.clearCache(key);
 
     await this.invalidateCategoryCaches();
     return { success: true };

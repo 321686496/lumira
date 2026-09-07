@@ -33,4 +33,10 @@ describe('RedisService (degraded)', () => {
     await expect(svc.del('x')).resolves.toBeUndefined();
     await expect(svc.delByPattern('lumira:cache:*')).resolves.toBeUndefined();
   });
+
+  it('incrEx returns 0 when disabled (rate-limit degradation)', async () => {
+    delete process.env.REDIS_URL;
+    const svc = new RedisService();
+    await expect(svc.incrEx('lumira:ratelimit:dev:templateSearch', 60)).resolves.toBe(0);
+  });
 });

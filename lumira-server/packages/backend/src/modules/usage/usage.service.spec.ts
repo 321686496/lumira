@@ -1,6 +1,7 @@
 // lumira-server/packages/backend/src/modules/usage/usage.service.spec.ts
 import { UsageService } from './usage.service';
 import { DatabaseService } from '../../database/database.service';
+import { RedisService } from '../../common/redis/redis.service';
 import type { EventInputDto } from './dto/batch-events.dto';
 
 describe('UsageService', () => {
@@ -10,12 +11,17 @@ describe('UsageService', () => {
     { clientEventId: 'e3', itemType: 'scene', itemId: 's1', itemSource: 'system', eventType: 'scene_select', occurredAt: 1002 },
   ];
 
-  function buildService(opts: { execRows?: unknown[]; execImpl?: () => void } = {}) {
+  /** 默认 redis mock：getJson 恒 miss（走 DB），setJson 静默 no-op */
+  function buildService(opts: { execRows?: unknown[]; execImpl?: () => void; cachedStats?: unknown } = {}) {
     const execute = jest.fn();
     execute.mockImplementation(opts.execImpl ?? (() => { throw new Error('use execRows'); }));
     execute.mockResolvedValueOnce(opts.execRows ? [opts.execRows] : []);
     const dbService = { getDb: jest.fn(() => ({ execute })) } as unknown as DatabaseService;
-    return { service: new UsageService(dbService), execute };
+    const redis = {
+      getJson: jest.fn(async () => opts.cachedStats ?? null),
+      setJson: jest.fn(async () => undefined),
+    } as unknown as RedisService;
+    return { service: new UsageService(dbService, redis), execute };
   }
 
   it('recordBatch 返回 inserted=events.length 且逐条但未空数组时返回 0', async () => {
@@ -52,6 +58,16 @@ describe('UsageService', () => {
     const { service } = buildService({ execRows: rows });
     const res = await service.stats('template');
     expect(res.items).toEqual([{ itemId: 't1', itemType: 'template', useShoot: 2, openDetail: 0, sceneSelect: 0 }]);
+  });
+
+  it('stats 命中 30s 缓存时不再打 DB', async () => {
+    const cached = {
+      items: [{ itemId: 't1', itemType: 'template' as const, useShoot: 1, openDetail: 2, sceneSelect: 0 }],
+    };
+    const { service, execute } = buildService({ cachedStats: cached });
+    const res = await service.stats('template');
+    expect(res).toEqual(cached);
+    expect(execute).not.toHaveBeenCalled();
   });
 
   it('upsertBuiltinTemplates 空数组返回 0，非空逐条 upsert', async () => {
