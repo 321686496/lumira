@@ -12,26 +12,28 @@ float ss_step(float edge0, float edge1, float x) {
   return t * t * (3.0 - 2.0 * t);
 }
 
-// 邻域低频采样：以 strength 决定采样半径（对应 CPU radius 2..5）
-float lowPassRadius() { return 2.0 + 3.0 * uStrength; }
-
+// 频率分离低频底图：11 稀疏 tap 十字高斯（tap 间距 σ/2，线性采样近似，覆盖 ±2.5σ）。
+// σ = (9+15s)×longSide/1280 —— 与取景器（iOS CIGaussianBlur σ=9+15s @1280 长边
+// 工作分辨率）及 CPU SkinSmoother（÷3 降采样大 σ 高斯 + 升采样）同视觉尺度。
+// 此前 radius=2+3s 的 9-tap 小核（σ≈1.3..3.3）比取景器弱 5~10 倍 → 成片磨皮
+// 观感「只是面部糊了一下」（2026-09-07 成片磨皮质量修复）。
+// 间距 d=σ/2 时权重 exp(-(i·d)²/(2σ²)) = exp(-i²/8)，与 σ 无关。
 void main() {
   vec2 uv = FlutterFragCoord().xy / uSize;
-  float radius = lowPassRadius();
-  // 4 方向 4 采样的低成本低频近似（可后续调权，匹配 CPU 高斯视觉）
+  float longSide = max(uSize.x, uSize.y);
+  float sigma = (9.0 + 15.0 * uStrength) * longSide / 1280.0;
+  float d = max(sigma * 0.5, 1.0);
   vec2 texel = 1.0 / uSize;
-  vec4 base = texture(uTexture, uv) * 0.0;
+  vec3 base = vec3(0.0);
   float wSum = 0.0;
-  for (int i = -4; i <= 4; i++) {
-    float w = exp(-float(i * i) / (2.0 * radius * radius));
-    vec2 off = vec2(float(i), 0.0) * texel;
-    base += texture(uTexture, uv + off) * w;
+  for (int i = -5; i <= 5; i++) {
+    float w = exp(-float(i * i) / 8.0);
+    base += texture(uTexture, uv + vec2(float(i) * d, 0.0) * texel).rgb * w;
     wSum += w;
   }
-  for (int i = -4; i <= 4; i++) {
-    float w = exp(-float(i * i) / (2.0 * radius * radius));
-    vec2 off = vec2(0.0, float(i)) * texel;
-    base += texture(uTexture, uv + off) * w;
+  for (int i = -5; i <= 5; i++) {
+    float w = exp(-float(i * i) / 8.0);
+    base += texture(uTexture, uv + vec2(0.0, float(i) * d) * texel).rgb * w;
     wSum += w;
   }
   base /= wSum;
