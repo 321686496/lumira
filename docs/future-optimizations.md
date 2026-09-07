@@ -315,7 +315,7 @@
 
 - **模块**：拍摄 · 成片链（OHOS C++ photo_processor.cpp / Dart dart_photo_pipeline.dart / iOS PreviewEffectProcessor.m）
 - **优化点**：锐化响应曲线最终定档 a=v/100×6.0（上限 6.0，四端统一，2026-09-06 第三次修正后定档）。历程：×6.0 原始值（真机可感知）→ 误回调 1.2（四端同步，拉满无感：硬边缘增益仅 ~2.7/255）→ iOS 单独 2.5（仍无感）→ 恢复 6.0。1.2/2.5 均低于人眼可感知阈值；当时「×6.0 效果过重」的反馈实为 iOS kernel 坐标 bug（黑屏/压暗）叠加所致，kernel 修复后纯 6.0 即正常观感。磨皮因 5-tap 内核分辨率语义限制，成片与预览的感知强度仍存在差异。
-- **背景/动机**：真机反馈「锐化拉满无感」两轮；每轮根因不同（第一轮 OHOS 死区阈值 4.0→1.0；第二轮 iOS kernel 非 ASCII 编译失败 + 全端强度过低）。iOS 取景器锐化/颗粒/磨皮/暗角整体静默失效的根因：CIKernel 源码字符串内含非 ASCII 字符（中文注释）导致编译失败、kernelWithString: 返回 nil——已清理为纯 ASCII 并补编译失败日志。iOS 颗粒取景器「几条黑线」根因：噪声采样 −0.5 相位使 nuv∈[−0.5,0) 落在 tile extent 外，CI 对 extent 外返回透明黑 → 每 128px 周期 1px 暗线——已 clamp [0,127]。
+- **背景/动机**：真机反馈「锐化拉满无感」两轮；每轮根因不同（第一轮 OHOS 死区阈值 4.0→1.0；第二轮 iOS kernel 非 ASCII 编译失败 + 全端强度过低）。iOS 取景器锐化/颗粒/磨皮/暗角整体静默失效的根因：CIKernel 源码字符串内含非 ASCII 字符（中文注释）导致编译失败、kernelWithString: 返回 nil——已清理为纯 ASCII 并补编译失败日志。iOS 颗粒取景器「几条黑线」根因（2026-09-07 终版，修正 2026-09-06 的相位误诊）：噪声采样用裸 tile 局部坐标（全 kernel 唯一不经过 samplerTransform 的采样点），CI 的 sampler 坐标空间/GPU 路径对非常规采样模式处理异常；−0.5 相位/clamp [0,127]/[0.5,127.5] 三轮相位修复均不改变症状，证明根因是裸坐标采样本身。已改为「tiledNoiseImageForWidth 烘焙同尺寸平铺噪声图 + 1:1 samplerTransform 采样」彻底修复（与 image/blur 采样完全同构）。
 - **目标状态**：真机验证 6.0 响应曲线四端观感（明显但不过度、无 halo 破坏）；按需微调磨皮强度/核半径与颗粒幅度。
 - **状态**：🔄 进行中
 
@@ -325,4 +325,16 @@
 - **优化点**：取景器效果处理的工作分辨率固定为长边 1280（对齐成片默认档「高清 maxDim=1280」），不随设置里的成片分辨率档位（standard 1080 / smooth 720）切换。
 - **背景/动机**：2026-09-06 修复「锐化拉满无效果 / 颗粒与成片不一致」时确立预览工作分辨率机制（sensor-native 12MP 帧 → 1280 长边 cap，效果与成片同尺度执行）。档位切到 standard/smooth 时成片效果尺度随之变化，预览颗粒密度与成片会有 ±20%~78% 的视觉差异（档位语义本身允许）。
 - **目标状态**：通过 updatePreviewEffects 把当前档位 maxDim 传到 iOS 原生侧，renderSync 用其作为 kPreviewWorkLongSide 动态 cap。
+- **状态**：⏳ 待优化
+
+---
+
+## 磨皮 σ 跨端统一（2026-09-07）
+
+### P1 · OHOS 原生磨皮 σ 对齐到「(9+15s)×longSide/1280」视觉尺度体系
+
+- **模块**：拍摄 · 成片链（OHOS C++ photo_processor.cpp smoothSkin / preview_fx.cpp）
+- **优化点**：2026-09-07 修复 iOS/Flutter 成片磨皮质量时，将 Dart CPU（skin_smoother.dart）、成片 GPU（skin_smooth.frag）、编辑页预览（edit_detail_effects.frag）统一为 σ=(9+15s)×longSide/1280 的「随分辨率缩放」尺度体系（与 iOS 取景器 CIGaussianBlur σ=9+15s @1280 长边一致）。但 OHOS 原生 smoothSkin/preview 仍是旧体系：1/3 分辨率下 σ=3+5s（折算全分辨率 ≈9+15s 固定像素，不随成片分辨率缩放）。两体系在 1280 长边成片上恰好重合，但在其他分辨率档位（1080/720/全尺寸）下 OHOS 与 iOS 的磨皮视觉尺度会有偏差。
+- **背景/动机**：OHOS 真机当前观感已验收（成片与 OHOS 取景器自洽），暂不动；跨端一致性留给后续统一。
+- **目标状态**：OHOS C++ 侧 σ 改为 (9+15s)×longSide/1280（在降采样图上按比例折算），与 iOS/Dart/三 shader 全端一个公式；改后需 OHOS 真机回归验证磨皮观感与 800ms 性能预算。
 - **状态**：⏳ 待优化

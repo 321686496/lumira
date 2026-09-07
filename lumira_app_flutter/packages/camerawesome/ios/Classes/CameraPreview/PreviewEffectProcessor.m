@@ -51,13 +51,18 @@ static const CGFloat kPreviewWorkLongSide = 1280.0;
 //      也是真机观感「锐化明显可感知」的校准点；2026-09-06 曾误回调 1.2/2.5，
 //      真机实测拉满无感（硬边缘增益仅 1-2%/255 级别，人眼不可察），恢复 6.0。
 //      死区 0.75、门控 (0.75,2.25) 不变。
-//   2) 颗粒：128×128 预置 tile，tap 相位 fract(px/128+off)×128−0.5 双线性
-//      （与成片 Dart applyPerPixelEffectsImg 的 xp=u×128−0.5 完全一致），
+//   2) 颗粒：噪声图与输出同尺寸（tiledNoiseImageForWidth 把 128×128 LCG tile
+//      按 (13,29) 偏移循环平铺烘焙进 w×h 位图），内核 1:1 采样
+//      （sample(noise, samplerTransform(noise, dc))，与 image/blur 完全同构），
 //      幅度 = grainOn×24/255×mix(0.35,1.0,smoothstep(0.05,0.85,luma))。
-//      ⚠️ nuv 必须 clamp 到 [0,127]：−0.5 相位使 fract<0.5/128 处 nuv∈[−0.5,0)，
-//      落在 tile extent 外——Core Image 对 extent 外采样返回「透明黑」而非边缘延伸
-//      （这正是 imageByClampingToExtent 存在的意义），g=0 → rgb += (0×2−1)×amp
-//      → 每个 128px 周期出现 1px 暗线（真机观感「几条黑线」，2026-09-06 确认）。
+//      ⚠️ 2026-09-07 二次修复（前两轮相位修复无效后的根因修正）：
+//      旧实现 sample(noise, fract(px/128+off)×128+0.5) 用裸 tile 局部坐标——
+//      全 kernel 唯一不经过 samplerTransform 的采样点，违反本文件既定铁律，
+//      真机表现为周期性竖直黑线 + 掉帧；纹素中心 ±0.5 相位 / clamp [0,127] /
+//      [0.5,127.5] 三轮修复均不改变症状，证明根因是裸坐标采样本身（CI 的
+//      sampler 坐标空间/GPU 路径对非常规采样模式处理异常），而非采样相位。
+//      改为「烘焙平铺 + 1:1 采样」后，noise 与 blur sampler 走完全相同的
+//      GPU 路径，ROI 也同步简化为 1:1（无需再为噪声返回全 tile extent）。
 //   3) 磨皮（频率分离）：base = blur sampler（applyParams 里 CIGaussianBlur
 //      预渲染的矩阵后整图高斯，经 samplerTransform 采样），detail = rgb−base，
 //      out = base+detail×(1−removal)，removal = baseRemove×肤色概率×(1−结构门控)，
@@ -87,13 +92,11 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   "    rgb += amnt * edge;\n"
   "  }\n"
   "  if (grainOn > 0.0) {\n"
-  "    vec2 nuv = vec2( fract(px.x * (1.0/128.0) + (13.0/128.0)), fract(px.y * (1.0/128.0) + (29.0/128.0)) ) * 128.0 - vec2(0.5);\n"
-  "    nuv = clamp(nuv, vec2(0.0), vec2(127.0));\n"
-  "    float g = sample(noise, nuv).r;\n"
-  "    float ls = mix(0.35, 1.0, smoothstep(0.05, 0.85, dot(rgb, lum)));\n"
-  "    float amp = grainOn * (24.0/255.0) * ls;\n"
-  "    rgb += (g*2.0 - 1.0) * amp;\n"
-  "  }\n"
+"    float g = sample(noise, samplerTransform(noise, dc)).r;\n"
+"    float ls = mix(0.35, 1.0, smoothstep(0.05, 0.85, dot(rgb, lum)));\n"
+"    float amp = grainOn * (24.0/255.0) * ls;\n"
+"    rgb += (g*2.0 - 1.0) * amp;\n"
+"  }\n"
   "  if (smoothS > 0.0) {\n"
   "    vec3 base = sample(blur, samplerTransform(blur, dc)).rgb;\n"
   "    vec3 det = rgb - base;\n"
@@ -126,7 +129,11 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   CIContext *_ciContext;
   CGColorSpaceRef _workingColorSpace; // 自持有
   CIKernel *_beautyKernel;   // 统一锐化/颗粒/磨皮/暗角内核（进程一次）
-  CIImage *_noiseTile;       // 预计算 128×128 颗粒 tile（一次性，消除逐帧随机）
+  NSData *_noiseTileData;    // 128×128 LCG 噪声 tile 原始数据（一次性，进程一份）
+  CIImage *_tiledNoise;      // 当前工作分辨率的「已平铺」噪声图（128 周期 + (13,29) 偏移已烘焙）
+  size_t _tiledNoiseW;
+  size_t _tiledNoiseH;
+  uint64_t _frameCounter;    // 渲染耗时日志节流
 
   BOOL _active;
   PreviewEffectsParams _params;
@@ -173,7 +180,7 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
     if (_beautyKernel == nil) {
       NSLog(@"[PreviewEffectProcessor] FATAL: beauty kernel compile FAILED, all spatial effects disabled");
     }
-    _noiseTile = [self makeNoiseTile];
+    _noiseTileData = [self makeNoiseTileData];
     atomic_init(&_publishedBuffer, NULL);
     atomic_init(&_busy, false);
     _active = NO;
@@ -281,7 +288,21 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
     return;
   }
 
+  // 掉帧取证日志（2026-09-07）：CI 渲染超过一帧预算（>33ms）必记，
+  // 另每 60 帧例行记一次基线。若日志显示 render 达几十/上百 ms，
+  // 说明该效果链落到了 CPU 软件渲染（GPU 路径异常的实锤）。
+  const CFAbsoluteTime t0 = CFAbsoluteTimeGetCurrent();
   [_ciContext render:result toCVPixelBuffer:outBuf bounds:[result extent] colorSpace:_workingColorSpace];
+  const double renderMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000.0;
+  _frameCounter++;
+  if (renderMs > 33.0 || (_frameCounter % 60) == 1) {
+    NSLog(@"[PreviewEffectProcessor] render %.2fms %.0fx%.0f frame=%llu (sh=%.0f gr=%.0f sm=%.0f vg=%.0f)",
+          renderMs, w, h, (unsigned long long)_frameCounter,
+          _params.hasSharpen ? _params.sharpen : 0.0,
+          _params.hasGrain ? _params.grain : 0.0,
+          _params.hasSmooth ? _params.smooth : 0.0,
+          _params.hasVignette ? _params.vignette : 0.0);
+  }
 
   // 原子发布新成帧（取走并释放旧帧）。
   CVPixelBufferRef old = atomic_exchange_explicit(&_publishedBuffer, outBuf, memory_order_release);
@@ -306,8 +327,6 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
   double vigS     = (_params.hasVignette && _params.vignette > 0) ? _params.vignette / 100.0 : 0.0;
   double smoothS  = (_params.hasSmooth && _params.smooth > 0) ? _params.smooth / 100.0 : 0.0;
   double grainS   = (_params.hasGrain && _params.grain > 0) ? _params.grain / 100.0 : 0.0;
-  // 噪声 tile 构建失败（malloc 失败的病态路径）时禁用颗粒，避免采样未定义区域。
-  if (_noiseTile == nil) grainS = 0.0;
 
   // 磨皮频率分离的低频底图（base）：矩阵后整图高斯（CIGaussianBlur，GPU）。
   // clamp 防边缘透黑、crop 回原 extent 与 destCoord() 对齐。
@@ -326,29 +345,29 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
 
   if ((sharpenA > 0 || vigS > 0 || smoothS > 0 || grainS > 0) && _beautyKernel) {
     const CGRect extent = input.extent;
-    const BOOL hasNoise = (_noiseTile != nil);
-    CIImage *noise = _noiseTile ?: result;
-    const CGRect noiseExtent = hasNoise ? _noiseTile.extent : CGRectNull;
+    // 颗粒噪声：与输出同尺寸的「已平铺」噪声图（tiledNoiseImageForWidth 把
+    // 128×128 LCG tile 按 (13,29) 偏移循环平铺烘焙），内核 1:1 采样
+    //（samplerTransform + destCoord，与 image/blur 完全同构——2026-09-07 颗粒
+    // 黑线+掉帧根因修复：旧实现裸 tile 局部坐标采样是全 kernel 唯一违反
+    // samplerTransform 铁律的采样点）。生成失败（malloc 病态路径）时禁用颗粒。
+    CIImage *noise = nil;
+    if (grainS > 0) {
+      noise = [self tiledNoiseImageForWidth:(size_t)extent.size.width
+                                      height:(size_t)extent.size.height];
+      if (noise == nil) grainS = 0.0;
+    }
     // blur 缺席时传 result 自身（smoothS==0 不进磨皮分支，参数占位而已）。
     // outExtent（vec4 = origin.x/origin.y/width/height）：内核用它把 destCoord()
     // 归一为输出像素坐标/UV（几何基准唯一可信来源，与 OHOS vUV·uSize 等价）。
-    // ROI 回调（此前 roiCallback:nil 的 1:1 假设是取景器压暗的根因之一）：
-    //   index 0（image）：锐化邻域 ±1 输出像素 → 外扩 2px 覆盖邻域采样；
-    //   index 1（noise）：任意输出位置都可能采样 [0,128)² → 恒返回噪声 tile 全 extent，
-    //                     否则输出区域不在 tile 附近时噪声输入区域为空 → 采样返回黑
-    //                     → rgb += (0×2−1)×amp → 整图压暗且无颗粒纹理；
-    //   index 2（blur）：1:1 采样 → 返回原 rect。
+    // ROI 回调：index 0（image）锐化邻域 ±1 输出像素 → 外扩 2px；
+    // 其余（noise/blur）均 1:1 采样 → 原样返回（噪声平铺图与输出 extent 一一对应，
+    // 不再需要旧实现的「恒返回噪声 tile 全 extent」特例）。
     result = [_beautyKernel applyWithExtent:extent
                                  roiCallback:^CGRect(int index, CGRect rect) {
                                    if (index == 0) return CGRectInset(rect, -2.0, -2.0);
-                                   if (index == 1) {
-                                     // tile 缺失时 noise 参数退化为 result（grainS 已被置 0，
-                                     // 内核不会采样它），按 1:1+外扩 返回安全区域。
-                                     return hasNoise ? noiseExtent : CGRectInset(rect, -2.0, -2.0);
-                                   }
                                    return rect;
                                  }
-                                   arguments:@[ result, noise, blurImg ?: result,
+                                   arguments:@[ result, noise ?: result, blurImg ?: result,
                                                 [CIVector vectorWithCGRect:extent],
                                                 @(sharpenA), @(vigS), @(smoothS), @(grainS) ]];
   }
@@ -373,12 +392,12 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
                                          @"inputBiasVector": bias }];
 }
 
-/// 预计算 128×128 颗粒 tile（固定 LCG 种子，与 OHOS C++/预览 shader 同分布）。
-/// 每进程构建一次并复用，替代逐帧 CIRandomGenerator → 消灭取景器卡顿，且离线复用。
+/// 预计算 128×128 颗粒噪声 tile 原始数据（固定 LCG 种子 0x85EBCA6B，
+/// 与 OHOS C++ / 预览 shader / Dart 成片同分布）。每进程构建一次并复用。
 /// ⚠️ 用 RGBA8 + deviceRGB 而非 R8 + DeviceGray：R8 灰度纹理在工作色域（RGB）上
 /// 采样时 Core Image 需要插入灰度→RGB 转换 pass（kernel 编译修复后真机实测颗粒
-/// 开启掉帧的嫌疑成本之一）；RGBA8 与工作色域零转换，采样即用。kernel 取 .r 通道。
-- (CIImage *)makeNoiseTile {
+/// 开启掉帧的嫌疑成本之一）；RGBA8 与工作色域零转换，采样即用。内核取 .r 通道。
+- (NSData *)makeNoiseTileData {
   const size_t tex = 128;
   const size_t bytes = tex * tex * 4;
   uint8_t *buf = (uint8_t *)malloc(bytes);
@@ -393,13 +412,54 @@ static NSString *const kPreviewBeautyKernelString = @" \n"
     buf[i * 4 + 2] = v;
     buf[i * 4 + 3] = 255;
   }
+  return [NSData dataWithBytesNoCopy:buf length:bytes freeWhenDone:YES];
+}
+
+/// 生成/缓存与输出同尺寸的「已平铺」颗粒噪声图（2026-09-07 颗粒黑线+掉帧根因修复）。
+///
+/// 把 128×128 LCG tile 按 (13,29) 偏移循环平铺烘焙到 w×h（等价于旧内核
+/// fract(px/128 + off)×128 的逐像素换算，值逐一相同），内核即可对 noise 用与
+/// image/blur 完全相同的 1:1 采样：sample(noise, samplerTransform(noise, dc))。
+/// 旧实现裸 tile 局部坐标采样是全 kernel 唯一不经过 samplerTransform 的采样点
+///（违反本文件既定铁律），真机表现为周期性竖直黑线 + 掉帧；纹素中心相位/clamp
+/// 两轮修复无效后确认根因即在此。同尺寸噪声图随工作分辨率缓存（分辨率变化时
+/// 重建一次，行级 memcpy，<1ms）。
+- (CIImage *)tiledNoiseImageForWidth:(size_t)w height:(size_t)h {
+  if (w < 1 || h < 1 || _noiseTileData == nil) return nil;
+  if (_tiledNoise != nil && _tiledNoiseW == w && _tiledNoiseH == h) return _tiledNoise;
+
+  const uint8_t *tile = (const uint8_t *)_noiseTileData.bytes; // 128×128 RGBA8
+  const size_t rowBytes = w * 4;
+  uint8_t *buf = (uint8_t *)malloc(rowBytes * h);
+  if (!buf) return nil;
+  // 每输出行 = tile 行 ((y+29)%128) 以列偏移 13 循环平铺（与旧内核
+  // nuv = fract(px/128 + 13/128 或 29/128)×128 逐值等价）。
+  for (size_t y = 0; y < h; ++y) {
+    const uint8_t *srcRow = tile + (size_t)((y + 29) % 128) * (128 * 4);
+    uint8_t *dstRow = buf + y * rowBytes;
+    size_t x = 0;
+    size_t off = 13; // 起始列（旧内核 x 偏移 13）
+    while (x < w) {
+      const size_t n = (128 - off) < (w - x) ? (128 - off) : (w - x);
+      memcpy(dstRow + x * 4, srcRow + off * 4, n * 4);
+      x += n;
+      off = 0;
+    }
+  }
   CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
-  CIImage *img = [CIImage imageWithBitmapData:[NSData dataWithBytesNoCopy:buf length:bytes freeWhenDone:YES]
-                                     bytesPerRow:tex * 4
-                                            size:CGSizeMake(tex, tex)
-                                          format:kCIFormatRGBA8
-                                      colorSpace:cs];
+  CIImage *img = [CIImage imageWithBitmapData:[NSData dataWithBytesNoCopy:buf length:rowBytes * h freeWhenDone:YES]
+                                   bytesPerRow:rowBytes
+                                          size:CGSizeMake(w, h)
+                                        format:kCIFormatRGBA8
+                                    colorSpace:cs];
   CGColorSpaceRelease(cs);
+  if (img == nil) {
+    free(buf);
+    return nil;
+  }
+  _tiledNoise = img;
+  _tiledNoiseW = w;
+  _tiledNoiseH = h;
   return img;
 }
 

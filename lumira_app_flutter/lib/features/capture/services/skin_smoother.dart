@@ -16,7 +16,9 @@ import 'package:image/image.dart' as img;
 /// - 抖音/主流美颜用的是**频率分离**：只削高频细节，低频结构 100% 保留。
 ///
 /// 算法（频率分离削细节）：
-/// 1. 低频底图 base = 中半径高斯（只去掉毛孔这类高频颗粒，保留低频明暗）；
+/// 1. 低频底图 base = 大 σ 高斯（σ=(9+15s)×longSide/1280，与取景器同视觉尺度；
+///    ÷3 降采样计算再升采样，OHOS 原生 smoothSkin 同构）——只去掉毛孔这类
+///    高频颗粒，保留低频明暗；
 /// 2. detail = 原图 − base（高通残差 = 高频颗粒 + 五官边缘等高对比结构）；
 /// 3. 逐像素门控：肤色概率 skin × 结构门控 struct(smoothstep(|detail|))：
 ///    - 平坦肤区（|detail| 小）→ removal≈baseRemove×skin，真正磨掉毛孔；
@@ -36,11 +38,33 @@ class SkinSmoother {
     if (strength <= 0.01) return src;
     if (src.width <= 1 || src.height <= 1) return src;
 
-    // 1. 低频底图 base：中半径高斯（2..5），只去掉细毛孔/瑕疵这类高频颗粒。
-    //    低频明暗结构（颧骨高光/鼻侧影/轮廓）仍完整保留在 base 里，不会变平。
-    //    对 src 的 clone 模糊，保证入参 src 不被修改。
-    final blurRadius = (2 + strength * 3).round().clamp(2, 5);
-    final base = img.gaussianBlur(src.clone(), radius: blurRadius);
+    // 1. 低频底图 base：频率分离（÷3 降采样 → 小图高斯 → 双线性升采样）。
+    //    σ 目标 = (9+15s)×longSide/1280 —— 与取景器同视觉尺度（iOS 取景器在
+    //    1280 长边工作分辨率上 CIGaussianBlur σ=9+15s，真机观感已校准为
+    //    「自然磨皮」标杆；2026-09-07 成片磨皮质量修复）。
+    //    此前成片用 radius 2..5 小半径（σ≈1.3..3.3），比取景器弱 5~10 倍，
+    //    且没有与取景器一致的频率分离低频底 → 成片磨皮观感「只是面部糊了一下」。
+    //    实现与 OHOS 原生 smoothSkin 同构（降采样模糊再升采样），计算量比
+    //    全分辨率直接大 σ 模糊低一个数量级；门控曲线（baseRemove/edgeLow）
+    //    与取景器 / skin_smooth.frag 严格一致，由结构门控保住低频明暗结构。
+    final longSide = math.max(src.width, src.height);
+    final sigmaTarget = (9.0 + 15.0 * strength) * longSide / 1280.0;
+    const downFactor = 3;
+    final dw = math.max(1, (src.width / downFactor).round());
+    final dh = math.max(1, (src.height / downFactor).round());
+    final small = img.copyResize(src,
+        width: dw,
+        height: dh,
+        interpolation: img.Interpolation.average);
+    // image 包 gaussianBlur 的 σ = radius×2/3 → radius = σ×1.5；
+    // σ 按实际降采样比折算（dw/src.width ≈ 1/3）。
+    final sigmaSmall = sigmaTarget * dw / src.width;
+    final blurRadius = math.max(1, (sigmaSmall * 1.5).round());
+    final lowSmall = img.gaussianBlur(small, radius: blurRadius);
+    final base = img.copyResize(lowSmall,
+        width: src.width,
+        height: src.height,
+        interpolation: img.Interpolation.linear);
 
     // 2. 逐像素"频率分离削细节"：
     //    detail = 原图 − 低频底（高频颗粒 + 五官边缘等高对比结构）

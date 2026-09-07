@@ -12,8 +12,9 @@
 //   - 颗粒：预置 128×128 tile（uNoise，外层 LCG 种子 0x85EBCA6B 生成，
 //     与 OHOS C++ / iOS 原生同分布），采样相位 offset (13,29)，
 //     幅度 = uGrain×24/255×mix(0.35,1.0,smoothstep(0.05,0.85,luma))；
-//   - 磨皮：9-tap 十字高斯低频（radius=2+3s，与 skin_smooth.frag /
-//     成片 GPU 磨皮同源），肤色掩膜 YCbCr 扩展区间 + 结构门控；
+//   - 磨皮：频率分离 11 稀疏 tap 十字高斯低频（tap 间距 σ/2，
+//     σ=(9+15s)×frameLong/1280，与 skin_smooth.frag / 取景器 / CPU
+//     SkinSmoother 同视觉尺度），YCbCr 肤色扩展区间 + 结构门控；
 //   - 暗角：factor = 1−s·smoothstep(0.45,1.0,dn)，dn=length(归一径向)/√2；
 //   - 拉腿：与 applyLegStretchImg 同几何——锚点 0.60（源高），满档整体
 //     高度 +20%，过渡带 0.12 smoothstep 混合，反向映射 + 双线性。
@@ -105,20 +106,25 @@ void main() {
     rgb += (g * 2.0 - 1.0) * amp;
   }
 
-  // 3) 磨皮：9-tap 十字高斯低频 + YCbCr 肤色 + 结构门控
-  //    （radius=2+3s，与 skin_smooth.frag / 成片 GPU 磨皮同源）
+  // 3) 磨皮：频率分离 11 稀疏 tap 十字高斯低频（tap 间距 σ/2）+ YCbCr 肤色
+  //    + 结构门控。σ=(9+15s)×frameLong/1280 —— 与 skin_smooth.frag / 取景器
+  //    （iOS CIGaussianBlur σ=9+15s @1280 长边）/ CPU SkinSmoother 同视觉尺度。
+  //    旧 9-tap radius=2+3s 小核（σ≈1.3..3.3）比取景器弱 5~10 倍，观感仅
+  //    面部糊（2026-09-07 磨皮质量修复）。间距 d=σ/2 时权重 exp(-i²/8)。
   if (uSmooth > 0.0) {
-    float radius = 2.0 + 3.0 * uSmooth;
+    float frameLong = max(uFrameSize.x, uFrameSize.y);
+    float sigma = (9.0 + 15.0 * uSmooth) * frameLong / 1280.0;
+    float d = max(sigma * 0.5, 1.0);
     vec3 base = vec3(0.0);
     float wSum = 0.0;
-    for (int i = -4; i <= 4; i++) {
-      float w = exp(-float(i * i) / (2.0 * radius * radius));
-      base += texture(uTexture, cp + vec2(float(i), 0.0) * texel).rgb * w;
+    for (int i = -5; i <= 5; i++) {
+      float w = exp(-float(i * i) / 8.0);
+      base += texture(uTexture, cp + vec2(float(i) * d, 0.0) * texel).rgb * w;
       wSum += w;
     }
-    for (int i = -4; i <= 4; i++) {
-      float w = exp(-float(i * i) / (2.0 * radius * radius));
-      base += texture(uTexture, cp + vec2(0.0, float(i)) * texel).rgb * w;
+    for (int i = -5; i <= 5; i++) {
+      float w = exp(-float(i * i) / 8.0);
+      base += texture(uTexture, cp + vec2(0.0, float(i) * d) * texel).rgb * w;
       wSum += w;
     }
     base /= wSum;
