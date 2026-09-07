@@ -338,3 +338,18 @@
 - **背景/动机**：OHOS 真机当前观感已验收（成片与 OHOS 取景器自洽），暂不动；跨端一致性留给后续统一。
 - **目标状态**：OHOS C++ 侧 σ 改为 (9+15s)×longSide/1280（在降采样图上按比例折算），与 iOS/Dart/三 shader 全端一个公式；改后需 OHOS 真机回归验证磨皮观感与 800ms 性能预算。
 - **状态**：⏳ 待优化
+---
+
+## 拍摄预览页编辑改版遗留（2026-09-08）
+
+### P2 · 改版终审 Minor 三项 + 死代码清理
+
+- **模块**：拍摄 · 预览页（capture_preview_page.dart；preview_edit_panel.dart 内 FilterThumbnail）
+- **优化点**：
+  1. FilterThumbnail 无 errorBuilder——滤镜缩略图源文件失效时渲染异常（与修图页共用组件的既有模式，非本次引入）；
+  2. FilterThumbnail 仅识别 http 前缀走网络，data: URL 会走 File() 解码失败（自定义模板图已改存绝对路径，实际触发概率极低）；
+  3. 拍摄预览页裁剪模式下对比按钮未隐藏（修图页裁剪时隐藏；规格要求「编辑全程随手可看」故不算缺陷，仅交互一致性差异）；
+  4. capture_preview_page.dart 的 _computeDeltaPostProcess 死代码（改版前 HEAD 即未使用，analyze info 预存）。
+- **背景/动机**：2026-09-07 拍摄预览页编辑改版（commits d16c4191..b90f076c）终审 3 项 Minor + 1 项死代码 info，均不阻塞合入，登记后续处理。
+- **目标状态**：FilterThumbnail 补 errorBuilder 与 data: 分支；裁剪模式对比按钮显隐对齐修图页（或明确保持并注明）；删除死方法。
+- **状态**：⏳ 待优化
