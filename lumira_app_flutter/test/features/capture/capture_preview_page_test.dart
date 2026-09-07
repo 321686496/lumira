@@ -13,6 +13,7 @@ import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/capture/data/capture_state.dart';
 import 'package:lumira_app_flutter/features/capture/pages/capture_preview_page.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/compare_photo_button.dart';
+import 'package:lumira_app_flutter/shared/widgets/common/lumira_surface.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
@@ -40,6 +41,7 @@ void main() {
   Widget wrap({
     required ThemeKey themeKey,
     required UIStyle uiStyle,
+    EdgeInsets pageInsets = EdgeInsets.zero,
   }) {
     final goRouter = GoRouter(
       initialLocation: '/home',
@@ -54,7 +56,17 @@ void main() {
           name: 'capturePreview',
           builder: (context, state) {
             final photoUrl = state.queryParams['photoUrl'];
-            return CapturePreviewPage(photoUrl: photoUrl);
+            Widget page = CapturePreviewPage(photoUrl: photoUrl);
+            // 模拟真机系统 inset（状态栏 / 手势导航 home 指示条）：
+            // 注入非零 MediaQuery.padding 到预览页子树（测试视口默认零 inset，
+            // 真机上 SafeArea 依赖此值避开系统栏）。
+            if (pageInsets != EdgeInsets.zero) {
+              page = MediaQuery(
+                data: MediaQuery.of(context).copyWith(padding: pageInsets),
+                child: page,
+              );
+            }
+            return page;
           },
         ),
       ],
@@ -70,9 +82,13 @@ void main() {
   }
 
   Future<void> openPreview(WidgetTester tester,
-      {UIStyle style = UIStyle.neumorphic}) async {
-    await tester.pumpWidget(
-        wrap(themeKey: ThemeKey.warmWhite, uiStyle: style));
+      {UIStyle style = UIStyle.neumorphic,
+      EdgeInsets pageInsets = EdgeInsets.zero}) async {
+    await tester.pumpWidget(wrap(
+      themeKey: ThemeKey.warmWhite,
+      uiStyle: style,
+      pageInsets: pageInsets,
+    ));
     await tester.pumpAndSettle();
     GoRouter.of(tester.element(find.text('HOME_PAGE')))
         .push(RouteNames.capturePreview);
@@ -130,6 +146,27 @@ void main() {
       setLargeViewport(tester);
       await openPreview(tester);
       expect(find.byType(ComparePhotoButton), findsOneWidget);
+    });
+
+    testWidgets(
+        'real-device insets: compare button below nav, dock above home indicator',
+        (tester) async {
+      setLargeViewport(tester);
+      // 模拟真机 inset（iOS 手势导航：状态栏 44 + home 指示条 34）；
+      // 测试视口默认零 inset 时布局与真机不同，需显式注入才能复现重叠/遮挡问题。
+      await openPreview(tester,
+          pageInsets: const EdgeInsets.fromLTRB(0, 44, 0, 34));
+
+      // 1) 对比按钮整体位于顶栏下方（不与右侧 删除/保存/分享 图标区域重叠）
+      final navRect = tester.getRect(find.widgetWithText(LumiraNav, '照片预览'));
+      final compareRect = tester.getRect(find.byType(ComparePhotoButton));
+      expect(compareRect.top, greaterThanOrEqualTo(navRect.bottom),
+          reason: '对比按钮应位于顶栏之下（含状态栏 inset）');
+
+      // 2) 底部编辑 dock 下缘避开系统 home 指示条（bottom inset 之上）
+      final dockRect = tester.getRect(find.byType(LumiraSurface));
+      expect(dockRect.bottom, lessThanOrEqualTo(2400.0 - 34.0),
+          reason: 'dock 应避开底部安全区（home 指示条）');
     });
 
     testWidgets('no floating button group / no drawer handle', (tester) async {

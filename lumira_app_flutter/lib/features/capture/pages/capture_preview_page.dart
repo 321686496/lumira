@@ -1281,7 +1281,10 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
               children: [
                 // 照片本体（裁剪模式 → PhotoCropLayer；否则 PhotoView/历史滑动）
                 _buildPhotoStage(tokens),
-                // 顶部导航 + 只读横幅（仅 _uiVisible 时显示）
+                // 顶部导航 + 只读横幅 + 右上角对比按钮/徽标（仅 _uiVisible 时显示）。
+                // 对比按钮与顶栏共用同一 SafeArea 布局流、位于顶栏下方：
+                // 真机状态栏 inset 下不与顶栏右侧动作图标重叠（不再引入
+                // 独立于顶栏高度的 top 魔法值）。
                 if (_uiVisible)
                   Positioned(
                     top: 0,
@@ -1325,40 +1328,48 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                                 ],
                               ),
                             ),
+                          // 右上角对比按钮（顶栏下方，叠照片浮层取向：半透明+细边无阴影）
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 16, right: 12),
+                                child: ComparePhotoButton(
+                                  comparing: _isComparing,
+                                  tokens: tokens,
+                                  onTap: _onCompareToggle,
+                                  overlayOnImage: true,
+                                ),
+                              ),
+                            ],
+                          ),
+                          // 对比状态徽标（开启后 1s 内显示，说明当前看到的版本）
+                          if (_showCompareBadge)
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.only(top: 8, right: 12),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.6),
+                                      borderRadius: BorderRadius.circular(1000),
+                                      border: Border.all(
+                                          color: Colors.white.withOpacity(0.25)),
+                                    ),
+                                    child: Text(
+                                      _isComparing ? '查看修改前' : '已回到修改后',
+                                      style: const TextStyle(
+                                          fontSize: 11, color: Colors.white),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                         ],
-                      ),
-                    ),
-                  ),
-                // 右上角对比按钮（导航栏下方，叠照片浮层取向：半透明+细边无阴影）
-                if (_uiVisible)
-                  Positioned(
-                    top: 64,
-                    right: 12,
-                    child: ComparePhotoButton(
-                      comparing: _isComparing,
-                      tokens: tokens,
-                      onTap: _onCompareToggle,
-                      overlayOnImage: true,
-                    ),
-                  ),
-                // 对比状态徽标（开启后 1s 内显示，说明当前看到的版本）
-                if (_uiVisible && _showCompareBadge)
-                  Positioned(
-                    top: 112,
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(1000),
-                        border: Border.all(
-                            color: Colors.white.withOpacity(0.25)),
-                      ),
-                      child: Text(
-                        _isComparing ? '查看修改前' : '已回到修改后',
-                        style: const TextStyle(
-                            fontSize: 11, color: Colors.white),
                       ),
                     ),
                   ),
@@ -1472,36 +1483,43 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     final bool isNetwork = _photoUrl.startsWith('http');
     final String? previewImagePath =
         (_photoUrl.isNotEmpty && !isNetwork) ? _photoUrl : null;
-    return LumiraSurface(
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      radius: 20,
-      clip: true,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          PreviewTagPillRow(
-            moods: _moods,
-            selectedSceneId: _selectedSceneId,
-            onSelectMood: _selectMood,
-            onSelectScene: _selectScene,
-            tokens: tokens,
-          ),
-          Container(width: double.infinity, height: 1, color: tokens.divider),
-          PreviewEditToolbar(
-            activeTool: _activeTool,
-            postProcess: _localPostProcess,
-            bakedPostProcess: _bakedPostProcess,
-            transform: _localTransform,
-            onToolChanged: _onToolChanged,
-            onPostProcessChanged: _updateLocalPostProcess,
-            onTransformChanged: _updateLocalTransform,
-            onReset: _resetAllLocal,
-            previewImagePath: previewImagePath,
-            isReadOnly: _isReadOnly,
-            onReadOnlyTap: _showReadOnlyToast,
-            tokens: tokens,
-          ),
-        ],
+    // SafeArea(top: false)：手势导航设备上避开底部 home 指示条
+    // （viewPadding.bottom 24-48dp），pill 行/工具条不被系统手势条遮挡
+    // （与顶栏的 SafeArea(bottom: false) 对称）。
+    return SafeArea(
+      top: false,
+      child: LumiraSurface(
+        margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        radius: 20,
+        clip: true,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PreviewTagPillRow(
+              moods: _moods,
+              selectedSceneId: _selectedSceneId,
+              onSelectMood: _selectMood,
+              onSelectScene: _selectScene,
+              tokens: tokens,
+            ),
+            Container(
+                width: double.infinity, height: 1, color: tokens.divider),
+            PreviewEditToolbar(
+              activeTool: _activeTool,
+              postProcess: _localPostProcess,
+              bakedPostProcess: _bakedPostProcess,
+              transform: _localTransform,
+              onToolChanged: _onToolChanged,
+              onPostProcessChanged: _updateLocalPostProcess,
+              onTransformChanged: _updateLocalTransform,
+              onReset: _resetAllLocal,
+              previewImagePath: previewImagePath,
+              isReadOnly: _isReadOnly,
+              onReadOnlyTap: _showReadOnlyToast,
+              tokens: tokens,
+            ),
+          ],
+        ),
       ),
     );
   }
