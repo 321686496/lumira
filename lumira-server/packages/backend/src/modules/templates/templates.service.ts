@@ -54,7 +54,7 @@ export class TemplatesService {
     const items = await this.getSearchBase();
     const q = params.q.trim().toLowerCase();
 
-    // 关键词过滤：多字段不区分大小写子串匹配（name/author/category/description/tags）
+    // 关键词过滤：多字段不区分大小写子串匹配（name/author/category/categoryName/description/tags）
     let matched = items;
     if (q) {
       matched = items.filter((it) => {
@@ -62,6 +62,7 @@ export class TemplatesService {
         if (base.name.toLowerCase().includes(q)) return true;
         if (base.author.toLowerCase().includes(q)) return true;
         if (base.category.toLowerCase().includes(q)) return true;
+        if (base.categoryName.toLowerCase().includes(q)) return true;
         if (base.description.toLowerCase().includes(q)) return true;
         return base.tags.some((t) => t.toLowerCase().includes(q));
       });
@@ -121,6 +122,14 @@ export class TemplatesService {
       .where(eq(templates.isActive, 1))
       .orderBy(asc(templates.sortOrder), desc(templates.updatedAt));
 
+    // 构建分类 key→name 映射（用于支持中文关键字搜索）
+    const categoryRows = await db.select().from(templateCategories)
+      .where(eq(templateCategories.isActive, 1));
+    const categoryNameMap = new Map<string, string>();
+    for (const cat of categoryRows) {
+      categoryNameMap.set(cat.key, cat.name);
+    }
+
     // 全站热度聚合（仅在 base 重建时执行一次；命中 usageStats 30s 缓存则零 DB）
     const stats = await this.usageService.stats('template');
     const statsMap = new Map(stats.items.map((i) => [i.itemId, i]));
@@ -134,6 +143,7 @@ export class TemplatesService {
           name: row.name,
           author: row.author,
           category: row.category,
+          categoryName: categoryNameMap.get(row.category) ?? '',
           description: row.description,
           tags: safeParseStringArray(row.tagsJson),
           sortOrder: row.sortOrder,
@@ -545,6 +555,7 @@ interface SearchBaseItem {
     name: string;
     author: string;
     category: string;
+    categoryName: string; // 分类中文名（用于支持中文关键字搜索）
     description: string;
     tags: string[];
     sortOrder: number;

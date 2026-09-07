@@ -10,6 +10,7 @@ import type { TemplateSearchSort } from '@lumira/shared';
 /** 构造一个 search base 项（Redis 物化缓存中的数据形态） */
 function item(id: string, over: {
   category?: string;
+  categoryName?: string;
   description?: string;
   tags?: string[];
   sortOrder?: number;
@@ -42,6 +43,7 @@ function item(id: string, over: {
       name,
       author: 'Lumira',
       category: over.category ?? 'portrait',
+      categoryName: over.categoryName ?? '',
       description: over.description ?? '',
       tags: over.tags ?? [],
       sortOrder: over.sortOrder ?? 0,
@@ -92,6 +94,17 @@ describe('TemplatesService.searchTemplates', () => {
     const res = await call(service, { q: '田园' });
     expect(res.total).toBe(1);
     expect(res.items.map((i) => i.id)).toEqual(['port-1']);
+  });
+
+  it('按分类中文名过滤（categoryName 字段匹配）', async () => {
+    const { service } = buildService([
+      item('port-1', { category: 'portrait', categoryName: '人像' }),
+      item('port-2', { category: 'portrait', categoryName: '人像' }),
+      item('land-1', { category: 'landscape', categoryName: '风光' }),
+    ]);
+    const res = await call(service, { q: '人像' });
+    expect(res.total).toBe(2);
+    expect(res.items.map((i) => i.id)).toEqual(['port-1', 'port-2']);
   });
 
   it('hot 排序使用全站热度（2×拍摄数 + 1×查看数）', async () => {
