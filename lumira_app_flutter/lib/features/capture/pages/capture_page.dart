@@ -1,0 +1,5031 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:math' as math;
+import 'dart:typed_data' show ByteData, Uint8List;
+import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByteFormat, ImageFilter, Paint, PictureRecorder, Offset, ImmutableBuffer, ImageDescriptor, PixelFormat, instantiateImageCodec;
+
+import 'package:flutter/foundation.dart'
+    show compute, defaultTargetPlatform, kDebugMode;
+import 'package:flutter/services.dart'
+    show HapticFeedback, SystemChrome, DeviceOrientation, SystemSound, SystemSoundType;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:image/image.dart' as img;
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:screen/screen.dart';
+import 'package:sqflite/sqflite.dart' show getDatabasesPath;
+
+import '../../../core/db/database_provider.dart';
+import '../../../core/services/ohos_image_processor.dart';
+import '../../../core/db/dao/gallery_dao.dart';
+import '../../../core/db/dao/usage_dao.dart';
+import '../../../core/router/route_names.dart';
+import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
+import '../../challenge/widgets/challenge_overlay_bar.dart';
+import '../../home/providers/banner_recommendation_provider.dart';
+import '../../points/data/points_repository.dart';
+import '../../profile/data/growth_models.dart';
+import '../../profile/services/growth_xp_provider.dart';
+import '../../sign_in/data/sign_in_repository.dart';
+import '../../templates/data/remote_templates_providers.dart';
+import '../../usage/usage_providers.dart';
+import '../data/capture_state.dart';
+import '../data/capture_thumbnail_state.dart';
+import '../data/custom_fill_light_colors.dart';
+import '../data/scene_presets_data.dart';
+import '../data/scene_record_mapper.dart' show sceneFilterFromJson;
+import '../domain/filter_recipe.dart' show composePostProcessMatrix, multiplyColorMatrices;
+import '../domain/photo_template.dart';
+import '../domain/scene_preset.dart' show SceneFilter;
+import '../services/camera_service.dart';
+import '../services/camera_service_provider.dart';
+import '../services/level_sensor_service.dart';
+import '../services/capture_worker.dart';
+import '../services/dart_photo_pipeline.dart'
+    show applyP3ToSrgbRgba, isDisplayP3Jpeg, legStretchRgba;
+import '../services/white_balance.dart';
+import '../../watermark/data/watermark_providers.dart';
+import '../../watermark/models/watermark_template.dart';
+import '../../watermark/widgets/watermark_animation_overlay.dart';
+import '../widgets/aspect_ratio_selector.dart';
+import '../widgets/capture_button.dart';
+import '../widgets/capture_nav.dart';
+import '../widgets/camera_preview.dart';
+import '../widgets/capture_thumbnail.dart';
+import '../widgets/delay_timer_button.dart';
+import '../widgets/filter_picker.dart';
+import '../widgets/level_indicator.dart';
+import '../widgets/param_panel.dart';
+import '../widgets/param_pill_bar.dart';
+import '../widgets/scene_preset_strip.dart';
+import '../widgets/shutter_feedback.dart';
+import '../widgets/template_drawer_panel.dart';
+import '../widgets/template_info_card.dart';
+import '../widgets/template_strip.dart';
+
+/// 拍摄页（Phase 2 MVP）
+///
+/// 视觉规格来源：lumira-app/src/pages/capture/index.vue
+/// 范围：导航栏 + 相机预览 + 拍摄按钮 + 缩略图 + 切换摄像头 + 横竖屏自适应 +
+///      真实拍照/缩放/闪光灯同步/摄像头切换（通过 CameraState 实现）
+///
+/// 全屏模式说明（修复 Bug 10）：
+/// - 全屏仅隐藏装饰性 UI（ParamPillBar、底部抽屉栏的模板/场景条）
+/// - 保留 CaptureNav（含退出全屏按钮）和底部核心交互（拍摄按钮、缩略图、切换摄像头）
+/// - 确保用户在全屏下仍能拍照、退出全屏
+/// 套用模板前的用户参数快照，用于取消套用时还原。
+/// 仅保存「套用模板会覆盖」的实时参数：补光灯、白平衡、缩放、照片比例。
+class _TemplateParamSnapshot {
+  const _TemplateParamSnapshot({
+    required this.aspectRatio,
+    required this.wb,
+    required this.zoom,
+    required this.apparentZoom,
+    required this.fillLightEnabled,
+    required this.fillLightColor,
+    required this.fillLightIntensity,
+  });
+
+  final String aspectRatio;
+  final WhiteBalanceSettings wb;
+  final double zoom;
+  final double apparentZoom;
+  final bool fillLightEnabled;
+  final Color fillLightColor;
+  final double fillLightIntensity;
+}
+
+// OHOS 原生（C++）快速路径的成片输出上限。C++ 后处理各阶段都快，不受 Dart 逐像素
+// CPU 管线的性能约束，故不再用设置里的 maxDim（默认 1280 → 成片被压到 960x1280 会糊）。
+// 传一个足够覆盖 5MP 竖屏档的大值，插件端「防放大糊」guard 会自动 fit 回源分辨率，
+// 让成片保持源图清晰度（960px 宽成片在现代屏幕上放大 1.4x+ 是「糊」的主因）。
+const int _ohosNativeMaxDim = 2560;
+
+class CapturePage extends ConsumerStatefulWidget {
+  const CapturePage({super.key,
+      this.templateId, this.sceneId, this.kitId, this.challengeId, this.trialMode = false});
+
+  /// 来自 URL ?templateId=xxx，null 表示自由拍摄
+  final String? templateId;
+
+  /// 来自 URL ?scene=xxx，表示从场景详情页进入，需应用场景预设
+  final String? sceneId;
+
+  /// 来自 URL ?kitId=xxx，表示套用组合套件（含场景+模板+参数覆盖）
+  final String? kitId;
+
+  /// 来自 URL ?challengeId=xxx，表示从挑战详情页进入，
+  /// 拍照保存后需回写挑战状态并跳转 XP 奖励页
+  final String? challengeId;
+
+  /// 来自 URL ?trial=1，表示付费模板试用模式：
+  /// 仅展示模板效果，隐藏参数调整/工具栏、禁用快门、取景器铺水印
+  final bool trialMode;
+
+  @override
+  ConsumerState<CapturePage> createState() => _CapturePageState();
+}
+
+/// 相机权限状态
+enum CameraPermissionStatus { unknown, granted, denied, permanentlyDenied }
+
+class _CapturePageState extends ConsumerState<CapturePage>
+    with WidgetsBindingObserver {
+  bool _isLandscape = false;
+
+  /// 横屏时悬浮内容（模板信息卡）需顺时针旋转的 90° 圈数（0/1/3）。
+  /// 由传感器按左右持机方向给出，保证横屏时 tips 文字正向可读。
+  int _landscapeQuarterTurns = 0;
+
+  /// 来自加速度传感器的竖/横持判定（true=竖持，false=横持，null=尚未判定/平放）。
+  /// 用于拍摄方向与比例：OHOS 引擎窗口旋转时不一定更新 MediaQuery，横屏持机时
+  /// MediaQuery 恒报竖屏，导致成片恒为竖图、3:4 也不翻成 4:3。这里改用传感器判断
+  /// "手机拿横了没"，与 iPhone 原相机一致，且不依赖窗口是否旋转。
+  bool? _devicePortrait;
+  StreamSubscription<HoldOrientation>? _devicePortraitSub;
+
+  CameraPermissionStatus _permissionStatus = CameraPermissionStatus.unknown;
+
+  /// 是否 OHOS（HarmonyOS）：非 iOS 且非 Android。用于区分平台差异（白平衡等）。
+  bool get _isOhos => !Platform.isAndroid && !Platform.isIOS;
+
+  /// 白闪动画触发器：每次拍照时递增，ShutterFeedback widget 监听变化播放动画。
+  int _shutterTrigger = 0;
+
+  /// 延迟拍照倒计时剩余秒数（>0 表示正在倒计时，0 表示无倒计时）。
+  int _delayRemaining = 0;
+
+  /// 延迟拍照倒计时定时器（1s 周期）。
+  Timer? _delayTimer;
+
+  /// 返回结果模式：当通过 ?mode=return 进入时，拍照完成后 pop 回上一页
+  /// （用于实战作业页的"去拍摄"流程，捕获路径作为 String 返回）
+  bool _returnResult = false;
+
+  /// 挑战模式自动导航标志：照片处理完成后仅自动跳转一次挑战确认页，
+  /// 防止状态持续为 final_ 时重复触发导航。
+  bool _hasNavigatedToChallenge = false;
+
+  /// 相机重建 key：每次 app 从后台恢复时递增，
+  /// 强制 CameraAwesomeBuilder 销毁旧实例并创建新实例，
+  /// 确保原生相机被重新初始化（修复取景器一直转圈的问题）。
+  int _cameraRebuildKey = 0;
+
+  /// 取景器原始帧捕获 key：包裹 CameraPreview 的原始相机流（ColorFiltered 之前），
+  /// FilterPicker 抽屉展开时通过此 key 调用 `boundary.toImage()` 捕获当前帧，
+  /// 在滤镜卡片中套用各滤镜的 ColorFilter 显示实时效果预览。
+  ///
+  /// 修复 Bug：之前用固定 GlobalKey，切换摄像头时 Flutter reparent 复用旧
+  /// RepaintBoundary 及其子树（CameraAwesomeBuilder），导致 sensor 不切换。
+  /// 现在改为在 facing 变化时重建 key，强制 RepaintBoundary + CameraAwesomeBuilder 重建。
+  GlobalKey _viewfinderCaptureKey = GlobalKey(debugLabel: 'viewfinder');
+
+  /// 已合成取景器（含色彩矩阵 + 前置镜像 + 裁切）的 RepaintBoundary key，
+  /// 用于 OHOS 快门冻结帧捕获（水印动画源，WYSIWYG）。
+  GlobalKey _filteredPreviewKey = GlobalKey(debugLabel: 'filteredPreview');
+
+  /// 上一次构建时的 facing，用于检测 facing 变化并重建 captureKey
+  String? _lastFacingForKey;
+
+  /// 补光开启前的原始屏幕亮度（0.0~1.0）。
+  /// 补光关闭或页面退出时恢复此值；null 表示未保存（补光未开启或已恢复）。
+  double? _originalScreenBrightness;
+
+  /// 套用模板前记录的用户自由模式参数快照，取消套用时还原。
+  /// null 表示当前不在模板模式（无可还原快照）。
+  _TemplateParamSnapshot? _preTemplateParams;
+
+  /// 相机就绪流订阅：驱动取景器加载看门狗。
+  /// readyStream 收到 true 表示相机已就绪（CameraAwesomeBuilder 状态脱离 Preparing）。
+  StreamSubscription<bool>? _cameraReadySub;
+
+  /// 取景器加载看门狗定时器。
+  ///
+  /// 修复 Bug：重复进入拍摄页时，上一会话的相机释放（native releaseCamera 未被
+  /// stop 等待）可能与本次初始化冲突，导致 CameraAwesomeBuilder 一直停留在
+  /// PreparingCameraState，取景器永远显示加载圈。这里在相机超时未就绪时递增
+  /// _cameraRebuildKey 强制重建 CameraAwesomeBuilder（与 App 恢复重建策略一致），
+  /// 让相机重新走完整的初始化流程。
+  Timer? _cameraReadyWatchdog;
+
+  /// 当前相机是否已就绪（readyStream 最近一次事件）。
+  bool _cameraReady = false;
+
+  /// 摄像头切换是否进行中（上一次切换尚未就绪）。
+  ///
+  /// 修复 Bug：快速连点镜头切换时，CameraAwesomeBuilder 会被反复销毁重建，
+  /// 而原生相机的 init/start（PreparingCameraState.start 内含 500ms 异步延迟且
+  /// dispose 不取消）会重叠执行，导致取景器黑屏卡住。切换期间置位该标志，
+  /// 忽略期间的所有再次切换（串行化），待新摄像头就绪（readyStream 发出 true）
+  /// 后复位。与 [_cameraReady] 分开：不要求"全局相机已就绪"才能切第一次，
+  /// 避免初始加载阶段无法切换（测试环境相机永不就绪时也不受影响）。
+  bool _cameraSwitchInProgress = false;
+
+  /// 看门狗已触发的重建次数（上限 2 次，避免无限重建）。
+  int _cameraReadyRebuildCount = 0;
+
+  /// 水印定格动画状态：拍照完成且水印 + 动画开关均开启时挂载 overlay。
+  /// 动画结束后自动跳转到拍摄预览页。
+  bool _showWatermarkAnimation = false;
+  String? _animationPhotoPath;
+  WatermarkTemplate? _animationTemplate;
+  /// 动画源是否已是屏幕空间 WYSIWYG 帧（取景器来源 = true，跳过方向对齐）。
+  bool _animationSourceAligned = false;
+  VoidCallback? _onAnimationComplete;
+
+  /// OHOS 分阶段拍照早帧订阅：一阶段低质量帧（~672ms）先于成片到达，
+  /// 收到即提前触发水印动画（无需等待成片 capture() ~1.9s 返回）。
+  StreamSubscription<String>? _earlyFrameSub;
+
+  /// 当前拍摄是否期望 OHOS 早帧（用于忽略上一帧残留事件，避免误触发动画）。
+  bool _expectingEarlyFrame = false;
+
+  /// 先快后真：当前这次快门的 photoId（提前生成，interim→final→DB→预览升级复用）。
+  String? _currentShutterPhotoId;
+
+  /// 角标缩略图的 GlobalKey：水印动画淡出后跳预览页之前，
+  /// 需要确保后处理落库完成（读取 finalPath/photoId）。
+  final _thumbnailKey = GlobalKey(debugLabel: 'watermarkThumb');
+
+  /// 每日首次拍摄积分是否已在本会话尝试过。
+  /// 仅用于减少重复请求；最终幂等由服务端 point_earn_events 唯一约束保证。
+  bool _dailyShootEarned = false;
+  bool _dailyAutoSignInDone = false; // 同一会话避免重复自动签到
+
+  @override
+  void initState() {
+    super.initState();
+    // UI 保持竖屏（与 main.dart 一致，幂等）：横屏拍摄的适配改走加速度传感器，
+    // 见 _devicePortrait 字段注释。hot reload 不会重跑 main()，这里再次确认竖屏锁定。
+    _lockPortrait();
+    // 订阅加速度传感器判定竖/横持：见 _devicePortrait 字段注释。仅当判定翻转时
+    // setState，避免传感器高频回调触发不必要的重建。
+    _devicePortraitSub =
+        LevelSensorService.holdOrientationStream().listen((o) {
+      if (!mounted) return;
+      final newLandscape = o.isLandscape;
+      if (newLandscape != _isLandscape ||
+          o.quarterTurns != _landscapeQuarterTurns) {
+        setState(() {
+          _isLandscape = newLandscape;
+          _landscapeQuarterTurns = o.quarterTurns;
+          _devicePortrait = o.portrait;
+        });
+      } else {
+        _devicePortrait = o.portrait;
+      }
+    });
+    // 从非拍摄页返回本拍摄页时，若本页面是被 retain（覆盖未销毁）的实例，
+    // 相机已在离开时被路由观察者释放，需重建相机预览才能恢复取景器。
+    // 通过 ref.listenManual 监听版本号自增；首次进入时相机尚未就绪（_cameraReady
+    // 为 false），据此跳过，避免新页面被多余地重建一次。
+    // 注意：flutter_riverpod 2.x 的 ref.listen 只能在 build 内使用（assert
+    // debugDoingBuild），initState 必须用 listenManual，否则 debug 构建进入拍摄页
+    // 直接断言崩溃；listenManual 在 widget unmount 时自动取消订阅。
+    ref.listenManual<int>(
+        CaptureState.cameraRenewVersionProvider, (previous, next) {
+      if (!mounted || previous == null) return;
+      if (next <= previous) return;
+      if (!_cameraReady) return;
+      _remountCameraOnReturn();
+    });
+    // 挑战模式：重置缩略图状态，确保 provider 处于 idle 初始态，
+    // 避免 StateNotifierProvider 残留 final_ 状态导致 ref.listen 误触发（直接跳转到确认页）。
+    if (widget.challengeId != null && widget.challengeId!.isNotEmpty) {
+      ref.read(captureThumbnailProvider.notifier).reset();
+    }
+    WidgetsBinding.instance.addObserver(this);
+    // 预热常驻 worker isolate（性能优化 A）：提前创建，避免第一张照片承担 isolate 创建开销
+    CaptureWorker.instance.ensureStarted().catchError((Object e) {
+      debugPrint('[capture] worker 预热失败（首次拍照时会重试）: $e');
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _applyRouteParamsToState();
+      ref.read(CaptureState.currentTemplateIdProvider.notifier).state =
+          widget.templateId;
+      // 试用模式：付费模板未解锁时仅展示效果，隐藏参数/禁用快门/铺水印
+      if (widget.trialMode) {
+        ref.read(CaptureState.trialModeProvider.notifier).state = true;
+      }
+      // 解析 returnResult 模式：?mode=return 时拍照完成后 pop 回上一页
+      final mode = GoRouterState.of(context).queryParams[RouteNames.paramMode];
+      _returnResult = mode == 'return';
+      // 加载持久化的前后置摄像头与照片比例（先于相机初始化，保证首次进入即恢复）
+      await CaptureState.loadCameraPrefs(
+          ProviderScope.containerOf(context, listen: false));
+      // 加载模板信息卡隐藏偏好（用户上次点了隐藏则本次保持隐藏）
+      await CaptureState.loadTemplateInfoCardPreference(
+          ProviderScope.containerOf(context, listen: false));
+      // 加载水平仪开关（持久化到 user_settings.level_enabled）
+      await CaptureState.loadLevelEnabled(
+          ProviderScope.containerOf(context, listen: false));
+
+      // 进入时幂等重应用模板补光配置：
+      // 退出拍摄页后 route observer 会 resetAll（关闭补光、模板/朝向归零），重新进入时
+      // 若 currentTemplateIdProvider 被设为与上次相同的值、且 loadCameraPrefs 恢复的朝向
+      // 恰好等于进入前的值，上方的「模板变化 / 朝向变化」两条 change-driven 监听都不会触发，
+      // 补光会停留在 resetAll 后的关闭态 → 补光丢失。
+      // 这里在朝向已由 loadCameraPrefs 稳定后，按「当前模板 + 当前朝向」主动幂等重建一次，
+      // 保证退出重进后模板补光始终被正确应用。
+      final entryTpl = ref.read(CaptureState.originalTemplateProvider);
+      if (entryTpl != null) {
+        _applyTemplateFillLight(entryTpl);
+      }
+
+      // 幂等重应用当前姿势的相机方向（模板驱动）：
+      // 上方的 currentTemplateIdProvider 赋值已触发相机方向监听（可能切到前置），
+      // 但 loadCameraPrefs 随后恢复了用户持久化的默认朝向（可能为 back）会覆盖它。
+      // 这里在朝向稳定后按「当前模板 + 当前姿势」再次主动应用，保证退出重进后
+      // 自拍类模板仍能正确切到前置摄像头。模板驱动不持久化，不污染用户偏好。
+      final poseDir = ref.read(CaptureState.currentPoseCameraDirectionProvider);
+      if (poseDir != null) {
+        _applyPoseCameraDirection(poseDir);
+      }
+
+      // 幂等重应用模板镜头建议：
+      // 与补光/姿势方向同理，在 loadCameraPrefs 稳定朝向后按「当前模板 + 当前朝向」
+      // 主动重应用一次，保证退出重进后镜头建议不丢失。若最终为前置，则不套用镜头
+      // 建议并把缩放归位 1x，避免模板切换时残留后置的长焦/广角倍数。
+      final entryTplForLens = ref.read(CaptureState.originalTemplateProvider);
+      if (entryTplForLens != null) {
+        if (ref.read(CaptureState.cameraFacingProvider) == 'back') {
+          _applyTemplateLens(entryTplForLens);
+        } else {
+          ref.read(CaptureState.apparentZoomProvider.notifier).state = 1.0;
+          ref.read(CaptureState.zoomProvider.notifier).state = 1.0;
+          ref.read(cameraServiceProvider).setZoomMultiplier(1.0);
+        }
+      }
+
+      // 修复 Bug（重复进入取景器卡加载）：
+      // 1. 订阅相机就绪流，驱动取景器加载看门狗（超时未就绪自动重建）
+      // 2. 调用 initialize() 让单例服务清除上一会话残留状态，保证干净起点
+      final cameraService = ref.read(cameraServiceProvider);
+      _cameraReadySub ??= cameraService.readyStream.listen((ready) {
+        if (!mounted) return;
+        if (ready) {
+          _cameraReady = true;
+          // 新摄像头就绪：解除切换防抖，允许下一次切换
+          _cameraSwitchInProgress = false;
+          _cameraReadyWatchdog?.cancel();
+          _cameraReadyWatchdog = null;
+          // 相机已就绪：重置重建计数，正常切换/重建多次不会耗尽看门狗预算，
+          // 保证后续某次相机意外卡住时看门狗仍能自动恢复。
+          _cameraReadyRebuildCount = 0;
+        } else {
+          _cameraReady = false;
+        }
+      });
+      cameraService.initialize(
+        facing: ref.read(CaptureState.cameraFacingProvider),
+      );
+
+      _requestCameraPermission();
+      _loadLastPhotoForThumbnail();
+      // 异步加载持久化的自由模式参数（仅在自由模式生效，模板模式由 currentTemplateId 覆盖）
+      CaptureState.loadFreeModeParams(
+          ProviderScope.containerOf(context, listen: false));
+      // 触发远程模板同步（invalidate 强制重新拉取），同步完成后 allTemplatesProvider 自动重新评估
+      ref.invalidate(remoteTemplatesSyncProvider);
+      ref.invalidate(remoteCategoriesSyncProvider);
+    });
+    // 从 DB 异步加载水印设置 + 自定义模板到 provider（非阻塞）。
+    // 修复：原仅在设置页 initState 加载，用户直奔拍摄页时水印设置/自定义模板为空。
+    Future.microtask(() {
+      final container = ProviderScope.containerOf(context, listen: false);
+      loadWatermarkSettings(container);
+      loadCustomWatermarks(container);
+    });
+  }
+
+  /// 读取路由参数（sceneId / templateId / kitId）并应用到 CaptureState
+  /// 优先级：kitId > templateId（套件已包含 templateId）；sceneId 独立设置
+  Future<void> _applyRouteParamsToState() async {
+    final kitId = widget.kitId;
+    final sceneId = widget.sceneId;
+
+    if (sceneId != null) {
+      ref.read(CaptureState.activeScenePresetIdProvider.notifier).state =
+          sceneId;
+      // 套用场景推荐滤镜（内置 + DB 自定义/系统场景均可命中）
+      final filter = await _resolveSceneFilter(sceneId);
+      if (filter != null) {
+        CaptureState.applySceneFilter(ref, filter);
+      }
+    }
+
+    if (kitId == null) return;
+
+    try {
+      final dao = await ref.read(compositionKitsDaoProvider.future);
+      final kit = await dao.getById(kitId);
+      if (kit == null) return;
+
+      // 设置 sceneId（套件中的 sceneId 优先于 URL scene 参数）
+      ref.read(CaptureState.activeScenePresetIdProvider.notifier).state =
+          kit.sceneId;
+
+      // 设置 templateId（套件中的 templateId 优先）
+      if (kit.templateId != null) {
+        ref.read(CaptureState.currentTemplateIdProvider.notifier).state =
+            kit.templateId;
+      }
+
+      // 应用相机参数覆盖到 freeModeCamera（无模板时）或 editableTemplate（有模板时）
+      final overrides = kit.cameraOverrides;
+      if (overrides.isNotEmpty) {
+        final editable = ref.read(CaptureState.editableTemplateProvider);
+        if (editable != null) {
+          // 有模板：基于模板相机参数叠加覆盖
+          final newCamera = editable.camera.copyWith(
+            exposureCompensation:
+                (overrides['exposureCompensation'] as num?)?.toDouble() ??
+                    editable.camera.exposureCompensation,
+            iso: (overrides['iso'] as num?)?.toInt() ?? editable.camera.iso,
+            shutterSpeed: (overrides['shutterSpeed'] as String?) ??
+                editable.camera.shutterSpeed,
+          );
+          ref.read(CaptureState.editableTemplateProvider.notifier).state =
+              editable.copyWith(camera: newCamera);
+        } else {
+          // 无模板：直接写 freeModeCamera
+          final current = ref.read(CaptureState.freeModeCameraProvider);
+          ref.read(CaptureState.freeModeCameraProvider.notifier).state =
+              current.copyWith(
+            exposureCompensation:
+                (overrides['exposureCompensation'] as num?)?.toDouble() ??
+                    current.exposureCompensation,
+            iso: (overrides['iso'] as num?)?.toInt() ?? current.iso,
+            shutterSpeed: (overrides['shutterSpeed'] as String?) ??
+                current.shutterSpeed,
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[capture] 加载套件失败: $e');
+    }
+  }
+
+  /// 按场景 ID 解析推荐滤镜。
+  /// 优先级：内置静态预设 map → scenes 表 DB 记录（自定义/系统场景）。
+  Future<SceneFilter?> _resolveSceneFilter(String sceneId) async {
+    final builtIn = ScenePresetsData.getScenePreset(sceneId);
+    if (builtIn != null) return builtIn.filter;
+    try {
+      final dao = await ref.read(scenesDaoProvider.future);
+      final record = await dao.getById(sceneId);
+      if (record != null) return sceneFilterFromJson(record.filter);
+    } catch (_) {
+      // 解析失败静默返回 null，不阻断拍摄页初始化
+    }
+    return null;
+  }
+
+  /// 请求相机权限
+  /// 修复：原代码从未调用 permission_handler 请求运行时权限，
+  /// 导致 CameraAwesomeBuilder 无法初始化，cameraStateProvider 始终为 null，
+  /// _onCapture() 永远显示"相机正在初始化，请稍候..."
+  Future<void> _requestCameraPermission() async {
+    final status = await Permission.camera.request();
+    if (!mounted) return;
+    setState(() {
+      switch (status) {
+        case PermissionStatus.granted:
+          _permissionStatus = CameraPermissionStatus.granted;
+          // 权限就绪后相机预览即将构建，启动取景器加载看门狗：
+          // 相机超时未就绪时自动重建 CameraAwesomeBuilder，避免取景器一直加载。
+          _startCameraReadyWatchdog();
+          break;
+        case PermissionStatus.permanentlyDenied:
+          _permissionStatus = CameraPermissionStatus.permanentlyDenied;
+          break;
+        default:
+          _permissionStatus = CameraPermissionStatus.denied;
+      }
+    });
+  }
+
+  /// 启动取景器加载看门狗。
+  ///
+  /// 相机在 [_cameraReadyTimeout] 内未就绪（readyStream 未收到 true）时，
+  /// 递增 [_cameraRebuildKey] 强制 CameraPreview 重建（ValueKey 变化 →
+  /// CameraAwesomeBuilder 销毁重建，相机重新初始化），最多重建 2 次。
+  /// 修复 Bug：重复进入拍摄页时相机初始化可能卡住，取景器永远显示加载圈。
+  void _startCameraReadyWatchdog() {
+    _cameraReadyWatchdog?.cancel();
+    _cameraReady = false;
+    _cameraReadyWatchdog = Timer(_cameraReadyTimeout, () {
+      if (!mounted || _cameraReady) return;
+      if (_cameraReadyRebuildCount >= 2) {
+        debugPrint('[capture] 相机多次重建后仍未就绪，放弃自动恢复');
+        return;
+      }
+      _cameraReadyRebuildCount++;
+      debugPrint(
+          '[capture] 相机 ${_cameraReadyTimeout.inSeconds}s 内未就绪，'
+          '强制重建取景器（第 $_cameraReadyRebuildCount 次）');
+      setState(() => _cameraRebuildKey++);
+      // 重建后重新计时（新 CameraAwesomeBuilder 会走完整初始化流程）
+      _startCameraReadyWatchdog();
+    });
+  }
+
+  static const _cameraReadyTimeout = Duration(seconds: 10);
+
+  /// 从数据库加载最近一张照片，显示在左下角缩略图（与原生相机行为一致）。
+  /// 修复 Bug：之前缩略图仅在拍摄后显示，进入拍摄页时为空白。
+  Future<void> _loadLastPhotoForThumbnail() async {
+    try {
+      final dao = await ref.read(galleryDaoProvider.future);
+      final recent = await dao.getRecent(limit: 1);
+      if (!mounted || recent.isEmpty) return;
+      final photo = recent.first;
+      final path = photo.filePath;
+      if (path == null || path.isEmpty) return;
+      ref
+          .read(captureThumbnailProvider.notifier)
+          .setFinalResult(path, photo.id);
+    } catch (e) {
+      debugPrint('[capture] 加载最近照片失败: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    // 退出页面时恢复屏幕亮度（安全网：补光仍开启时退出）
+    _restoreBrightness();
+    // 修复 Bug：不再在这里调用 cameraService.dispose()。
+    // 相机资源由 CameraAwesomeBuilder 自身的 CameraContext.dispose() 在卸载时
+    // 通过 CamerawesomePlugin.stop() 停止；这里再 stop 一次会与前者并发，且
+    // cameraServiceProvider 是 app 级单例，dispose 会把 _readyController 永久
+    // 关闭，导致再次进入拍摄页时取景器就绪流失效、卡在加载中。
+    _cameraReadySub?.cancel();
+    _cameraReadyWatchdog?.cancel();
+    _devicePortraitSub?.cancel();
+    _delayTimer?.cancel();
+    _delayTimer = null;
+    _earlyFrameSub?.cancel();
+    _earlyFrameSub = null;
+    // 释放常驻 worker isolate（性能优化 A：避免 isolate 泄漏）
+    CaptureWorker.instance.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// 补光开启：保存当前屏幕亮度，然后调至最高（1.0）。
+  void _enableMaxBrightness() {
+    () async {
+      try {
+        _originalScreenBrightness = await Screen.brightness;
+        await Screen.setBrightness(1.0);
+      } catch (e) {
+        debugPrint('[capture] set max brightness failed: $e');
+      }
+    }();
+  }
+
+  /// 补光关闭或页面退出：恢复原始屏幕亮度。
+  void _restoreBrightness() {
+    final saved = _originalScreenBrightness;
+    if (saved == null) return;
+    _originalScreenBrightness = null;
+    () async {
+      try {
+        await Screen.setBrightness(saved);
+      } catch (e) {
+        debugPrint('[capture] restore brightness failed: $e');
+      }
+    }();
+  }
+
+  /// 记录当前模板相关的实时参数快照（套用模板前的用户自由模式状态），
+  /// 供取消套用时还原。快照只覆盖套用模板会覆盖的实时参数：
+  /// 补光灯（开关/颜色/强度）、白平衡、缩放、照片比例。
+  _TemplateParamSnapshot _captureTemplateParams() {
+    return _TemplateParamSnapshot(
+      aspectRatio: ref.read(CaptureState.aspectRatioProvider),
+      wb: ref.read(whiteBalanceSessionProvider),
+      zoom: ref.read(CaptureState.zoomProvider),
+      apparentZoom: ref.read(CaptureState.apparentZoomProvider),
+      fillLightEnabled: ref.read(CaptureState.fillLightEnabledProvider),
+      fillLightColor: ref.read(CaptureState.fillLightColorProvider),
+      fillLightIntensity: ref.read(CaptureState.fillLightIntensityProvider),
+    );
+  }
+
+  /// 取消套用模板时，把上面快照记下的参数还原回套用前的用户状态。
+  void _restoreTemplateParams(_TemplateParamSnapshot s) {
+    ref.read(CaptureState.aspectRatioProvider.notifier).state = s.aspectRatio;
+    ref.read(whiteBalanceSessionProvider.notifier).state = s.wb;
+    ref.read(cameraServiceProvider).setWhiteBalance(s.wb);
+    ref.read(CaptureState.zoomProvider.notifier).state = s.zoom;
+    ref.read(CaptureState.apparentZoomProvider.notifier).state = s.apparentZoom;
+    ref.read(cameraServiceProvider).setZoomMultiplier(s.zoom);
+    ref
+        .read(CaptureState.fillLightEnabledProvider.notifier)
+        .state = s.fillLightEnabled;
+    ref.read(CaptureState.fillLightColorProvider.notifier).state =
+        s.fillLightColor;
+    ref.read(CaptureState.fillLightIntensityProvider.notifier).state =
+        s.fillLightIntensity;
+    debugPrint(
+        '[capture] 取消套用模板，还原参数: ratio=${s.aspectRatio} '
+        'wb=${s.wb} zoom=${s.zoom} fillLightEnabled=${s.fillLightEnabled} '
+        'fillLightColor=$s.fillLightColor intensity=${s.fillLightIntensity}');
+  }
+
+  /// 依据当前摄像头朝向，把模板的补光灯配置应用到补光状态。
+  /// 颜色/强度始终跟随模板；是否激活补光取决于「模板启用补光 + 前置摄像头」。
+  /// 前摄未激活时仅记录颜色/强度，切到后置不激活实时光强/悬浮取景器。
+  void _applyTemplateFillLight(PhotoTemplate next) {
+    final fl = next.postProcess.fillLight;
+    final enabled = fl != null && fl.enabled;
+    final onFront = ref.read(CaptureState.cameraFacingProvider) == 'front';
+    ref.read(CaptureState.fillLightColorProvider.notifier).state =
+        Color((fl?.color ?? 0xFFFFE5B4) | 0xFF000000);
+    ref.read(CaptureState.fillLightIntensityProvider.notifier).state =
+        fl?.intensity ?? 0.8;
+    ref.read(CaptureState.fillLightEnabledProvider.notifier).state =
+        enabled && onFront;
+    debugPrint(
+        '[capture] 模板套用补光灯: enabled=${enabled && onFront} '
+        'color=#${(fl?.color ?? 0xFFFFE5B4).toRadixString(16)} '
+        'intensity=${fl?.intensity ?? 0.8} facing=${onFront ? 'front' : 'back'}');
+  }
+
+  /// 按姿势指定的相机方向切换前后摄像头。
+  /// - direction 为 null（模板/姿势未指定）→ 不干预，保持当前朝向
+  /// - direction 与当前朝向相同 → 跳过
+  /// - 模板驱动的切换不持久化（不覆盖用户的前后摄偏好，自由模式仍恢复默认朝向）
+  void _applyPoseCameraDirection(String? direction) {
+    if (direction == null) return;
+    final current = ref.read(CaptureState.cameraFacingProvider);
+    if (current == direction) return;
+    ref.read(CaptureState.cameraFacingProvider.notifier).state = direction;
+    // 复用切换防抖与看门狗：防止与紧随的手动切换重叠导致取景器卡死
+    _cameraSwitchInProgress = true;
+    _startCameraReadyWatchdog();
+    debugPrint('[capture] 模板/姿势指定相机方向，切换至: $direction');
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    final size = WidgetsBinding.instance.window.physicalSize;
+    final newIsLandscape = size.width > size.height;
+    if (newIsLandscape != _isLandscape) {
+      setState(() => _isLandscape = newIsLandscape);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      // App 从后台恢复时，原生相机已被释放并重新初始化，
+      // 但 Dart 侧的 AwesomeCameraPreview 仍持有旧的 textureId/previewSize。
+      // 解决方案：递增 _cameraRebuildKey，通过 ValueKey 强制 CameraPreview
+      // （及其内部的 CameraAwesomeBuilder）完全重建，
+      // 确保取景器获取新的 textureId 和 previewSize。
+      debugPrint('[capture] App resumed, forcing camera re-initialization');
+      setState(() {
+        _cameraRebuildKey++;
+      });
+    }
+  }
+
+  /// 返回拍摄页时强制重建相机预览。
+  ///
+  /// 离开拍摄页到非拍摄页时，路由观察者已显式释放相机（CamerawesomePlugin.stop）。
+  /// 若本页是被 retain（覆盖未销毁）的实例，返回时不会重新 initState，这里的
+  /// CameraAwesomeBuilder 仍持有已释放的相机上下文，取景器会黑屏/卡住。
+  /// 递增 [_cameraRebuildKey]（ValueKey 变化）强制销毁旧实例并重建，重新初始化相机。
+  void _remountCameraOnReturn() {
+    if (!mounted) return;
+    debugPrint('[capture] 从其他页面返回拍摄页，强制重建相机预览');
+    _startCameraReadyWatchdog();
+    setState(() => _cameraRebuildKey++);
+  }
+
+  void _onBack() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      GoRouter.of(context).go(RouteNames.home);
+    }
+  }
+
+  /// 锁定竖屏（幂等，与 main.dart 启动配置一致）。
+  ///
+  /// UI 整体保持竖屏，避免 iOS 横屏后整页布局被拉伸挤压。横屏拍摄的成片方向与
+  /// 悬浮模板信息卡的旋转，均由加速度传感器驱动（见 [_devicePortrait]），不依赖
+  /// 窗口是否旋转。hot reload 不会重跑 main()，这里在拍摄页初始化时再确认一次。
+  Future<void> _lockPortrait() async {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
+  }
+
+  /// 隐藏顶部模板信息卡并持久化（下次进入拍摄页保持隐藏）。
+  void _hideTemplateInfoCard() {
+    final container = ProviderScope.containerOf(context, listen: false);
+    ref.read(CaptureState.templateInfoCardHiddenProvider.notifier).state = true;
+    CaptureState.persistTemplateInfoCardHidden(container, true);
+  }
+
+  /// 重新显示顶部模板信息卡并持久化。
+  void _showTemplateInfoCard() {
+    final container = ProviderScope.containerOf(context, listen: false);
+    ref.read(CaptureState.templateInfoCardHiddenProvider.notifier).state = false;
+    CaptureState.persistTemplateInfoCardHidden(container, false);
+  }
+
+  /// 将 CaptureState 的 CaptureFlashMode 映射为 CameraService 的 CameraFlashMode。
+  /// CameraService 实现内部会再映射到各平台 camerawesome 的 FlashMode 枚举。
+  CameraFlashMode _mapFlashMode(CaptureFlashMode mode) {
+    switch (mode) {
+      case CaptureFlashMode.off:
+        return CameraFlashMode.off;
+      case CaptureFlashMode.on:
+        return CameraFlashMode.on;
+      case CaptureFlashMode.auto:
+        return CameraFlashMode.auto;
+      case CaptureFlashMode.torch:
+        return CameraFlashMode.torch;
+    }
+  }
+
+  /// 启动延迟拍照倒计时：中央大数字每秒递减并播放快门声节拍，计时到 0 触发真正拍照。
+  void _startDelayCountdown(int seconds) {
+    _delayTimer?.cancel();
+    _delayRemaining = seconds;
+    setState(() {});
+    SystemSound.play(SystemSoundType.click);
+    _delayTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      if (_delayRemaining <= 1) {
+        t.cancel();
+        _delayTimer = null;
+        setState(() => _delayRemaining = 0);
+        _doCapture();
+      } else {
+        setState(() => _delayRemaining--);
+        SystemSound.play(SystemSoundType.click);
+      }
+    });
+  }
+
+  /// 取消正在进行的延时倒计时（不发生拍照）。幂等，无倒计时时安全。
+  void _cancelDelayCountdown() {
+    _delayTimer?.cancel();
+    _delayTimer = null;
+    if (_delayRemaining > 0) {
+      setState(() => _delayRemaining = 0);
+    }
+  }
+
+  /// 快门入口：处理延迟拍照。
+  /// - 正在倒计时 → 再次点击取消延时（不发生拍照，iOS 风格）
+  /// - 已选延时(>0) 且未在倒计时 → 启动倒计时，不立即拍照
+  /// - 延时为 0 → 直接拍照
+  Future<void> _onCapture() async {
+    if (_delayRemaining > 0) {
+      debugPrint('[capture] _onCapture() cancel delay countdown');
+      _cancelDelayCountdown();
+      return;
+    }
+    final delay = ref.read(CaptureState.delayTimerProvider);
+    if (delay > 0) {
+      debugPrint('[capture] _onCapture() start delay: ${delay}s');
+      _startDelayCountdown(delay);
+      return;
+    }
+    await _doCapture();
+  }
+
+  /// 拍照体：调用 CameraService 拿到原始 JPEG，后处理后显示到角标。
+  ///
+  /// 连拍优化：capture（相机拍照）和后处理解耦。
+  /// - capture 调用立即返回（camerawesome 内部排队 takePhoto，每次返回独立文件）
+  /// - 后处理在独立 isolate 中串行执行，不阻塞 UI 和下次 capture 调用
+  /// - 角标显示最新完成的一张
+  Future<void> _doCapture() async {
+    debugPrint('[capture] _doCapture() called');
+
+    // 试用模式：禁用快门，提示用户解锁后再拍摄
+    if (ref.read(CaptureState.trialModeProvider)) {
+      LumiraToast.show(
+        context,
+        '试用模式不可拍摄，购买解锁后即可使用',
+        duration: const Duration(milliseconds: 1200),
+      );
+      return;
+    }
+
+    // 快门声音：按设置播放系统快门音（默认开启，设置页可关闭）
+    if (ref.read(CaptureState.shutterSoundProvider)) {
+      SystemSound.play(SystemSoundType.click);
+    }
+
+    final cameraService = ref.read(cameraServiceProvider);
+    final flashMode = ref.read(CaptureState.flashModeProvider);
+    final facing = ref.read(CaptureState.cameraFacingProvider);
+    final zoom = ref.read(CaptureState.zoomProvider);
+
+    // === 水印相框入场动画条件（快门按下即并行抓帧，动画源与成片互不阻塞） ===
+    final wmSettings = ref.read(watermarkSettingsProvider);
+    final wmTemplate = ref.read(currentWatermarkTemplateProvider);
+    // 挑战模式下不触发水印定格动画（即使水印与动画开关均已开启），
+    // 挑战流程聚焦拍摄本身，避免动画打断确认/完成跳转。
+    final isChallengeMode =
+        widget.challengeId != null && widget.challengeId!.isNotEmpty;
+    final shouldAnimateNow = wmSettings.enabled &&
+        wmSettings.animationEnabled &&
+        wmTemplate != null &&
+        !isChallengeMode;
+
+    // === 先快后真：快门即生成 photoId（供早帧 interim 回调使用） ===
+    final photoId = 'photo_${DateTime.now().millisecondsSinceEpoch}';
+    _currentShutterPhotoId = photoId;
+
+    // 立即反馈：白闪 + 角标 processing 态
+    setState(() => _shutterTrigger++);
+    ref.read(captureThumbnailProvider.notifier).startCapture(photoId: photoId);
+
+    // 快门冻结帧动画源：iOS/OHOS 统一用 RepaintBoundary 截图（含色彩矩阵 +
+    // 前置镜像 + 裁切，与取景器 100% 一致）。此前 iOS 用原生 video 帧直出
+    // （captureFrameForAnimation）作动画源：该帧不含 Flutter ColorFiltered
+    // 滤镜效果，动画内容与取景器不一致，故弃用、双端统一走屏幕空间截图。
+    // 取景器帧捕捉不到瞬时闪光，闪光模式（on/auto/torch）动画源回退用成片。
+    // Android 动画源回退用成片（原生硬解码）。
+    final isIos = Platform.isIOS;
+
+    // OHOS 分阶段拍照：订阅早帧通道（常驻一次）。一阶段低质量帧（~672ms）先于成片
+    // capture()（~1.9s）返回到达。
+    // 先快后真：早帧无条件作为 interim 先顶屏（缩略图/预览）。
+    // 水印动画源不再用原生早帧（FAST_MODE 走相册增强链路，与取景器不符），
+    // 改为快门时刻冻结取景器帧（_captureShutterViewfinderFrame，WYSIWYG）。
+    // _expectingEarlyFrame 标记本次拍摄期望早帧，防止上一帧残留事件误触发 interim。
+    final isOhos = !isIos && !Platform.isAndroid;
+    _expectingEarlyFrame = isOhos;
+    if (isOhos) {
+      try {
+        _earlyFrameSub ??= cameraService.photoEarlyFrames().listen((path) {
+          if (!_expectingEarlyFrame || path.isEmpty) {
+            return;
+          }
+          // 允许连续转场：interim 分支本地判定，避免「残留早帧误触发动画」的历史问题。
+          _expectingEarlyFrame = false;
+          final pid = _currentShutterPhotoId;
+          debugPrint('[capture] OHOS early frame arrived: $path pid=$pid');
+          if (pid != null) {
+            ref.read(captureThumbnailProvider.notifier)
+                .setInterimResult(path, photoId: pid);
+          }
+        });
+      } catch (e) {
+        debugPrint('[capture] listen OHOS early frame failed: $e');
+      }
+    }
+
+    // iOS/OHOS：快门即冻结已合成取景器帧作水印动画源（RepaintBoundary 截图，
+    // 含色彩矩阵 + 前置镜像 + 裁切，保证动画内容 = 取景器所见）。
+    // 与成片 capture() 并行执行，不阻塞。
+    final shutterFrameFuture = shouldAnimateNow && flashMode == CaptureFlashMode.off
+        ? _captureShutterViewfinderFrame()
+        : Future<String?>.value(null);
+
+    // 快照当前比例参数（避免连拍中切换比例导致参数不一致）
+    final ratioId = ref.read(CaptureState.aspectRatioProvider);
+    // 使用 MediaQuery（与取景器一致）而非已废弃的 WidgetsBinding.instance.window.physicalSize，
+    // 后者在部分平台返回 Size.zero 导致 screenRatio=NaN，isolate 裁切失败后 catch 返回原始 4:3 图像。
+    final screenSize = MediaQuery.of(context).size;
+    // 物理方向优先用加速度传感器（见 _devicePortrait）：OHOS 窗口/MediaQuery 未必跟随旋转，
+    // 仅看 MediaQuery 会恒判竖屏 → 横屏持机成片仍是竖图、3:4 也不翻成 4:3。
+    // 传感器判定成功（非 null）时用之；否则回退到 MediaQuery。
+    final isPortrait =
+        _devicePortrait ?? (screenSize.height >= screenSize.width);
+    var screenRatio = screenSize.width / screenSize.height;
+    if (!screenRatio.isFinite || screenRatio <= 0) {
+      // Fallback：典型手机屏幕比例（竖屏 9:19.5，横屏 19.5:9）
+      screenRatio = isPortrait ? 9.0 / 19.5 : 19.5 / 9.0;
+    }
+    final targetRatio =
+        CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
+
+    try {
+      // === P0：动画不等成片 ===
+      // OHOS capture()（框架 photoAvailable 投递，~2s）是快门到可交互的最大延迟。
+      // 先启动拍照 Future 不立即 await，等动画源帧（快门冻结帧/取景器直出帧，
+      // 100-300ms）就绪即播水印动画，成片在后台继续。
+      final sw = Stopwatch()..start();
+      final captureFuture = cameraService.capture(
+        config: CaptureConfig(
+          facing: facing,
+          zoomMultiplier: zoom,
+          flashMode: _mapFlashMode(flashMode),
+        ),
+      );
+
+      // 快门冻结取景器帧（动画源，WYSIWYG），与成片 capture() 并行已完成。
+      // 编码 100-300ms，失败/无可用帧时回退用成片做动画源。
+      String? shutterFramePath;
+      try {
+        shutterFramePath = await shutterFrameFuture;
+      } catch (e) {
+        debugPrint('[capture] shutterFrameForAnimation failed: $e');
+      }
+
+      // === 水印相框入场动画（动画源帧就绪即触发，不等成片） ===
+      // 使用「动画内容源帧」+ CustomPaint 叠加水印（与最终渲染水印视觉一致），
+      // 后处理在队列中并行执行。
+      // - iOS/OHOS 动画源 = 快门冻结取景器帧（RepaintBoundary 截图，
+      //   含色彩矩阵+前置镜像+裁切，WYSIWYG）；
+      // 屏幕空间帧（已旋转/已镜像），sourceAligned=true 跳过二次对齐。
+      // 注意：此处不消费 _expectingEarlyFrame——成片未返回前早帧仍应送达
+      // （interim 先快后真），等 capture() 返回后再复位。
+      final earlyAnimSource = shutterFramePath;
+      if (shouldAnimateNow &&
+          mounted &&
+          earlyAnimSource != null &&
+          !_showWatermarkAnimation) {
+        _startWatermarkAnimation(
+          earlyAnimSource,
+          wmTemplate,
+          sourceAligned: true,
+        );
+      }
+
+      // 等待成片返回（动画已开播，后台完成）。
+      final result = await captureFuture;
+      debugPrint('[perf] cameraService.capture: ${sw.elapsedMilliseconds}ms');
+
+      // 回退：无动画源帧（闪光模式/取景器帧捕捉失败）且动画尚未启动 →
+      // 用成片启动（成片是原始照片，需要方向对齐，sourceAligned=false）。
+      if (shouldAnimateNow && mounted && !_showWatermarkAnimation) {
+        _startWatermarkAnimation(
+          result.filePath,
+          wmTemplate,
+          sourceAligned: false,
+        );
+      }
+      if (shouldAnimateNow) {
+        _expectingEarlyFrame = false;
+      }
+
+      // 【抗手抖-单帧选帧】对成片做清晰度评分（拉普拉斯方差），用于角标渐进预览和
+      // 选帧诊断。防糊由系统层解决（OHOS 8.2MP 档位 + HIGH_QUALITY，project_memory
+      // 硬约束），应用层不据此叠加锐化去模糊。
+      // 【OHOS 性能优化】用主 isolate 的 dart:ui（OS 加速解码）把该帧降采样到
+      // 240px rawRgba 传给 worker 直接评分，避免 worker 纯 Dart 全量解码
+      // 4000px JPEG（每帧 0.3-0.8s，是 OHOS 变慢的主因）。
+      final swScore = Stopwatch()..start();
+      final smallFrames = await _decodeBurstThumbnails([result.filePath]);
+      final scoreResult = await CaptureWorker.instance.scoreFrames(
+        [result.filePath],
+        smallRgba: smallFrames?.rgbaList,
+        smallW: smallFrames?.widthList,
+        smallH: smallFrames?.heightList,
+      );
+      debugPrint('[perf] scoreFrames: ${swScore.elapsedMilliseconds}ms '
+          'score=${scoreResult.bestScore}');
+
+      // 渐进显示：立即把该帧的原图预览放进角标（后处理完成后会替换为成品）
+      if (scoreResult.previewBytes != null) {
+        ref.read(captureThumbnailProvider.notifier)
+            .setQuickResult(scoreResult.previewBytes!);
+      }
+
+      // 仅选中的一帧进入后处理队列（后处理异步执行，不阻塞下次 capture 调用）
+      final postProcess = ref.read(CaptureState.effectivePostProcessProvider);
+      debugPrint('[capture] postProcess for isolate: '
+          'brightness=${postProcess.color.brightness}, '
+          'sharpen=${postProcess.sharpen}, '
+          'smooth=${postProcess.smoothStrength}, '
+          'vignette=${postProcess.vignette}, '
+          'grain=${postProcess.grain}, '
+          'clarity=${postProcess.color.clarity}, '
+          'brilliance=${postProcess.color.brilliance}, '
+          'vibrance=${postProcess.color.vibrance}');
+      _processCaptureQueue.add(_CaptureProcessParams(
+        inputPath: result.filePath,
+        photoId: photoId,
+        targetRatio: targetRatio,
+        ratioId: ratioId,
+        isPortrait: isPortrait,
+        isFront: facing == 'front',
+        postProcess: postProcess,
+        isWysiwyg: result.isWysiwyg,
+        // 默认分辨率档位决定成片输出/解码尺寸（设置页可切换）
+        maxDim: CaptureResolutions.byId(
+                ref.read(CaptureState.defaultResolutionProvider))
+            .maxDim,
+        decodeDim: CaptureResolutions.byId(
+                ref.read(CaptureState.defaultResolutionProvider))
+            .decodeDim,
+      ));
+      _processCaptureQueueItem();
+    } catch (e, st) {
+      debugPrint('[capture] capture failed: $e\n$st');
+      if (!mounted) return;
+      LumiraToast.show(
+        context,
+        '拍照失败：$e',
+        duration: const Duration(seconds: 2),
+      );
+    }
+  }
+
+  /// 连拍帧的 240px 降采样 RGBA 小图（供 worker 评分，避免 worker 纯 Dart 全量解码）。
+  static const int _kBurstThumbDim = 240;
+
+  /// 用 dart:ui（OS 加速解码）把连拍帧降到 [_kBurstThumbDim]px 的 rawRgba。
+  /// 返回 null 表示全部解码失败（调用方会回退到 worker 内自行读文件解码）。
+  /// 返回的字节是"紧凑拷贝"（offset 0、长度精确），保证跨 isolate 传递后
+  /// img.Image.fromBytes(bytes: rgba.buffer) 能正确读取。
+  Future<_BurstThumbnails?> _decodeBurstThumbnails(List<String> paths) async {
+    final sw = Stopwatch()..start();
+    final rgbaList = <Uint8List>[];
+    final widthList = <int>[];
+    final heightList = <int>[];
+    for (final p in paths) {
+      try {
+        final bytes = await File(p).readAsBytes();
+        final codec = await ui.instantiateImageCodec(
+          bytes,
+          targetWidth: _kBurstThumbDim,
+          targetHeight: _kBurstThumbDim,
+        );
+        final frame = await codec.getNextFrame();
+        final image = frame.image;
+        final w = image.width, h = image.height;
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+        codec.dispose();
+        image.dispose();
+        if (byteData == null) throw StateError('toByteData null');
+        rgbaList.add(Uint8List.fromList(
+          byteData.buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes),
+        ));
+        widthList.add(w);
+        heightList.add(h);
+        debugPrint('[capture] burst thumb $p decoded ${w}x${h}, '
+            'rgbaLen=${byteData.lengthInBytes} (expect ${w * h * 4}) target=$_kBurstThumbDim');
+      } catch (e) {
+        debugPrint('[capture] decode burst thumb $p failed: $e');
+      }
+    }
+    debugPrint('[perf] decodeBurstThumbnails x${rgbaList.length}: ${sw.elapsedMilliseconds}ms');
+    if (rgbaList.isEmpty || rgbaList.length != paths.length) return null;
+    return _BurstThumbnails(rgbaList, widthList, heightList);
+  }
+
+  /// 拍照后处理队列（串行消费，避免 isolate 并发创建开销和内存峰值）
+  final _processCaptureQueue = <_CaptureProcessParams>[];
+  bool _isProcessingCapture = false;
+
+  /// 串行处理拍照后处理队列。
+  /// 每张照片在独立 isolate 中处理（方向对齐 + 前置镜像 + 比例裁切），
+  /// 处理完成后更新角标为最新一张。
+  Future<void> _processCaptureQueueItem() async {
+    if (_isProcessingCapture || _processCaptureQueue.isEmpty) return;
+    _isProcessingCapture = true;
+    final params = _processCaptureQueue.removeAt(0);
+
+    // 提前判断是否需要水印（决定 isolate 输出 rawRgba 还是 JPEG）
+    final watermarkSettings = ref.read(watermarkSettingsProvider);
+    final watermarkTemplate = ref.read(currentWatermarkTemplateProvider);
+    final needWatermark = watermarkSettings.enabled && watermarkTemplate != null;
+
+    // [非破坏性编辑] 在 isolate 处理前备份原图（isolate 会覆写 inputPath）
+    // 与 GPU 处理并行执行（两者都只读 inputPath，互不干扰），节省 ~50ms
+    String? originalPath;
+    Future<void>? backupFuture;
+    try {
+      originalPath = '${params.inputPath}.original.jpg';
+      backupFuture = File(params.inputPath).copy(originalPath).then((_) {});
+    } catch (e) {
+      debugPrint('[capture] 原图保留启动失败（不阻塞）: $e');
+      originalPath = null;
+    }
+
+    // === OHOS 单次原生快速路径 ===
+    // 无论是否开「水印」，只要无暂未原生实现的复杂效果（磨皮/暗角/颗粒/Clarity）就走原生：
+    // processJpeg 先原生搞定"底片"（解码→几何变换→色彩矩阵→边缘自适应锐化→JPEG硬编码→写文件）。
+    // 开「水印」时水印随后单独用「原生解码 + 原生编码」合成（见下方水印分支），绕开
+    // GPU toByteData 读回 + isolate 逐像素 + 软件编码（日志实测那套要 4.5s+）。
+    // 失败一律回退下面原有 GPU+isolate+水印管线，绝不阻塞拍摄。iOS/Android 不走此分支。
+    // 横屏拍摄不走原生：OHOS processJpeg 的几何变换是「居中等比裁窗」（天然等价旋转的
+    // 前提是目标宽高比与源一致），横屏持机时源/目标纵横比翻转，裁窗会直接切掉内容而非
+    // 转正，成片方向错误。这里用加速度传感判定出的 isPortrait 把关：横屏一律走下面的
+    // GPU+isolate 管线（该管线按 isPortrait 做真正的 90° 旋转），竖屏才走原生快速路径。
+    final fastNative = _isOhos &&
+        params.isPortrait &&
+        // 拉腿尚未在 OHOS 原生 processJpeg 实现，开拉腿时走 Dart 管线应用。
+        params.postProcess.legStretch == 0 &&
+        // 磨皮/暗角/颗粒/Clarity 已全部由 OHOS 原生 C++ 实现（clarity 除矩阵内对比度
+        // 折叠外另有独立中频 pass；锐化→清晰度→颗粒→磨皮→暗角 逐像素），与慢管线同序同语义，故不再回退 Dart。
+        // 仅自定义裁剪（需几何裁窗，原生 processJpeg 用 center-cover 近似）仍回退 Dart。
+        params.postProcess.customCropRect == null;
+    bool nativeFastDone = false;
+    if (fastNative) {
+      final swNative = Stopwatch()..start();
+      try {
+        final nativeTiming = <String, int>{};
+        nativeFastDone = await OhosImageProcessor.instance.processJpeg(
+          inputPath: params.inputPath,
+          outputPath: params.inputPath,
+          targetRatio: params.targetRatio,
+          isPortrait: params.isPortrait,
+          isFront: params.isFront,
+          matrix: composePostProcessMatrix(params.postProcess),
+          // 拍摄成片锐化严格用用户/模板真实值，禁止代码层强制最小锐化。
+          // 防糊由系统层解决：OHOS 8.2MP 档位 + PhotoQualityPrioritization.HIGH_QUALITY。
+          sharpen: params.postProcess.sharpen,
+          clarity: params.postProcess.color.clarity,
+          smoothStrength: params.postProcess.smoothStrength,
+          vignette: params.postProcess.vignette,
+          grain: params.postProcess.grain,
+          // OHOS 原生 C++ 后处理各阶段都很快（解码/矩阵/锐化/磨皮/暗角/颗粒/编码），
+          // 不受制于 Dart 逐像素 CPU 管线的 maxDim 限制。此处把输出推到「源分辨率」
+          // （maxDim=2560 足够覆盖 5MP 竖屏档，插件端有「防放大糊」guard 会自动 fit
+          // 回源尺寸），成片不再被 1280 硬压到 960x1280——那正是「成片发糊、拉不回来」的
+          // 主因：960px 宽成片在现代屏幕上会被放大 1.4x+，软。
+          maxDim: _ohosNativeMaxDim,
+          timing: nativeTiming,
+        );
+        swNative.stop();
+        debugPrint('[perf] OHOS原生 processJpeg 快速路径: ${swNative.elapsedMilliseconds}ms '
+            'ok=$nativeFastDone decode=${nativeTiming['decode']}ms '
+            'transform=${nativeTiming['transform']}ms sharpen=${nativeTiming['sharpen']}ms '
+            'encode=${nativeTiming['encode']}ms');
+      } catch (e) {
+        debugPrint('[capture] OHOS 原生快速路径异常，回退原管线: $e');
+        nativeFastDone = false;
+      }
+    }
+
+    // === 性能测量（临时，定位 1.5-2s 瓶颈后移除） ===
+    final swTotal = Stopwatch()..start();
+    String processedPath = params.inputPath;
+    List<int>? gpuSourceAvgRgb;
+    List<int>? diagBefore;
+    List<int>? diagAfter;
+    _GpuProcessedData? gpuData;
+    CaptureWorkerResult? workerResult;
+    try {
+      final swGpu = Stopwatch()..start();
+      // 【所见即所得修复】先在主 isolate 中用 dart:ui GPU 管线应用色彩矩阵，
+      // 与取景器 ColorFiltered 使用完全相同的渲染管线。
+      // 然后传 rawRgba 给 worker isolate 做后续 CPU 处理（锐化/磨皮/暗角/JPEG 编码）。
+      // （OHOS 原生快速路径已产出成片，跳过本段与后续 worker/水印。）
+      if (!nativeFastDone) {
+        gpuData = await _applyColorMatrixOnGpu(params, needRawRgba: needWatermark);
+        swGpu.stop();
+        debugPrint('[perf] _applyColorMatrixOnGpu: ${swGpu.elapsedMilliseconds}ms');
+        if (gpuData == null) {
+          // GPU 处理失败，跳过后续处理（不阻塞拍照流程）
+          debugPrint('[capture] GPU 处理失败，使用原始照片');
+          _isProcessingCapture = false;
+          return;
+        }
+      } else {
+        swGpu.stop();
+      }
+      // 等待原图备份完成（isolate 即将覆写 inputPath）
+      if (backupFuture != null) {
+        await backupFuture.catchError((Object e) {
+          debugPrint('[capture] 原图保留失败（不阻塞）: $e');
+          originalPath = null;
+        });
+      }
+      final swIso = Stopwatch()..start();
+      if (!nativeFastDone) {
+        // 常驻 worker isolate（A 优化），避免 compute() 每次创建 isolate 的开销
+        // 偏黄诊断结论（2026-08-24，color_diag 实测 diagBefore=[128,108,100]）：成片在 sRGB
+        // 语境下比取景器偏暖。这不是 P3 二次转换问题（实测对 sRGB 像素再套 P3→sRGB 会进一步
+        // 抬 R / 压 B，加重偏黄），而是 iOS 相机 ISP 成片固有的暖倾向。这里对 iOS 走 worker
+        // 固定去黄校色（压低红、抬亮蓝），使成片与取景器观感一致。
+        final gd = gpuData!; // 此时非空：非原生快速路径下 gpuData 已在上面赋值，null 时已提前 return
+        workerResult = await CaptureWorker.instance.process(
+          CaptureWorkerRequest(
+            rgbaBytes: gd.rgbaBytes,
+            width: gd.width,
+            height: gd.height,
+            outputPath: gd.outputPath,
+            sharpen: gd.sharpen,
+            clarity: gd.clarity,
+            grain: gd.grain,
+            smoothStrength: gd.smoothStrength,
+            vignette: gd.vignette,
+            needRawRgba: gd.needRawRgba,
+          ),
+        );
+        swIso.stop();
+        debugPrint('[perf] CaptureWorker.process: ${swIso.elapsedMilliseconds}ms '
+            'platform=${defaultTargetPlatform.name}, '
+            'diagBefore=${workerResult.diagBefore}, '
+            'diagAfter=${workerResult.diagAfter}');
+        if (!mounted) {
+          _isProcessingCapture = false;
+          return;
+        }
+        processedPath = workerResult.outputPath;
+        gpuSourceAvgRgb = gpuData.sourceAvgRgb;
+        diagBefore = workerResult.diagBefore;
+        diagAfter = workerResult.diagAfter;
+      } else {
+        swIso.stop();
+      }
+
+      // evict FileImage 缓存，防止 isolate 覆写后旧解码图残留
+      try {
+        PaintingBinding.instance.imageCache
+            .evict(FileImage(File(processedPath)));
+      } catch (e) {
+        debugPrint('[capture] evict FileImage 缓存失败: $e');
+      }
+
+      // === 水印渲染 ===
+      // 在主 isolate 中将水印合成到处理后的图像上，生成带水印的 finalPath。
+      // 失败时静默回退到 processedPath，绝不阻塞拍照流程。
+      // originalPath 仍为未加水印的原始备份，不受此步骤影响。
+      String finalPath = processedPath;
+      final wantWatermark = watermarkTemplate != null && watermarkSettings.enabled;
+      if (wantWatermark) {
+        ui.Image? sourceImage;
+        final swWm = Stopwatch()..start();
+        try {
+          if (nativeFastDone) {
+            // 原生已产出底片：用原生解码（不解码缩放，targetWidth/Height=0）拿 RGBA，
+            // 再走同一水印渲染，绕开 dart:ui 软件解码（OHOS 上极慢，日志实测整条旧管线 4.5s+）。
+            final decoded = await OhosImageProcessor.instance.decodeJpegToRgba(
+              path: processedPath,
+              targetWidth: 0,
+              targetHeight: 0,
+            );
+            if (decoded != null) {
+              final buffer = await ui.ImmutableBuffer.fromUint8List(decoded.rgba);
+              final descriptor = ui.ImageDescriptor.raw(
+                buffer,
+                width: decoded.width,
+                height: decoded.height,
+                pixelFormat: ui.PixelFormat.rgba8888,
+              );
+              buffer.dispose();
+              final codec = await descriptor.instantiateCodec();
+              final frame = await codec.getNextFrame();
+              sourceImage = frame.image;
+              descriptor.dispose();
+              codec.dispose();
+            }
+          } else if (workerResult != null && workerResult.rgbaBytes != null) {
+            // 旧管线：用 worker 返回的 rawRgba 直接创建 ui.Image（ImageDescriptor.raw）
+            // 避免 JPEG 编解码往返（节省 ~180ms）
+            final buffer = await ui.ImmutableBuffer.fromUint8List(workerResult.rgbaBytes!);
+            final descriptor = ui.ImageDescriptor.raw(
+              buffer,
+              width: workerResult.width,
+              height: workerResult.height,
+              pixelFormat: ui.PixelFormat.rgba8888,
+            );
+            buffer.dispose();
+            final codec = await descriptor.instantiateCodec();
+            final frame = await codec.getNextFrame();
+            sourceImage = frame.image;
+            descriptor.dispose();
+            codec.dispose();
+          }
+
+          if (sourceImage != null) {
+            final renderer = ref.read(watermarkRendererProvider);
+            final wmResult = await renderer.render(
+              sourceImage: sourceImage,
+              template: watermarkTemplate,
+            );
+
+            // 将 RGBA 字节编码为 JPEG（quality 90，与 worker 输出统一）。
+            // OHOS：走系统 ImagePacker 硬件编码（替代纯 Dart img.encodeJpg，节省 ~1.2s），
+            // 失败时静默回退 Dart 软件编码，绝不阻塞拍照流程。
+            Uint8List jpegBytes;
+            final isOhos = OhosImageProcessor.isSupported;
+            final jpegNative = isOhos
+                ? await OhosImageProcessor.instance.encodeJpegFromRgba(
+                    rgba: wmResult.rgbaBytes,
+                    width: wmResult.width,
+                    height: wmResult.height,
+                    quality: 90,
+                  )
+                : null;
+            if (jpegNative != null) {
+              jpegBytes = jpegNative;
+            } else {
+              final outputImage = img.Image.fromBytes(
+                width: wmResult.width,
+                height: wmResult.height,
+                bytes: wmResult.rgbaBytes.buffer,
+                numChannels: 4,
+                order: img.ChannelOrder.rgba,
+              );
+              jpegBytes = img.encodeJpg(outputImage, quality: 90);
+            }
+            finalPath = processedPath.replaceAll(RegExp(r'\.jpg$'), '_wm.jpg');
+            await File(finalPath).writeAsBytes(jpegBytes);
+
+            debugPrint('[watermark] rendered to $finalPath');
+          }
+        } catch (e) {
+          debugPrint('[watermark] render failed, using original: $e');
+          finalPath = processedPath;
+        } finally {
+          sourceImage?.dispose();
+          swWm.stop();
+          debugPrint('[perf] watermark render: ${swWm.elapsedMilliseconds}ms');
+        }
+      }
+
+      // 先快后真：photoId 已在快门处生成，interim→final→DB→预览升级全程复用同一 id。
+      final photoId = params.photoId;
+
+      // [偏黄诊断] 把原始图 / 处理结果 / 分阶段 RGB 报告写入 Documents，
+      // 便于在 iOS「文件」App 中人工核对黄色从哪一步进入（无需看控制台日志）。
+      try {
+        await _writeColorDiagnostics(
+          rawPath: originalPath,
+          outputPath: finalPath,
+          sourceAvgRgb: gpuSourceAvgRgb,
+          diagBefore: diagBefore,
+          diagAfter: diagAfter,
+        );
+      } catch (e) {
+        debugPrint('[capture] 颜色诊断写盘失败（不影响拍照）: $e');
+      }
+
+      // 落库到相册（原图备份 + GalleryItemRecord + provider 失效）
+      try {
+        final dao = await ref.read(galleryDaoProvider.future);
+        final templateId = ref.read(CaptureState.currentTemplateIdProvider);
+        final sceneId = ref.read(CaptureState.activeScenePresetIdProvider);
+        final lut = params.postProcess.lut;
+        final record = GalleryItemRecord(
+          id: photoId,
+          filePath: finalPath,
+          originalPath: originalPath,
+          // cropRatio 持久化拍摄实际使用的比例 id（此前为构造默认 '3:4'，
+          // fullscreen 等成片编辑时基准区域错位 → 裁剪与框选不一致）
+          postProcess: params.postProcess.copyWith(
+            cropRatio: params.ratioId,
+          ),
+          dataUrl: null,
+          sceneId: sceneId,
+          templateId: templateId,
+          kitId: widget.kitId,
+          mood: null,
+          lut: (lut == 'none' || lut.isEmpty) ? null : lut,
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+        );
+        await dao.insert(record);
+        ref.invalidate(galleryDaoProvider);
+        ref.invalidate(bannerRecommendationProvider);
+        debugPrint('[capture] 自动保存到应用相册: ${record.id}');
+        // 埋点：拍摄成片成功（模板 builtin/remote + 系统场景），失败静默不阻断；
+        // 先 report（事件入队）再 sync，避免 sync 先于新事件完成导致延迟上报
+        // ignore: unawaited_futures
+        _reportAndSync(record.templateId, record.sceneId);
+        // 个性化反馈：完成拍摄 → 加权写给模板分类画像（失败静默）
+        if (record.templateId != null) {
+          try {
+            final service =
+                await ref.read(interestServiceProvider.future);
+            // ignore: unawaited_futures
+            service.recordSignal(record.templateId!, 3.0);
+          } catch (_) {}
+        }
+
+        // 每日首次拍摄经验台账 + 结算升级奖励（后台幂等；失败静默，绝不阻塞拍照流程）
+        // 每日首拍积分已合并进下方自动签到
+        if (!_dailyShootEarned) {
+          _dailyShootEarned = true;
+          _recordDailyShootXp();
+        }
+
+        // === 自动签到：每日首拍自动触发 ===
+        if (!_dailyAutoSignInDone) {
+          _dailyAutoSignInDone = true;
+          _autoSignIn();
+        }
+
+        // 套件使用次数 +1（仅在套用 kit 进入时）
+        if (widget.kitId != null) {
+          try {
+            final kitsDao = await ref.read(compositionKitsDaoProvider.future);
+            await kitsDao.incrementUsage(widget.kitId!);
+          } catch (e) {
+            debugPrint('[capture] 套件 usage 计数失败: $e');
+          }
+        }
+      } catch (e) {
+        debugPrint('[capture] 落库失败: $e');
+      }
+
+      // === 角标缩略图更新 ===
+      // 动画已在 _onCapture() 中立即触发（使用原始照片 + 水印 overlay），
+      // 后处理完成后直接更新角标，无需等待动画结束。
+      // 动画 overlay 覆盖在角标上方，用户在动画结束后才看到更新后的角标。
+      // 先快后真：这里是 full-res 完成 → 原位升级（interim→final）的触发点。
+      debugPrint('[perf] setFinalResult(final_) at ${DateTime.now().millisecondsSinceEpoch}ms');
+      ref.read(captureThumbnailProvider.notifier)
+          .setFinalResult(finalPath, photoId);
+      ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
+          finalPath;
+
+      // 诊断：确认最终照片文件的实际像素尺寸（排查横向拉伸）
+      try {
+        final fb = await File(finalPath).readAsBytes();
+        final decoder = img.findDecoderForData(fb);
+        final info = decoder?.startDecode(fb);
+        debugPrint('[capture] 照片文件实际尺寸: ${info?.width}x${info?.height} '
+            'ratio=${info != null && info.height != 0 ? (info.width / info.height).toStringAsFixed(4) : "?"}');
+      } catch (e) {
+        debugPrint('[capture] 读取照片尺寸失败: $e');
+      }
+    } catch (e) {
+      debugPrint('[capture] process failed: $e');
+    } finally {
+      swTotal.stop();
+      debugPrint('[perf] _processCaptureQueueItem total: ${swTotal.elapsedMilliseconds}ms');
+      _isProcessingCapture = false;
+      // 队列中还有则继续处理
+      if (_processCaptureQueue.isNotEmpty && mounted) {
+        _processCaptureQueueItem();
+      }
+    }
+  }
+
+  /// OHOS 快门冻结取景器帧：快门瞬间对「已合成取景器」toImage，作水印动画源。
+  /// 取景器已含 ColorFiltered 色彩矩阵 + 前置镜像 + 比例裁切（WYSIWYG），
+  /// 因此动画内容与取景器一致。返回 PNG 文件路径；失败返回 null（上层回退成片）。
+  ///
+  /// 仅捕获相机画面本身（filteredCamera），不含构图线/剪影/对焦框等 UI 叠层，
+  /// 避免动画源被调试元素污染。
+  Future<String?> _captureShutterViewfinderFrame() async {
+    final boundary = _filteredPreviewKey.currentContext?.findRenderObject();
+    if (boundary is! RenderRepaintBoundary) {
+      debugPrint('[capture] shutterFrame: RepaintBoundary 不可用');
+      return null;
+    }
+    try {
+      final sw = Stopwatch()..start();
+      final uiImage = await boundary.toImage();
+      final byteData =
+          await uiImage.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return null;
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      String? chosen;
+      String? lastErr;
+      for (final base in await _shutterFrameBases()) {
+        try {
+          final photosDir = Directory(p.join(base, 'photos'));
+          if (!await photosDir.exists()) {
+            await photosDir.create(recursive: true);
+          }
+          chosen = p.join(photosDir.path, 'shutter_frame_$ts.png');
+          final bytes = byteData.buffer
+              .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes);
+          await File(chosen).writeAsBytes(bytes, flush: true);
+          break;
+        } catch (e) {
+          lastErr = e.toString();
+        }
+      }
+      final path = chosen;
+      if (path == null) {
+        debugPrint('[capture] shutterFrame 写入失败: $lastErr');
+        return null;
+      }
+      debugPrint('[capture] shutterFrame: ${sw.elapsedMilliseconds}ms $path');
+      return path;
+    } catch (e) {
+      debugPrint('[capture] shutterFrame capture failed: $e');
+      return null;
+    }
+  }
+
+  /// 快门冻结帧的候选持久目录基址（依次尝试，与拍照路径一致，避免写 tmp 丢失）。
+  Future<List<String>> _shutterFrameBases() async {
+    final bases = <String>[];
+    try {
+      bases.add(await getDatabasesPath());
+    } catch (e) {
+      debugPrint('[capture] shutterFrame getDatabasesPath 不可用: $e');
+    }
+    try {
+      bases.add((await getApplicationDocumentsDirectory()).path);
+    } catch (e) {
+      debugPrint('[capture] shutterFrame getApplicationDocumentsDirectory 不可用: $e');
+    }
+    return bases;
+  }
+
+  /// 触发水印定格动画（用指定「动画内容源帧」路径 + 水印模板）。
+  /// 动画淡出后跳转拍摄预览页；后处理为异步，需等最终照片落库完成
+  /// 后才带上 finalPath 打开预览页（见 [_goToPreviewWhenReady]）。
+  ///
+  /// - iOS/OHOS：动画源 = 快门冻结取景器帧（RepaintBoundary 截图，
+  ///   含色彩矩阵+前置镜像+裁切，WYSIWYG），闪光模式/截图失败回退用成片。
+  ///
+  /// [sourceAligned]：动画源是否已是屏幕空间 WYSIWYG 帧（已旋转/已镜像）。
+  /// 取景器来源帧为 true（overlay 跳过方向对齐，避免双重镜像/旋转）；
+  /// 回退用原始成片时为 false（overlay 按设备方向 + 前置镜像对齐）。
+  void _startWatermarkAnimation(
+    String photoPath,
+    WatermarkTemplate template, {
+    required bool sourceAligned,
+  }) {
+    if (!mounted) return;
+    setState(() {
+      _showWatermarkAnimation = true;
+      _animationPhotoPath = photoPath;
+      _animationTemplate = template;
+      _animationSourceAligned = sourceAligned;
+    });
+    _onAnimationComplete = () {
+      if (!mounted) return;
+      setState(() => _showWatermarkAnimation = false);
+      _goToPreviewWhenReady();
+    };
+  }
+
+  /// 水印动画淡出后跳转拍摄预览页前的等待逻辑。
+  /// 后处理（GPU + worker isolate + 水印渲染 + 落库）为异步执行，动画播放期间
+  /// 通常已经完成；此处轮询 [captureThumbnailProvider] 直到 photoId 且（finalPath 或
+  /// interimPath）就绪——先快后真：interim（早帧，~672ms）即可打开预览，full-res 后原位升级。
+  Future<void> _goToPreviewWhenReady() async {
+    const maxWait = Duration(milliseconds: 3000);
+    final sw = Stopwatch()..start();
+    while (mounted && sw.elapsed < maxWait) {
+      final state = ref.read(captureThumbnailProvider);
+      if ((state.finalPath != null || state.interimPath != null) &&
+          state.photoId != null) {
+        _onThumbnailTap();
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+    }
+  }
+
+  /// 切换摄像头：仅切换 `cameraFacingProvider` 状态。
+  /// CameraPreview widget 会 watch 此 provider 并通过 CameraService 重建预览，
+  /// onReady 回调中重新应用闪光灯/缩放/镜像等参数。
+  void _switchCamera() {
+    // 倒计时进行中切换前后摄像头 → 取消延时
+    _cancelDelayCountdown();
+
+    // 防抖：上一次摄像头切换尚未就绪时忽略快速连点。
+    // 否则 CameraAwesomeBuilder 会被反复销毁重建，而原生相机的 init/start
+    // （PreparingCameraState.start 内含 500ms 异步延迟且 dispose 不取消）会
+    // 重叠执行，导致取景器黑屏卡住。切换完成后（readyStream 发出 true）
+    // 复位标志，允许下一次切换。
+    if (_cameraSwitchInProgress) return;
+    _cameraSwitchInProgress = true;
+
+    final current = ref.read(CaptureState.cameraFacingProvider);
+    final next = current == 'back' ? 'front' : 'back';
+    ref.read(CaptureState.cameraFacingProvider.notifier).state = next;
+
+    // 持久化前后置选择：退出拍摄页/App 后下次进入自动恢复
+    CaptureState.persistCameraFacing(
+        ProviderScope.containerOf(context, listen: false), next);
+
+    // 切换到前置摄像头时关闭闪光灯（前置无闪光灯硬件）
+    if (next == 'front' &&
+        ref.read(CaptureState.flashModeProvider) != CaptureFlashMode.off) {
+      ref.read(CaptureState.flashModeProvider.notifier).state =
+          CaptureFlashMode.off;
+    }
+
+    // 切换到后置摄像头时自动关闭补光灯（补光仅前置有效）
+    // 同时重置悬浮取景器的位置和大小，以便下次开启时恢复初始状态
+    if (next == 'back' &&
+        ref.read(CaptureState.fillLightEnabledProvider)) {
+      ref.read(CaptureState.fillLightEnabledProvider.notifier).state = false;
+      ref.read(CaptureState.fillLightViewfinderScaleProvider.notifier).state =
+          0.5;
+      ref.read(CaptureState.fillLightViewfinderOffsetProvider.notifier).state =
+          Offset.zero;
+    }
+    // 切换到后置时收起补光抽屉（工具已被隐藏）
+    if (next == 'back' &&
+        ref.read(CaptureState.activeToolProvider) == 'fillLight') {
+      ref.read(CaptureState.activeToolProvider.notifier).state = null;
+    }
+
+    // 切换摄像头后将缩放重置为 1x
+    ref.read(CaptureState.apparentZoomProvider.notifier).state = 1.0;
+    ref.read(CaptureState.zoomProvider.notifier).state = 1.0;
+
+    // 切换后重启看门狗：若新摄像头未在超时内就绪（原生卡住/黑屏），
+    // 自动强制重建取景器恢复，避免停留在黑屏状态。
+    _startCameraReadyWatchdog();
+  }
+
+  /// 每日首次拍摄经验台账 + 结算升级奖励（fire-and-forget）。
+  /// 每日首拍积分已合并进自动签到（+4/天，连签 7 天额外 +14），不再单独发放。
+  Future<void> _recordDailyShootXp() async {
+    try {
+      final repo = await ref.read(pointsRepositoryProvider.future);
+      // 每日首拍经验（+10）写台账 + 结算升级奖励
+      try {
+        final db = await ref.read(databaseProvider.future);
+        await awardAndClaim(
+          db: db,
+          repo: repo,
+          source: 'shoot_daily',
+          amount: 10,
+          refId: utc8DateStr(),
+        );
+      } catch (e) {
+        debugPrint('[capture] daily shoot xp failed: $e');
+      }
+    } catch (e) {
+      // 离线/网络异常静默，不打扰拍摄
+      debugPrint('[capture] earn daily shoot xp failed: $e');
+    }
+  }
+
+  /// 每日首拍自动签到（fire-and-forget）。
+  /// 服务端幂等；失败静默，绝不阻塞拍照流程。
+  Future<void> _autoSignIn() async {
+    try {
+      final repo = await ref.read(signInRepositoryProvider.future);
+      await repo.signIn();
+      // 签到成功后刷新状态
+      ref.invalidate(signInRepositoryProvider);
+      ref.invalidate(pointsRepositoryProvider);
+      debugPrint('[auto-signin] daily first shoot auto signin success');
+    } catch (e) {
+      // 网络错误 / 重复签到都静默，绝不阻塞拍照
+      debugPrint('[auto-signin] auto signin failed (silent): $e');
+    }
+  }
+
+  /// 缩放回调：接收真实倍数，clamp 到设备支持范围后下发到相机。
+  /// 由 _ZoomDial 倍数切换或水平拖动触发。
+  /// 比例切换的视觉效果由取景器容器大小变化 + cover 裁切自动实现，无需 zoom 补偿。
+  void _onZoomChanged(double multiplier) {
+    final minZoom = ref.read(CaptureState.deviceMinZoomProvider) ?? 1.0;
+    final maxZoom = ref.read(CaptureState.deviceMaxZoomProvider) ?? 10.0;
+    final clamped = multiplier.clamp(minZoom, maxZoom);
+    ref.read(CaptureState.apparentZoomProvider.notifier).state = clamped;
+    ref.read(CaptureState.zoomProvider.notifier).state = clamped;
+    ref.read(cameraServiceProvider).setZoomMultiplier(clamped);
+  }
+
+  /// 模板镜头建议 → 目标真实缩放倍数。
+  ///
+  /// 镜头字段（lensSuggestion/lensType）表达「建议用哪颗物理镜头」。camerawesome
+  /// （原生 + OHOS fork）没有独立的切镜头 API，跨镜头只能靠变焦比实现
+  /// （CameraX / AVFoundation / OHOS 相机底层均按变焦比切换物理镜头），因此这里
+  /// 把镜头建议映射为真实倍数。
+  ///
+  /// - 主摄/标准/1x → 1.0（显式归位，避免残留上一模板的长焦/广角倍数）
+  /// - 广角/超广角 → 0.5x（设备不支持时由下层 clamp 回主摄 1x）
+  /// - 长焦 → 2.0x，长焦 70mm+ → 3.0x
+  /// - 微距 → 1.0（多数设备无法用变焦切换到独立微距镜，退回主摄）
+  /// - 未知值 → null（不干预）
+  static double? _lensToZoomMultiplier(String lens) {
+    final v = lens.trim().toLowerCase();
+    switch (v) {
+      case 'main':
+      case '1x':
+      case '标准镜头':
+      case '主摄镜头':
+        return 1.0;
+      case 'wide':
+      case 'ultra_wide':
+      case 'wide_angle_0.6x':
+      case '广角镜头':
+      case '超广角镜头':
+        return 0.5;
+      case 'telephoto':
+      case '长焦镜头':
+        return 2.0;
+      case 'telephoto_70mm_plus':
+        return 3.0;
+      case 'macro':
+      case 'tele_macro':
+      case '微距镜头':
+      case '长焦/微距镜头':
+        return 1.0;
+      default:
+        return null;
+    }
+  }
+
+  /// 套用模板的镜头建议：把 lensSuggestion/lensType 映射为真实缩放倍数并下发。
+  /// 仅后置摄像头生效（前置无物理镜头切换，避免把前置 1x 拉成广角/长焦）。
+  /// 用户随后仍可手动缩放覆盖（与白平衡/补光一致：模板驱动、可手动调整）。
+  void _applyTemplateLens(PhotoTemplate tpl) {
+    final lens = tpl.camera.lensSuggestion ?? tpl.camera.lensType;
+    if (lens == null || lens.isEmpty) return;
+    final target = _lensToZoomMultiplier(lens);
+    if (target == null) return;
+    // 镜头建议只在后置生效；前置不套用（此处调用方已保证 facing，双保险）
+    final minZoom = ref.read(CaptureState.deviceMinZoomProvider) ?? 0.5;
+    final maxZoom = ref.read(CaptureState.deviceMaxZoomProvider) ?? 10.0;
+    final clamped = target.clamp(minZoom, maxZoom);
+    ref.read(CaptureState.apparentZoomProvider.notifier).state = clamped;
+    ref.read(CaptureState.zoomProvider.notifier).state = clamped;
+    ref.read(cameraServiceProvider).setZoomMultiplier(clamped);
+    debugPrint('[capture] 模板镜头建议「$lens」→ ${clamped}x');
+  }
+
+  /// 拍摄成片成功埋点：
+  /// - 模板：source∈{builtin,remote} 上报 useShoot；自定义 source 被 Recorder 静默过滤。
+  /// - 场景：仅系统内置场景（按 scenes 表 creator=='system' 判定）上报 useShoot。
+  /// 全部失败静默，绝不阻断拍照流程。
+  Future<void> _reportUseShoot(String? templateId, String? sceneId) async {
+    try {
+      final recorder = await ref.read(usageEventRecorderProvider.future);
+      if (templateId != null && templateId.isNotEmpty) {
+        final dao = await ref.read(templatesDaoProvider.future);
+        final record = await dao.getById(templateId);
+        final source = record?.source;
+        if (source != null) {
+          await recorder.recordTemplate(
+            templateId: templateId,
+            source: source,
+            event: UsageEventType.useShoot,
+          );
+        }
+      }
+      if (sceneId != null && sceneId.isNotEmpty) {
+        final sDao = await ref.read(scenesDaoProvider.future);
+        final sRecord = await sDao.getById(sceneId);
+        if (sRecord != null && sRecord.creator == 'system') {
+          await recorder.recordScene(
+            sceneId: sceneId,
+            creator: sRecord.creator,
+            event: UsageEventType.useShoot,
+          );
+        }
+      }
+    } catch (_) {
+      // 埋点失败静默
+    }
+  }
+
+  /// 先完成拍摄埋点（事件入队），再触发使用次数同步，避免 sync 先于新事件 insert 完成导致本次事件延迟上报。
+  /// 整体 fire-and-forget，失败静默不阻塞拍照流程。
+  Future<void> _reportAndSync(String? templateId, String? sceneId) async {
+    try {
+      await _reportUseShoot(templateId, sceneId);
+      await _triggerUsageSync();
+    } catch (_) {
+      // 埋点/同步失败静默，不影响拍照
+    }
+  }
+
+  /// 拍摄成片后触发使用次数同步（fire-and-forget，失败静默不阻断拍照流程）。
+  Future<void> _triggerUsageSync() async {
+    try {
+      final service = await ref.read(usageSyncServiceProvider.future);
+      await service.runSync();
+    } catch (_) {
+      // 网络/鉴权失败静默，下次拍摄或启动时再同步
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isFullscreen = ref.watch(CaptureState.isFullscreenProvider);
+    final isTrialMode = ref.watch(CaptureState.trialModeProvider);
+    final thumbState = ref.watch(captureThumbnailProvider);
+    final isChallengeMode =
+        widget.challengeId != null && widget.challengeId!.isNotEmpty;
+    final captureInProgress =
+        thumbState.status == CaptureThumbnailStatus.processing;
+    // 当前套用的模板（null = 自由模式）。用于顶部模板信息卡显示。
+    final template = ref.watch(CaptureState.originalTemplateProvider);
+    // 模板信息卡是否被用户隐藏（持久化，用户点了隐藏后下次保持隐藏）
+    final templateInfoCardHidden =
+        ref.watch(CaptureState.templateInfoCardHiddenProvider);
+    // 修复 Bug：watch facing 以在 facing 变化时重建 _viewfinderCaptureKey，
+    // 强制 RepaintBoundary + CameraAwesomeBuilder 重建（切换 sensor）
+    final facing = ref.watch(CaptureState.cameraFacingProvider);
+    // 当前竖/横屏，供水印动画方向对齐（与成片管线一致）
+    final isPortrait =
+        MediaQuery.of(context).size.height >= MediaQuery.of(context).size.width;
+    if (_lastFacingForKey != facing) {
+      _viewfinderCaptureKey = GlobalKey(debugLabel: 'viewfinder_$facing');
+      _filteredPreviewKey = GlobalKey(debugLabel: 'filteredPreview_$facing');
+      _lastFacingForKey = facing;
+    }
+
+    // 监听闪光灯模式变化，通过 CameraService 同步到相机引擎
+    ref.listen<CaptureFlashMode>(CaptureState.flashModeProvider, (prev, next) {
+      ref.read(cameraServiceProvider).setFlashMode(_mapFlashMode(next));
+    });
+
+    // EV 补偿 → 取景器亮度：将 EV [-3, +3] 映射到 brightness [0, 1]
+    // EV=0 → brightness=0.5（中性），EV=+3 → brightness=1.0（最亮），EV=-3 → brightness=0.0（最暗）
+    ref.listen<CameraParams>(CaptureState.effectiveCameraProvider, (prev, next) {
+      if (prev?.exposureCompensation != next.exposureCompensation) {
+        final ev = next.exposureCompensation;
+        final brightness = (0.5 + ev / 6.0).clamp(0.0, 1.0);
+        ref.read(cameraServiceProvider).setBrightness(brightness);
+      }
+    });
+
+    // 比例切换时重新下发当前缩放（真实倍数不变，直接下发）
+    // 比例切换的视觉效果由取景器容器大小变化 + cover 裁切自动实现
+    ref.listen<String>(CaptureState.aspectRatioProvider, (prev, next) {
+      if (prev != next) {
+        final multiplier = ref.read(CaptureState.zoomProvider);
+        ref.read(cameraServiceProvider).setZoomMultiplier(multiplier);
+      }
+    });
+
+    // 补光灯开关 → 屏幕亮度：开启时调至最高（1.0），关闭时恢复原值。
+    // 监听 fillLightEnabledProvider 以覆盖所有开关路径（颜色选择、关闭按钮、切后置摄像头、退出页面）。
+    ref.listen<bool>(CaptureState.fillLightEnabledProvider, (prev, next) {
+      if (prev == next) return;
+      if (next) {
+        _enableMaxBrightness();
+      } else {
+        _restoreBrightness();
+      }
+    });
+
+    // ── 模板参数快照（取消套用还原）──
+    // 本 listener 必须注册在所有模板套用 listener 之前：套用模板（prev==null && next!=null）
+    // 时先记录用户自由模式参数快照，之后各套用 listener 才会把模板参数写进去；
+    // 取消套用（prev!=null && next==null）时，其余套用 listener 都以 next==null 提前返回
+    // 不写参数，因此此处把快照还原回用户原参数。快照在模板切换（prev/next 均非空）时不更新，
+    // 保证取消后回到最初套用模板前的用户状态。
+    ref.listen<PhotoTemplate?>(
+        CaptureState.originalTemplateProvider, (prev, next) {
+      if (prev == null && next != null) {
+        _preTemplateParams = _captureTemplateParams();
+      } else if (prev != null && next == null) {
+        final s = _preTemplateParams;
+        _preTemplateParams = null;
+        if (s != null) _restoreTemplateParams(s);
+      }
+    });
+
+    // 模板切换时同步 aspectRatioProvider 为模板的 cropRatio
+    // 修复：之前模板的 cropRatio 字段被完全忽略，导致不同模板拍出来比例都一样
+    // （永远使用 aspectRatioProvider 的默认值 'fullscreen'）。
+    // 现在模板加载/切换时自动套用其 cropRatio，取景器、比例切换器、拍照裁剪
+    // 三者都跟随模板比例，保证 WYSIWYG。用户仍可手动点比例切换器覆盖，
+    // 直到下次切换模板。
+    // 切到自由模式（next == null）时不主动改比例，保留用户上一次的选择。
+    ref.listen<PhotoTemplate?>(CaptureState.originalTemplateProvider, (prev, next) {
+      if (next != null && next.postProcess.cropRatio.isNotEmpty) {
+        final cropRatio = next.postProcess.cropRatio;
+        final current = ref.read(CaptureState.aspectRatioProvider);
+        if (current != cropRatio) {
+          ref.read(CaptureState.aspectRatioProvider.notifier).state = cropRatio;
+          debugPrint('[capture] 模板切换，同步比例: $cropRatio');
+        }
+      }
+    });
+
+    // 模板切换时自动套用模板的白平衡设置（预设 + 手动色温）。
+    // 取景器与直出都随传感器生效（WYSIWYG）。自由模式（next == null）不干预，
+    // 保留用户当前选择，与其它模板参数一致。
+    ref.listen<PhotoTemplate?>(
+        CaptureState.originalTemplateProvider, (prev, next) {
+      if (next == null) return;
+      final cam = next.camera;
+      // 模板 whiteBalance 为预设模式字符串（auto/daylight/cloudy/fluorescent/incandescent）。
+      final wbMode = whiteBalanceModeFromString(cam.whiteBalance);
+      // 「预设 + 色温」方向：iOS/Android 下发带 whiteBalanceK 的手动色温（原生手动分支优先）；
+      // OHOS 连续色温不可用，应下发改预设模式（temperatureK 置 null，走原生预设分支）。
+      final settings = _isOhos
+          ? WhiteBalanceSettings(mode: wbMode)
+          : WhiteBalanceSettings(mode: wbMode, temperatureK: cam.whiteBalanceK);
+      // 同步 UI 会话状态 + 下发传感器
+      ref.read(whiteBalanceSessionProvider.notifier).state = settings;
+      ref.read(cameraServiceProvider).setWhiteBalance(settings);
+      debugPrint(
+          '[capture] 模板套用白平衡: ${settings.mode} K=${settings.temperatureK}');
+    });
+
+    // 模板切换时按模板「镜头建议」自动切换镜头（通过变焦比实现）。
+    // - 仅后置生效（前置无物理镜头切换，避免把前置 1x 拉成广角/长焦）
+    // - 切到自由模式（next == null）不干预，保留当前缩放
+    // - 用户随后仍可手动缩放覆盖（与白平衡/补光一致：模板驱动、可手动调整）
+    ref.listen<PhotoTemplate?>(
+        CaptureState.originalTemplateProvider, (prev, next) {
+      if (next == null) return;
+      if (ref.read(CaptureState.cameraFacingProvider) == 'front') return;
+      _applyTemplateLens(next);
+    });
+
+    // 模板切换时自动套用补光灯配置：
+    // 模板启用了补光灯 → 自动开启并应用模板的颜色/强度（与拍摄页补光应用一致，保证所见即所得）；
+    // 模板未启用补光灯 → 关闭补光灯（跟随模板参数）。
+    // 补光仅前置摄像头生效，后置时只记录颜色/强度配置、不激活实时光强/悬浮取景器；
+    // 切到自由模式（next == null）时不干预，保留用户当前的补光设置。
+    ref.listen<PhotoTemplate?>(
+        CaptureState.originalTemplateProvider, (prev, next) {
+      if (next == null) return;
+      _applyTemplateFillLight(next);
+    });
+
+    // 摄像头切换时，若当前模板启用了补光灯，则随前置/后置自动开启/关闭补光。
+    // 修复 Bug：退出拍摄页时 route observer 会 resetAll（将 cameraFacing 重置为
+    // back），重新进入时上面的模板监听以 back 判定补光 disabled，之后
+    // loadCameraPrefs 再恢复为 front 时不会再次应用模板补光 → 补光丢失。
+    // 增加对 facing 的监听后，无论 loadCameraPrefs 恢复还是用户手动切前置，
+    // 只要模板启用了补光就会自动重新开启，行为与"套用模板自动开补光"一致。
+    ref.listen<String>(CaptureState.cameraFacingProvider, (prev, next) {
+      if (prev == next) return;
+      final template = ref.read(CaptureState.originalTemplateProvider);
+      if (template == null) return;
+      final fl = template.postProcess.fillLight;
+      if (fl == null || !fl.enabled) return; // 模板未启用补光，不干预
+      final onFront = next == 'front';
+      ref.read(CaptureState.fillLightEnabledProvider.notifier).state = onFront;
+      if (!onFront) {
+        // 切后置时重置悬浮取景器（与 _switchCamera 对后置的处理一致）
+        ref.read(CaptureState.fillLightViewfinderScaleProvider.notifier).state =
+            0.5;
+        ref.read(CaptureState.fillLightViewfinderOffsetProvider.notifier).state =
+            Offset.zero;
+      }
+    });
+
+    // 模板 / 姿势切换时，按当前姿势的 cameraDirection 自动切换前后摄像头：
+    // - 姿势指定方向（'front'/'back'）且与当前朝向不同 → 切换
+    // - 姿势未指定（null，绝大多数模板）→ 不干预，保留当前朝向
+    // - 切到自由模式（模板为空 → 方向为 null）→ 不干预，保留用户当前朝向
+    ref.listen<String?>(
+        CaptureState.currentPoseCameraDirectionProvider, (prev, next) {
+      if (prev == next) return;
+      _applyPoseCameraDirection(next);
+    });
+
+    // 挑战模式：照片处理完成（状态变为 final_ 且 photoId 就绪）后，
+    // 直接跳转挑战确认页，跳过预览页的"保存"步骤。
+    // 用户可在确认页点"重拍"回到拍摄页重新拍摄。
+    if (isChallengeMode) {
+      ref.listen<CaptureThumbnailState>(captureThumbnailProvider,
+          (prev, next) {
+        if (_hasNavigatedToChallenge) return;
+        if (next.status != CaptureThumbnailStatus.final_) return;
+        if (next.photoId == null || next.finalPath == null) return;
+        // 必须从 processing / preview / interim 过渡到 final_ 才触发，避免：
+        // 1. prev 为 null（首次监听/重建后 provider 残留 final_ 状态）时误触发
+        // 2. 状态一直为 final_ 时重复触发
+        if (prev?.status != CaptureThumbnailStatus.processing &&
+            prev?.status != CaptureThumbnailStatus.preview &&
+            prev?.status != CaptureThumbnailStatus.interim) return;
+        _hasNavigatedToChallenge = true;
+        final cid = widget.challengeId!;
+        final pid = next.photoId!;
+        GoRouter.of(context).go(
+          '${RouteNames.challengeConfirm}'
+          '?${RouteNames.paramChallengeId}=${Uri.encodeComponent(cid)}'
+          '&${RouteNames.paramPhotoId}=${Uri.encodeComponent(pid)}',
+        );
+      });
+    }
+
+    // EV 补偿通过上方 effectiveCameraProvider 监听器实时下发到取景器。
+    // 闪光灯模式变化由 flashModeProvider 监听器通过 CameraService.setFlashMode 处理。
+    // 白平衡功能已下线（SDK 不支持手动设置），ISO/快门为推荐参考值，
+    // 三者（WB/快门/ISO）的真实实现见 docs/superpowers/plans/ 下的相机手动参数计划。
+
+    // 权限未授予时显示权限引导 UI
+    if (_permissionStatus == CameraPermissionStatus.unknown ||
+        _permissionStatus == CameraPermissionStatus.denied) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: _CameraPermissionGuide(
+          status: _permissionStatus,
+          onRetry: _requestCameraPermission,
+          onBack: _onBack,
+        ),
+      );
+    }
+
+    if (_permissionStatus == CameraPermissionStatus.permanentlyDenied) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: _CameraPermissionGuide(
+          status: _permissionStatus,
+          onRetry: _requestCameraPermission,
+          onBack: _onBack,
+          onOpenSettings: () => openAppSettings(),
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 1. 取景器 + 补光背景
+          // 补光开启时：取景器缩小为悬浮窗口，背景显示补光色
+          // 补光关闭时：取景器全屏铺满
+          _ViewfinderArea(
+            rebuildKey: _cameraRebuildKey,
+            onZoomChanged: _onZoomChanged,
+            rawCaptureKey: _viewfinderCaptureKey,
+            previewCaptureKey: _filteredPreviewKey,
+          ),
+
+          // 1.5 试用模式水印遮罩（铺在取景器上方，不可点击穿透）
+          if (isTrialMode)
+            const Positioned.fill(
+              child: _TrialWatermarkOverlay(),
+            ),
+
+          // 2. 导航栏（始终保留：含返回 + 全屏切换 + 闪光灯）
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: CaptureNav(onBack: _onBack),
+          ),
+
+          // 2.5 顶部浮层组：比例切换器 → 参数 pill 栏 → 挑战悬浮条 → 模板信息卡
+          //    比例/参数固定在顶部，模板信息卡放在最下方避免挤压上方控件
+          //    导航栏改为毛玻璃胶囊后，需要更大的偏移量来留出间隙
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 76,
+            left: 0,
+            right: 0,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 延迟拍照按钮（iOS 原相机：取景器顶部居中，导航胶囊下方；试用模式隐藏）
+                if (!isTrialMode) const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Center(child: DelayTimerButton()),
+                ),
+                // 比例切换器（导航栏下方居中；全屏模式下隐藏，避免全屏时仍被比例胶囊遮挡）
+                if (!isFullscreen) const Center(child: AspectRatioSelector()),
+                // 比例切换器与参数 pill 栏之间的间隙
+                const SizedBox(height: 8),
+                // 参数 pill 栏（全屏 / 试用模式隐藏）
+                if (!isFullscreen && !isTrialMode)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: ParamPillBar(),
+                  ),
+                // 挑战悬浮条（仅挑战拍摄模式显示）
+                if (isChallengeMode && !isFullscreen)
+                  ChallengeOverlayBar(
+                    challengeId: widget.challengeId!,
+                    captureInProgress: captureInProgress,
+                    isLandscape: _isLandscape,
+                    quarterTurns: _landscapeQuarterTurns,
+                  ),
+                // 套用模板时显示可折叠模板信息卡（移至下方，避免挤压比例/参数选项）
+                // 试用模式隐藏（仅展示效果，不暴露参数）
+                // 用户隐藏后仅在页面角落显示一个透明小图标，点击可一键恢复显示
+                if (template != null && !isFullscreen && !isTrialMode)
+                  if (templateInfoCardHidden)
+                    Align(
+                      alignment: Alignment.topRight,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 6, top: 4),
+                        child: _TemplateInfoRestoreChip(
+                          onShow: _showTemplateInfoCard,
+                        ),
+                      ),
+                    )
+                  else
+                    TemplateInfoCard(
+                      template: template,
+                      isLandscape: _isLandscape,
+                      quarterTurns: _landscapeQuarterTurns,
+                      onHide: _hideTemplateInfoCard,
+                    ),
+              ],
+            ),
+          ),
+
+          // 3. 多姿势切换按钮（仅 poses>1 的模板显示；叠照片浮层按风格自适应）
+          if (!isTrialMode)
+            Positioned(
+              // 置于取景器右侧、画面纵向约 40% 处，避开顶部浮层组与底部控制区
+              right: 12,
+              top: MediaQuery.of(context).size.height * 0.40,
+              child: const _PoseSwitchButton(),
+            ),
+
+          // 4. 底部控制区（始终保留：含拍摄按钮 + 缩略图 + 切换摄像头）
+          //    全屏模式下仅隐藏工具栏与抽屉（在 _BottomControlArea 内部处理）
+          //    试用模式下隐藏工具栏/抽屉/缩放栏，快门替换为锁定态
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: _BottomControlArea(
+              isFullscreen: isFullscreen,
+              isTrialMode: isTrialMode,
+              onZoomChanged: _onZoomChanged,
+              onCapture: _onCapture,
+              onSwitchCamera: _switchCamera,
+              onThumbnailTap: _onThumbnailTap,
+              rawCaptureKey: _viewfinderCaptureKey,
+              thumbnailKey: _thumbnailKey,
+            ),
+          ),
+
+          // 4.5 抽屉浮层已移除，恢复 Column 流式布局
+
+          // 5. 参数面板（底部滑入，使用 AnimatedPositioned，必须在 Stack 内）
+          const ParamPanel(),
+
+          // 6. 水平仪（使用 Positioned，必须在 Stack 内）
+          const LevelIndicator(),
+
+          // 8. 快门白闪反馈 overlay（最顶层，IgnorePointer 不拦截手势）
+          Positioned.fill(
+            child: ShutterFeedback(trigger: _shutterTrigger),
+          ),
+
+          // 延时倒计时：全屏中央大数字（IgnorePointer 使其点击穿透到快门按钮 → 点快门取消）
+          if (_delayRemaining > 0)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Center(
+                  child: Text(
+                    '$_delayRemaining',
+                    style: TextStyle(
+                      fontSize: 120,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      height: 1,
+                      shadows: [
+                        Shadow(
+                          color: Colors.black.withOpacity(0.45),
+                          blurRadius: 16,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+          // 9. 水印定格动画 overlay（最顶层，IgnorePointer 不拦截手势）
+          if (_showWatermarkAnimation &&
+              _animationPhotoPath != null &&
+              _animationTemplate != null)
+            Positioned.fill(
+              child: WatermarkAnimationOverlay(
+                key: const ValueKey('watermark_anim'),
+                photoPath: _animationPhotoPath!,
+                watermarkTemplate: _animationTemplate!,
+                isFront: facing == 'front',
+                isPortrait: isPortrait,
+                // 取景器来源帧已 WYSIWYG 对齐，跳过 overlay 二次旋转/镜像。
+                sourceAligned: _animationSourceAligned,
+                onAnimationComplete: _onAnimationComplete ?? () {},
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 角标缩略图点击跳预览页。
+  /// 从 `captureThumbnailProvider` 读取最终图路径和 photoId。
+  /// 先快后真：finalPath 或 interimPath（早帧）均可打开预览；interim 打开时带
+  /// pendingFinal 标记，预览页等 full-res 完成后原位升级。
+  void _onThumbnailTap() {
+    final state = ref.read(captureThumbnailProvider);
+    final path = state.finalPath ?? state.interimPath;
+    final photoId = state.photoId;
+    if (path == null || photoId == null) return;
+    final pendingFinal = state.finalPath == null && state.interimPath != null;
+    final aspectRatio = ref.read(CaptureState.aspectRatioProvider);
+    if (_returnResult) {
+      context.pop(path);
+    } else {
+      // 拼接 capturePreview 路由 URL，可选追加 challengeId（挑战闭环）
+      final buf = StringBuffer(
+        '${RouteNames.capturePreview}'
+        '?photoUrl=${Uri.encodeComponent(path)}'
+        '&photoId=$photoId'
+        '&aspectRatio=${Uri.encodeComponent(aspectRatio)}',
+      );
+      if (pendingFinal) {
+        buf.write('&pendingFinal=1');
+      }
+      final cid = widget.challengeId;
+      if (cid != null && cid.isNotEmpty) {
+        buf.write('&${RouteNames.paramChallengeId}=${Uri.encodeComponent(cid)}');
+      }
+      GoRouter.of(context).push(buf.toString());
+    }
+  }
+}
+
+/// 取景器区域：按用户选定的比例约束相机预览的显示范围。
+///
+/// 修复（用户反馈）：
+/// 之前全屏模式使用 contain 模式，会把 3:4 的传感器图像完整显示在 9:19.5 的屏幕里
+/// （留黑边），但拍照后却按屏幕比例 9:19.5 裁剪。预览和照片不一致（非 WYSIWYG），
+/// 导致用户看到全身预览，照片却只有脸部。
+///
+/// 现行方案（WYSIWYG，与系统相机一致）：
+/// - 所有比例（包括 'fullscreen'）都使用 [CameraPreviewFit.cover]，预览 = 照片
+/// - 'fullscreen' 模式：目标比例 = 屏幕比例，预览填满屏幕，照片按屏幕比例裁剪
+/// - 其他比例：将预览约束到目标比例的矩形框内，cover 裁剪填充
+/// - 取景器所见即所得，切换比例时主体大小变化仅来自裁剪区域差异（与系统相机一致）
+class _ViewfinderArea extends ConsumerWidget {
+  const _ViewfinderArea({
+    required this.rebuildKey,
+    required this.onZoomChanged,
+    this.rawCaptureKey,
+    this.previewCaptureKey,
+  });
+
+  final int rebuildKey;
+  final ValueChanged<double>? onZoomChanged;
+  final GlobalKey? rawCaptureKey;
+  final GlobalKey? previewCaptureKey;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ratioId = ref.watch(CaptureState.aspectRatioProvider);
+    final facing = ref.watch(CaptureState.cameraFacingProvider);
+    final fillLightEnabled = ref.watch(CaptureState.fillLightEnabledProvider);
+    final screenSize = MediaQuery.of(context).size;
+    final isPortrait = screenSize.height >= screenSize.width;
+    final screenRatio = screenSize.width / screenSize.height;
+    final targetRatio =
+        CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
+    final isFullscreen = ratioId == 'fullscreen';
+
+    // 补光悬浮模式：仅前置摄像头 + 补光开启时激活
+    final isFloating = fillLightEnabled && facing == 'front';
+
+    if (!isFloating) {
+      // 取景器容器大小变化方案（原生相机行为）：
+      // 容器比例 = 目标比例时，cover 不额外裁切传感器图像，
+      // 4:3 显示传感器全视角（最广），全屏 cover 裁切左右（视野变窄）。
+      // 容器外为纯黑背景，居中对称黑边。
+      double vfW, vfH;
+      if (isFullscreen) {
+        vfW = screenSize.width;
+        vfH = screenSize.height;
+      } else {
+        if (screenRatio > targetRatio) {
+          // 屏幕比目标宽 → 容器按高度填满，左右留黑边
+          vfH = screenSize.height;
+          vfW = vfH * targetRatio;
+        } else {
+          // 屏幕比目标窄 → 容器按宽度填满，上下留黑边
+          vfW = screenSize.width;
+          vfH = vfW / targetRatio;
+        }
+      }
+
+      return Container(
+        color: Colors.black,
+        child: Center(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            width: vfW,
+            height: vfH,
+            child: CameraPreview(
+              key: ValueKey('camera_preview_${rebuildKey}_$facing'),
+              onZoomChanged: onZoomChanged,
+              previewFit: CameraPreviewFit.cover,
+              rawCaptureKey: rawCaptureKey,
+              previewCaptureKey: previewCaptureKey,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 补光悬浮模式：取景器缩小为可拖动窗口，背景显示补光色
+    return _FloatingViewfinder(
+      rebuildKey: rebuildKey,
+      facing: facing,
+      onZoomChanged: onZoomChanged,
+      rawCaptureKey: rawCaptureKey,
+      previewCaptureKey: previewCaptureKey,
+      screenSize: screenSize,
+    );
+  }
+}
+
+/// 悬浮取景器：补光开启时显示，可拖动、可缩放
+/// 背景为补光色（模拟屏幕发光），取景器窗口浮在上方
+class _FloatingViewfinder extends ConsumerStatefulWidget {
+  const _FloatingViewfinder({
+    required this.rebuildKey,
+    required this.facing,
+    required this.onZoomChanged,
+    required this.rawCaptureKey,
+    required this.previewCaptureKey,
+    required this.screenSize,
+  });
+
+  final int rebuildKey;
+  final String facing;
+  final ValueChanged<double>? onZoomChanged;
+  final GlobalKey? rawCaptureKey;
+  final GlobalKey? previewCaptureKey;
+  final Size screenSize;
+
+  @override
+  ConsumerState<_FloatingViewfinder> createState() => _FloatingViewfinderState();
+}
+
+class _FloatingViewfinderState extends ConsumerState<_FloatingViewfinder> {
+  Offset _dragOffset = Offset.zero;
+  // 当前活跃的指针数量，用于区分单指拖动 vs 多指缩放
+  int _activePointers = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = ref.watch(CaptureState.fillLightColorProvider);
+    final intensity = ref.watch(CaptureState.fillLightIntensityProvider);
+    final scale = ref.watch(CaptureState.fillLightViewfinderScaleProvider);
+    final savedOffset =
+        ref.watch(CaptureState.fillLightViewfinderOffsetProvider);
+    final ratioId = ref.watch(CaptureState.aspectRatioProvider);
+
+    final sw = widget.screenSize.width;
+    final sh = widget.screenSize.height;
+    final isPortrait = sh >= sw;
+    final screenRatio = sw / sh;
+    // 窗口宽高比：与用户选择的成像比例一致
+    final windowRatio =
+        CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
+    // 窗口宽 = 屏幕宽 * scale；窗口高 = 宽 / windowRatio
+    final windowW = sw * scale;
+    final windowH = windowW / windowRatio;
+
+    // 窗口中心点的绝对位置 = 屏幕中心 + 保存的偏移 + 当前拖动偏移
+    final centerX = sw / 2 + savedOffset.dx + _dragOffset.dx;
+    final centerY = sh * 0.42 + savedOffset.dy + _dragOffset.dy;
+    // 窗口左上角坐标
+    final left = centerX - windowW / 2;
+    final top = centerY - windowH / 2;
+
+    // 补光色：整个屏幕都是补光色（无黑色背景）
+    // intensity > 1.0 时，将颜色向白色混合，让补光更亮
+    final bgFull = intensity > 1.0
+        ? Color.lerp(color, Colors.white, (intensity - 1.0).clamp(0.0, 0.5))!
+        : color.withOpacity(intensity.clamp(0.0, 1.0));
+
+    // clipBehavior: Clip.none 让窗口可溢出屏幕边缘（拖动时部分超出仍可见）
+    return Stack(
+      fit: StackFit.expand,
+      clipBehavior: Clip.none,
+      children: [
+        // 1. 全屏补光色背景（整个屏幕都是补光色，无黑色）
+        Positioned.fill(child: ColoredBox(color: bgFull)),
+
+        // 2. 悬浮取景器窗口：独立小窗，可拖动，浮在补光色背景之上
+        //    用 Listener（而非 GestureDetector）直接处理指针事件，
+        //    绕过手势竞技场——CameraPreview 内部的缩放/对焦手势不会抢走拖动事件。
+        //    translucent 让 CameraPreview 也能收到事件，缩放/对焦仍可用。
+        Positioned(
+          left: left,
+          top: top,
+          width: windowW,
+          height: windowH,
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) {
+              _activePointers++;
+            },
+            onPointerMove: (event) {
+              // 仅单指时拖动窗口；多指（双指缩放）交给 CameraPreview 处理
+              if (_activePointers == 1) {
+                setState(() => _dragOffset += event.delta);
+              }
+            },
+            onPointerUp: (_) {
+              _activePointers = (_activePointers - 1).clamp(0, 99);
+              if (_activePointers == 0 && _dragOffset != Offset.zero) {
+                ref.read(CaptureState.fillLightViewfinderOffsetProvider.notifier).state =
+                    savedOffset + _dragOffset;
+                _dragOffset = Offset.zero;
+              }
+            },
+            onPointerCancel: (_) {
+              _activePointers = (_activePointers - 1).clamp(0, 99);
+              if (_activePointers == 0) {
+                _dragOffset = Offset.zero;
+              }
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white54, width: 2),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: CameraPreview(
+                  key: ValueKey(
+                      'camera_preview_${widget.rebuildKey}_${widget.facing}'),
+                  onZoomChanged: widget.onZoomChanged,
+                  previewFit: CameraPreviewFit.cover,
+                  rawCaptureKey: widget.rawCaptureKey,
+                  previewCaptureKey: widget.previewCaptureKey,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 底部控制区：缩放Tab栏 + 工具栏 + 抽屉 + 拍摄按钮行
+/// 修复 Bug 10：全屏模式下隐藏工具栏与抽屉，保留拍摄按钮、缩略图、切换摄像头
+/// 改造：原"紧凑模板条+折叠按钮+展开面板"已替换为一排图标工具栏 + 底部抽屉
+/// 修复：操作栏背景完全覆盖到底部（不使用 SafeArea，手动处理 bottom padding）
+class _BottomControlArea extends StatelessWidget {
+  const _BottomControlArea({
+    required this.isFullscreen,
+    required this.isTrialMode,
+    required this.onZoomChanged,
+    required this.onCapture,
+    required this.onSwitchCamera,
+    required this.onThumbnailTap,
+    this.rawCaptureKey,
+    this.thumbnailKey,
+  });
+
+  final bool isFullscreen;
+  final bool isTrialMode;
+  final ValueChanged<double> onZoomChanged;
+  final VoidCallback onCapture;
+  final VoidCallback onSwitchCamera;
+  final VoidCallback onThumbnailTap;
+  final GlobalKey? rawCaptureKey;
+  final GlobalKey? thumbnailKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.transparent,
+            Colors.black.withOpacity(0.3),
+            Colors.black.withOpacity(0.7),
+            Colors.black.withOpacity(0.95),
+          ],
+          stops: const [0.0, 0.4, 0.7, 1.0],
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottomPadding),
+        // clipBehavior: Clip.none 允许缩放轮盘向上溢出到取景器区域
+        // （此 OHOS fork 的 Column 不透传 clipBehavior，改用 Flex 显式指定）
+        child: Flex(
+          direction: Axis.vertical,
+          mainAxisSize: MainAxisSize.min,
+          clipBehavior: Clip.none,
+          children: [
+            // 缩放Tab栏（全屏 / 试用模式隐藏）
+            if (!isFullscreen && !isTrialMode)
+              _ZoomBar(onChanged: onZoomChanged),
+
+            // 工具栏 + 抽屉（全屏 / 试用模式隐藏）
+            if (!isFullscreen && !isTrialMode) ...[
+              const _CaptureToolbar(),
+              _AnimatedToolDrawer(rawCaptureKey: rawCaptureKey),
+            ],
+
+            // 拍摄按钮行（试用模式下快门替换为锁定态，不响应拍照）
+            _CaptureButtonRow(
+              onCapture: onCapture,
+              onSwitchCamera: onSwitchCamera,
+              onThumbnailTap: onThumbnailTap,
+              thumbnailKey: thumbnailKey,
+              locked: isTrialMode,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 底部工具栏：一排图标按钮（模板/场景/参数/补光）— 圆角矩形半透明背景
+/// 点击未激活的工具 → 激活并展开抽屉
+/// 点击已激活的工具 → 收起抽屉
+/// 点击"参数" → 直接打开 ParamPanel
+class _CaptureToolbar extends ConsumerWidget {
+  const _CaptureToolbar();
+
+  static const _tools = [
+    _ToolDef('templates', Icons.dashboard_outlined, Icons.dashboard, '模板'),
+    _ToolDef('scenes', Icons.palette_outlined, Icons.palette, '场景'),
+    _ToolDef('params', Icons.tune, Icons.tune, '参数'),
+    _ToolDef('filter', Icons.filter_alt_outlined, Icons.filter_alt, '滤镜'),
+    _ToolDef('fillLight', Icons.lightbulb_outline, Icons.lightbulb, '补光'),
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activeTool = ref.watch(CaptureState.activeToolProvider);
+    final isFullscreen = ref.watch(CaptureState.isFullscreenProvider);
+    final facing = ref.watch(CaptureState.cameraFacingProvider);
+    if (isFullscreen) return const SizedBox.shrink();
+
+    // 补光工具仅在前置摄像头时显示（屏幕补光仅对前摄自拍摄影有效）
+    final tools = facing == 'front'
+        ? _tools
+        : _tools.where((t) => t.id != 'fillLight').toList();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.08),
+          width: 0.5,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: tools.map((tool) {
+          final active = activeTool == tool.id;
+          return _ToolButton(
+            tool: tool,
+            active: active,
+            onTap: () => _onTap(ref, tool.id, active),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  void _onTap(WidgetRef ref, String toolId, bool active) {
+    // 任意工具栏点击都会收起模板「显示更多」大面板（回到横向模板条）
+    ref.read(CaptureState.templateDrawerExpandedProvider.notifier).state =
+        false;
+    if (toolId == 'params') {
+      // 参数 tab：直接打开 ParamPanel，同时高亮 params tab
+      final panelExpanded = ref.read(CaptureState.panelExpandedProvider);
+      if (active && panelExpanded) {
+        // 已激活且面板展开 → 关闭面板并收起抽屉
+        ref.read(CaptureState.panelExpandedProvider.notifier).state = false;
+        ref.read(CaptureState.activeToolProvider.notifier).state = null;
+      } else {
+        ref.read(CaptureState.panelExpandedProvider.notifier).state = true;
+        ref.read(CaptureState.activeToolProvider.notifier).state = 'params';
+      }
+      return;
+    }
+    // 补光 tab：仅切换控制面板开合，不关闭补光灯本身
+    // 补光灯的关闭由用户在面板中点击已选中的预设色来完成
+    // 其他 tab：toggle 行为
+    final next = active ? null : toolId;
+    ref.read(CaptureState.activeToolProvider.notifier).state = next;
+  }
+}
+
+class _ToolDef {
+  const _ToolDef(this.id, this.icon, this.activeIcon, this.label);
+  final String id;
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+}
+
+class _ToolButton extends StatelessWidget {
+  const _ToolButton({required this.tool, required this.active, required this.onTap});
+  final _ToolDef tool;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active ? const Color(0xFFC9A96E) : Colors.white70;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 选中指示器（2dp 金色短横线）
+            Container(
+              width: 16,
+              height: 2,
+              margin: const EdgeInsets.only(bottom: 4),
+              decoration: BoxDecoration(
+                color: active ? const Color(0xFFC9A96E) : Colors.transparent,
+                borderRadius: BorderRadius.circular(1),
+              ),
+            ),
+            Icon(active ? tool.activeIcon : tool.icon, color: color, size: 22),
+            const SizedBox(height: 2),
+            Text(
+              tool.label,
+              style: TextStyle(color: color, fontSize: 11),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 工具栏下方的抽屉：根据 activeToolProvider 渲染对应内容
+/// 高度根据内容自适应（child 自然撑开），收起时高度 0（AnimatedSize 动画）
+class _AnimatedToolDrawer extends ConsumerWidget {
+  const _AnimatedToolDrawer({this.rawCaptureKey});
+
+  final GlobalKey? rawCaptureKey;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activeTool = ref.watch(CaptureState.activeToolProvider);
+    final isFullscreen = ref.watch(CaptureState.isFullscreenProvider);
+    if (isFullscreen) return const SizedBox.shrink();
+
+    final hasContent = activeTool != null;
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: hasContent
+          ? Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.4),
+              ),
+              child: _buildContent(activeTool, ref),
+            )
+          : const SizedBox(height: 0, width: double.infinity),
+    );
+  }
+
+  Widget _buildContent(String toolId, WidgetRef ref) {
+    switch (toolId) {
+      case 'templates':
+        // 「显示更多」展开为 60% 高度 + 搜索框的大面板，否则显示前 10 个模板条
+        final expanded =
+            ref.watch(CaptureState.templateDrawerExpandedProvider);
+        if (expanded) return const TemplateDrawerPanel();
+        return TemplateStrip(
+          onShowMore: () => ref
+              .read(CaptureState.templateDrawerExpandedProvider.notifier)
+              .state = true,
+        );
+      case 'scenes':
+        return const ScenePresetStrip();
+      case 'params':
+        // 参数面板由 ParamPanel（底部滑入）处理，抽屉不显示额外内容
+        return const SizedBox.shrink();
+      case 'filter':
+        return const FilterPicker();
+      case 'fillLight':
+        return const _FillLightPanel();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+}
+
+/// 补光控制面板：预设色行 + 亮度滑块 + 可展开色环
+class _FillLightPanel extends ConsumerWidget {
+  const _FillLightPanel();
+
+  static const _presets = [
+    _FillLightPreset('暖白', Color(0xFFFFE5B4), 0.6),
+    _FillLightPreset('冷白', Color(0xFFE0F0FF), 0.6),
+    _FillLightPreset('黄金', Color(0xFFFFB347), 0.7),
+    _FillLightPreset('柔粉', Color(0xFFFFC0CB), 0.6),
+    _FillLightPreset('青蓝', Color(0xFF8FD3F4), 0.5),
+    _FillLightPreset('紫', Color(0xFFD8BFD8), 0.5),
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final enabled = ref.watch(CaptureState.fillLightEnabledProvider);
+    final color = ref.watch(CaptureState.fillLightColorProvider);
+    final intensity = ref.watch(CaptureState.fillLightIntensityProvider);
+    final viewfinderScale = ref.watch(CaptureState.fillLightViewfinderScaleProvider);
+    final ringExpanded = ref.watch(_ringExpandedProvider);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 提示行
+          Row(
+            children: [
+              const Text(
+                '补光',
+                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  enabled ? '已启用 · 再次点击选中色关闭' : '点击颜色开启',
+                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // 预设色行：选中的预设色移到第一位
+          SizedBox(
+            height: 44,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                ..._orderedPresets(enabled, color).map((p) {
+                  final isSelected = enabled && _colorMatches(color, p.color);
+                  return _PresetColorDot(
+                    preset: p,
+                    selected: isSelected,
+                    onTap: () {
+                      if (isSelected) {
+                        // 已选中 → 关闭补光，恢复取景器原状
+                        _turnOffFillLight(ref);
+                      } else {
+                        // 未选中 → 切换补光色，保留当前亮度（不重置）
+                        ref.read(CaptureState.fillLightEnabledProvider.notifier).state = true;
+                        ref.read(CaptureState.fillLightColorProvider.notifier).state = p.color;
+                        ref.read(_ringExpandedProvider.notifier).state = false;
+                      }
+                    },
+                  );
+                }),
+                // 自定义按钮
+                _ActionDot(
+                  icon: Icons.color_lens,
+                  label: '自定义',
+                  selected: ringExpanded,
+                  onTap: () {
+                    ref.read(CaptureState.fillLightEnabledProvider.notifier).state = true;
+                    ref.read(_ringExpandedProvider.notifier).state = !ringExpanded;
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          // 亮度滑块（0.1 ~ 1.5，可超过 100% 让补光更亮）
+          Row(
+            children: [
+              const Icon(Icons.brightness_6, color: Colors.white54, size: 16),
+              Expanded(
+                child: LumiraSlider(
+                  value: intensity.clamp(0.1, 1.5),
+                  min: 0.1,
+                  max: 1.5,
+                  divisions: 28,
+                  onChanged: enabled
+                      ? (v) {
+                          ref.read(CaptureState.fillLightIntensityProvider.notifier)
+                              .state = v;
+                          // 调试（Bug：亮度到一定值后补光色反而变暗）：
+                          // 与 _FloatingViewfinder 里 bgFull 完全相同的算法，逐帧输出供真机比对。
+                          if (kDebugMode) {
+                            final c = ref.read(
+                                CaptureState.fillLightColorProvider);
+                            final b = v > 1.0
+                                ? Color.lerp(c, Colors.white,
+                                    (v - 1.0).clamp(0.0, 0.5))
+                                : c.withOpacity(v.clamp(0.0, 1.0));
+                            debugPrint(
+                                '[fillLight] intensity=$v color=#${c.value.toRadixString(16).padLeft(8, '0')} bgFull=${b?.value.toRadixString(16).padLeft(8, '0')}');
+                          }
+                        }
+                      : (double _) {},
+                ),
+              ),
+              SizedBox(
+                width: 42,
+                child: Text(
+                  '${(intensity * 100).round()}%',
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+            ],
+          ),
+          // 取景器窗口大小滑块（仅补光开启时可用）
+          Row(
+            children: [
+              const Icon(Icons.crop_free, color: Colors.white54, size: 16),
+              Expanded(
+                child: LumiraSlider(
+                  value: viewfinderScale.clamp(0.3, 1.0),
+                  min: 0.3,
+                  max: 1.0,
+                  divisions: 14,
+                  onChanged: enabled
+                      ? (v) => ref.read(CaptureState.fillLightViewfinderScaleProvider.notifier).state = v
+                      : (double _) {},
+                ),
+              ),
+              SizedBox(
+                width: 36,
+                child: Text(
+                  '${(viewfinderScale * 100).round()}%',
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+            ],
+          ),
+          // 可展开方形取色盘 + 收藏的颜色
+          if (ringExpanded) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 4),
+              child: Center(
+                child: _SquareColorPicker(
+                  onColorChanged: (c) {
+                    ref.read(CaptureState.fillLightColorProvider.notifier).state = c;
+                  },
+                ),
+              ),
+            ),
+            // 保存颜色行（合并系统预设与用户保存颜色）
+            _SaveColorsRow(
+              onPick: (c) {
+                ref.read(CaptureState.fillLightEnabledProvider.notifier).state = true;
+                ref.read(CaptureState.fillLightColorProvider.notifier).state = c;
+              },
+              onAdd: (name, c) {
+                ref.read(customFillLightColorsProvider.notifier).add(name, c);
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  bool _colorMatches(Color a, Color b) => a.value == b.value;
+
+  /// 将当前选中的预设色移到列表第一位（未启用、未选中或已在第一位时保持原顺序）。
+  List<_FillLightPreset> _orderedPresets(bool enabled, Color color) {
+    if (!enabled) return _presets;
+    final index = _presets.indexWhere((p) => _colorMatches(color, p.color));
+    if (index <= 0) return _presets;
+    final result = [..._presets];
+    final item = result.removeAt(index);
+    result.insert(0, item);
+    return result;
+  }
+
+  /// 关闭补光并重置悬浮取景器到初始状态（位置、大小）
+  void _turnOffFillLight(WidgetRef ref) {
+    ref.read(CaptureState.fillLightEnabledProvider.notifier).state = false;
+    ref.read(CaptureState.fillLightViewfinderScaleProvider.notifier).state = 0.5;
+    ref.read(CaptureState.fillLightViewfinderOffsetProvider.notifier).state =
+        Offset.zero;
+    ref.read(_ringExpandedProvider.notifier).state = false;
+  }
+}
+
+class _FillLightPreset {
+  const _FillLightPreset(this.label, this.color, this.intensity);
+  final String label;
+  final Color color;
+  final double intensity;
+}
+
+class _PresetColorDot extends StatelessWidget {
+  const _PresetColorDot({required this.preset, required this.selected, required this.onTap});
+  final _FillLightPreset preset;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        margin: const EdgeInsets.only(right: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: preset.color,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? const Color(0xFFC9A96E) : Colors.white24,
+                  width: selected ? 2 : 1,
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              preset.label,
+              style: TextStyle(
+                color: selected ? const Color(0xFFC9A96E) : Colors.white54,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionDot extends StatelessWidget {
+  const _ActionDot({required this.icon, required this.label, required this.selected, required this.onTap});
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        margin: const EdgeInsets.only(right: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: Colors.white12,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? const Color(0xFFC9A96E) : Colors.white24,
+                  width: selected ? 2 : 1,
+                ),
+              ),
+              child: Icon(icon, color: Colors.white70, size: 16),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? const Color(0xFFC9A96E) : Colors.white54,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 色环展开状态（仅 capture_page 内部使用）
+final _ringExpandedProvider = StateProvider<bool>((ref) => false);
+
+/// 方形 HSV 取色盘（色相 + 饱和度/亮度二维面板）
+/// 顶部：色相条（水平滑动选色相）
+/// 下方：SV 方形面板（X=饱和度，Y=亮度，左下黑、右下灰、右上纯色、左上白）
+class _SquareColorPicker extends StatefulWidget {
+  const _SquareColorPicker({required this.onColorChanged});
+  final ValueChanged<Color> onColorChanged;
+
+  @override
+  State<_SquareColorPicker> createState() => _SquareColorPickerState();
+}
+
+class _SquareColorPickerState extends State<_SquareColorPicker> {
+  double _hue = 40.0; // 默认暖白附近
+  double _saturation = 0.6;
+  double _value = 1.0;
+
+  @override
+  Widget build(BuildContext context) {
+    const panelSize = 220.0;
+    const hueBarHeight = 24.0;
+    final currentColor =
+        HSVColor.fromAHSV(1.0, _hue, _saturation, _value).toColor();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // SV 方形面板
+        SizedBox(
+          width: panelSize,
+          height: panelSize,
+          child: GestureDetector(
+            onPanDown: (d) => _handleSv(d.localPosition, panelSize),
+            onPanUpdate: (d) => _handleSv(d.localPosition, panelSize),
+            child: CustomPaint(
+              painter: _SvPanelPainter(
+                hue: _hue,
+                saturation: _saturation,
+                value: _value,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        // 色相条
+        SizedBox(
+          width: panelSize,
+          height: hueBarHeight,
+          child: GestureDetector(
+            onPanDown: (d) => _handleHue(d.localPosition, panelSize),
+            onPanUpdate: (d) => _handleHue(d.localPosition, panelSize),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(hueBarHeight / 2),
+              child: CustomPaint(
+                painter: _HueBarPainter(hue: _hue),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        // 当前色预览
+        Container(
+          width: panelSize,
+          height: 28,
+          decoration: BoxDecoration(
+            color: currentColor,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.white24, width: 1),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '#${currentColor.red.toRadixString(16).padLeft(2, '0').toUpperCase()}'
+            '${currentColor.green.toRadixString(16).padLeft(2, '0').toUpperCase()}'
+            '${currentColor.blue.toRadixString(16).padLeft(2, '0').toUpperCase()}',
+            style: TextStyle(
+              color: _value > 0.5 ? Colors.black54 : Colors.white70,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _handleSv(Offset localPos, double size) {
+    final s = (localPos.dx / size).clamp(0.0, 1.0);
+    // Y 轴反向：顶部=亮度1.0，底部=亮度0.0
+    final v = (1.0 - localPos.dy / size).clamp(0.0, 1.0);
+    setState(() {
+      _saturation = s;
+      _value = v;
+    });
+    widget.onColorChanged(
+        HSVColor.fromAHSV(1.0, _hue, _saturation, _value).toColor());
+  }
+
+  void _handleHue(Offset localPos, double width) {
+    final h = (localPos.dx / width * 360.0).clamp(0.0, 360.0);
+    setState(() => _hue = h);
+    widget.onColorChanged(
+        HSVColor.fromAHSV(1.0, _hue, _saturation, _value).toColor());
+  }
+}
+
+/// SV 面板绘制器：横向饱和度，纵向亮度
+class _SvPanelPainter extends CustomPainter {
+  const _SvPanelPainter({
+    required this.hue,
+    required this.saturation,
+    required this.value,
+  });
+  final double hue;
+  final double saturation;
+  final double value;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    // 基色：当前色相的纯色
+    final baseColor = HSVColor.fromAHSV(1.0, hue, 1.0, 1.0).toColor();
+
+    // 横向：白→纯色（饱和度）
+    final saturatePaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [Colors.white, baseColor],
+      ).createShader(rect);
+    canvas.drawRect(rect, saturatePaint);
+
+    // 纵向：透明→黑（亮度）
+    final valuePaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Colors.transparent, Colors.black],
+      ).createShader(rect);
+    canvas.drawRect(rect, valuePaint);
+
+    // 指示器圆圈
+    final cx = saturation * size.width;
+    final cy = (1.0 - value) * size.height;
+    final indicator = Offset(cx, cy);
+    canvas.drawCircle(indicator, 8, Paint()..color = Colors.white);
+    canvas.drawCircle(indicator, 8,
+        Paint()..color = Colors.black38..style = PaintingStyle.stroke..strokeWidth = 1.5);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SvPanelPainter old) =>
+      old.hue != hue ||
+      old.saturation != saturation ||
+      old.value != value;
+}
+
+/// 色相条绘制器
+class _HueBarPainter extends CustomPainter {
+  const _HueBarPainter({required this.hue});
+  final double hue;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final paint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          for (var h = 0; h <= 360; h += 30)
+            HSVColor.fromAHSV(1.0, h.toDouble(), 1.0, 1.0).toColor(),
+        ],
+      ).createShader(rect);
+    canvas.drawRect(rect, paint);
+
+    // 指示器
+    final x = (hue / 360.0) * size.width;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(x, size.height / 2), width: 6, height: size.height + 4),
+        const Radius.circular(3),
+      ),
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.fill,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _HueBarPainter old) => old.hue != hue;
+}
+
+/// 保存颜色行：合并系统预设与用户保存颜色为一个列表，
+/// 用户保存的颜色可长按修改或删除。
+class _SaveColorsRow extends ConsumerStatefulWidget {
+  const _SaveColorsRow({
+    required this.onPick,
+    required this.onAdd,
+  });
+  final ValueChanged<Color> onPick;
+  final void Function(String name, Color color) onAdd;
+
+  @override
+  ConsumerState<_SaveColorsRow> createState() => _SaveColorsRowState();
+}
+
+class _SaveColorsRowState extends ConsumerState<_SaveColorsRow> {
+  bool _showNameInput = false;
+  final _nameController = TextEditingController();
+  bool _hintShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHintState();
+  }
+
+  Future<void> _loadHintState() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/lumira_fill_light_hint.json');
+      if (await file.exists()) {
+        if (mounted) setState(() => _hintShown = true);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _markHintShown() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/lumira_fill_light_hint.json');
+      await file.writeAsString('{"shown":true}');
+      if (mounted) setState(() => _hintShown = true);
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  // 系统预设颜色（与 _FillLightPanel._presets 一致）
+  static const _presets = [
+    _FillLightPreset('暖白', Color(0xFFFFE5B4), 0.6),
+    _FillLightPreset('冷白', Color(0xFFE0F0FF), 0.6),
+    _FillLightPreset('黄金', Color(0xFFFFB347), 0.7),
+    _FillLightPreset('柔粉', Color(0xFFFFC0CB), 0.6),
+    _FillLightPreset('青蓝', Color(0xFF8FD3F4), 0.5),
+    _FillLightPreset('紫', Color(0xFFD8BFD8), 0.5),
+  ];
+
+  void _showEditSheet(String name, Color color) {
+    _markHintShown();
+    showLumiraBottomSheet(
+      context: context,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white24),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  name,
+                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+          LumiraListTile(
+            leading: const Icon(Icons.edit, color: Color(0xFFC9A96E), size: 20),
+            title: const Text('修改名称', style: TextStyle(color: Colors.white70, fontSize: 14)),
+            onTap: () {
+              Navigator.pop(ctx);
+              _showRenameDialog(name);
+            },
+          ),
+          LumiraListTile(
+            leading: const Icon(Icons.color_lens, color: Color(0xFFC9A96E), size: 20),
+            title: const Text('修改颜色', style: TextStyle(color: Colors.white70, fontSize: 14)),
+            onTap: () {
+              Navigator.pop(ctx);
+              // 用当前颜色打开色环
+              ref.read(CaptureState.fillLightColorProvider.notifier).state = color;
+            },
+          ),
+          LumiraListTile(
+            leading: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+            title: const Text('删除', style: TextStyle(color: Colors.redAccent, fontSize: 14)),
+            onTap: () {
+              ref.read(customFillLightColorsProvider.notifier).remove(name);
+              Navigator.pop(ctx);
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  void _showRenameDialog(String oldName) {
+    final controller = TextEditingController(text: oldName);
+    showLumiraDialog(
+      context: context,
+      builder: (ctx) => LumiraAlertDialog(
+        title: const Text('修改名称'),
+        content: LumiraTextField(
+          controller: controller,
+          hintText: '输入新名称',
+        ),
+        actions: [
+          LumiraButton(
+            variant: ButtonVariant.ghost,
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          LumiraButton(
+            variant: ButtonVariant.primary,
+            onPressed: () {
+              final newName = controller.text.trim();
+              if (newName.isNotEmpty && newName != oldName) {
+                ref.read(customFillLightColorsProvider.notifier).update(oldName, newName: newName);
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final customColors = ref.watch(customFillLightColorsProvider);
+    final currentColor = ref.watch(CaptureState.fillLightColorProvider);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 标题行 + 保存按钮
+          Row(
+            children: [
+              const Text(
+                '保存颜色',
+                style: TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => setState(() => _showNameInput = !_showNameInput),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.white12,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.bookmark_add_outlined, size: 12, color: const Color(0xFFC9A96E)),
+                      const SizedBox(width: 3),
+                      Text(
+                        '保存当前',
+                        style: TextStyle(color: const Color(0xFFC9A96E), fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          // 命名输入框
+          if (_showNameInput) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: currentColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white24, width: 1),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: LumiraTextField(
+                    controller: _nameController,
+                    hintText: '为该颜色命名（如：日落金）',
+                  ),
+                ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () {
+                    final name = _nameController.text.trim();
+                    if (name.isEmpty) return;
+                    widget.onAdd(name, currentColor);
+                    _nameController.clear();
+                    setState(() => _showNameInput = false);
+                    _markHintShown();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFC9A96E),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      '保存',
+                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          // 合并的颜色列表：系统预设 + 用户保存
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 44,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                // 系统预设颜色（不可删改）
+                ..._presets.map((p) {
+                  final isSelected = _colorMatch(currentColor, p.color);
+                  return _PresetColorDot(
+                    preset: p,
+                    selected: isSelected,
+                    onTap: () => widget.onPick(p.color),
+                  );
+                }),
+                // 分隔符
+                if (customColors.isNotEmpty)
+                  Container(
+                    width: 1,
+                    margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                    color: Colors.white12,
+                  ),
+                // 用户保存颜色（可长按删改）
+                ...customColors.map((c) {
+                  final isSelected = _colorMatch(currentColor, c.color);
+                  return _SavedColorDot(
+                    name: c.name,
+                    color: c.color,
+                    selected: isSelected,
+                    onTap: () => widget.onPick(c.color),
+                    onLongPress: () => _showEditSheet(c.name, c.color),
+                  );
+                }),
+              ],
+            ),
+          ),
+          // 操作提示（首次显示，用户长按或保存后消失）
+          if (!_hintShown)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.white30, size: 12),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      '长按保存的颜色可修改或删除',
+                      style: TextStyle(color: Colors.white30, fontSize: 10),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  bool _colorMatch(Color a, Color b) => a.value == b.value;
+}
+
+/// 用户保存的颜色圆点（支持长按）
+class _SavedColorDot extends StatelessWidget {
+  const _SavedColorDot({
+    required this.name,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+    required this.onLongPress,
+  });
+  final String name;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Container(
+        width: 44,
+        margin: const EdgeInsets.only(right: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? const Color(0xFFC9A96E) : Colors.white24,
+                  width: selected ? 2 : 1,
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: selected ? const Color(0xFFC9A96E) : Colors.white54,
+                fontSize: 9,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 缩放栏：默认胶囊 Tab + 拖动弹出 iPhone 原生风格旋转轮盘
+///
+/// 默认状态：半透明胶囊容器，显示预设倍数 Tab，点击快速切换。
+/// 后置摄像头：水平拖动胶囊时弹出旋转轮盘（从底部滑入），可精细调整缩放。
+/// 轮盘旋转，指针固定在顶部不动（与 iPhone 原生相机一致）。
+/// 前置摄像头：仅支持点按 Tab 切换，不支持拖动精细调整。
+class _ZoomBar extends ConsumerStatefulWidget {
+  const _ZoomBar({required this.onChanged});
+
+  final ValueChanged<double> onChanged;
+
+  @override
+  ConsumerState<_ZoomBar> createState() => _ZoomBarState();
+}
+
+class _ZoomBarState extends ConsumerState<_ZoomBar> {
+  /// 是否正在显示弧形轮盘（水平拖动中）
+  bool _showDial = false;
+
+  /// 拖动起始时的倍数
+  double _dragStartMultiplier = 1.0;
+
+  /// 拖动起始时的水平位置
+  double _dragStartX = 0.0;
+
+  /// 轮盘滑入动画控制器
+  double _dialOffset = 1.0; // 1.0 = 完全隐藏（底部），0.0 = 完全显示
+
+  /// 上一次触发震动的倍数（用于检测刻度变化）
+  double _lastHapticMultiplier = -1.0;
+
+  /// 当前活跃指针数：用于区分「单指横向滑动」与「双指捏合」。
+  /// 轮盘只在缩放 Tab 上单指左右滑动时弹出，捏合缩放不弹轮盘。
+  int _activePointers = 0;
+
+  void _onPointerDown(PointerDownEvent event) {
+    _activePointers++;
+    setState(() {});
+    // 第二根手指落下（开始捏合）时立即收起轮盘
+    if (_activePointers >= 2 && _showDial) {
+      _animateDialOut();
+    }
+  }
+
+  void _onPointerUp(PointerUpEvent event) {
+    setState(() => _activePointers = (_activePointers - 1).clamp(0, 10));
+  }
+
+  void _onPointerCancel(PointerCancelEvent event) {
+    setState(() => _activePointers = (_activePointers - 1).clamp(0, 10));
+  }
+
+  /// 根据设备能力动态生成预设倍数列表。
+  List<double> _getZoomPresets(String facing, double maxZoom, bool supportsUltraWide) {
+    final base = <double>[1.0];
+    if (facing == 'back') {
+      if (maxZoom >= 2.0) base.add(2.0);
+      if (maxZoom >= 3.0) base.add(3.0);
+      if (maxZoom >= 5.0) base.add(5.0);
+    }
+    if (supportsUltraWide) base.insert(0, 0.5);
+    return base;
+  }
+
+  /// 找到最接近当前倍数的预设索引
+  int _nearestPresetIndex(double multiplier, List<double> presets) {
+    int nearest = 0;
+    double minDiff = double.infinity;
+    for (var i = 0; i < presets.length; i++) {
+      final diff = (presets[i] - multiplier).abs();
+      if (diff < minDiff) {
+        minDiff = diff;
+        nearest = i;
+      }
+    }
+    return nearest;
+  }
+
+  void _onHorizontalDragStart(DragStartDetails details) {
+    final facing = ref.read(CaptureState.cameraFacingProvider);
+    if (facing != 'back') return;
+    // 仅单指横向滑动显示轮盘；双指捏合不显示（由 _PinchZoomCamera 处理缩放）
+    if (_activePointers != 1) return;
+    _dragStartMultiplier = ref.read(CaptureState.apparentZoomProvider);
+    _dragStartX = details.globalPosition.dx;
+    _lastHapticMultiplier = _dragStartMultiplier;
+    setState(() => _showDial = true);
+    _animateDialIn();
+  }
+
+  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    final facing = ref.read(CaptureState.cameraFacingProvider);
+    if (facing != 'back') return;
+    // 拖动过程中第二根手指落下（变成捏合）时停止缩放调整
+    if (_activePointers != 1) return;
+    final minZoom = ref.read(CaptureState.deviceMinZoomProvider) ?? 1.0;
+    final maxZoom = ref.read(CaptureState.deviceMaxZoomProvider) ?? 10.0;
+    final deltaX = details.globalPosition.dx - _dragStartX;
+    // 每 30px = 0.1x 倍数变化
+    final deltaMultiplier = (deltaX / 30) * 0.1;
+    var newMultiplier = _dragStartMultiplier + deltaMultiplier;
+    newMultiplier = newMultiplier.clamp(minZoom, maxZoom);
+    widget.onChanged(newMultiplier);
+
+    // 每变化 0.1x 触发一次震动反馈
+    final roundedNew = (newMultiplier * 10).round() / 10.0;
+    final roundedLast = (_lastHapticMultiplier * 10).round() / 10.0;
+    if (roundedNew != roundedLast) {
+      HapticFeedback.lightImpact();
+      _lastHapticMultiplier = newMultiplier;
+    }
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails _) {
+    HapticFeedback.mediumImpact();
+    _animateDialOut();
+  }
+
+  void _animateDialIn() {
+    double start = 1.0;
+    double end = 0.0;
+    const duration = Duration(milliseconds: 250);
+    final startTime = DateTime.now();
+
+    void tick() {
+      final elapsed = DateTime.now().difference(startTime);
+      final t = (elapsed.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
+      final eased = 1 - math.pow(1 - t, 3).toDouble();
+      setState(() {
+        _dialOffset = start + (end - start) * eased;
+      });
+      if (t < 1.0) {
+        Future.delayed(const Duration(milliseconds: 16), tick);
+      }
+    }
+    tick();
+  }
+
+  void _animateDialOut() {
+    double start = _dialOffset;
+    double end = 1.0;
+    const duration = Duration(milliseconds: 200);
+    final startTime = DateTime.now();
+
+    void tick() {
+      final elapsed = DateTime.now().difference(startTime);
+      final t = (elapsed.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
+      final eased = t * t;
+      setState(() {
+        _dialOffset = start + (end - start) * eased;
+      });
+      if (t < 1.0) {
+        Future.delayed(const Duration(milliseconds: 16), tick);
+      } else {
+        setState(() => _showDial = false);
+      }
+    }
+    tick();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final facing = ref.watch(CaptureState.cameraFacingProvider);
+    final multiplier = ref.watch(CaptureState.apparentZoomProvider);
+    final maxZoom = ref.watch(CaptureState.deviceMaxZoomProvider) ?? 10.0;
+    final minZoom = ref.watch(CaptureState.deviceMinZoomProvider) ?? 1.0;
+    final supportsUltraWide = ref.watch(CaptureState.supportsUltraWideProvider);
+    final presets = _getZoomPresets(facing, maxZoom, supportsUltraWide);
+    final activeIndex = _nearestPresetIndex(multiplier, presets);
+    final canDrag = facing == 'back';
+
+    return Listener(
+      onPointerDown: _onPointerDown,
+      onPointerUp: _onPointerUp,
+      onPointerCancel: _onPointerCancel,
+      behavior: HitTestBehavior.translucent,
+      child: SizedBox(
+        height: 60,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.bottomCenter,
+          children: [
+            // 默认胶囊 Tab 栏：仅在此胶囊上单指左右滑动才弹出轮盘
+            // （GestureDetector 只包住胶囊，避免整条空白区域误触发轮盘）
+            GestureDetector(
+              onHorizontalDragStart: canDrag ? _onHorizontalDragStart : null,
+              onHorizontalDragUpdate: canDrag ? _onHorizontalDragUpdate : null,
+              onHorizontalDragEnd: canDrag ? _onHorizontalDragEnd : null,
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.35),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (var i = 0; i < presets.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 2),
+                      _ZoomTab(
+                        label: presets[i] == presets[i].toInt()
+                            ? '${presets[i].toInt()}'
+                            : presets[i].toStringAsFixed(1),
+                        active: i == activeIndex && !_showDial,
+                        onTap: () {
+                          widget.onChanged(presets[i]);
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            // 圆形轮盘 overlay（后置拖动时从底部滑入）
+            if (_showDial)
+              Positioned(
+                bottom: 0 + 80 * _dialOffset,
+                left: 0,
+                right: 0,
+                child: SizedBox(
+                  width: screenWidth,
+                  height: screenWidth / 2,
+                  child: _HalfCircleDial(
+                    multiplier: multiplier,
+                    presets: presets,
+                    activeIndex: activeIndex,
+                    minZoom: minZoom,
+                    maxZoom: maxZoom,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 单个缩放 Tab 按钮 — iPhone 原生风格
+class _ZoomTab extends StatelessWidget {
+  const _ZoomTab({required this.label, required this.active, required this.onTap});
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFFF0C040) : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: active ? Colors.black : Colors.white.withOpacity(0.85),
+            fontSize: 13,
+            fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 半圆缩放轮盘 — 完整圆形只显示上半部分
+///
+/// 直径 = 屏幕宽度 100%，圆心在底部中央。
+/// 半透明黑色圆形背景，只显示上半圆。
+class _HalfCircleDial extends StatelessWidget {
+  const _HalfCircleDial({
+    required this.multiplier,
+    required this.presets,
+    required this.activeIndex,
+    required this.minZoom,
+    required this.maxZoom,
+  });
+
+  final double multiplier;
+  final List<double> presets;
+  final int activeIndex;
+  final double minZoom;
+  final double maxZoom;
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final radius = screenWidth / 2;
+
+    final totalRange = maxZoom - minZoom;
+    final currentT = totalRange > 0 ? (multiplier - minZoom) / totalRange : 0.0;
+    // 与 iPhone 原生一致：半圆弧（180°），从左侧经顶部到右侧
+    const tickStartAngle = -math.pi;
+    const tickSweepAngle = math.pi;
+    final currentAngleOnDial = tickStartAngle + currentT * tickSweepAngle;
+    final rotationAngle = (-math.pi / 2) - currentAngleOnDial;
+
+    return SizedBox(
+      width: screenWidth,
+      height: radius,
+      child: ClipRect(
+        // topCenter：让完整圆从顶部开始向下溢出，只露出上半圆（∩ 形，圆心在底部中央）。
+        // 之前误用 bottomCenter 导致露出的是下半圆（∪ 形），上半弧上的刻度全被裁掉。
+        child: OverflowBox(
+          maxHeight: screenWidth,
+          alignment: Alignment.topCenter,
+          child: SizedBox(
+            width: screenWidth,
+            height: screenWidth,
+            child: Stack(
+              children: [
+                // 半透明黑色圆形背景
+                Container(
+                  width: screenWidth,
+                  height: screenWidth,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.55),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                // 旋转刻度层（刻度随轮盘旋转，指针固定）
+                Transform.rotate(
+                  angle: rotationAngle,
+                  child: SizedBox(
+                    width: screenWidth,
+                    height: screenWidth,
+                    child: CustomPaint(
+                      painter: _HalfCircleTickPainter(
+                        radius: radius,
+                        startAngle: tickStartAngle,
+                        sweepAngle: tickSweepAngle,
+                        totalRange: totalRange,
+                      ),
+                    ),
+                  ),
+                ),
+                // 数字标签：按旋转后的屏幕坐标直接定位，保持正立且不被底部裁切
+                ..._buildUprightLabels(radius, rotationAngle, totalRange, tickStartAngle, tickSweepAngle),
+                // 固定指针
+                Positioned(
+                  top: screenWidth * 0.04,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: CustomPaint(painter: _PointerPainter()),
+                  ),
+                ),
+                // 当前倍数显示（居中于半圆中心，避免与顶部刻度数字重叠）
+                Positioned(
+                  top: screenWidth * 0.25 - 14,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0C040),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${multiplier.toStringAsFixed(1)}x',
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildUprightLabels(double radius, double rotationAngle, double totalRange, double tickStartAngle, double tickSweepAngle) {
+    final widgets = <Widget>[];
+    const labelBoxW = 44.0;
+    const labelBoxH = 20.0;
+    final labelR = radius * 0.82 - 22;
+
+    for (var i = 0; i < presets.length; i++) {
+      final preset = presets[i];
+      final t = totalRange > 0 ? (preset - minZoom) / totalRange : 0.0;
+      final markAngle = tickStartAngle + t * tickSweepAngle;
+      // 轮盘层旋转后，刻度在屏幕上的角度（0 = 正右，-π/2 = 正上）
+      final screenAngle = markAngle + rotationAngle;
+      final isMajor = i == activeIndex;
+
+      // 标签中心落在旋转后的屏幕坐标（始终正立，无需反向旋转）
+      final cx = radius + labelR * math.cos(screenAngle);
+      var cy = radius + labelR * math.sin(screenAngle);
+      // 夹紧在上半圆内，避免位于基线（左右两端）的标签被底部裁掉一半
+      cy = cy.clamp(labelBoxH / 2 + 2, radius - labelBoxH / 2 - 2).toDouble();
+
+      final label = preset == preset.toInt()
+          ? '${preset.toInt()}'
+          : preset.toStringAsFixed(1);
+
+      widgets.add(
+        Positioned(
+          left: cx - labelBoxW / 2,
+          top: cy - labelBoxH / 2,
+          child: SizedBox(
+            width: labelBoxW,
+            height: labelBoxH,
+            child: Center(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: isMajor ? const Color(0xFFF0C040) : Colors.white.withOpacity(0.8),
+                  fontSize: isMajor ? 15 : 12,
+                  fontWeight: isMajor ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return widgets;
+  }
+}
+
+/// 半圆刻度绘制器（随轮盘旋转）
+class _HalfCircleTickPainter extends CustomPainter {
+  _HalfCircleTickPainter({
+    required this.radius,
+    required this.startAngle,
+    required this.sweepAngle,
+    required this.totalRange,
+  });
+
+  final double radius;
+  final double startAngle;
+  final double sweepAngle;
+  final double totalRange;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final centerX = size.width / 2;
+    final centerY = size.height / 2;
+    final arcR = radius * 0.82;
+
+    // 1. 绘制弧线
+    final arcPaint = Paint()
+      ..color = Colors.white.withOpacity(0.25)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(centerX, centerY), radius: arcR),
+      startAngle,
+      sweepAngle,
+      false,
+      arcPaint,
+    );
+
+    // 2. 绘制密集刻度线
+    final stepCount = ((totalRange / 0.1).round()).clamp(10, 200);
+    for (var i = 0; i <= stepCount; i++) {
+      final t = i / stepCount;
+      final angle = startAngle + t * sweepAngle;
+      final isMajorTick = i % 10 == 0;
+      final tickLength = isMajorTick ? 14.0 : 6.0;
+      final tickWidth = isMajorTick ? 1.5 : 0.7;
+
+      final outerR = arcR;
+      final innerR = arcR - tickLength;
+
+      final p1 = Offset(
+        centerX + outerR * math.cos(angle),
+        centerY + outerR * math.sin(angle),
+      );
+      final p2 = Offset(
+        centerX + innerR * math.cos(angle),
+        centerY + innerR * math.sin(angle),
+      );
+
+      canvas.drawLine(
+        p1, p2,
+        Paint()
+          ..color = Colors.white.withOpacity(isMajorTick ? 0.75 : 0.35)
+          ..strokeWidth = tickWidth,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_HalfCircleTickPainter oldDelegate) => false;
+}
+
+/// 顶部固定指针绘制器（金黄色向下小三角）
+class _PointerPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = const Color(0xFFF0C040);
+    final s = 6.0;
+    final path = Path()
+      ..moveTo(0, s)
+      ..lineTo(-s * 0.8, -s * 0.5)
+      ..lineTo(s * 0.8, -s * 0.5)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// 拍摄按钮行：角标缩略图 + 拍摄按钮 + 翻转摄像头
+/// 试用模式水印遮罩
+///
+/// 铺在取景器上方：半透明白色斜纹 + 重复"LUMIRA 试用"水印文字，
+/// 中央提示"购买解锁后去除水印"。IgnorePointer 不拦截手势，
+/// 导航栏（含购买/退出）与底部锁定快门仍可操作。
+class _TrialWatermarkOverlay extends StatelessWidget {
+  const _TrialWatermarkOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        color: Colors.white.withOpacity(0.06),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // 斜纹水印文字（CustomPainter 绘制，性能优于大量 Transform Text）
+            CustomPaint(painter: _TrialWatermarkPainter()),
+            // 中央提示
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.55),
+                  borderRadius: BorderRadius.circular(9999),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.3),
+                    width: 0.5,
+                  ),
+                ),
+                child: const Text(
+                  '试用模式 · 购买解锁后去除水印',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 斜纹"LUMIRA 试用"水印文字画笔
+class _TrialWatermarkPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final textStyle = TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+      color: Colors.white.withOpacity(0.22),
+      letterSpacing: 2,
+    );
+
+    canvas.save();
+    canvas.rotate(-0.45);
+    const step = 130.0;
+    const offset = -200.0;
+    // 沿斜向网格铺满水印文字
+    for (var x = offset; x < size.height + 200; x += step) {
+      for (var y = offset; y < size.width + 200; y += step) {
+        final tp = TextPainter(
+          text: TextSpan(text: 'LUMIRA 试用', style: textStyle),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, Offset(y, x));
+      }
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _CaptureButtonRow extends ConsumerWidget {
+  const _CaptureButtonRow({
+    required this.onCapture,
+    required this.onSwitchCamera,
+    required this.onThumbnailTap,
+    this.thumbnailKey,
+    this.locked = false,
+  });
+
+  final VoidCallback onCapture;
+  final VoidCallback onSwitchCamera;
+  final VoidCallback onThumbnailTap;
+  final GlobalKey? thumbnailKey;
+  /// 试用模式：快门替换为锁定态，点击提示解锁
+  final bool locked;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          // 角标缩略图（左）：四态状态机驱动（idle/processing/preview/final）
+          // thumbnailKey：水印动画 Phase 4 通过此 key 读取角标全局 Rect
+          // 试用模式隐藏缩略图（不产生照片）
+          if (!locked)
+            CaptureThumbnail(key: thumbnailKey, onTap: onThumbnailTap),
+          // 拍摄按钮（中）：试用模式替换为锁定快门
+          locked ? const _LockedCaptureButton() : CaptureButton(onTap: onCapture),
+          // 翻转摄像头（右）
+          GestureDetector(
+            onTap: onSwitchCamera,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.3),
+                  width: 1.5,
+                ),
+              ),
+              child: const Icon(
+                Icons.cameraswitch_outlined,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 试用模式锁定快门：不可拍照，点击提示解锁
+class _LockedCaptureButton extends StatelessWidget {
+  const _LockedCaptureButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => LumiraToast.show(
+        context,
+        '试用模式不可拍摄，购买解锁后即可使用',
+        duration: const Duration(milliseconds: 1200),
+      ),
+      child: Container(
+        width: 80,
+        height: 80,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white.withOpacity(0.6), width: 4),
+        ),
+        alignment: Alignment.center,
+        child: Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white.withOpacity(0.85),
+          ),
+          child: const Icon(
+            Icons.lock_outline,
+            size: 28,
+            color: Colors.black54,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 相机权限引导页
+/// 在权限未授予时显示，提供重新请求/跳转系统设置的入口
+class _CameraPermissionGuide extends StatelessWidget {
+  const _CameraPermissionGuide({
+    required this.status,
+    required this.onRetry,
+    required this.onBack,
+    this.onOpenSettings,
+  });
+
+  final CameraPermissionStatus status;
+  final VoidCallback onRetry;
+  final VoidCallback onBack;
+  final VoidCallback? onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isPermanentlyDenied =
+        status == CameraPermissionStatus.permanentlyDenied;
+    final String message = isPermanentlyDenied
+        ? '相机权限已被永久拒绝，请在系统设置中手动开启相机权限后返回应用。'
+        : '需要相机权限才能进行拍摄，请授予相机权限。';
+    final String actionText = isPermanentlyDenied ? '前往设置' : '重新授权';
+
+    return SafeArea(
+      child: Stack(
+        children: [
+          // 返回按钮
+          Positioned(
+            top: 0,
+            left: 0,
+            child: LumiraIconButton(
+              icon: Icons.arrow_back_ios_new,
+              color: Colors.white,
+              onPressed: onBack,
+            ),
+          ),
+          // 居中引导内容
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.camera_alt_outlined,
+                    size: 64,
+                    color: Colors.white54,
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    '相机权限未开启',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  // 主操作按钮
+                  SizedBox(
+                    width: double.infinity,
+                    child: LumiraButton(
+                      variant: ButtonVariant.primary,
+                      onPressed: isPermanentlyDenied
+                          ? onOpenSettings
+                          : onRetry,
+                      child: Text(actionText),
+                    ),
+                  ),
+                  if (isPermanentlyDenied) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: LumiraButton(
+                        variant: ButtonVariant.ghost,
+                        onPressed: onRetry,
+                        child: const Text('返回后重试'),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 拍照后处理参数（传给 worker isolate）。
+class _CaptureProcessParams {
+  const _CaptureProcessParams({
+    required this.inputPath,
+    required this.photoId,
+    required this.targetRatio,
+    required this.ratioId,
+    required this.isPortrait,
+    required this.isFront,
+    required this.postProcess,
+required this.maxDim,
+    required this.decodeDim,
+    this.isWysiwyg = false,
+  });
+  final String inputPath;
+
+  /// 快门时提前生成的 photoId，interim→final→DB→预览升级全程复用。
+  final String photoId;
+
+  final double targetRatio; // 目标宽高比（正向像素）
+
+  /// 拍摄实际使用的比例 id（'fullscreen' / '3:4' / '1:1' ...）。
+  /// 落库时写入 postProcess.cropRatio：编辑保存时按它重建比例基准区域，
+  /// 框选与导出才能所见即所得（此前存构造默认 '3:4'，fullscreen 成片
+  /// 编辑时基准区域错位 → 裁剪不一致）。
+  final String ratioId;
+  final bool isPortrait;
+  final bool isFront;
+  final PostProcess postProcess;
+
+  /// 输出最大边（px），来自默认分辨率档位（默认高清 1280）
+  final int maxDim;
+
+  /// JPEG 降采样解码目标长边（px），略高于输出留画质余量
+  final int decodeDim;
+
+  /// 成片是否与取景器同源直出（iOS 非闪光 WYSIWYG）。
+  /// true 时后处理**不**做内容自适应白平衡/ISP 校色，仅叠加与取景器相同的
+  /// 用户色彩矩阵（见 _applyColorMatrixOnGpu）。
+  final bool isWysiwyg;
+}
+
+/// 连拍帧的 240px 降采样 RGBA 小图集合（并行列表，与路径一一对应）。
+class _BurstThumbnails {
+  const _BurstThumbnails(this.rgbaList, this.widthList, this.heightList);
+  final List<Uint8List> rgbaList;
+  final List<int> widthList;
+  final List<int> heightList;
+}
+
+/// 后处理输出/解码尺寸来源说明：
+/// 成片输出最大边与 JPEG 解码目标边长不再硬编码，改由「默认分辨率」档位
+/// （CaptureResolutions，设置页可切换）决定。高清档沿用原值：
+/// - 输出最大边 1280：2048 → 1280 大幅降低逐像素 CPU 处理耗时（锐化/清晰度/颗粒/
+///   磨皮/暗角均为 O(N)），像素数降为原来的 (1280/2048)^2 ≈ 39%，CPU 处理耗时约减半。
+/// - 解码目标长边 1600：略高于输出，避免全尺寸解码后再 GPU 缩小，可省 0.4-1.0s。
+///   【性能优化 B / C】
+
+/// GPU 处理后的 rawRgba 数据 + 尺寸，传给 worker isolate 做后续 CPU 处理。
+class _GpuProcessedData {
+  const _GpuProcessedData({
+    required this.rgbaBytes,
+    required this.width,
+    required this.height,
+    required this.outputPath,
+    required this.sharpen,
+    required this.clarity,
+    required this.grain,
+    required this.smoothStrength,
+    required this.vignette,
+    required this.needRawRgba,
+    this.sourceAvgRgb,
+  });
+  final Uint8List rgbaBytes;
+  final int width;
+  final int height;
+  final String outputPath;
+  final int sharpen;
+  final double? clarity;
+  final int grain;
+  final int smoothStrength;
+  final int vignette;
+  /// 为 true 时 isolate 不编码 JPEG，直接返回 rawRgba 给主 isolate 做水印合成，
+  /// 避免主 isolate 重复解码 JPEG（节省 ~180ms）。
+  /// 为 false 时 isolate 直接编码 JPEG 写文件（无水印场景，不阻塞 UI）。
+  final bool needRawRgba;
+
+  /// 诊断：dart:ui 解码后的源图平均 RGB（色彩矩阵/绘制前）。
+  /// 与 diagBefore（绘制后）对比，可判定偏黄来自相机片源还是后处理矩阵。
+  final List<int>? sourceAvgRgb;
+}
+
+/// 诊断：对 rawRgba (ByteData) 做步进采样，返回平均 RGB 估算。
+/// 用于定位偏黄发生环节（解码 vs 绘制 vs 编码）。
+List<int> _sampleAvgRgbFromRgba(ByteData byteData) {
+  final length = byteData.lengthInBytes;
+  final pixelBytes = length ~/ 4;
+  if (pixelBytes <= 0) return [0, 0, 0];
+  // 步进采样（每 64 像素取一个），降低耗时
+  final step = (pixelBytes / 8192).ceil().clamp(1, 64);
+  var r = 0.0, g = 0.0, b = 0.0, cnt = 0;
+  for (var i = 0; i < length; i += 4 * step) {
+    if (i + 3 >= length) break;
+    r += byteData.getUint8(i);
+    g += byteData.getUint8(i + 1);
+    b += byteData.getUint8(i + 2);
+    cnt++;
+  }
+  if (cnt == 0) return [0, 0, 0];
+  return [(r / cnt).round(), (g / cnt).round(), (b / cnt).round()];
+}
+
+/// 【iOS 偏黄修复】内容自适应白平衡：从成片自身的中性灰/浅灰像素统计 R/G/B 均值，
+/// 构造逐通道增益矩阵，把灰区拉回等量（R=G=B）→ 只抵消相机 ISP（Smart HDR/Deep
+/// Fusion）对中性区域的色偏，不动场景真实色彩。灰区近中性时返回 null（无需校正）。
+///
+/// 【曝光守恒铁律】三通道增益几何均值（(gr*gg*gb)^(1/3)）必须为 1，这样中性灰像素
+/// 灰度不变，全局曝光绝不动。仅当通道间相对差异足够大（R-B 失衡，即偏黄/偏蓝）时
+/// 才有非恒等的校正矩阵。
+List<double>? _buildAdaptiveWhiteBalanceMatrixFromRgba(
+    ByteData byteData, int width, int height) {
+  if (width <= 0 || height <= 0) return null;
+
+  // 收集中性灰/浅灰像素（低饱和度 + 中高亮度，避开纯黑/纯白/过曝与强饱和色）。
+  var ir = 0.0, ig = 0.0, ib = 0.0, n = 0;
+  for (var y = 0; y < height; y += 2) {
+    for (var x = 0; x < width; x += 2) {
+      final i = (y * width + x) * 4;
+      if (i + 3 >= byteData.lengthInBytes) continue;
+      final r = byteData.getUint8(i);
+      final g = byteData.getUint8(i + 1);
+      final b = byteData.getUint8(i + 2);
+      // 低饱和度（通道间最大差 ≤ 24），亮度适中（20~235，排除过曝高光与暗部）。
+      final mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
+      final mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
+      if (mx <= 0 || mx - mn > 24) continue;
+      if (mn < 20 || mx > 235) continue;
+      ir += r; ig += g; ib += b; n++;
+    }
+  }
+  if (n < 400) return null; // 灰区样本不足，不冒险校色
+
+  final avgR = ir / n, avgG = ig / n, avgB = ib / n;
+
+  // 目标：把灰区三通道的平均值推到相同（中性）→ 逐通道增益。
+  // 以 G 为亮度锚，R/B 向 G 对齐：若灰区偏黄（R>G>B），则 R 需小幅下降、B 需小幅抬升。
+  var gr = (avgG / avgR).clamp(0.88, 1.12);
+  var gg = 1.0;
+  var gb = (avgG / avgB).clamp(0.88, 1.12);
+
+  // 曝光守恒：三通道几何均值归 1，只保留通道间相对差异。
+  final gmean = math.pow(gr * gg * gb, 1.0 / 3.0).toDouble();
+  if (gmean > 1e-6) {
+    gr /= gmean;
+    gg /= gmean;
+    gb /= gmean;
+  }
+
+  if ((gr - 1).abs() < 0.015 &&
+      (gg - 1).abs() < 0.015 &&
+      (gb - 1).abs() < 0.015) {
+    return null; // 灰区已中性，无需校正
+  }
+  debugPrint('[capture] 自适应白平衡: grayAvg=[${avgR.round()},${avgG.round()},${avgB.round()}] '
+      '(n=$n) → gains=[${gr.toStringAsFixed(3)},${gg.toStringAsFixed(3)},${gb.toStringAsFixed(3)}]');
+  return [
+    gr, 0, 0, 0, 0,
+    0, gg, 0, 0, 0,
+    0, 0, gb, 0, 0,
+    0, 0, 0, 1, 0,
+  ];
+}
+
+/// RGBA 原始字节 → [ui.Image]（ImageDescriptor.raw，避免 JPEG 编解码往返）。
+Future<ui.Image> _rgbaToUiImage(
+  Uint8List rgba,
+  int width,
+  int height,
+) async {
+  final buffer = await ui.ImmutableBuffer.fromUint8List(rgba);
+  final descriptor = ui.ImageDescriptor.raw(
+    buffer,
+    width: width,
+    height: height,
+    pixelFormat: ui.PixelFormat.rgba8888,
+  );
+  buffer.dispose();
+  final codec = await descriptor.instantiateCodec();
+  final frame = await codec.getNextFrame();
+  final image = frame.image;
+  descriptor.dispose();
+  codec.dispose();
+  return image;
+}
+
+/// 诊断（compute 顶层函数）：用 image 包(CPU)解码 JPEG bytes 并采样平均 RGB。
+/// 对比 dart:ui 解码结果，判断偏黄是否来自 dart:ui 解码器色彩空间处理。
+List<int> imageDecodeSample(Uint8List bytes) {
+  final decoded = img.decodeJpg(bytes);
+  if (decoded == null) return [-1, -1, -1];
+  // 转换为 uint8 采样（仅诊断用）
+  var r = 0.0, g = 0.0, b = 0.0, cnt = 0;
+  for (var y = 0; y < decoded.height; y += 8) {
+    for (var x = 0; x < decoded.width; x += 8) {
+      final p = decoded.getPixel(x, y);
+      r += p.r.toInt();
+      g += p.g.toInt();
+      b += p.b.toInt();
+      cnt++;
+    }
+  }
+  if (cnt == 0) return [0, 0, 0];
+  return [(r / cnt).round(), (g / cnt).round(), (b / cnt).round()];
+}
+
+/// 在主 isolate 中用 dart:ui GPU 管线处理照片：
+/// 1. 解码 JPEG（降采样，C 优化）
+/// 2. 方向对齐 + cover 裁切 + 前置镜像 + 缩放到 kMaxProcessDim（B 优化）
+/// 3. 应用色彩矩阵（与取景器 ColorFiltered 使用完全相同的 GPU 渲染管线）
+/// 4. 导出 rawRgba 给常驻 worker isolate（capture_worker.dart）做后续 CPU 处理
+/// 【所见即所得修复】
+/// 之前在 worker isolate 中用 image 包的 applyColorMatrixImg 逐像素应用色彩矩阵，
+/// 与取景器 GPU 渲染管线（dart:ui ColorFilter.matrix）存在色彩空间差异，
+/// 导致拍照后效果与取景器不一致。
+/// 现在改为在主 isolate 中用 dart:ui 的 Canvas + ColorFilter.matrix 处理，
+/// 与取景器使用完全相同的渲染管线，保证所见即所得。
+/// [偏黄诊断] 把拍照管线各阶段产物写入 Documents，可在 iOS「文件」App 中直接查看，
+/// 代替控制台日志定位黄色从哪一步进入：
+///  - raw_src.jpg     = rawPath（相机写盘、Dart 处理前的原始 JPEG）
+///  - final_out.jpg   = outputPath（最终成片：无水印=worker编码，有水印=水印合成后）
+///  - color_diag.txt  = 各阶段平均 RGB + 是否启用去黄校色，供人工核对偏黄方向。
+/// 写盘失败不影响拍照正常流程。
+Future<void> _writeColorDiagnostics({
+  required String? rawPath,
+  required String outputPath,
+  List<int>? sourceAvgRgb,
+  required List<int>? diagBefore,
+  required List<int>? diagAfter,
+}) async {
+  final dir = Directory(
+    '${(await getApplicationDocumentsDirectory()).path}/color_diag',
+  );
+  await dir.create(recursive: true);
+  final rawFile = File('${dir.path}/raw_src.jpg');
+  final outFile = File('${dir.path}/final_out.jpg');
+  if (rawPath != null && await File(rawPath).exists()) {
+    await File(rawPath).copy(rawFile.path);
+  }
+  // 取“最终产物”而非中间路径：有水印时 worker 不写 processedPath，只有 finalPath 是真实成片
+  await File(outputPath).copy(outFile.path);
+  final buf = StringBuffer()
+    ..writeln('拍照偏黄诊断 ${DateTime.now().toIso8601String()}')
+    ..writeln('platform=${defaultTargetPlatform.name}')
+    ..writeln('diagSource(dart:ui解码+P3→sRGB后, 色彩矩阵前, 平均RGB)=$sourceAvgRgb')
+    ..writeln('diagBefore(色彩矩阵后/worker收到, 平均RGB)=$diagBefore')
+    ..writeln('diagAfter(worker效果处理后, 平均RGB)=$diagAfter')
+    ..writeln(
+        '判断：diagSource≈diagBefore 且 R>B → 偏黄在解码前（相机片源）；'
+        'diagSource≈中性而 diagBefore R>B → 偏黄连色彩矩阵引入。')
+    ..writeln('请对照打开 raw_src.jpg 与 final_out.jpg（final_out=最终成片）：哪一个偏黄？');
+  await File('${dir.path}/color_diag.txt').writeAsString(buf.toString());
+  debugPrint('[capture] 颜色诊断已写入 ${dir.path}');
+}
+
+Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, {required bool needRawRgba}) async {
+  // === 性能测量（临时，定位 1.5-2s 瓶颈后移除） ===
+  final swDecode = Stopwatch()..start();
+  try {
+    final isOhos = OhosImageProcessor.isSupported;
+    late ui.Image srcImage;
+    List<int>? nativeAvgRgb;
+    List<int>? sourceAvgRgb;
+    // iOS photo 管线成片的内容自适应白平衡校正矩阵（抵消相机 ISP 对中性区偏黄）。
+    List<double>? previewCorrectionMatrix;
+    if (isOhos) {
+      // OHOS：flutter_ohos 引擎 dart:ui 的 JPEG 软件解码极慢（1200x1600 实测 ~6s），
+      // 改走 OHOS 系统 image.ImageSource（系统/硬件解码）拿 RGBA，
+      // 再用 ImageDescriptor.raw 建 ui.Image，彻底绕开该瓶颈。
+      final native = await OhosImageProcessor.instance.decodeJpegToRgba(
+        path: params.inputPath,
+        targetWidth: params.decodeDim,
+        targetHeight: params.decodeDim,
+      );
+      if (native == null) {
+        debugPrint('[capture] OHOS 原生解码失败，回退原始照片');
+        return null;
+      }
+      final buffer = await ui.ImmutableBuffer.fromUint8List(native.rgba);
+      final rDescriptor = ui.ImageDescriptor.raw(
+        buffer,
+        width: native.width,
+        height: native.height,
+        pixelFormat: ui.PixelFormat.rgba8888,
+      );
+      buffer.dispose();
+      final rCodec = await rDescriptor.instantiateCodec();
+      final rFrame = await rCodec.getNextFrame();
+      srcImage = rFrame.image;
+      rCodec.dispose();
+      rDescriptor.dispose();
+      // 诊断：直接采样原生 RGBA（免二次解码）
+      nativeAvgRgb = _sampleAvgRgbFromRgba(ByteData.sublistView(native.rgba));
+      sourceAvgRgb = nativeAvgRgb;
+    } else {
+      final bytes = await File(params.inputPath).readAsBytes();
+      // 高效降采样解码：先用 ImageDescriptor 读取原始宽高，再按比例缩放到
+      // 不超过 decodeDim 的包围盒内（保持原始宽高比，避免拉伸）。
+      // 相比固定 targetWidth:1600（竖屏 3:4 会解出 1600x2133），竖屏 3:4 只需
+      // 解 1200x1600，少解约 1.8 倍像素，显著降低大 JPEG 解码耗时。
+      final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+      final descriptor = await ui.ImageDescriptor.encoded(buffer);
+      final srcW = descriptor.width;
+      final srcH = descriptor.height;
+      final decodeScale = math.min(
+        params.decodeDim / srcW,
+        params.decodeDim / srcH,
+      ).clamp(0.0, 1.0); // 小图不放大
+      final resizedW = (srcW * decodeScale).round().clamp(1, params.decodeDim);
+      final resizedH = (srcH * decodeScale).round().clamp(1, params.decodeDim);
+      final codec = await descriptor.instantiateCodec(
+        targetWidth: resizedW,
+        targetHeight: resizedH,
+      );
+      final frame = await codec.getNextFrame();
+      srcImage = frame.image;
+      codec.dispose();
+      descriptor.dispose();
+      buffer.dispose();
+
+      // [P3→sRGB 根因修复] dart:ui 解码忽略 JPEG 内嵌 ICC：宽色域 iPhone 原片（Display P3）
+      // 被当作 sRGB 解释 → 肤色/暖色偏黄，而取景器走系统色管（P3 渲染正确）故不黄。
+      // 检测到 P3 时，对解码像素做正确的 P3→sRGB 矩阵换算（线性化 → 逆矩阵 → sRGB 编码，
+      // 方向铁律见 dart_photo_pipeline.applyP3ToSrgbRgba），在绘制色彩矩阵之前完成，
+      // 使成片与取景器一致。非 P3 原片（OHOS / 普通 JPEG）不做处理。
+      if (isDisplayP3Jpeg(bytes)) {
+        try {
+          final srcByteData =
+              await srcImage.toByteData(format: ui.ImageByteFormat.rawRgba);
+          if (srcByteData != null) {
+            final rgba = srcByteData.buffer.asUint8List(
+              srcByteData.offsetInBytes,
+              srcByteData.lengthInBytes,
+            );
+            applyP3ToSrgbRgba(rgba);
+            final corrected =
+                await _rgbaToUiImage(rgba, srcImage.width, srcImage.height);
+            srcImage.dispose();
+            srcImage = corrected;
+            debugPrint('[capture] 检测到 Display P3，已做正确 P3→sRGB 色域换算');
+          }
+        } catch (e) {
+          debugPrint('[capture] P3→sRGB 换算失败（保留原像素继续）: $e');
+        }
+      }
+
+      // 诊断：解码后、绘制前，直接采样源图 rawRgba 平均 RGB。
+      // 与 worker 收到的 diagBefore（GPU 绘制后）对比，可定位偏黄发生在解码还是绘制。
+      // 同时基于源像素（P3→sRGB 换算后）构造内容自适应白平衡矩阵。
+      try {
+        final srcByteData =
+            await srcImage.toByteData(format: ui.ImageByteFormat.rawRgba);
+        if (srcByteData != null) {
+          sourceAvgRgb = _sampleAvgRgbFromRgba(srcByteData);
+          debugPrint('[capture] 源图解码 rawRgba 平均RGB(dart:ui): $sourceAvgRgb');
+          // 【iOS 偏黄修复】非 WYSIWYG（photo 管线成片：Smart HDR/Deep Fusion）
+          // 时，其照片 ISP 比 video 管线偏暖。从成片自身中性灰/浅灰像素统计逐通道
+          // 增益（灰世界 + 曝光守恒），把灰区拉回等量（R=G=B），只抵消 ISP 对中性
+          // 区的色偏、不动场景真实色彩。仅 iOS 启用（OHOS/Android 无此偏黄问题）。
+          // 【WYSIWYG】iOS 非闪光成片=取景器 video 帧直出，本身就是取景器画面，
+          // 无需也不应做该启发式校色（灰区少/强色场景会误判），跳过以免偏离所见。
+          if (Platform.isIOS && !params.isWysiwyg) {
+            previewCorrectionMatrix = _buildAdaptiveWhiteBalanceMatrixFromRgba(
+              srcByteData,
+              srcImage.width,
+              srcImage.height,
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('[capture] 源图采样失败: $e');
+      }
+
+      // 诊断：用 image 包(CPU)直接解码同一 JPEG 采样，与 dart:ui 解码结果对比。
+      // 仅 iOS 保留（OHOS 无偏黄问题，且该 CPU 解码约占 1.9s）。
+      try {
+        final imgByteData = await compute(imageDecodeSample, bytes);
+        debugPrint('[capture] 源图解码 平均RGB(image包CPU): $imgByteData');
+      } catch (e) {
+        debugPrint('[capture] image包解码采样失败: $e');
+      }
+    }
+    swDecode.stop();
+    debugPrint(<String>[
+      '[perf] gpu decode JPEG: ${swDecode.elapsedMilliseconds}ms (src=${srcImage.width}x${srcImage.height})',
+      if (isOhos && nativeAvgRgb != null) ' nativeAvgRgb=$nativeAvgRgb',
+    ].join());
+
+    // 计算方向对齐参数
+    final jpegIsLandscape = srcImage.width > srcImage.height;
+    final needRotate = (params.isPortrait && jpegIsLandscape) ||
+        (!params.isPortrait && !jpegIsLandscape);
+    // 前置镜像仅在「sensor-native 横屏像素」时补做：
+    // - iOS WYSIWYG（video 帧直出，isWysiwyg=true）：连接 videoMirrored=Front
+    //   已镜像、且已物理竖屏（videoOrientation=Portrait）→ 再镜像=双重水平翻转；
+    // - iOS photoOutput 回退 / OHOS photoAvailable 直出：横屏未镜像像素 → 需补镜像。
+    // 竖屏像素（w<=h）的前置 JPEG 只可能来自「已镜像」管线，横屏像素只可能未镜像，
+    // 故按像素方向即可区分，无需依赖 isWysiwyg 标志（还能覆盖原生回退路径）。
+    final needMirror = params.isFront && jpegIsLandscape;
+    final alignRotation = needRotate ? (params.isPortrait ? 90 : 270) : 0;
+
+    // 计算输出尺寸（基于 targetRatio，限制最大边为默认分辨率档位的 maxDim）
+    // （B 优化：2048 → 1280，逐像素 CPU 效果处理耗时约减半）
+    final maxDim = params.maxDim.toDouble();
+    double outW, outH;
+    if (params.isPortrait) {
+      outH = maxDim.toDouble();
+      outW = maxDim * params.targetRatio;
+      if (outW > maxDim) {
+        outW = maxDim.toDouble();
+        outH = maxDim / params.targetRatio;
+      }
+    } else {
+      outW = maxDim.toDouble();
+      outH = maxDim / params.targetRatio;
+      if (outH > maxDim) {
+        outH = maxDim.toDouble();
+        outW = maxDim * params.targetRatio;
+      }
+    }
+    final iOutW = outW.round();
+    final iOutH = outH.round();
+
+    // cover 缩放（等比，不改变内容比例）：在原始图像坐标系中计算，
+    // 让旋转后的图像完全覆盖输出画布，溢出部分由画布边界自动裁剪。
+    //
+    // 关键数学：canvas 变换顺序是 scale → rotate（先写的先应用到源图坐标）。
+    // 对源点 (x, y)，经过均匀 scale(s) 再 rotate 90°：
+    //   rotate 90° 矩阵: [0, 1, -1, 0]
+    //   (x·s, y·s) → (y·s, -x·s)
+    // 因此：
+    //   - 源宽 srcW 映射到输出 Y 轴范围: ±srcW·s/2，需 ≥ outH/2 → s ≥ outH / srcW
+    //   - 源高 srcH 映射到输出 X 轴范围: ±srcH·s/2，需 ≥ outW/2 → s ≥ outW / srcH
+    // 不旋转时：s ≥ outW / srcW 且 s ≥ outH / srcH
+    // 取较大值（cover 定义：完全覆盖画布，允许溢出）
+    final swapDims = alignRotation == 90 || alignRotation == 270;
+    final double coverScale;
+    if (swapDims) {
+      coverScale = math.max(
+        outW / srcImage.height.toDouble(), // 源高 → 输出宽
+        outH / srcImage.width.toDouble(),  // 源宽 → 输出高
+      );
+    } else {
+      coverScale = math.max(
+        outW / srcImage.width.toDouble(),
+        outH / srcImage.height.toDouble(),
+      );
+    }
+    debugPrint('[capture] transform: src=${srcImage.width}x${srcImage.height}, '
+        'isPortrait=${params.isPortrait}, isFront=${params.isFront}, '
+        'jpegIsLandscape=$jpegIsLandscape, needRotate=$needRotate, '
+        'alignRotation=${alignRotation}°, swapDims=$swapDims, '
+        'targetRatio=${params.targetRatio.toStringAsFixed(4)}, '
+        'out=$iOutW x $iOutH (ratio=${(iOutW / iOutH).toStringAsFixed(4)}), '
+        'coverScale=${coverScale.toStringAsFixed(5)}');
+    final rotatedImgW = swapDims ? srcImage.height * coverScale : srcImage.width * coverScale;
+    final rotatedImgH = swapDims ? srcImage.width * coverScale : srcImage.height * coverScale;
+    debugPrint('[capture] 旋转后图像尺寸: ${rotatedImgW.toStringAsFixed(1)}x${rotatedImgH.toStringAsFixed(1)} '
+        '(覆盖画布 $iOutW x $iOutH: X方向${rotatedImgW >= iOutW - 0.5 ? "✓" : "❌(拉伸!"}'
+        ' Y方向${rotatedImgH >= iOutH - 0.5 ? "✓" : "❌(拉伸!"})');
+
+    // 构造色彩矩阵
+    // iOS 成片已切回 photo 管线：先叠加内容自适应白平衡（抵消相机 ISP 对中性区
+    // 偏黄，让灰区观感追平取景器），再叠加用户色彩矩阵（风格化）。校正矩阵先行
+    // 作用于原始像素，避免被风格化改变 / 两者混在一起不可控。
+    var matrix = composePostProcessMatrix(params.postProcess);
+    if (previewCorrectionMatrix != null) {
+      matrix = multiplyColorMatrices(matrix, previewCorrectionMatrix);
+    }
+
+    // 单次 Canvas：方向对齐 + cover 裁剪 + 镜像 + 缩放 + ColorMatrix（一步完成）
+    //
+    // 关键：scale 和 mirror 必须在 rotate 之前应用（在原始图像坐标系中）。
+    // rotate 之后画布 X/Y 轴互换，若 scale 在 rotate 之后会导致宽高缩放因子被交换→拉伸；
+    // mirror 在 rotate 之后会导致左右镜像变成上下翻转。
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+
+    final paint = ui.Paint()..filterQuality = ui.FilterQuality.low;
+    paint.colorFilter = ui.ColorFilter.matrix(matrix);
+
+    canvas.translate(outW / 2.0, outH / 2.0);
+    canvas.scale(
+      (needMirror ? -1.0 : 1.0) * coverScale,
+      coverScale,
+    );
+    canvas.rotate(alignRotation * math.pi / 180.0);
+    canvas.drawImage(
+      srcImage,
+      ui.Offset(-srcImage.width / 2.0, -srcImage.height / 2.0),
+      paint,
+    );
+
+    final picture = recorder.endRecording();
+    final swToImage = Stopwatch()..start();
+    final outImage = await picture.toImage(iOutW, iOutH);
+    swToImage.stop();
+    picture.dispose();
+    srcImage.dispose();
+
+    // 导出 rawRgba
+    final swRgba = Stopwatch()..start();
+    final byteData = await outImage.toByteData(format: ui.ImageByteFormat.rawRgba);
+    outImage.dispose();
+    swRgba.stop();
+    debugPrint('[perf] gpu canvas toImage: ${swToImage.elapsedMilliseconds}ms, '
+        'toByteData(rawRgba): ${swRgba.elapsedMilliseconds}ms (out=$iOutW x $iOutH)');
+    if (byteData == null) return null;
+
+// 拉腿：成片方向对齐/裁剪后，在导出 rawRgba 前做字节级纵向拉伸，与取景器
+    // 实时预览（LegStretchPreviewOverlay）一致。此前拍摄管线一直忽略 legStretch
+    // （实时预览显示拉长但成片完全没有拉腿效果），此处补齐使成片 WYSIWYG。
+    // 注意：函数内已有 double 型 outW/outH（cover 缩放用），此处用 stretchW/H
+    // 表示拉伸后的 int 输出尺寸，避免重名冲突导致编译失败。
+    var outRgba = byteData.buffer.asUint8List();
+    var stretchW = iOutW;
+    var stretchH = iOutH;
+    final leg = params.postProcess.legStretch;
+    if (leg > 0) {
+      final stretched = legStretchRgba(
+        outRgba,
+        width: stretchW,
+        height: stretchH,
+        legStretch: leg,
+      );
+      outRgba = stretched.bytes;
+      stretchH = stretched.height;
+      debugPrint(
+          '[capture] 拉腿: legStretch=$leg, $iOutW x $iOutH -> $stretchW x $stretchH');
+    }
+
+    return _GpuProcessedData(
+      rgbaBytes: outRgba,
+      width: stretchW,
+      height: stretchH,
+      outputPath: params.inputPath,
+// 拍摄成片锐化严格使用用户/模板的真实 sharpen 值，禁止代码层强制最小锐化。
+      // 防糊由系统层解决：OHOS 拍照档位 8.2MP + PhotoQualityPrioritization.HIGH_QUALITY
+      //（project_memory 硬约束），应用层不得再叠加锐化补偿。
+      sharpen: params.postProcess.sharpen,
+      clarity: params.postProcess.color.clarity,
+      grain: params.postProcess.grain,
+      smoothStrength: params.postProcess.smoothStrength,
+      vignette: params.postProcess.vignette,
+      needRawRgba: needRawRgba,
+      sourceAvgRgb: sourceAvgRgb,
+    );
+  } catch (e, st) {
+    debugPrint('[capture] GPU 色彩矩阵处理失败: $e\n$st');
+    return null;
+  }
+}
+
+/// 用户隐藏模板信息卡后显示的恢复入口。
+///
+/// 仅显示一个小型图标并置于页面角落，背景透明、不遮挡拍摄画面；
+/// 点击后一键重新显示模板信息卡。
+class _TemplateInfoRestoreChip extends ConsumerWidget {
+  const _TemplateInfoRestoreChip({
+    required this.onShow,
+  });
+
+  final VoidCallback onShow;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
+    return Semantics(
+      label: '重新显示模板信息',
+      button: true,
+      child: GestureDetector(
+        onTap: onShow,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          // 扩大可点击区域但不产生可见背景，避免影响拍摄
+          padding: const EdgeInsets.all(10),
+          child: Icon(
+            Icons.auto_awesome,
+            size: 20,
+            color: tokens.brand.withOpacity(0.85),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 多姿势模板的「切换姿势」按钮（叠照片浮层）。
+/// 仅在 `editableTemplateProvider.poses.length > 1` 时渲染；点击调用
+/// [CaptureState.nextPose] 循环切换，剪影随 [CaptureState.currentPoseIndexProvider] 跟随。
+/// 背景/描边随当前 UI 风格派生（实心/半透明 surface + 细边，无外阴影、无毛玻璃、不硬编码颜色）。
+class _PoseSwitchButton extends ConsumerWidget {
+  const _PoseSwitchButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final poses = ref.watch(CaptureState.editableTemplateProvider)?.poses ??
+        const <Pose>[];
+    if (poses.length <= 1) return const SizedBox.shrink();
+    final idx = ref.watch(CaptureState.currentPoseIndexProvider);
+
+    // 叠在照片上的浮层取向：各风格都用「实心/半透明 surface + 细边」表达表面，
+    // 不做模糊、不挂外阴影；glass 风格用其自身的半透明白表达玻璃表面。
+    final Color bg;
+    final Border border;
+    switch (appTheme.style) {
+      case UIStyle.neumorphic:
+        bg = tokens.surface.withOpacity(0.78);
+        border = Border.all(color: tokens.divider.withOpacity(0.7), width: 0.8);
+        break;
+      case UIStyle.flat:
+        bg = tokens.surface.withOpacity(0.75);
+        border = Border.all(color: tokens.divider, width: 1);
+        break;
+      case UIStyle.glass:
+        bg = Colors.white.withOpacity(0.22);
+        border = Border.all(color: Colors.white.withOpacity(0.35), width: 0.8);
+        break;
+      case UIStyle.female:
+        bg = tokens.surface.withOpacity(0.82);
+        border = Border.all(color: tokens.brand.withOpacity(0.15), width: 0.8);
+        break;
+    }
+
+    return Semantics(
+      label: '切换姿势，当前 ${idx + 1} / ${poses.length}',
+      button: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => CaptureState.nextPose(ref),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(999),
+            border: border,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.swap_horiz, size: 16, color: tokens.textPrimary),
+              const SizedBox(width: 4),
+              Text(
+                '${idx + 1}/${poses.length}',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
