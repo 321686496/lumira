@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/theme_tokens.dart';
+import '../../effects/recessed_surface.dart';
 
 /// Lumira 全局下拉选择器
 ///
@@ -40,45 +41,79 @@ class LumiraDropdown<T> extends ConsumerWidget {
         : InputState.disabled;
     final visual = appTheme.inputVisual(state);
 
-    final BoxDecoration decoration = _buildTriggerDecoration(appTheme, tokens, visual, radius);
+    DropdownMenuItem<T>? selectedItem;
+    for (final item in items) {
+      if (item.value == value) {
+        selectedItem = item;
+        break;
+      }
+    }
 
-    final DropdownMenuItem<T>? selectedItem = items
-        .cast<DropdownMenuItem<T>?>()
-        .firstWhere((item) => item?.value == value, orElse: () => null);
+    final inner = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Expanded(
+            child: selectedItem != null
+                ? DefaultTextStyle.merge(
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: visual.foreground,
+                    ),
+                    child: selectedItem.child,
+                  )
+                : Text(
+                    hintText ?? '',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: tokens.textTertiary,
+                    ),
+                  ),
+          ),
+          const SizedBox(width: 8),
+          Icon(
+            Icons.keyboard_arrow_down,
+            size: 20,
+            color: enabled ? tokens.textTertiary : tokens.textTertiary.withOpacity(0.5),
+          ),
+        ],
+      ),
+    );
+
+    // 触发器复用 LumiraTextField 视觉：新拟态走凹陷表面，其余走 BoxDecoration。
+    final Widget trigger;
+    if (appTheme.style == UIStyle.neumorphic) {
+      if (state == InputState.disabled) {
+        trigger = Container(
+          decoration: BoxDecoration(
+            color: visual.background,
+            borderRadius: BorderRadius.circular(radius),
+          ),
+          child: inner,
+        );
+      } else {
+        trigger = RecessedSurface(
+          tokens: tokens,
+          borderRadius: radius,
+          depth: 0.20,
+          rimFraction: 0.24,
+          recessDark: Color.lerp(tokens.surface, tokens.shadowConcave.first.color, 0.5)!,
+          recessLight:
+              Color.lerp(tokens.surface, tokens.shadowConcave[1].color, 0.55)!,
+          color: visual.background,
+          child: inner,
+        );
+      }
+    } else {
+      trigger = Container(
+        decoration: _buildTriggerDecoration(appTheme, tokens, visual, radius),
+        child: inner,
+      );
+    }
 
     return GestureDetector(
       onTap: enabled ? () => _showOptions(context) : null,
-      child: Container(
-        decoration: decoration,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Expanded(
-              child: selectedItem != null
-                  ? DefaultTextStyle.merge(
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: visual.foreground,
-                      ),
-                      child: selectedItem.child,
-                    )
-                  : Text(
-                      hintText ?? '',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: tokens.textTertiary,
-                      ),
-                    ),
-            ),
-            const SizedBox(width: 8),
-            Icon(
-              Icons.keyboard_arrow_down,
-              size: 20,
-              color: enabled ? tokens.textTertiary : tokens.textTertiary.withOpacity(0.5),
-            ),
-          ],
-        ),
-      ),
+      child: trigger,
     );
   }
 
@@ -90,11 +125,10 @@ class LumiraDropdown<T> extends ConsumerWidget {
   ) {
     switch (appTheme.style) {
       case UIStyle.neumorphic:
+        // 不应到达（新拟态走 RecessedSurface）；兜底为平底 surface。
         return BoxDecoration(
-          color: visual.gradient == null ? visual.background : null,
-          gradient: visual.gradient,
+          color: visual.background,
           borderRadius: BorderRadius.circular(radius),
-          boxShadow: visual.shadows,
         );
       case UIStyle.flat:
         return BoxDecoration(

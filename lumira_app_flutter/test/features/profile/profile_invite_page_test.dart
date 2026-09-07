@@ -31,6 +31,10 @@ class _FakeInviteRepository implements InviteRepository {
 
   @override
   Future<InviteStats> stats() async => throw UnimplementedError();
+
+  @override
+  Future<CompleteInviteResponse> completeInvite() async =>
+      throw UnimplementedError();
 }
 
 /// 测试用 AuthDao stub（避免依赖 sqflite）

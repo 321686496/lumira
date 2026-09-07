@@ -20,6 +20,9 @@ abstract class InviteRepository {
   /// POST /invite/activate
   Future<ActivateInviteResponse> activate(ActivateInviteRequest req);
 
+  /// POST /invite/complete（新用户首次成片后结算邀请达成，幂等）
+  Future<CompleteInviteResponse> completeInvite();
+
   /// GET /invite/stats（旧契约，供 ProfileInvitePage 使用）
   Future<InviteStats> stats();
 }
@@ -44,6 +47,15 @@ class RemoteInviteRepository implements InviteRepository {
       body: req.toJson(),
       fromJson: (j) =>
           ActivateInviteResponse.fromJson(j as Map<String, dynamic>),
+    );
+  }
+
+  @override
+  Future<CompleteInviteResponse> completeInvite() {
+    return _api.post(
+      '/invite/complete',
+      fromJson: (j) =>
+          CompleteInviteResponse.fromJson(j as Map<String, dynamic>),
     );
   }
 

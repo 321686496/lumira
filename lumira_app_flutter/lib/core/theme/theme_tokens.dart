@@ -163,6 +163,11 @@ class ThemeTokens {
     }
   }
 
+  /// 主题明暗分类：按画布亮度判定（< 0.5 视为深色主题）。
+  /// 目前仅 ink 为深色；未来新增深色主题会自动归入深色选择器。
+  static bool isDarkTheme(ThemeKey theme) =>
+      of(theme).canvas.computeLuminance() < 0.5;
+
   // === glass 风格主题色工具（组件复用，跟随品牌色，亮/暗各一套） ===
 
   /// glass 磨砂填充色（半透明，让背后彩色背景透出）。亮色主题白底品牌微染，

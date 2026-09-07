@@ -31,14 +31,26 @@ class ProfileThemePage extends ConsumerStatefulWidget {
 }
 
 class _ProfileThemePageState extends ConsumerState<ProfileThemePage> {
-  bool _followSystem = false;
-
   void _selectTheme(ThemeKey key) {
     final label = ProfileMockData.themes.firstWhere((t) => t.key == key).label;
     // 切换即生效 + 持久化到本地
     // ignore: unawaited_futures
     persistTheme(ref, key);
     LumiraToast.show(context, '已切换至$label', duration: const Duration(milliseconds: 1000));
+  }
+
+  void _selectDarkTheme(ThemeKey key) {
+    final label = ProfileMockData.themes.firstWhere((t) => t.key == key).label;
+    // ignore: unawaited_futures
+    persistDarkThemeKey(ref, key);
+    LumiraToast.show(context, '深色模式已切换至$label', duration: const Duration(milliseconds: 1000));
+  }
+
+  void _selectLightTheme(ThemeKey key) {
+    final label = ProfileMockData.themes.firstWhere((t) => t.key == key).label;
+    // ignore: unawaited_futures
+    persistLightThemeKey(ref, key);
+    LumiraToast.show(context, '浅色模式已切换至$label', duration: const Duration(milliseconds: 1000));
   }
 
   void _selectStyle(UIStyle style) {
@@ -55,6 +67,17 @@ class _ProfileThemePageState extends ConsumerState<ProfileThemePage> {
     final currentStyle = ref.watch(uiStyleProvider);
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
+    // 跟随系统状态（开启时主题由系统明暗 + 深浅色选择决定）
+    final followSystem = ref.watch(followSystemProvider);
+    final darkTheme = ref.watch(darkThemeKeyProvider);
+    final lightTheme = ref.watch(lightThemeKeyProvider);
+    // 明暗主题分类：按画布亮度自动归类（目前仅 ink 为深色）
+    final lightThemes = ProfileMockData.themes
+        .where((t) => !ThemeTokens.isDarkTheme(t.key))
+        .toList();
+    final darkThemes = ProfileMockData.themes
+        .where((t) => ThemeTokens.isDarkTheme(t.key))
+        .toList();
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -88,20 +111,45 @@ class _ProfileThemePageState extends ConsumerState<ProfileThemePage> {
                     tokens: tokens,
                     onSelect: _selectStyle,
                   ),
-                  const SizedBox(height: 24),
-                  _SectionTitle(text: '颜色主题', tokens: tokens),
-                  const SizedBox(height: 8),
-                  _ThemeGrid(
-                    currentTheme: currentTheme,
-                    appTheme: appTheme,
-                    onSelect: _selectTheme,
-                  ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
                   _FollowSystemCard(
                     tokens: tokens,
-                    value: _followSystem,
-                    onChanged: (v) => setState(() => _followSystem = v),
+                    value: followSystem,
+                    onChanged: (v) {
+                      // 切换即生效 + 持久化到本地
+                      // ignore: unawaited_futures
+                      persistFollowSystem(ref, v);
+                    },
                   ),
+                  const SizedBox(height: 20),
+                  if (followSystem) ...[
+                    _SectionTitle(text: '浅色模式主题', tokens: tokens),
+                    const SizedBox(height: 8),
+                    _ThemeGrid(
+                      themes: lightThemes,
+                      selected: lightTheme,
+                      appTheme: appTheme,
+                      onSelect: _selectLightTheme,
+                    ),
+                    const SizedBox(height: 24),
+                    _SectionTitle(text: '深色模式主题', tokens: tokens),
+                    const SizedBox(height: 8),
+                    _ThemeGrid(
+                      themes: darkThemes,
+                      selected: darkTheme,
+                      appTheme: appTheme,
+                      onSelect: _selectDarkTheme,
+                    ),
+                  ] else ...[
+                    _SectionTitle(text: '颜色主题', tokens: tokens),
+                    const SizedBox(height: 8),
+                    _ThemeGrid(
+                      themes: ProfileMockData.themes,
+                      selected: currentTheme,
+                      appTheme: appTheme,
+                      onSelect: _selectTheme,
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   _BottomNote(tokens: tokens),
                 ],
@@ -616,11 +664,13 @@ class _StylePreview extends StatelessWidget {
 
 class _ThemeGrid extends StatelessWidget {
   const _ThemeGrid({
-    required this.currentTheme,
+    required this.themes,
+    required this.selected,
     required this.appTheme,
     required this.onSelect,
   });
-  final ThemeKey currentTheme;
+  final List<ThemePreview> themes;
+  final ThemeKey selected;
   final AppThemeData appTheme;
   final void Function(ThemeKey) onSelect;
 
@@ -633,10 +683,10 @@ class _ThemeGrid extends StatelessWidget {
       mainAxisSpacing: 12,
       crossAxisSpacing: 12,
       childAspectRatio: 1.05,
-      children: ProfileMockData.themes.map((t) {
+      children: themes.map((t) {
         return _ThemeCard(
           preview: t,
-          selected: t.key == currentTheme,
+          selected: t.key == selected,
           appTheme: appTheme,
           onTap: () => onSelect(t.key),
         );

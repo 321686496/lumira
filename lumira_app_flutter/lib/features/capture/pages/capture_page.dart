@@ -31,6 +31,7 @@ import '../../../shared/widgets/lumira/lumira.dart';
 import '../../challenge/widgets/challenge_overlay_bar.dart';
 import '../../home/providers/banner_recommendation_provider.dart';
 import '../../points/data/points_repository.dart';
+import '../../invite/data/invite_repository.dart';
 import '../../profile/data/growth_models.dart';
 import '../../profile/services/growth_xp_provider.dart';
 import '../../sign_in/data/sign_in_repository.dart';
@@ -258,6 +259,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 仅用于减少重复请求；最终幂等由服务端 point_earn_events 唯一约束保证。
   bool _dailyShootEarned = false;
   bool _dailyAutoSignInDone = false; // 同一会话避免重复自动签到
+  bool _inviteCompleteReported = false; // 邀请达成上报本会话只执行一次（后端幂等）
 
   @override
   void initState() {
@@ -1418,6 +1420,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
           _recordDailyShootXp();
         }
 
+        // 邀请达成上报：新用户首次完成成片后通知后端结算邀请（幂等；失败静默）。
+        // ignore: unawaited_futures
+        _reportInviteAchieved();
+
         // === 自动签到：每日首拍自动触发 ===
         if (!_dailyAutoSignInDone) {
           _dailyAutoSignInDone = true;
@@ -1659,6 +1665,22 @@ class _CapturePageState extends ConsumerState<CapturePage>
     } catch (e) {
       // 离线/网络异常静默，不打扰拍摄
       debugPrint('[capture] earn daily shoot xp failed: $e');
+    }
+  }
+
+  /// 邀请达成上报：新用户首次完成成片后通知后端结算邀请（幂等；失败静默）。
+  /// 后端 completeInvite 幂等：未绑定返回 none，已达成返回 alreadyAchieved。
+  Future<void> _reportInviteAchieved() async {
+    if (_inviteCompleteReported) return;
+    _inviteCompleteReported = true;
+    try {
+      final repo = await ref.read(inviteRepositoryProvider.future);
+      await repo.completeInvite();
+      ref.invalidate(inviteStatsProvider);
+      debugPrint('[capture] invite complete reported');
+    } catch (e) {
+      // 未绑定/网络异常静默，绝不阻塞拍照流程
+      debugPrint('[capture] invite complete report failed (silent): $e');
     }
   }
 

@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
@@ -56,6 +57,16 @@ void main() {
     test('rosegold brand should be #BC8888', () {
       // Neumorphic fix: 调深以让玫瑰金特色更明显
       expect(ThemeTokens.of(ThemeKey.rosegold).brand.value, 0xFFBC8888);
+    });
+
+    test('isDarkTheme: ink 为深色，warmWhite 为浅色', () {
+      expect(ThemeTokens.isDarkTheme(ThemeKey.ink), isTrue);
+      expect(ThemeTokens.isDarkTheme(ThemeKey.warmWhite), isFalse);
+    });
+
+    test('isDarkTheme: 目前仅 ink 一套深色主题', () {
+      final dark = ThemeKey.values.where(ThemeTokens.isDarkTheme).toList();
+      expect(dark, [ThemeKey.ink]);
     });
   });
 
@@ -135,6 +146,66 @@ void main() {
       final theme = container.read(appThemeProvider);
       expect(theme.style, UIStyle.female);
       expect(theme.multiGradient, isNotNull);
+    });
+
+    test('followSystemProvider defaults to false', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      expect(container.read(followSystemProvider), isFalse);
+    });
+
+    test('darkThemeKeyProvider defaults to ink, lightThemeKeyProvider defaults to warmWhite', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      expect(container.read(darkThemeKeyProvider), ThemeKey.ink);
+      expect(container.read(lightThemeKeyProvider), ThemeKey.warmWhite);
+    });
+
+    test('effectiveThemeKeyProvider: followSystem off → 使用手动选择的主题', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      container.read(themeKeyProvider.notifier).state = ThemeKey.morandi;
+      expect(container.read(effectiveThemeKeyProvider), ThemeKey.morandi);
+    });
+
+    test('effectiveThemeKeyProvider: followSystem on + 系统深色 → darkThemeKey', () {
+      final container = ProviderContainer(
+        overrides: [
+          systemBrightnessProvider.overrideWith((ref) => Brightness.dark),
+        ],
+      );
+      addTearDown(container.dispose);
+      container.read(followSystemProvider.notifier).state = true;
+      container.read(darkThemeKeyProvider.notifier).state = ThemeKey.retro;
+      expect(container.read(effectiveThemeKeyProvider), ThemeKey.retro);
+    });
+
+    test('effectiveThemeKeyProvider: followSystem on + 系统浅色 → lightThemeKey', () {
+      final container = ProviderContainer(
+        overrides: [
+          systemBrightnessProvider.overrideWith((ref) => Brightness.light),
+        ],
+      );
+      addTearDown(container.dispose);
+      container.read(followSystemProvider.notifier).state = true;
+      container.read(lightThemeKeyProvider.notifier).state = ThemeKey.fresh;
+      expect(container.read(effectiveThemeKeyProvider), ThemeKey.fresh);
+    });
+
+    test('effectiveThemeKeyProvider: 切换 followSystem 开关即时切换生效主题', () {
+      final container = ProviderContainer(
+        overrides: [
+          systemBrightnessProvider.overrideWith((ref) => Brightness.dark),
+        ],
+      );
+      addTearDown(container.dispose);
+      container.read(themeKeyProvider.notifier).state = ThemeKey.cozy;
+      container.read(darkThemeKeyProvider.notifier).state = ThemeKey.ink;
+      expect(container.read(effectiveThemeKeyProvider), ThemeKey.cozy);
+      container.read(followSystemProvider.notifier).state = true;
+      expect(container.read(effectiveThemeKeyProvider), ThemeKey.ink);
+      container.read(followSystemProvider.notifier).state = false;
+      expect(container.read(effectiveThemeKeyProvider), ThemeKey.cozy);
     });
   });
 }

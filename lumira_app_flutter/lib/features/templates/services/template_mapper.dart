@@ -116,7 +116,7 @@ class TemplateMapper {
       camera: const <String, dynamic>{},
       sceneGuide: const <String, dynamic>{},
       postProcess: const <String, dynamic>{},
-      createdAt: meta.updatedAt * 1000,
+      createdAt: meta.createdAt * 1000,
       updatedAt: meta.updatedAt * 1000,
       isBuiltin: false,
       isRecommended: false,
@@ -128,7 +128,8 @@ class TemplateMapper {
   ///
   /// 用于 [remoteTemplateDetailProvider] 详情按需拉取时 upsert 到 sqflite。
   /// 在 meta 基础上覆盖 5 段内容 JSON，使详情页能从本地缓存读取完整内容。
-  /// createdAt 保留 meta.updatedAt（与列表同步时一致，便于 prune 判定）。
+  /// createdAt 使用后端真实发布时间（metaToRecord 内部 ×1000 换算为毫秒）；updatedAt
+  /// 与列表同步一致（便于 prune / 增量比对判定）。
   static TemplateRecord detailToRecord(RemoteTemplateDetailDto detail) {
     // RemoteTemplateDetailDto 与 RemoteTemplateMetaDto 字段重叠但非继承关系，
     // 此处构造一个 meta DTO 复用 metaToRecord 逻辑，避免字段映射重复。
@@ -149,6 +150,7 @@ class TemplateMapper {
       classification: detail.classification,
       ambience: detail.ambience,
       sortOrder: detail.sortOrder,
+      createdAt: detail.createdAt,
       updatedAt: detail.updatedAt,
     );
     final metaRecord = metaToRecord(meta);
@@ -188,6 +190,7 @@ class TemplateMapper {
         referenceSource: r.referenceSource,
         shortDesc: r.shortDesc,
         ambience: ambienceFromJson(r.ambienceJson),
+        createdAt: r.createdAt,
         updatedAt: r.updatedAt,
         source: r.source,
       ),

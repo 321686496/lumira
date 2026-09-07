@@ -171,7 +171,7 @@ void main() {
   }
 
   group('WatermarkManagePage', () {
-    testWidgets('renders LumiraNav with title 水印管理 and 模板 header',
+    testWidgets('renders LumiraNav with title 水印管理 and 水印模板 header',
         (tester) async {
       setLargeViewport(tester);
       final container = makeContainer();
@@ -180,10 +180,22 @@ void main() {
 
       expect(find.byType(WatermarkManagePage), findsOneWidget);
       expect(find.widgetWithText(LumiraNav, '水印管理'), findsOneWidget);
-      expect(find.text('模板'), findsOneWidget);
+      expect(find.text('水印模板'), findsOneWidget);
     });
 
-    testWidgets('default layout is list (单列), toggle button shows grid icon',
+    testWidgets('renders header with total count and active watermark name',
+        (tester) async {
+      setLargeViewport(tester);
+      final container = makeContainer();
+      await tester.pumpWidget(wrap(container));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 8 款模板（6 预置 + 2 自定义），默认未选中 → 「未选择」
+      expect(find.text('8'), findsOneWidget);
+      expect(find.textContaining('当前使用「未选择」'), findsOneWidget);
+    });
+
+    testWidgets('default layout is list (单列), segment highlights list icon',
         (tester) async {
       setLargeViewport(tester);
       final container = makeContainer(); // 默认 manageLayout = list
@@ -194,12 +206,13 @@ void main() {
         container.read(watermarkSettingsProvider).manageLayout,
         WatermarkManageLayout.list,
       );
-      // 处于 list 布局时，右上角切换按钮提示切换到「双列」→ 显示 grid_view
+      // 布局分段控件：单列 / 双列两个入口均存在
       expect(
-        find.descendant(
-          of: find.byKey(const ValueKey('watermark-layout-toggle')),
-          matching: find.byIcon(Icons.grid_view),
-        ),
+        find.byKey(const ValueKey('watermark-layout-list')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('watermark-layout-grid')),
         findsOneWidget,
       );
       // 列表布局下卡片展示名称文本
@@ -218,15 +231,15 @@ void main() {
       expect(find.text('旅行水印'), findsOneWidget);
     });
 
-    testWidgets('tapping layout toggle switches to grid and back to list',
+    testWidgets('tapping layout segment switches to grid and back to list',
         (tester) async {
       setLargeViewport(tester);
       final container = makeContainer();
       await tester.pumpWidget(wrap(container));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 切到双列
-      await tester.tap(find.byKey(const ValueKey('watermark-layout-toggle')));
+      // 切到双列（点击分段控件中的 grid 图标）
+      await tester.tap(find.byKey(const ValueKey('watermark-layout-grid')));
       await tester.pump(const Duration(milliseconds: 700)); // 等持久化 timer
       await tester.pumpAndSettle();
 
@@ -234,17 +247,11 @@ void main() {
         container.read(watermarkSettingsProvider).manageLayout,
         WatermarkManageLayout.grid,
       );
-      // grid 布局下切换按钮提示回「单列」→ 显示 view_agenda
-      expect(
-        find.descendant(
-          of: find.byKey(const ValueKey('watermark-layout-toggle')),
-          matching: find.byIcon(Icons.view_agenda),
-        ),
-        findsOneWidget,
-      );
+      // grid 布局下信息区与卡片正常渲染
+      expect(find.text('水印模板'), findsOneWidget);
 
-      // 再切回单列
-      await tester.tap(find.byKey(const ValueKey('watermark-layout-toggle')));
+      // 再切回单列（点击分段控件中的 list 图标）
+      await tester.tap(find.byKey(const ValueKey('watermark-layout-list')));
       await tester.pump(const Duration(milliseconds: 700));
       await tester.pumpAndSettle();
 
@@ -286,29 +293,49 @@ void main() {
     testWidgets('copy action inserts a new custom template via dao',
         (tester) async {
       setLargeViewport(tester);
-      // 只放一条自定义模板便于定位其 ⋮ 菜单
+      // 只放一条自定义模板便于定位其操作按钮
       watermarkDao = _FakeWatermarkDao([_custom('custom_1', '我的水印')]);
       final container = makeContainer();
       await tester.pumpWidget(wrap(container));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 定位「我的水印」卡片内的 ⋮ 菜单（避免误点预置卡片的菜单）
+      // 自定义模板操作按钮直接外露（无「更多」菜单），定位「我的水印」卡片的复制按钮
       final customCard = find.ancestor(
         of: find.text('我的水印'),
         matching: find.byType(NeuCard),
       );
-      final menuBtn = find.descendant(
+      final copyBtn = find.descendant(
         of: customCard,
-        matching: find.byIcon(Icons.more_vert),
+        matching: find.byIcon(Icons.copy_outlined),
       );
-      await tester.tap(menuBtn.first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('复制'));
+      await tester.tap(copyBtn.first);
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pumpAndSettle();
 
       expect(watermarkDao.lastInserted, isNotNull);
       expect(watermarkDao.lastInserted!.type, WatermarkTemplateType.custom);
+    });
+
+    testWidgets('preset card exposes edit button without more menu',
+        (tester) async {
+      setLargeViewport(tester);
+      final container = makeContainer();
+      await tester.pumpWidget(wrap(container));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 预置模板卡片直接外露「编辑」操作按钮，且不再出现「更多」菜单入口
+      final presetCard = find.ancestor(
+        of: find.text('简约日期'),
+        matching: find.byType(NeuCard),
+      );
+      expect(
+        find.descendant(
+          of: presetCard,
+          matching: find.byIcon(Icons.edit_outlined),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.more_vert), findsNothing);
     });
 
     testWidgets('preview widgets render on manage page (custom + preset)',
@@ -320,6 +347,24 @@ void main() {
 
       // showPhotoBackground=false → 不加载真实照片，但仍渲染 WatermarkPreview
       expect(find.byType(WatermarkPreview), findsWidgets);
+    });
+
+    testWidgets('shows custom watermark hint when no custom templates',
+        (tester) async {
+      setLargeViewport(tester);
+      // 无自定义模板 → 出现「还没有自定义水印」引导卡
+      watermarkDao = _FakeWatermarkDao([]);
+      final container = makeContainer();
+      await tester.pumpWidget(wrap(container));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('还没有自定义水印'), findsOneWidget);
+      expect(find.textContaining('点此创作你的专属水印'), findsOneWidget);
+
+      // 点击引导卡进入新建水印编辑页
+      await tester.tap(find.text('还没有自定义水印'));
+      await tester.pumpAndSettle();
+      expect(find.text('WATERMARK_EDIT'), findsOneWidget);
     });
 
     testWidgets('renders across neumorphic / flat / glass / female styles',

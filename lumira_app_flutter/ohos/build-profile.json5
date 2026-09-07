@@ -5,13 +5,13 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "storeFile": "E:/Project/photo_post/packagefile/harmony/public.p12",
+          "storeFile": "D:/app/projects/photo_post/packagefile/harmony/public.p12",
           "storePassword": "00000019704B88809C3F9AC23A67C5DA9FEB5A9B61E6002DF6FCFE3FABD86B23E16FB0437D31645666",
           "keyAlias": "public",
           "keyPassword": "00000019CB68298EFDE55FB88294DAAAF0992B17791F01D8E1132A4C04AE7A15328F3213047D00A188",
           "signAlg": "SHA256withECDSA",
-          "profile": "E:/Project/photo_post/packagefile/harmony/lumiradebugDebug.p7b",
-          "certpath": "E:/Project/photo_post/packagefile/harmony/debug.cer"
+          "profile": "D:/app/projects/photo_post/packagefile/harmony/lumiradebugDebug.p7b",
+          "certpath": "D:/app/projects/photo_post/packagefile/harmony/debug.cer"
         }
       }
     ],

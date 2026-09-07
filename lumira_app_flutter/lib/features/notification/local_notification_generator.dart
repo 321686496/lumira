@@ -161,6 +161,7 @@ class LocalNotificationGenerator {
         id: 'template:${newest.id}',
         source: 'local',
         kind: 'template',
+        templateId: newest.id,
         title: '新模板上线',
         body: '新模板《${newest.name}》已更新，快去「模板库」试试！',
         timeMs: newest.updatedAt,

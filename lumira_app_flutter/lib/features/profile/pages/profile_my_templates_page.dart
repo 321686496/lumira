@@ -16,7 +16,7 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/data/capture_state.dart';
 import '../../templates/services/template_exporter.dart';
 import '../../templates/services/template_image_store.dart';
-import '../../templates/widgets/template_cover_image.dart';
+import '../../templates/widgets/adaptive_cover_image.dart';
 import '../../templates/widgets/template_import_sheet.dart';
 import '../../templates/data/templates_providers.dart';
 import '../data/profile_content_mock_data.dart';
@@ -378,12 +378,6 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
                           RouteNames.withTemplateId(RouteNames.templatesDetail, tpl.id),
                         ),
                         onLongPress: _openActionSheet,
-                        onApply: (tpl) => GoRouter.of(context).push(
-                          RouteNames.withTemplateId(RouteNames.capture, tpl.id),
-                        ),
-                        onEdit: (tpl) => GoRouter.of(context).push(
-                          RouteNames.withTemplateId(RouteNames.templatesEditor, tpl.id),
-                        ),
                       )
                     else
                       _EmptyState(tokens: tokens),
@@ -727,34 +721,63 @@ class _TplList extends StatelessWidget {
     required this.templates,
     required this.onTap,
     required this.onLongPress,
-    required this.onApply,
-    required this.onEdit,
   });
 
   final ThemeTokens tokens;
   final List<CustomTemplate> templates;
   final void Function(CustomTemplate) onTap;
   final void Function(CustomTemplate) onLongPress;
-  final void Function(CustomTemplate) onApply;
-  final void Function(CustomTemplate) onEdit;
+
+  /// 估算单张卡片总高度，用于双列瀑布流按高度配平（仅分配用，非精确值）。
+  double _estimateCardHeight(CustomTemplate t, double cardWidth) {
+    final imageH = cardWidth / kDefaultCoverRatio;
+    // 封面 + 文字区：内边距 24 + 名称 20 + 间距 6 + 分类行 16 + 间距 8 + 参数行 16
+    const textH = 24 + 20 + 6 + 16 + 8 + 16;
+    return imageH + textH;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final cardWidth = (screenWidth - 40 - 12) / 2; // 页面左右 padding 20 + 列间距 12
+
+    // 瀑布流双列：按估算高度累加，把下一张卡放到当前更矮的一列，视觉上近似等高收尾。
+    final left = <Widget>[];
+    final right = <Widget>[];
+    var leftH = 0.0;
+    var rightH = 0.0;
+    for (final t in templates) {
+      final card = Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: _TplCard(
+          tokens: tokens,
+          template: t,
+          onTap: () => onTap(t),
+          onLongPress: () => onLongPress(t),
+        ),
+      );
+      final h = _estimateCardHeight(t, cardWidth);
+      if (leftH <= rightH) {
+        left.add(card);
+        leftH += h;
+      } else {
+        right.add(card);
+        rightH += h;
+      }
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 24), // 40rpx/24rpx/48rpx → 20/12/24dp
-      child: Column(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (var i = 0; i < templates.length; i++) ...[
-            if (i > 0) const SizedBox(height: 12),
-            _TplRow(
-              tokens: tokens,
-              template: templates[i],
-              onTap: () => onTap(templates[i]),
-              onLongPress: () => onLongPress(templates[i]),
-              onApply: () => onApply(templates[i]),
-              onEdit: () => onEdit(templates[i]),
-            ),
-          ],
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: left),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: right),
+          ),
         ],
       ),
     );
@@ -780,22 +803,18 @@ String _categoryLabel(TemplateCategory c) {
   }
 }
 
-class _TplRow extends StatelessWidget {
-  const _TplRow({
+class _TplCard extends StatelessWidget {
+  const _TplCard({
     required this.tokens,
     required this.template,
     required this.onTap,
     required this.onLongPress,
-    required this.onApply,
-    required this.onEdit,
   });
 
   final ThemeTokens tokens;
   final CustomTemplate template;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
-  final VoidCallback onApply;
-  final VoidCallback onEdit;
 
   String get _evText {
     final ev = template.exposureCompensation;
@@ -811,45 +830,36 @@ class _TplRow extends StatelessWidget {
       onLongPress: onLongPress,
       behavior: HitTestBehavior.opaque,
       child: NeuCard(
-        padding: const EdgeInsets.all(12), // 24rpx → 12dp
-        child: Row(
+        padding: EdgeInsets.zero,
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // TplCoverWrap
-            Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10), // 20rpx → 10dp
-                  child: SizedBox(
-                    width: 100, // 200rpx → 100dp
-                    height: 100,
-                    child: TemplateCoverImage(
-                      cover: t.coverUrl,
-                      coverData: t.coverData,
-                      fit: BoxFit.cover,
-                      fallback: Container(
-                        color: tokens.surfaceAlt,
-                        child: Icon(
-                          Icons.photo_outlined,
-                          color: tokens.textTertiary,
-                          size: 28,
-                        ),
-                      ),
-                      errorFallback: Container(
-                        color: tokens.surfaceAlt,
-                        child: Icon(
-                          Icons.broken_image_outlined,
-                          color: tokens.textTertiary,
-                        ),
-                      ),
-                    ),
-                  ),
+            // 封面：真实比例自适应（9:16 温和削减），宽度 100%，与模板库卡片一致
+            AdaptiveCoverImage(
+              cover: t.coverUrl,
+              coverData: t.coverData,
+              fallback: Container(
+                color: tokens.surfaceAlt,
+                child: Icon(
+                  Icons.photo_outlined,
+                  color: tokens.textTertiary,
+                  size: 28,
                 ),
+              ),
+              errorFallback: Container(
+                color: tokens.surfaceAlt,
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  color: tokens.textTertiary,
+                ),
+              ),
+              overlay: [
+                // 分类徽标：叠在封面左上角（半透明深色 pill），与模板库一致
                 Positioned(
-                  bottom: 4,
-                  left: 4,
+                  top: 8,
+                  left: 8,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2), // 14rpx/4rpx → 7/2dp
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
                       // 硬编码颜色，与 uni-app 一致 (rgba(0,0,0,0.55))
                       color: const Color(0x8C000000),
@@ -858,8 +868,8 @@ class _TplRow extends StatelessWidget {
                     child: Text(
                       _categoryLabel(t.category),
                       style: const TextStyle(
-                        fontSize: 10, // 20rpx → 10dp
-                        fontWeight: FontWeight.w500,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),
                     ),
@@ -867,18 +877,16 @@ class _TplRow extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(width: 12),
-            // TplContent
-            Expanded(
+            Padding(
+              padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     t.name,
                     style: TextStyle(
                       fontFamily: 'Noto Serif SC',
-                      fontSize: 15, // 30rpx → 15dp
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: tokens.textPrimary,
                     ),
@@ -886,30 +894,37 @@ class _TplRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 6),
-                  // TplTags: tags.slice(0, 3)
+                  // 分类 + 自定义徽标（与模板库卡片信息行一致）
                   Wrap(
-                    spacing: 4,
+                    spacing: 6,
                     runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      for (final tag in t.tags.take(3))
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: tokens.brandSubtle,
-                            borderRadius: BorderRadius.circular(9999),
-                          ),
-                          child: Text(
-                            tag,
-                            style: TextStyle(
-                              fontSize: 10, // 20rpx → 10dp
-                              color: tokens.brandText,
-                            ),
+                      Text(
+                        _categoryLabel(t.category),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: tokens.brand,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: tokens.brandSubtle,
+                          borderRadius: BorderRadius.circular(9999),
+                        ),
+                        child: Text(
+                          '自定义',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: tokens.brandText,
                           ),
                         ),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  // TplParamSummary
+                  const SizedBox(height: 8),
+                  // 相机参数摘要（EV / ISO / 快门），沿用模板信息行风格
                   Wrap(
                     spacing: 4,
                     runSpacing: 4,
@@ -917,16 +932,6 @@ class _TplRow extends StatelessWidget {
                       _ParamItem(text: _evText, tokens: tokens),
                       _ParamItem(text: '${t.iso} ISO', tokens: tokens),
                       _ParamItem(text: t.shutterSpeed, tokens: tokens),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  // TplActions
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      _ApplyBtn(tokens: tokens, onTap: onApply),
-                      const SizedBox(width: 8),
-                      _EditBtn(tokens: tokens, onTap: onEdit),
                     ],
                   ),
                 ],
@@ -952,81 +957,6 @@ class _ParamItem extends StatelessWidget {
         fontSize: 11, // 22rpx → 11dp
         color: tokens.textTertiary,
         fontFamily: 'Courier New',
-      ),
-    );
-  }
-}
-
-class _ApplyBtn extends StatelessWidget {
-  const _ApplyBtn({required this.tokens, required this.onTap});
-  final ThemeTokens tokens;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), // 24rpx/12rpx → 12/6dp
-        decoration: BoxDecoration(
-          // 硬编码颜色，与 uni-app 一致 (gradient brand → brandDeep)
-          gradient: LinearGradient(colors: [tokens.brand, tokens.brandDeep]),
-          borderRadius: BorderRadius.circular(9999),
-          boxShadow: tokens.shadowConvexBrand,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(Icons.camera_alt_outlined, size: 14, color: Colors.white),
-            SizedBox(width: 4),
-            Text(
-              '拍摄',
-              style: TextStyle(
-                fontSize: 12, // 24rpx → 12dp
-                fontWeight: FontWeight.w500,
-                color: Colors.white,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EditBtn extends StatelessWidget {
-  const _EditBtn({required this.tokens, required this.onTap});
-  final ThemeTokens tokens;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: tokens.surfaceAlt,
-          borderRadius: BorderRadius.circular(9999),
-          boxShadow: tokens.shadowConvexSubtle,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.edit_outlined, size: 14, color: tokens.textSecondary),
-            const SizedBox(width: 4),
-            Text(
-              '编辑',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: tokens.textSecondary,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

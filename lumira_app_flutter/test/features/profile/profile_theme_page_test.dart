@@ -10,6 +10,7 @@ import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/profile/pages/profile_theme_page.dart';
+import 'package:lumira_app_flutter/shared/widgets/lumira/form/lumira_switch.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
@@ -215,6 +216,70 @@ void main() {
         expect(find.byType(ProfileThemePage), findsOneWidget, reason: 'style=$style');
         expect(find.text('颜色主题'), findsOneWidget, reason: 'style=$style');
       }
+    });
+
+    testWidgets('开启跟随系统后展示浅色/深色双主题选择区', (tester) async {
+      setLargeViewport(tester);
+      final container = ProviderContainer(
+        overrides: [
+          themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
+          uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(wrapWithContainer(container));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 默认关闭：展示「颜色主题」，无双区
+      expect(find.text('颜色主题'), findsOneWidget);
+      expect(find.text('浅色模式主题'), findsNothing);
+      expect(find.text('深色模式主题'), findsNothing);
+
+      // 打开跟随系统开关
+      await tester.tap(find.byType(LumiraSwitch));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(container.read(followSystemProvider), isTrue);
+      // 开启后：双主题选择区
+      expect(find.text('颜色主题'), findsNothing);
+      expect(find.text('浅色模式主题'), findsOneWidget);
+      expect(find.text('深色模式主题'), findsOneWidget);
+      // 深色选择器只展示深色主题（目前仅浓墨）
+      expect(find.text('浓墨'), findsOneWidget);
+    });
+
+    testWidgets('跟随系统下选择深色主题写入 darkThemeKeyProvider', (tester) async {
+      setLargeViewport(tester);
+      final container = ProviderContainer(
+        overrides: [
+          themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
+          uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(wrapWithContainer(container));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      await tester.tap(find.byType(LumiraSwitch));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 默认深色主题 ink
+      expect(container.read(darkThemeKeyProvider), ThemeKey.ink);
+      // 深色区目前唯一卡片即浓墨（页面较长需先滚动到可见），点击后仍为 ink
+      await tester.ensureVisible(find.text('浓墨'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      await tester.tap(find.text('浓墨'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      expect(container.read(darkThemeKeyProvider), ThemeKey.ink);
+
+      // 浅色区选择「莫兰迪」写入 lightThemeKeyProvider
+      expect(container.read(lightThemeKeyProvider), ThemeKey.warmWhite);
+      await tester.ensureVisible(find.text('莫兰迪'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      await tester.tap(find.text('莫兰迪'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      expect(container.read(lightThemeKeyProvider), ThemeKey.morandi);
     });
   });
 }

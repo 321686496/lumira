@@ -114,6 +114,8 @@ class TemplateMeta {
   final RemoteTemplateAmbienceDto? ambience;
   /// 后端更新时间戳（毫秒，详情展示用）。
   final int updatedAt;
+  /// 模板发布时间戳（毫秒，详情展示用；内置/旧模板为 0 时详情页隐藏）。
+  final int createdAt;
 
   /// 模板来源：'builtin'（系统内置）| 'custom'（用户自定义）| 'remote'（后端动态）。
   /// 用于 UI 区分「我的」自定义模板与后端同步模板（如拍摄页模板条角标）。
@@ -154,6 +156,7 @@ class TemplateMeta {
     this.shortDesc = '',
     this.ambience,
     this.updatedAt = 0,
+    this.createdAt = 0,
     this.source = 'builtin',
   })  : _cover = cover,
         _coverData = coverData,
@@ -175,6 +178,7 @@ class TemplateMeta {
     String? shortDesc,
     Object? ambience = _unset,
     int? updatedAt,
+    int? createdAt,
     String? source,
   }) =>
       TemplateMeta(
@@ -199,6 +203,7 @@ class TemplateMeta {
             ? this.ambience
             : ambience as RemoteTemplateAmbienceDto?,
         updatedAt: updatedAt ?? this.updatedAt,
+        createdAt: createdAt ?? this.createdAt,
         source: source ?? this.source,
       );
 
@@ -221,13 +226,14 @@ class TemplateMeta {
           shortDesc == other.shortDesc &&
           ambience == other.ambience &&
           updatedAt == other.updatedAt &&
+          createdAt == other.createdAt &&
           source == other.source;
 
   @override
   int get hashCode => Object.hash(id, name, author, version, category, classification,
       Object.hashAll(tags), Object.hashAll(tagIds), price,
       Object.hashAll(images.map((e) => e.hashCode)), description, referenceSource,
-      shortDesc, ambience, updatedAt, source);
+      shortDesc, ambience, updatedAt, createdAt, source);
 }
 
 /// 模板分类。

@@ -15,6 +15,7 @@ class NotificationItem {
     required this.source,
     this.remoteId,
     required this.kind,
+    this.templateId,
     required this.title,
     required this.body,
     required this.timeMs,
@@ -33,6 +34,9 @@ class NotificationItem {
   /// 通知类别：如 'announcement' / 'streak' / 'challenge' / 'achievement' / 'template' / 'system'。
   final String kind;
 
+  /// 关联模板 id（template 上新通知，点击直达模板详情；其它类别为 null）。
+  final String? templateId;
+
   final String title;
   final String body;
 
@@ -47,6 +51,7 @@ class NotificationItem {
         source: r.source,
         remoteId: r.remoteId,
         kind: r.kind,
+        templateId: r.templateId,
         title: r.title,
         body: r.body,
         timeMs: r.timeMs,
@@ -59,6 +64,7 @@ class NotificationItem {
         source: source,
         remoteId: remoteId,
         kind: kind,
+        templateId: templateId,
         title: title,
         body: body,
         timeMs: timeMs,

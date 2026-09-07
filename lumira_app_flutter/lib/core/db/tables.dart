@@ -164,6 +164,11 @@ class Tables {
   static const String colDefaultResolution = 'default_resolution';
   static const String colWatermark = 'watermark';
 
+  // === user_settings 扩展列（v53 迁移新增，跟随系统的深浅色主题选择） ===
+  // 取值：ThemeKey.name（深色默认 'ink'，浅色默认 'warmWhite'）
+  static const String colThemeKeyDark = 'theme_key_dark';
+  static const String colThemeKeyLight = 'theme_key_light';
+
   // === auth 表（v5） ===
   static const String auth = 'auth';
   static const String colDeviceId = 'device_id';
@@ -256,6 +261,7 @@ class Tables {
   static const String notifications = 'notifications';
   static const String colRemoteId = 'remote_id';
   static const String colKind = 'kind';
+  // colTemplateId 复用 gallery_items 段已声明的常量（值同为 'template_id'）
   static const String colRead = 'read';          // 0 未读 1 已读
   static const String colCleared = 'cleared';    // 0 未清除 1 已清除
   static const String colTimeMs = 'time_ms';

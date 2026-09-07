@@ -10,7 +10,6 @@ import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/profile/pages/profile_settings_page.dart';
-import 'package:lumira_app_flutter/shared/widgets/lumira/form/lumira_switch.dart';
 import 'package:lumira_app_flutter/shared/widgets/lumira/form/lumira_text_field.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
@@ -123,8 +122,9 @@ void main() {
       // 偏好问卷入口已移除
       expect(find.text('偏好问卷'), findsNothing);
       // 显示组
-      expect(find.text('网格显示'), findsOneWidget);
       expect(find.text('水平仪'), findsOneWidget);
+      // 网格显示设置项已移除
+      expect(find.text('网格显示'), findsNothing);
       // 拍摄组
       expect(find.text('默认分辨率'), findsOneWidget);
       expect(find.text('水印'), findsOneWidget);
@@ -170,28 +170,6 @@ void main() {
       await settleOrPump(tester, UIStyle.neumorphic);
 
       expect(find.text('PROFILE_THEME'), findsOneWidget);
-    });
-
-    testWidgets('toggling 网格显示 switches state', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 找到 "网格显示" 行下的 Switch
-      final gridRow = find.ancestor(of: find.text('网格显示'), matching: find.byType(GestureDetector));
-      final gridSwitch = find.descendant(of: gridRow, matching: find.byType(LumiraSwitch));
-      expect(gridSwitch, findsOneWidget);
-
-      // 初始状态：defaultGridOn=false
-      LumiraSwitch switchWidget = tester.widget<LumiraSwitch>(gridSwitch);
-      expect(switchWidget.value, false);
-
-      // 切换开关
-      await tester.tap(gridSwitch);
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      switchWidget = tester.widget<LumiraSwitch>(gridSwitch);
-      expect(switchWidget.value, true);
     });
 
     testWidgets('tapping version 7 times navigates to redeem page', (tester) async {

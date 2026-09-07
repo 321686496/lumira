@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/theme_tokens.dart';
+import '../../effects/recessed_surface.dart';
 
 /// Lumira 全局文本输入框
 ///
@@ -93,8 +94,6 @@ class _LumiraTextFieldState extends ConsumerState<LumiraTextField> {
     // rpx → dp：app_theme.inputRadius 存储的是 rpx 原值（12/8/12/24），/2 得 dp
     final radius = appTheme.inputRadius / 2;
 
-    final BoxDecoration decoration = _buildDecoration(appTheme, tokens, visual, radius);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -110,50 +109,7 @@ class _LumiraTextFieldState extends ConsumerState<LumiraTextField> {
           ),
           const SizedBox(height: 8),
         ],
-        Container(
-          decoration: decoration,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: TextField(
-            controller: widget.controller,
-            focusNode: _focusNode,
-            enabled: widget.enabled,
-            obscureText: widget.obscureText,
-            keyboardType: widget.keyboardType,
-            onChanged: widget.onChanged,
-            onSubmitted: widget.onSubmitted,
-            maxLines: widget.maxLines,
-            maxLength: widget.maxLength,
-            style: TextStyle(
-              fontSize: 14,
-              color: visual.foreground,
-            ),
-            decoration: InputDecoration(
-              isDense: true,
-              contentPadding: EdgeInsets.zero,
-              hintText: widget.hintText,
-              hintStyle: TextStyle(
-                fontSize: 14,
-                color: tokens.textTertiary,
-              ),
-              prefixIcon: widget.prefixIcon,
-              prefixIconConstraints: const BoxConstraints(
-                minWidth: 0,
-                minHeight: 0,
-              ),
-              suffixIcon: widget.suffixIcon,
-              suffixIconConstraints: const BoxConstraints(
-                minWidth: 0,
-                minHeight: 0,
-              ),
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              errorBorder: InputBorder.none,
-              disabledBorder: InputBorder.none,
-              counterText: '',
-            ),
-          ),
-        ),
+        _buildSurface(appTheme, tokens, visual, state, radius),
         if (widget.errorText != null && widget.errorText!.isNotEmpty) ...[
           const SizedBox(height: 6),
           Padding(
@@ -171,7 +127,104 @@ class _LumiraTextFieldState extends ConsumerState<LumiraTextField> {
     );
   }
 
-  /// 按 4 风格分支构建容器装饰
+  /// 输入表面容器：新拟态走「凹陷表面」（[RecessedSurface]），其余风格走 [BoxDecoration]。
+  ///
+  /// 新拟态用 `recessedGradient(depth:0.18)` 时凹陷过于微弱、几乎不可见；改用
+  /// [RecessedSurface] 手绘「左上暗 / 右下亮」方向性内沿，才读得出明确的凹陷感/浮雕感。
+  /// 聚焦态加深凹陷，作为嵌入输入的视觉反馈；禁用态保持平底。
+  Widget _buildSurface(
+    AppThemeData appTheme,
+    ThemeTokens tokens,
+    InputVisual visual,
+    InputState state,
+    double radius,
+  ) {
+    final inner = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: _buildTextField(visual.foreground, tokens),
+    );
+
+    if (appTheme.style == UIStyle.neumorphic) {
+      // 禁用态：平底无凹陷（与 inputVisual 的 gradient==null 语义一致）。
+      if (state == InputState.disabled) {
+        return Container(
+          decoration: BoxDecoration(
+            color: visual.background,
+            borderRadius: BorderRadius.circular(radius),
+          ),
+          child: inner,
+        );
+      }
+      // 常态凹陷，聚焦时加深 → 明确的「嵌入感 / 凹陷感」。
+      // 刻意压低 depth + 收窄 rim + 暖化明暗（拉向表面色而不是硬中性灰），
+      // 让凹陷浅淡、柔和、带治愈感，避免生硬或显脏。
+      final depth = _focused ? 0.38 : 0.20;
+      return RecessedSurface(
+        tokens: tokens,
+        borderRadius: radius,
+        depth: depth,
+        rimFraction: 0.24,
+        recessDark: Color.lerp(tokens.surface, tokens.shadowConcave.first.color, 0.5)!,
+        recessLight:
+            Color.lerp(tokens.surface, tokens.shadowConcave[1].color, 0.55)!,
+        color: visual.background,
+        child: inner,
+      );
+    }
+
+    final decoration = _buildDecoration(appTheme, tokens, visual, radius);
+    return Container(
+      decoration: decoration,
+      child: inner,
+    );
+  }
+
+  /// 原生 [TextField] 主体，样式统一、跨风格复用。
+  Widget _buildTextField(Color foreground, ThemeTokens tokens) {
+    return TextField(
+      controller: widget.controller,
+      focusNode: _focusNode,
+      enabled: widget.enabled,
+      obscureText: widget.obscureText,
+      keyboardType: widget.keyboardType,
+      onChanged: widget.onChanged,
+      onSubmitted: widget.onSubmitted,
+      maxLines: widget.maxLines,
+      maxLength: widget.maxLength,
+      style: TextStyle(
+        fontSize: 14,
+        color: foreground,
+      ),
+      decoration: InputDecoration(
+        isDense: true,
+        contentPadding: EdgeInsets.zero,
+        hintText: widget.hintText,
+        hintStyle: TextStyle(
+          fontSize: 14,
+          color: tokens.textTertiary,
+        ),
+        prefixIcon: widget.prefixIcon,
+        prefixIconConstraints: const BoxConstraints(
+          minWidth: 0,
+          minHeight: 0,
+        ),
+        suffixIcon: widget.suffixIcon,
+        suffixIconConstraints: const BoxConstraints(
+          minWidth: 0,
+          minHeight: 0,
+        ),
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        errorBorder: InputBorder.none,
+        disabledBorder: InputBorder.none,
+        counterText: '',
+      ),
+    );
+  }
+
+  /// 按 4 风格分支构建容器装饰（新拟态已在 [build]/[_buildSurface] 用 [RecessedSurface]
+  /// 处理，本方法仅服务于 flat / glass / female）。
   BoxDecoration _buildDecoration(
     AppThemeData appTheme,
     ThemeTokens tokens,
@@ -180,12 +233,10 @@ class _LumiraTextFieldState extends ConsumerState<LumiraTextField> {
   ) {
     switch (appTheme.style) {
       case UIStyle.neumorphic:
-        // 嵌入态：surface 打底 + recessedGradient 表达凹陷，无阴影无边框
+        // 不应到达（新拟态走 RecessedSurface）；兜底为平底 surface。
         return BoxDecoration(
-          color: visual.gradient == null ? visual.background : null,
-          gradient: visual.gradient,
+          color: visual.background,
           borderRadius: BorderRadius.circular(radius),
-          boxShadow: visual.shadows,
         );
       case UIStyle.flat:
         // surfaceAlt + divider 边框 + 无阴影

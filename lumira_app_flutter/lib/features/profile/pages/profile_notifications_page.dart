@@ -12,6 +12,8 @@ import '../../../shared/widgets/common/lumira_surface.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../notification/notification_models.dart';
 import '../../notification/notification_providers.dart';
+import '../../notification/notification_ui_utils.dart';
+import 'profile_notification_detail_page.dart';
 
 /// 通知中心页（真实数据实现）
 ///
@@ -54,65 +56,19 @@ class ProfileNotificationsPage extends ConsumerWidget {
     await ref.read(clearNotificationProvider)(id);
   }
 
-  /// 点击一行：后端公告只标记已读；本地通知标记已读后跳转对应页面。
+  /// 点击一行：标记已读后进入通知详情页。
   void _onTap(WidgetRef ref, BuildContext context, NotificationItem n) {
     _markRead(ref, n.id);
-    if (n.source != 'local') return;
-    final String? route = _localRoute(n.kind);
-    if (route != null) {
-      GoRouter.of(context).push(route);
-    }
+    // 详情页为纯展示页、无深链/query 需求，直接 Navigator 压栈即可，
+    // 无需为它在 router.dart 注册 GoRoute（该路由表在多轮编辑中反复冲突/回退）。
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => ProfileNotificationDetailPage(item: n),
+    ));
   }
 
-  /// 本地通知类别 → 目标路由（打卡/挑战/成就/模板）。
-  String? _localRoute(String kind) {
-    switch (kind) {
-      case 'streak':
-        return RouteNames.checkinList; // 连续打卡
-      case 'challenge':
-        return RouteNames.challenge; // 今日挑战
-      case 'achievement':
-        return RouteNames.profileGrowth; // 成就/成长
-      case 'template':
-        return RouteNames.templates; // 模板库
-      case 'system':
-      default:
-        return null; // 系统类无对应页面，仅标记已读
-    }
-  }
+  IconData _iconFor(String kind) => notificationIconFor(kind);
 
-  IconData _iconFor(String kind) {
-    switch (kind) {
-      case 'streak':
-        return Icons.local_fire_department_outlined;
-      case 'challenge':
-        return Icons.emoji_events_outlined;
-      case 'achievement':
-        return Icons.star_outline;
-      case 'template':
-        return Icons.layers_outlined;
-      case 'system':
-        return Icons.info_outline;
-      case 'announcement':
-        return Icons.campaign_outlined;
-      default:
-        return Icons.notifications_outlined;
-    }
-  }
-
-  String _formatTime(int timeMs) {
-    final now = DateTime.now();
-    final dt = DateTime.fromMillisecondsSinceEpoch(timeMs);
-    final today = DateTime(now.year, now.month, now.day);
-    final day = DateTime(dt.year, dt.month, dt.day);
-    final diff = today.difference(day).inDays;
-    final hh = dt.hour.toString().padLeft(2, '0');
-    final mm = dt.minute.toString().padLeft(2, '0');
-    if (diff == 0) return '今天 $hh:$mm';
-    if (diff == 1) return '昨天 $hh:$mm';
-    if (dt.year == now.year) return '${dt.month}月${dt.day}日';
-    return '${dt.year}/${dt.month}/${dt.day}';
-  }
+  String _formatTime(int timeMs) => notificationTimeText(timeMs);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

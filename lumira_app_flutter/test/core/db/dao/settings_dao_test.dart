@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:lumira_app_flutter/core/db/dao/settings_dao.dart';
+import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/capture/domain/photo_template.dart';
 
 void main() {
@@ -22,6 +23,8 @@ void main() {
           CREATE TABLE user_settings (
             id INTEGER PRIMARY KEY DEFAULT 1,
             theme_key TEXT NOT NULL DEFAULT 'warmWhite',
+            theme_key_dark TEXT NOT NULL DEFAULT 'ink',
+            theme_key_light TEXT NOT NULL DEFAULT 'warmWhite',
             ui_style TEXT NOT NULL DEFAULT 'neumorphic',
             follow_system INTEGER NOT NULL DEFAULT 0,
             capture_fullscreen INTEGER NOT NULL DEFAULT 0,
@@ -190,6 +193,47 @@ void main() {
       expect(await dao.getAspectRatio(), equals('4:3'));
       await dao.setAspectRatio('1:1');
       expect(await dao.getAspectRatio(), equals('1:1'));
+    });
+  });
+
+  group('跟随系统主题持久化', () {
+    test('getFollowSystem default is false', () async {
+      expect(await dao.getFollowSystem(), isFalse);
+    });
+
+    test('setFollowSystem(true) persists to DB', () async {
+      await dao.setFollowSystem(true);
+      expect(await dao.getFollowSystem(), isTrue);
+      final rows = await db.query('user_settings', where: 'id = 1');
+      expect(rows.first['follow_system'], equals(1));
+    });
+
+    test('setFollowSystem(false) after true works', () async {
+      await dao.setFollowSystem(true);
+      await dao.setFollowSystem(false);
+      expect(await dao.getFollowSystem(), isFalse);
+    });
+
+    test('getDarkThemeKey default is ink', () async {
+      expect(await dao.getDarkThemeKey(), ThemeKey.ink);
+    });
+
+    test('setDarkThemeKey persists and getDarkThemeKey returns same value', () async {
+      await dao.setDarkThemeKey(ThemeKey.retro);
+      expect(await dao.getDarkThemeKey(), ThemeKey.retro);
+      final rows = await db.query('user_settings', where: 'id = 1');
+      expect(rows.first['theme_key_dark'], equals('retro'));
+    });
+
+    test('getLightThemeKey default is warmWhite', () async {
+      expect(await dao.getLightThemeKey(), ThemeKey.warmWhite);
+    });
+
+    test('setLightThemeKey persists and getLightThemeKey returns same value', () async {
+      await dao.setLightThemeKey(ThemeKey.fresh);
+      expect(await dao.getLightThemeKey(), ThemeKey.fresh);
+      final rows = await db.query('user_settings', where: 'id = 1');
+      expect(rows.first['theme_key_light'], equals('fresh'));
     });
   });
 }

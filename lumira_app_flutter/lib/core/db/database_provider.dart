@@ -33,7 +33,7 @@ import 'dao/templates_drafts_dao.dart';
 import '../../features/templates/recommend/user_interests.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 51;
+const int _kDbVersion = 54;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -477,6 +477,8 @@ Future<void> _onCreate(Database db, int version) async {
     CREATE TABLE IF NOT EXISTS ${Tables.userSettings} (
       ${Tables.colId} INTEGER PRIMARY KEY DEFAULT 1,
       ${Tables.colThemeKey} TEXT NOT NULL DEFAULT 'warmWhite',
+      ${Tables.colThemeKeyDark} TEXT NOT NULL DEFAULT 'ink',
+      ${Tables.colThemeKeyLight} TEXT NOT NULL DEFAULT 'warmWhite',
       ${Tables.colUiStyle} TEXT NOT NULL DEFAULT 'neumorphic',
       ${Tables.colFollowSystem} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colCaptureFullscreen} INTEGER NOT NULL DEFAULT 0,
@@ -657,6 +659,7 @@ Future<void> _onCreate(Database db, int version) async {
         ${Tables.colSource} TEXT NOT NULL,
         ${Tables.colRemoteId} TEXT,
         ${Tables.colKind} TEXT NOT NULL,
+        ${Tables.colTemplateId} TEXT,
         ${Tables.colTitleN} TEXT NOT NULL,
         ${Tables.colBodyN} TEXT NOT NULL,
         ${Tables.colTimeMs} INTEGER NOT NULL,
@@ -1272,6 +1275,7 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
           ${Tables.colSource} TEXT NOT NULL,
           ${Tables.colRemoteId} TEXT,
           ${Tables.colKind} TEXT NOT NULL,
+          ${Tables.colTemplateId} TEXT,
           ${Tables.colTitleN} TEXT NOT NULL,
           ${Tables.colBodyN} TEXT NOT NULL,
           ${Tables.colTimeMs} INTEGER NOT NULL,
@@ -1538,6 +1542,54 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await db.execute(TemplatesDraftsTable.createSql);
     } catch (e) {
       debugPrint('v51 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 52) {
+    try {
+      // v52: 修复存量内置模板图片路径扩展名 .png → .jpg。
+      // 早期版本内置模板图片资产曾以 .png 落盘并被写入 cover/images_json，
+      // 资产统一再生成 .jpg 后存量 DB 仍引用不存在的 .png，导致模板列表/详情
+      // Image.asset 抛 "Asset not found"。按 TemplateRegistry 重播内置模板即可
+      // 用当前 .jpg 路径覆盖存量记录；收藏等用户状态存于独立 favorites 表，不受影响。
+      await BuiltinDataSeeder.reseedBuiltinTemplates(db);
+    } catch (e) {
+      debugPrint('v52 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 53) {
+    try {
+      // v53: user_settings 新增 theme_key_dark / theme_key_light 列
+      // （跟随系统开启时，系统深色/浅色模式各自使用的主题）
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colThemeKeyDark,
+        "TEXT NOT NULL DEFAULT 'ink'",
+      );
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colThemeKeyLight,
+        "TEXT NOT NULL DEFAULT 'warmWhite'",
+      );
+    } catch (e) {
+      debugPrint('v53 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 54) {
+    try {
+      // v54: notifications 新增 template_id 列
+      // （template 上新通知携带关联模板 id，点击直达模板详情）
+      await _addColumnIfNotExists(
+        db,
+        Tables.notifications,
+        Tables.colTemplateId,
+        'TEXT',
+      );
+    } catch (e) {
+      debugPrint('v54 migration failed (silent fallback): $e');
     }
   }
 }

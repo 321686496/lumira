@@ -25,7 +25,7 @@ import '../data/profile_mock_data.dart';
 ///
 /// 关键交互：
 /// - 主题选择 / 风格选择点击 → 跳 profileSettingsTheme
-/// - 4 个 toggle 开关（网格 / 水平仪 / 快门声 / 水印）
+/// - 4 个 toggle 开关（水平仪 / 水印 / 水印动画 / 快门声音）
 /// - 版本号 7 连击 → 跳转兑换码页面
 /// - 合规条目（用户协议 / 隐私政策 / 个人信息清单与SDK目录）→ 跳转对应详情页
 class ProfileSettingsPage extends ConsumerStatefulWidget {
@@ -36,8 +36,6 @@ class ProfileSettingsPage extends ConsumerStatefulWidget {
 }
 
 class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
-  late bool _gridOn = ProfileMockData.defaultGridOn;
-
   /// 缓存占用文本（缓存详情页入口展示，异步计算）
   String _cacheSizeText = '0.0 MB';
 
@@ -160,7 +158,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
-    final currentThemeKey = ref.watch(themeKeyProvider);
+    final currentThemeKey = ref.watch(effectiveThemeKeyProvider);
     final currentUiStyle = ref.watch(uiStyleProvider);
     // Forced fix: 主题/风格 value 动态显示当前选择
     final themeLabel = ProfileMockData.themes
@@ -255,15 +253,6 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: Column(
                     children: [
-                      _SettingItem(
-                        icon: Icons.grid_on_outlined,
-                        label: '网格显示',
-                        trailing: LumiraSwitch(
-                          value: _gridOn,
-                          onChanged: (v) => setState(() => _gridOn = v),
-                        ),
-                        tokens: tokens,
-                      ),
                       _SettingItem(
                         icon: Icons.straighten_outlined,
                         label: '水平仪',

@@ -12,7 +12,9 @@ import '../../../core/theme/theme_tokens.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../features/invite/data/invite_models.dart';
 import '../../../features/invite/data/invite_repository.dart';
+import '../../../features/invite/widgets/invite_bind_success_sheet.dart';
 import '../../../features/invite/widgets/invite_poster_sheet.dart';
+import '../../home/widgets/scan_qr_page.dart';
 import '../../../shared/widgets/api_error_banner.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
@@ -92,21 +94,24 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
       final repo = await ref.read(inviteRepositoryProvider.future);
       final resp = await repo.activate(ActivateInviteRequest(inviteCode: code));
       if (!mounted) return;
-      if (resp.rewards != null) {
-        LumiraToast.show(toastContext, '邀请码已激活，解锁 ${resp.rewards!.items.length} 项奖励', duration: const Duration(milliseconds: 1500));
-      } else {
-        LumiraToast.show(toastContext, '邀请码已激活', duration: const Duration(milliseconds: 1500));
-      }
+      // 绑定成功：弹窗展示达成条件与「达成后」可获得的奖励明细
+      await showInviteBindSuccessSheet(
+        context,
+        conditionText:
+            resp.condition ?? '绑定成功后，完成首次拍照/成片，你与好友将各得 30 积分奖励',
+        rewards: resp.achievableRewards,
+        inviterDeviceId: resp.inviterDeviceId,
+      );
+      if (!mounted) return;
       ref.invalidate(inviteStatsProvider);
       _codeController.clear();
     } on ApiException catch (e) {
       if (!mounted) return;
       LumiraToast.show(toastContext, '激活失败：${e.message}', duration: const Duration(milliseconds: 1500));
     } catch (_) {
-      // 离线/未注册环境兜底
+      // 未知错误不误报成功（此前这里兜底显示「绑定成功」误导用户）
       if (!mounted) return;
-      LumiraToast.show(toastContext, '绑定成功：$code', duration: const Duration(milliseconds: 1000));
-      _codeController.clear();
+      LumiraToast.show(toastContext, '绑定失败，请稍后重试', duration: const Duration(milliseconds: 1500));
     }
   }
 
@@ -164,6 +169,17 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
                 FadeUp(
                   delay: const Duration(milliseconds: 60),
                   child: _MyInviteCodeCard(tokens: tokens),
+                ),
+                // 达成条件标识：让用户明确「什么样的邀请才算成立」，
+                // 避免发送邀请码后对方迟迟未首拍导致困惑。
+                FadeUp(
+                  delay: const Duration(milliseconds: 80),
+                  child: _ConditionBanner(tokens: tokens),
+                ),
+                // 我的绑定区块：展示我被谁邀请、绑定时间与达成进度
+                FadeUp(
+                  delay: const Duration(milliseconds: 90),
+                  child: _MyBindingCard(tokens: tokens),
                 ),
                 const SizedBox(height: 20),
                 FadeUp(
@@ -731,6 +747,17 @@ class _CodeCard extends StatelessWidget {
           LumiraTextField(
             controller: controller,
             hintText: '粘贴好友的邀请码...',
+            suffixIcon: IconButton(
+              onPressed: () async {
+                final text = await Navigator.of(context).push<String>(
+                  MaterialPageRoute(builder: (_) => const ScanQrPage()),
+                );
+                if (text != null && text.trim().isNotEmpty) {
+                  controller.text = text.trim();
+                }
+              },
+              icon: const Icon(Icons.qr_code_scanner, size: 20),
+            ),
           ),
           const SizedBox(height: 12),
           Align(
@@ -818,8 +845,10 @@ class _InviteeRow extends StatelessWidget {
     final id = invitee.inviteeDeviceId;
     final short = id.length > 12 ? '${id.substring(0, 6)}…${id.substring(id.length - 4)}' : id;
     final channel = invitee.channel;
-    final label = _channelLabels[channel] ?? channel;
+    final channelLabel = _channelLabels[channel] ?? channel;
     final date = _formatTimestamp(invitee.activatedAt);
+    // 邀请达成状态：pending=新用户已绑定但尚未首次成片；success=已成立
+    final achieved = invitee.achieved;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: isLast
@@ -859,7 +888,7 @@ class _InviteeRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  date,
+                  '$date · $channelLabel',
                   style: TextStyle(
                     fontSize: 12,
                     fontFamily: 'Courier New',
@@ -869,14 +898,15 @@ class _InviteeRow extends StatelessWidget {
               ],
             ),
           ),
+          // 状态 tag：区分「已达成」与「待达成」
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: tokens.success,
+              color: achieved ? tokens.success : tokens.brand,
               borderRadius: BorderRadius.circular(1000),
             ),
             child: Text(
-              label,
+              achieved ? '已达成' : '待成片',
               style: const TextStyle(
                 fontSize: 11,
                 color: Colors.white,
@@ -930,6 +960,179 @@ class _MyInviteCodeCard extends ConsumerWidget {
                 child: Text('复制', style: TextStyle(fontSize: 12, color: tokens.brandText)),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 达成条件标识横幅：说明「新用户完成首次拍照/成片后，邀请才算成立并发放奖励」。
+/// 解决用户发送邀请码后不知为何老用户侧未计数的困惑。
+class _ConditionBanner extends ConsumerWidget {
+  const _ConditionBanner({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final condition =
+        ref.watch(inviteStatsProvider).valueOrNull?.condition;
+    final text = condition ??
+        '新用户绑定邀请码后，完成首次拍照/成片，邀请才算成立，双方各得 30 积分奖励';
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: tokens.brandSubtle,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, size: 16, color: tokens.brand),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '达成条件：$text',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.5,
+                color: tokens.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 「我的绑定」区块：展示我被谁邀请、绑定时间、达成进度与状态。
+/// 未绑定邀请码时隐藏该区块。
+class _MyBindingCard extends ConsumerWidget {
+  const _MyBindingCard({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final binding = ref.watch(inviteStatsProvider).valueOrNull?.myInviter;
+    if (binding == null) return const SizedBox.shrink();
+
+    final achieved = binding.achieved;
+    final date = _formatTimestamp(binding.activatedAt);
+    final inviteCode = binding.inviteCode;
+
+    return NeuCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.handshake_outlined, size: 18, color: tokens.brand),
+              const SizedBox(width: 8),
+              Text(
+                '我的绑定',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _BindingRow(
+            label: '绑定邀请码',
+            value: inviteCode == null || inviteCode.isEmpty
+                ? '—'
+                : inviteCode,
+            tokens: tokens,
+          ),
+          _BindingRow(
+            label: '绑定时间',
+            value: date,
+            tokens: tokens,
+          ),
+          _BindingRow(
+            label: '达成状态',
+            value: achieved ? '已达成' : '待完成首次成片',
+            valueColor: achieved ? tokens.success : tokens.brand,
+            tokens: tokens,
+          ),
+          const SizedBox(height: 10),
+          // 进度提示
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: achieved ? tokens.success : tokens.brandSubtle,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  achieved ? Icons.check_circle_outline : Icons.schedule,
+                  size: 16,
+                  color: achieved ? tokens.success : tokens.brand,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    achieved
+                        ? '你已完成首次成片，与你邀请的好友均已获得奖励。'
+                        : '完成首次拍照/成片后，你与好友将各得 30 积分奖励。',
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.5,
+                      color: achieved ? tokens.success : tokens.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 「我的绑定」单行信息
+class _BindingRow extends StatelessWidget {
+  const _BindingRow({
+    required this.label,
+    required this.value,
+    required this.tokens,
+    this.valueColor,
+  });
+  final String label;
+  final String value;
+  final ThemeTokens tokens;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 76,
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 13, color: tokens.textTertiary),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                color: valueColor ?? tokens.textPrimary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
         ],
       ),
     );

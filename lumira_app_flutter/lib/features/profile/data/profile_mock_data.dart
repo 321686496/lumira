@@ -252,7 +252,6 @@ class ProfileMockData {
   ];
 
   /// 设置页默认开关值（mock）
-  static const bool defaultGridOn = false;
   static const bool defaultLevelOn = true;
   static const bool defaultShutterOn = true;
   static const bool defaultWatermarkOn = true;

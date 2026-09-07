@@ -30,6 +30,8 @@ class RemoteTemplateMetaDto {
   final RemoteTemplateClassificationDto classification;
   final RemoteTemplateAmbienceDto ambience;
   final int sortOrder;
+  /// 模板发布时间（epoch 秒，详情页展示用）。
+  final int createdAt;
   final int updatedAt;
 
   const RemoteTemplateMetaDto({
@@ -49,6 +51,7 @@ class RemoteTemplateMetaDto {
     required this.classification,
     this.ambience = const RemoteTemplateAmbienceDto(),
     required this.sortOrder,
+    this.createdAt = 0,
     required this.updatedAt,
   });
 
@@ -80,6 +83,7 @@ class RemoteTemplateMetaDto {
         (j['ambience'] as Map<String, dynamic>?) ?? const {},
       ),
       sortOrder: (j['sortOrder'] as num?)?.toInt() ?? 0,
+      createdAt: (j['createdAt'] as num?)?.toInt() ?? 0,
       updatedAt: (j['updatedAt'] as num?)?.toInt() ?? 0,
     );
   }
@@ -276,6 +280,8 @@ class RemoteTemplateDetailDto {
   final RemoteTemplateClassificationDto classification;
   final RemoteTemplateAmbienceDto ambience;
   final int sortOrder;
+  /// 模板发布时间（epoch 秒，详情页展示用）。
+  final int createdAt;
   final int updatedAt;
 
   // === 5 段完整内容 JSON ===
@@ -305,6 +311,7 @@ class RemoteTemplateDetailDto {
     required this.classification,
     this.ambience = const RemoteTemplateAmbienceDto(),
     required this.sortOrder,
+    this.createdAt = 0,
     required this.updatedAt,
     required this.composition,
     required this.pose,
@@ -341,6 +348,7 @@ class RemoteTemplateDetailDto {
       classification: meta.classification,
       ambience: meta.ambience,
       sortOrder: meta.sortOrder,
+      createdAt: meta.createdAt,
       updatedAt: meta.updatedAt,
       composition: composition,
       pose: pose,

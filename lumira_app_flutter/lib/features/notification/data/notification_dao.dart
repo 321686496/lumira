@@ -13,6 +13,7 @@ class NotificationRecord {
     required this.source,
     this.remoteId,
     required this.kind,
+    this.templateId,
     required this.title,
     required this.body,
     required this.timeMs,
@@ -32,6 +33,9 @@ class NotificationRecord {
   /// 通知类别：如 'announcement'（后端公告 / 本地事件类型）。
   final String kind;
 
+  /// 关联模板 id（template 上新通知，点击直达模板详情；其它类别为 null）。
+  final String? templateId;
+
   final String title;
   final String body;
 
@@ -49,6 +53,7 @@ class NotificationRecord {
         Tables.colSource: source,
         Tables.colRemoteId: remoteId,
         Tables.colKind: kind,
+        Tables.colTemplateId: templateId,
         Tables.colTitleN: title,
         Tables.colBodyN: body,
         Tables.colTimeMs: timeMs,
@@ -61,6 +66,7 @@ class NotificationRecord {
         source: source,
         remoteId: remoteId,
         kind: kind,
+        templateId: templateId,
         title: title,
         body: body,
         timeMs: timeMs,
@@ -74,6 +80,7 @@ class NotificationRecord {
       source: row[Tables.colSource] as String,
       remoteId: row[Tables.colRemoteId] as String?,
       kind: row[Tables.colKind] as String,
+      templateId: row[Tables.colTemplateId] as String?,
       title: row[Tables.colTitleN] as String,
       body: row[Tables.colBodyN] as String,
       timeMs: (row[Tables.colTimeMs] as num).toInt(),
