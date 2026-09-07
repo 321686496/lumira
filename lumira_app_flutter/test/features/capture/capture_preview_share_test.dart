@@ -41,5 +41,6 @@ void main() {
     expect(find.text('保存到相册'), findsWidgets);
     expect(find.text('分享到系统'), findsOneWidget);
     expect(find.text('生成 EXIF 海报'), findsOneWidget);
+    expect(find.text('生成对比图'), findsOneWidget);
   });
 }
