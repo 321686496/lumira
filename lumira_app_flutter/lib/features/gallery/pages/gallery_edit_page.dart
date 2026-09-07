@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:lumira_app_flutter/core/utils/image_cache.dart';
+import 'package:lumira_app_flutter/features/capture/widgets/compare_photo_button.dart';
 
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
@@ -377,7 +378,7 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
               Positioned(
                 top: 12,
                 right: 12,
-                child: _CompareButton(
+                child: ComparePhotoButton(
                   comparing: _isComparing,
                   tokens: tokens,
                   onTap: () => setState(() => _isComparing = !_isComparing),
@@ -653,61 +654,6 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
 }
 
 // === 私有 widget ===
-
-/// 画布右上角悬浮「对比」按钮
-class _CompareButton extends StatelessWidget {
-  const _CompareButton({
-    required this.comparing,
-    required this.tokens,
-    required this.onTap,
-  });
-
-  final bool comparing;
-  final ThemeTokens tokens;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: tokens.surface,
-          shape: BoxShape.circle,
-          boxShadow: tokens.shadowConvexSubtle,
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Icon(
-              Icons.chrome_reader_mode_outlined,
-              size: 20,
-              color: comparing ? tokens.brand : tokens.textSecondary,
-            ),
-            if (comparing)
-              Positioned(
-                top: 6,
-                right: 6,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: tokens.brand,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 /// 保存 / 完成按钮（金色渐变 pill）
 class _SaveAction extends ConsumerWidget {
