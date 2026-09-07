@@ -20,11 +20,10 @@ import '../../capture/domain/filter_recipe.dart';
 import '../../capture/domain/photo_template.dart';
 import '../../capture/domain/post_process_delta.dart';
 import '../../capture/services/photo_post_processor.dart';
-import '../../capture/services/skin_smooth_shader.dart';
+import '../../capture/widgets/detail_effects_layer.dart';
 import '../../capture/widgets/post_process_color_tab.dart';
 import '../../capture/widgets/post_process_detail_tab.dart';
 import '../../capture/widgets/preview_edit_panel.dart';
-import '../../capture/widgets/smooth_image_layer.dart';
 import '../../profile/providers/collection_providers.dart';
 import '../widgets/photo_crop_layer.dart';
 
@@ -1021,10 +1020,6 @@ class _CanvasArea extends StatelessWidget {
     );
   }
 
-  /// 是否启用磨皮实时预览：对比模式显示原图，或 smoothStrength<=0 时一律走原路径。
-  bool _useSkin(PostProcess appliedPost, bool isComparing) =>
-      !isComparing && needsSkin(appliedPost);
-
   Widget _buildImage(String url, bool isComparing) {
     // 对比模式：显示原图（不应用变换或滤镜）
     final appliedTransform =
@@ -1057,13 +1052,16 @@ class _CanvasArea extends StatelessWidget {
           ),
         );
 
-    // 磨皮实时预览：非对比模式 且 smoothStrength>0 → 底层图片切为 GPU shader 磨皮层。
-    // 解码未就绪/失败时 SmoothImageLayer 自动回退到 lumiraImage()（对比/快速路径不受影响）。
-    final useSkin = _useSkin(appliedPost, isComparing);
-    Widget imageWidget = useSkin
-        ? SmoothImageLayer(
+    // 细节效果实时预览（锐化/磨皮/暗角/颗粒/拉腿的增量）：非对比、任一增量非零、
+    // 且本地文件（非 http）→ 底层图片切为 GPU shader 细节效果层（磨皮/暗角也统一
+    // 由该层处理，不再走 SmoothImageLayer / RadialGradient 叠加）。
+    // 解码未就绪/失败时 DetailEffectsLayer 自动回退到 lumiraImage()。
+    final detailEffects = DetailEffectsParams.fromPostProcess(appliedPost);
+    final bool isNetworkUrl = url.startsWith('http');
+    Widget imageWidget = !isComparing && detailEffects.hasAnyEffect && !isNetworkUrl
+        ? DetailEffectsLayer(
             url: url,
-            strength: skinStrength(appliedPost),
+            effects: detailEffects,
             fallback: lumiraImage,
           )
         : lumiraImage();
@@ -1095,33 +1093,8 @@ class _CanvasArea extends StatelessWidget {
       );
     }
 
-    // 晕影预览：通过 Stack + RadialGradient 叠加在图片上方
-    // （smoothStrength 已由 SmoothImageLayer 的 GPU shader 实时预览覆盖，不属于 ColorFilter；
-    //  此处仅叠加晕影。sharpen 为逐像素效果，仅导出时生效，无法用 ColorFilter 模拟）
-    if (appliedPost.vignette > 0) {
-      imageWidget = Stack(
-        fit: StackFit.passthrough,
-        children: [
-          imageWidget,
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(
-                          appliedPost.vignette / 100 * 0.5),
-                    ],
-                    stops: const [0.4, 1.0],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
+    // 暗角已由 DetailEffectsLayer 的 shader 按成片 A.3 公式实时预览
+    //（锐化/磨皮/颗粒/拉腿同理由该层统一处理）。
     return imageWidget;
   }
 }

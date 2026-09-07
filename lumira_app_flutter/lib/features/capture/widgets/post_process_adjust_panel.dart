@@ -139,7 +139,7 @@ List<AdjustDef> detailAdjustDefs() => [
         setValue: (p, v) => p.copyWith(smoothStrength: v.round()),
       ),
       AdjustDef(
-        label: '晕影',
+        label: '暗角',
         icon: Icons.photo_size_select_actual_outlined,
         min: 0,
         max: 100,
@@ -159,7 +159,6 @@ List<AdjustDef> detailAdjustDefs() => [
         icon: Icons.accessibility_new,
         min: 0,
         max: 100,
-        hint: '导出后生效',
         getValue: (p) => p.legStretch.toDouble(),
         setValue: (p, v) => p.copyWith(legStretch: v.round()),
       ),

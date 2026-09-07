@@ -187,6 +187,7 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
                     sharpen: _baked.sharpen,
                     vignette: _baked.vignette,
                     grain: _baked.grain,
+                    legStretch: _baked.legStretch,
                   ));
                   break;
                 case 3:

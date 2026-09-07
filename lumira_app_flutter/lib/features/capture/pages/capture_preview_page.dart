@@ -20,6 +20,7 @@ import '../data/capture_preview_mock_data.dart';
 import '../data/capture_state.dart';
 import '../data/capture_thumbnail_state.dart';
 import '../widgets/preview_edit_panel.dart';
+import '../widgets/detail_effects_layer.dart';
 import '../widgets/smooth_image_layer.dart';
 import '../../gallery/widgets/photo_crop_layer.dart';
 import '../domain/filter_recipe.dart';
@@ -662,13 +663,16 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       );
     }
 
-    // 磨皮实时预览：非对比、启用磨皮、且本地文件（非 http）→ 底层图片切为 GPU shader 磨皮层。
-    // 解码未就绪/失败时 SmoothImageLayer 自动回退到 buildImage()（http 无法本地解码 → 直接原图）。
-    final useSkin = !isComparing && needsSkin(postProcess) && !isNetworkUrl;
-    final Widget baseImage = useSkin
-        ? SmoothImageLayer(
+    // 细节效果实时预览（锐化/磨皮/暗角/颗粒/拉腿的增量）：非对比、任一增量非零、
+    // 且本地文件（非 http）→ 底层图片切为 GPU shader 细节效果层（磨皮也统一由该层
+    // 处理，不再单独走 SmoothImageLayer）。解码未就绪/失败时自动回退到 buildImage()。
+    final detailEffects = DetailEffectsParams.fromPostProcess(postProcess);
+    final useDetailFx =
+        !isComparing && detailEffects.hasAnyEffect && !isNetworkUrl;
+    final Widget baseImage = useDetailFx
+        ? DetailEffectsLayer(
             url: photoUrl,
-            strength: skinStrength(postProcess),
+            effects: detailEffects,
             fallback: buildImage,
           )
         : buildImage();
