@@ -55,10 +55,12 @@ function item(id: string, over: {
 describe('TemplatesService.searchTemplates', () => {
   function buildService(base: any[], rateCount = 0) {
     const redis = {
+      isEnabled: jest.fn(() => true),
+      // incrEx 原子限流：直接返回预设的当前窗口计数
+      incrEx: jest.fn(async () => rateCount),
       getJson: jest.fn(async (key: string) => {
         if (String(key).includes('templateSearch:base')) return base;
-        // 限流计数：返回预设值，setJson 不持久化（不影响正常路径）
-        return rateCount === 0 ? 0 : rateCount;
+        return null;
       }),
       setJson: jest.fn(async () => undefined),
     } as unknown as RedisService;
@@ -134,8 +136,8 @@ describe('TemplatesService.searchTemplates', () => {
     expect(res.items.map((i) => i.id)).toEqual(['2', '1']);
   });
 
-  it('单设备触发限流（60 次/分钟）返回 429', async () => {
-    const { service } = buildService([item('a')], 60);
+  it('单设备触发限流（第 61 次起返回 429）', async () => {
+    const { service } = buildService([item('a')], 61);
     await expect(call(service, { q: 'x' })).rejects.toMatchObject({
       status: HttpStatus.TOO_MANY_REQUESTS,
     });

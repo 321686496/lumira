@@ -2,13 +2,20 @@
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
+import { RedisService } from '../../common/redis/redis.service';
 import { usageEvents, builtinTemplates, builtinScenes } from '../../database/schema';
 import type { EventInputDto } from './dto/batch-events.dto';
 import type { UsageStatsResponse, UsageStatsItem, UsageItemType, BuiltinTemplateListResponse, BuiltinSceneListResponse } from '@lumira/shared';
 
+/** 热度聚合缓存 TTL：search base / scenes / usage stats 三方共享，最多延迟 30s 更新（运营侧无实时需求） */
+const STATS_CACHE_TTL = 30;
+
 @Injectable()
 export class UsageService {
-  constructor(private readonly dbService: DatabaseService) {}
+  constructor(
+    private readonly dbService: DatabaseService,
+    private readonly redisService: RedisService,
+  ) {}
 
   /** 批量上报。用 INSERT ... ON DUPLICATE KEY UPDATE 保证 client_event_id 幂等。 */
   async recordBatch(deviceId: string, events: EventInputDto[]): Promise<{ inserted: number }> {
@@ -27,8 +34,14 @@ export class UsageService {
     return { inserted: events.length };
   }
 
-  /** 全站按 itemType+itemId+eventType 累加汇总。 */
+  /** 全站按 itemType+itemId+eventType 累加汇总（30s 短 TTL 缓存，防热点全表聚合被打爆）。 */
   async stats(itemType?: UsageItemType): Promise<UsageStatsResponse> {
+    // 短 TTL 缓存：search base / scenes / usage stats 三方共享同一热度口径，
+    // 命中时跳过全表 GROUP BY（热度过期重建也由本缓存兜底）
+    const key = `lumira:cache:usageStats:${itemType ?? 'all'}`;
+    const cached = await this.redisService.getJson<UsageStatsResponse>(key);
+    if (cached !== null) return cached;
+
     const db = this.dbService.getDb();
     const rows = await db.execute(sql`
       SELECT item_id AS itemId, item_type AS itemType, event_type AS eventType, COUNT(*) AS cnt
@@ -46,7 +59,9 @@ export class UsageService {
       else if (r.eventType === 'scene_select') item.sceneSelect += cnt;
       summary.set(key, item);
     }
-    return { items: [...summary.values()] };
+    const result: UsageStatsResponse = { items: [...summary.values()] };
+    await this.redisService.setJson(key, result, STATS_CACHE_TTL);
+    return result;
   }
 
   /** App 全量上报内置模板 id/名称，主键幂等 upsert。 */

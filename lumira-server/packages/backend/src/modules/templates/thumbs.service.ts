@@ -57,15 +57,18 @@ export class ThumbsService {
   /** 返回（或生成并缓存）分类图标的指定宽度 JPEG 缩略图 */
   async categoryIcon(key: string, rawWidth: string | number): Promise<ThumbResult> {
     const width = this.clampWidth(rawWidth);
-    const src = await this.findIconFile(key);
-    if (!src) throw new NotFoundException('category icon not found');
 
+    // 磁盘命中优先：已生成缩略图直接返回（零 DB、零 CPU），
+    // 配合写链路 preGenerate 后命中率接近 100%
     const thumbDir = path.join(this.uploadDir, 'thumbs', 'categories', key);
     const thumbFile = path.join(thumbDir, `w${width}.jpg`);
-
     if (fs.existsSync(thumbFile)) {
       return { data: fs.readFileSync(thumbFile), type: 'image/jpeg' };
     }
+
+    // 未命中才查 DB（只为了拿上传文件名），并懒生成（覆盖旧分类/迁移前数据）
+    const src = await this.findIconFile(key);
+    if (!src) throw new NotFoundException('category icon not found');
 
     // 用纯 JS 的 jimp 缩放（无原生依赖，Docker/CI 零额外安装风险）。
     // 若原图格式 jimp 不支持（如 webp），捕获异常后回退返回原图。
@@ -82,6 +85,36 @@ export class ThumbsService {
       return { data: buf, type: 'image/jpeg' };
     } catch {
       return { data: fs.readFileSync(src), type: 'application/octet-stream' };
+    }
+  }
+
+  /**
+   * 预生成某分类的多个宽度缩略图（写链路调用，把生成成本从读请求挪到上传时）。
+   * jimp 不支持的源格式（如 webp）静默跳过，读链路懒生成兜底。
+   */
+  async preGenerate(key: string, widths: number[] = [200, 400, 800]): Promise<void> {
+    const src = await this.findIconFile(key);
+    if (!src) return;
+    const thumbDir = path.join(this.uploadDir, 'thumbs', 'categories', key);
+    for (const w of widths) {
+      try {
+        const width = this.clampWidth(w);
+        const img = await Jimp.read(src);
+        img.resize(width, Jimp.AUTO).quality(JPEG_QUALITY);
+        const buf = await img.getBufferAsync(Jimp.MIME_JPEG);
+        fs.mkdirSync(thumbDir, { recursive: true });
+        fs.writeFileSync(path.join(thumbDir, `w${width}.jpg`), buf);
+      } catch {
+        // 该宽度生成失败（源格式不支持等）静默跳过
+      }
+    }
+  }
+
+  /** 删除某分类的缩略图缓存目录（icon 变更/删除时清理旧宽度残留） */
+  clearCache(key: string): void {
+    const thumbDir = path.join(this.uploadDir, 'thumbs', 'categories', key);
+    if (fs.existsSync(thumbDir)) {
+      fs.rmSync(thumbDir, { recursive: true, force: true });
     }
   }
 }

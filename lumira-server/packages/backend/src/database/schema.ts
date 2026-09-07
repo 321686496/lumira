@@ -1,5 +1,6 @@
 // lumira-server/packages/backend/src/database/schema.ts
 
+import { sql } from 'drizzle-orm';
 import { mysqlTable, text, int, bigint, longtext, uniqueIndex, varchar, index } from 'drizzle-orm/mysql-core';
 
 export const devices = mysqlTable('devices', {
