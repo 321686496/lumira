@@ -177,12 +177,16 @@ class AdjustPanel extends StatefulWidget {
   /// 浅色主题色板；null 时使用半透明深色配色（拍摄预览页）
   final ThemeTokens? tokens;
 
+  /// 暗色语境强调色（拍摄页 ParamPanel 传 tokens.brand）；null 走 tokens/fallback
+  final Color? accentColor;
+
   const AdjustPanel({
     super.key,
     required this.defs,
     required this.full,
     required this.onChanged,
     this.tokens,
+    this.accentColor,
   });
 
   @override
@@ -214,6 +218,7 @@ class _AdjustPanelState extends State<AdjustPanel> {
                 def: widget.defs[i],
                 selected: i == _selected,
                 tokens: t,
+                accentColor: widget.accentColor,
                 onTap: () => setState(() => _selected = i),
               ),
             ),
@@ -231,7 +236,7 @@ class _AdjustPanelState extends State<AdjustPanel> {
                   opacity: animation,
                   child: child,
                 ),
-                child: _EditSlider(
+                child: AdjustSlider(
                   key: ValueKey(def.label),
                   label: def.label,
                   value: value,
@@ -239,6 +244,7 @@ class _AdjustPanelState extends State<AdjustPanel> {
                   max: def.max,
                   hint: def.hint,
                   tokens: t,
+                  accentColor: widget.accentColor,
                   onChanged: (v) =>
                       widget.onChanged(def.setValue(widget.full, v)),
                 ),
@@ -259,6 +265,7 @@ class _AdjustStripChip extends StatelessWidget {
   final AdjustDef def;
   final bool selected;
   final ThemeTokens? tokens;
+  final Color? accentColor;
   final VoidCallback onTap;
 
   const _AdjustStripChip({
@@ -266,20 +273,19 @@ class _AdjustStripChip extends StatelessWidget {
     required this.selected,
     required this.tokens,
     required this.onTap,
+    this.accentColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final t = tokens;
-    final bgColor = selected
-        ? (t?.brand ?? const Color(0xFFE5C07B))
-        : (t?.surfaceAlt ?? Colors.white12);
+    final accent = accentColor ?? (t?.brand ?? const Color(0xFFE5C07B));
+    final bgColor = selected ? accent : (t?.surfaceAlt ?? Colors.white12);
     final iconColor = selected
         ? (t?.textInverse ?? Colors.black)
         : (t?.textSecondary ?? Colors.white70);
-    final labelColor = selected
-        ? (t?.brand ?? const Color(0xFFE5C07B))
-        : (t?.textSecondary ?? Colors.white70);
+    final labelColor =
+        selected ? accent : (t?.textSecondary ?? Colors.white70);
 
     return GestureDetector(
       onTap: onTap,
@@ -320,7 +326,12 @@ class _AdjustStripChip extends StatelessWidget {
 // 单滑块（名称 + 数值 + 轨道 + 可选提示文字）
 // =============================================================================
 
-class _EditSlider extends StatefulWidget {
+/// 单滑块（名称 + 数值 + 轨道 + 可选提示文字）。
+///
+/// 公开复用：拍摄页 ParamPanel（EV/色温/透明度）与编辑面板共用同一质感。
+/// [accentColor]：暗色语境强调色（null 时走 tokens / 默认 fallback）；
+/// [format]：数值格式化（null 时默认整型 +/-）。
+class AdjustSlider extends StatefulWidget {
   final String label;
   final double value;
   final double min;
@@ -328,30 +339,34 @@ class _EditSlider extends StatefulWidget {
   final ThemeTokens? tokens;
   final ValueChanged<double> onChanged;
   final String? hint;
+  final Color? accentColor;
+  final String Function(double)? format;
 
-  const _EditSlider({
+  const AdjustSlider({
     super.key,
     required this.label,
     required this.value,
     required this.min,
     required this.max,
-    required this.tokens,
     required this.onChanged,
+    this.tokens,
     this.hint,
+    this.accentColor,
+    this.format,
   });
 
   @override
-  State<_EditSlider> createState() => _EditSliderState();
+  State<AdjustSlider> createState() => _AdjustSliderState();
 }
 
-class _EditSliderState extends State<_EditSlider> {
+class _AdjustSliderState extends State<AdjustSlider> {
   double _dragValue = double.nan;
 
   double get _effectiveValue =>
       _dragValue.isNaN ? widget.value : _dragValue;
 
   @override
-  void didUpdateWidget(_EditSlider oldWidget) {
+  void didUpdateWidget(AdjustSlider oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.value != widget.value) {
       _dragValue = double.nan;
@@ -359,6 +374,9 @@ class _EditSliderState extends State<_EditSlider> {
   }
 
   String _format(double v) {
+    if (widget.format != null) {
+      return widget.format!(v);
+    }
     final rounded = v.round();
     return rounded > 0 ? '+$rounded' : '$rounded';
   }
@@ -376,10 +394,11 @@ class _EditSliderState extends State<_EditSlider> {
 
     final labelColor = t?.textSecondary ?? Colors.white70;
     final valueColor = t?.textSecondary ?? Colors.white54;
-    final valueActiveColor = t?.brand ?? const Color(0xFFE5C07B);
+    final accent = widget.accentColor ?? (t?.brand ?? const Color(0xFFE5C07B));
+    final valueActiveColor = accent;
     final trackColor = t?.divider ?? Colors.white24;
-    final fillColor = t?.brand ?? const Color(0xFFE5C07B);
-    final thumbBorderColor = t?.brand ?? const Color(0xFFE5C07B);
+    final fillColor = accent;
+    final thumbBorderColor = accent;
     final thumbFillColor = t?.surface ?? Colors.white;
     final hintColor = t?.textTertiary ?? Colors.white38;
 
