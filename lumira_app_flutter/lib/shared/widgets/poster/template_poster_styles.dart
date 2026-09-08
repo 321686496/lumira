@@ -32,9 +32,6 @@ List<PosterStyle> templatePosterStyles() => [
         ratios: const {
           PosterRatio.fullScreen,
           PosterRatio.ratio34,
-          PosterRatio.square,
-          PosterRatio.ratio169,
-          PosterRatio.ratio43,
         },
         builder: (d) => PosterPrintCard(data: d),
       ),
@@ -87,20 +84,20 @@ List<PosterStyle> templatePosterStyles() => [
         builder: (d) => _P3Gallery(data: d),
       ),
       PosterStyle(
-        id: 'pE',
-        name: '大标题压图',
-        groupName: '样式九 · 大标题压图',
-        kind: PosterKind.template,
-        ratios: const {PosterRatio.ratio169, PosterRatio.ratio43},
-        builder: (d) => _PETitleOverlay(data: d),
-      ),
-      PosterStyle(
         id: 'stage1',
         name: '典雅简净',
         groupName: '样式十 · 典雅简净',
         kind: PosterKind.template,
         ratios: const {PosterRatio.ratio43},
         builder: (d) => _Stage1Sketch(data: d),
+      ),
+      PosterStyle(
+        id: 'pE',
+        name: '大标题压图',
+        groupName: '样式九 · 大标题压图',
+        kind: PosterKind.template,
+        ratios: const {PosterRatio.ratio169, PosterRatio.ratio43},
+        builder: (d) => _PETitleOverlay(data: d),
       ),
     ];
 
@@ -125,11 +122,26 @@ class _S3FullBleed extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           d.photoBuilder(w, h),
-          const PosterScrim(bottom: true, strong: true),
+          // 设计稿四段式压暗：rgba(16,12,7,.16)→0(26%)→.5(74%)→.68(100%)
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0x29100C07),
+                  Color(0x00100C07),
+                  Color(0x80100C07),
+                  Color(0xAD100C07),
+                ],
+                stops: [0.0, 0.26, 0.74, 1.0],
+              ),
+            ),
+          ),
           Positioned(
             top: 22 * k,
             left: 24 * k,
-            child: PosterBrandOnPhoto(logoSize: 15 * k),
+            child: PosterBrandOnPhoto(logoSize: 15 * k, scale: k),
           ),
           Positioned(
             left: 0,
@@ -154,6 +166,14 @@ class _S3FullBleed extends StatelessWidget {
                     size: 40 * k,
                     letterSpacing: 2 * k,
                     height: 1.2,
+                    shadows: [
+                      // 设计稿：text-shadow 0 2px 14px rgba(0,0,0,.4)
+                      Shadow(
+                        color: const Color(0x66000000),
+                        offset: Offset(0, 2 * k),
+                        blurRadius: 14 * k,
+                      ),
+                    ],
                   ),
                   SizedBox(height: 12 * k),
                   PosterCatText(
@@ -165,14 +185,16 @@ class _S3FullBleed extends StatelessWidget {
                   ),
                   SizedBox(height: 22 * k),
                   Container(
-                    padding: EdgeInsets.all(14 * k),
+                    padding: EdgeInsets.fromLTRB(14 * k, 11 * k, 14 * k, 11 * k),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(.94),
                       borderRadius: BorderRadius.circular(14 * k),
                     ),
                     child: PosterQrTip(
                       data: d.qrData,
-                      qrSize: 60 * k,
+                      qrSize: 56,
+                      scale: k,
+                      qrBackground: Colors.white,
                       hint: posterQrHintOf(d),
                       sub: posterQrSubOf(d),
                     ),
@@ -186,6 +208,7 @@ class _S3FullBleed extends StatelessWidget {
                       ),
                     ),
                     child: PosterFootOnPhoto(
+                      scale: k,
                       nameColor: const Color(0xFFE8CFA4),
                       zhColor: Colors.white.withOpacity(.75),
                       sloganColor: Colors.white.withOpacity(.65),

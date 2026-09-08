@@ -1,12 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../data/templates_mock_data.dart';
+import '../services/template_mapper.dart';
 import 'adaptive_cover_image.dart';
 import 'template_badges.dart';
+
+/// TemplateRecord → TemplateRecommendation 适配
+/// DAO 推荐模板数据 → RecommendationCard 所需类型
+///
+/// 供模板页「今日为你推荐」与首页「模板推荐」共用，保证两处卡片口径一致。
+TemplateRecommendation templateRecordToRecommendation(TemplateRecord r) {
+  // 副行展示模板短描述，更有内容感、不再固定一句话。
+  final desc = r.shortDesc.isNotEmpty
+      ? r.shortDesc
+      : (r.description.isNotEmpty ? r.description : '为你推荐');
+  return TemplateRecommendation(
+    id: r.id,
+    name: r.name,
+    reason: desc,
+    source: TemplateSource.systemPick,
+    imageSeed: r.id,
+    category: r.category,
+    cover: r.cover.isEmpty ? null : TemplateMapper.normalizeAssetUrl(r.cover),
+    coverData: r.coverData,
+    // 与「全部模板页」卡片对齐的徽标数据：价格/自定义/氛围
+    price: r.price,
+    isCustom: r.source == 'custom',
+    ambience: TemplateMapper.ambienceFromJson(r.ambienceJson),
+  );
+}
 
 /// 推荐模板卡片（Hero 推荐区横向滚动项）
 ///

@@ -9,15 +9,20 @@ import 'package:go_router/go_router.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
+import 'package:lumira_app_flutter/features/capture/data/capture_state.dart';
 import 'package:lumira_app_flutter/features/capture/pages/capture_preview_template_page.dart';
-import 'package:lumira_app_flutter/shared/widgets/lumira/form/lumira_slider.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/camera_preview.dart';
+import 'package:lumira_app_flutter/features/capture/widgets/capture_bottom_controls.dart';
+import 'package:lumira_app_flutter/features/capture/widgets/capture_nav.dart';
+import 'package:lumira_app_flutter/features/capture/widgets/param_panel.dart';
+import 'package:lumira_app_flutter/features/templates/data/preview_form_provider.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
 
-/// Task 2.9A — CapturePreviewTemplatePage 测试
+/// CapturePreviewTemplatePage 测试（对齐拍摄页改造后）
 ///
-/// 覆盖 brief §5.4 ≥10 项断言 + cross-theme/cross-style smoke test。
+/// 预览页已复用拍摄页公共组件（CaptureNav / ParamPanel / CaptureBottomBar /
+/// ParamPillBar / CapturePoseSwitchButton），故断言以共享组件 + 「完成」写回为主。
 void main() {
   FlutterExceptionHandler? originalErrorHandler;
 
@@ -80,8 +85,7 @@ void main() {
       overrides: [
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
-        // Bug 12 修复：用占位 widget 替换 CameraAwesomeBuilder，
-        // 避免 camera 预览持续渲染导致 pumpAndSettle 超时
+        // 用占位 widget 替换 CameraAwesomeBuilder，避免 camera 预览持续渲染导致 pumpAndSettle 超时
         cameraPreviewOverrideProvider.overrideWithValue(
           const ColoredBox(
             color: Color(0xFF181614),
@@ -108,28 +112,31 @@ void main() {
     addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
   }
 
+  const tplQuery =
+      '/capture/preview-template?${RouteNames.paramTemplateId}=tpl-cafe-portrait';
+
   // ============================================================
-  // 分类 1: 路由参数加载（3 tests）
+  // 分类 1: 路由参数加载
   // ============================================================
   group('CapturePreviewTemplatePage — route parameter loading', () {
-    testWidgets('loads template by templateId and renders nav title',
+    testWidgets('loads template by templateId and renders capture nav + pills',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
         uiStyle: UIStyle.neumorphic,
-        initialLocation:
-            '/capture/preview-template?${RouteNames.paramTemplateId}=tpl-cafe-portrait',
+        initialLocation: tplQuery,
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // existingTemplateForm.meta.name = '咖啡馆人像'
-      expect(find.text('咖啡馆人像'), findsOneWidget);
-      // 副标题：分类 · aspectRatio（人像 · 3:4）
-      expect(find.textContaining('3:4'), findsOneWidget);
+      // 桥接生效后 currentTemplateIdProvider 非空 → CaptureNav 显示「模板拍摄」
+      expect(find.text('模板拍摄'), findsOneWidget);
+      // 参数 pill 栏（EV / ISO；参数面板提示文案也含 "EV"，故只需 ≥1）
+      expect(find.textContaining('EV'), findsWidgets);
+      expect(find.textContaining('ISO'), findsWidgets);
     });
 
-    testWidgets('loads draft by draftId and renders nav title', (tester) async {
+    testWidgets('loads draft by draftId', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
@@ -138,15 +145,14 @@ void main() {
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // draftForm.meta.name = '咖啡馆人像草稿'
-      expect(find.text('咖啡馆人像草稿'), findsOneWidget);
+      expect(find.text('模板拍摄'), findsOneWidget);
+      expect(find.textContaining('EV'), findsWidgets);
     });
 
     testWidgets(
         'invalid templateId shows 模板加载失败 SnackBar and pops after 1000ms',
         (tester) async {
       setLargeViewport(tester);
-      // 从 home push 到 preview-template，使 canPop() 为 true
       final goRouter = GoRouter(
         initialLocation: '/home',
         routes: [
@@ -173,7 +179,6 @@ void main() {
         overrides: [
           themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
           uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
-          // Bug 12 修复：用占位 widget 替换 CameraAwesomeBuilder，避免 pumpAndSettle 超时
           cameraPreviewOverrideProvider.overrideWithValue(
             const ColoredBox(
               color: Color(0xFF181614),
@@ -185,207 +190,107 @@ void main() {
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // push 到 preview-template 页（无效 templateId）
       goRouter.push(
           '/capture/preview-template?${RouteNames.paramTemplateId}=nonexistent-id');
-      // 加载失败路径用 addPostFrameCallback + Future.delayed(1000ms)
       await tester.pump();
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // SnackBar 模板加载失败 出现
       expect(find.text('模板加载失败'), findsOneWidget);
 
-      // 推进时间至 1000ms 之后
       await tester.pump(const Duration(milliseconds: 1100));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 已 pop：CapturePreviewTemplatePage 不存在，回到 home
       expect(find.byType(CapturePreviewTemplatePage), findsNothing);
       expect(find.text('HOME_PAGE'), findsOneWidget);
     });
   });
 
   // ============================================================
-  // 分类 2: 基本渲染（3 tests）
+  // 分类 2: 基本渲染（共享拍摄组件）
   // ============================================================
   group('CapturePreviewTemplatePage — basic rendering', () {
-    testWidgets('renders 4 param pills (EV/ISO/SS/WB)', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(
-        themeKey: ThemeKey.warmWhite,
-        uiStyle: UIStyle.neumorphic,
-        initialLocation:
-            '/capture/preview-template?${RouteNames.paramTemplateId}=tpl-cafe-portrait',
-      ));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 4 个 pill 标签
-      expect(find.text('EV'), findsOneWidget);
-      expect(find.text('ISO'), findsOneWidget);
-      expect(find.text('SS'), findsOneWidget);
-      expect(find.text('WB'), findsOneWidget);
-    });
-
-    testWidgets('renders sync button 同步调整到编辑器', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(
-        themeKey: ThemeKey.warmWhite,
-        uiStyle: UIStyle.neumorphic,
-        initialLocation:
-            '/capture/preview-template?${RouteNames.paramTemplateId}=tpl-cafe-portrait',
-      ));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      expect(find.text('同步调整到编辑器'), findsOneWidget);
-    });
-
-    testWidgets('renders panel header 参数调整 with collapsed state',
+    testWidgets('renders shared capture components (nav / param panel / bottom bar)',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
         uiStyle: UIStyle.neumorphic,
-        initialLocation:
-            '/capture/preview-template?${RouteNames.paramTemplateId}=tpl-cafe-portrait',
+        initialLocation: tplQuery,
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.text('参数调整'), findsOneWidget);
-      expect(find.text('实时调整模板参数'), findsOneWidget);
-      // 折叠态：键盘箭头朝上（Icons.keyboard_arrow_up）
-      expect(find.byIcon(Icons.keyboard_arrow_up), findsOneWidget);
+      expect(find.byType(CaptureNav), findsOneWidget);
+      expect(find.byType(ParamPanel), findsOneWidget);
+      expect(find.byType(CaptureBottomBar), findsOneWidget);
+      // 底部工具栏出现（模板/场景/参数/滤镜）
+      expect(find.text('参数'), findsOneWidget);
+      expect(find.text('滤镜'), findsOneWidget);
+    });
+
+    testWidgets('renders 同步到编辑器 confirm capsule', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+        themeKey: ThemeKey.warmWhite,
+        uiStyle: UIStyle.neumorphic,
+        initialLocation: tplQuery,
+      ));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('同步到编辑器'), findsOneWidget);
     });
   });
 
   // ============================================================
-  // 分类 3: 交互（5 tests）
+  // 分类 3: 交互
   // ============================================================
   group('CapturePreviewTemplatePage — interactions', () {
-    testWidgets('tapping flash toggle changes flashOn state', (tester) async {
+    testWidgets('nav flash toggle cycles flash mode', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
         uiStyle: UIStyle.neumorphic,
-        initialLocation:
-            '/capture/preview-template?${RouteNames.paramTemplateId}=tpl-cafe-portrait',
+        initialLocation: tplQuery,
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 初始：flash_off
+      // 初始：后置摄像头 → flash_off
       expect(find.byIcon(Icons.flash_off), findsOneWidget);
-
-      // 点击闪光灯按钮
       await tester.tap(find.byIcon(Icons.flash_off));
       await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 切换为 flash_on
-      expect(find.byIcon(Icons.flash_on), findsOneWidget);
+      // 点击后变为 torch → flashlight_on
+      expect(find.byIcon(Icons.flashlight_on), findsOneWidget);
     });
 
-    testWidgets('tapping panel header toggles panelExpanded', (tester) async {
+    testWidgets('tapping 参数 tool opens ParamPanel with 5 tabs', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
         uiStyle: UIStyle.neumorphic,
-        initialLocation:
-            '/capture/preview-template?${RouteNames.paramTemplateId}=tpl-cafe-portrait',
+        initialLocation: tplQuery,
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 折叠态：键盘箭头朝上
-      expect(find.byIcon(Icons.keyboard_arrow_up), findsOneWidget);
-      // 折叠态：参数调整区段标题（构图 / 相机参数 / 后期调色）不存在
-      expect(find.text('构图'), findsNothing);
-      expect(find.text('相机参数'), findsNothing);
-
-      // 点击面板标题展开
-      await tester.tap(find.text('参数调整'));
+      await tester.tap(find.text('参数'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 展开态：键盘箭头朝下
-      expect(find.byIcon(Icons.keyboard_arrow_down), findsOneWidget);
-      // 展开态：3 个区段标题出现
-      expect(find.text('构图'), findsOneWidget);
-      expect(find.text('相机参数'), findsOneWidget);
-      expect(find.text('后期调色'), findsOneWidget);
+      // ParamPanel Tab 栏展开：相机 / 色彩 / 细节 / 构图 / 场景
+      // （"场景" 也出现在底部工具栏按钮，故限定在 ParamPanel 内查找）
+      final inPanel = (String t) =>
+          find.descendant(of: find.byType(ParamPanel), matching: find.text(t));
+      expect(inPanel('相机'), findsOneWidget);
+      expect(inPanel('色彩'), findsOneWidget);
+      expect(inPanel('构图'), findsOneWidget);
+      expect(inPanel('场景'), findsOneWidget);
     });
+  });
 
-    testWidgets(
-        'expanded panel renders 11 sliders (opacity/EV/ISO/WBK/brightness/contrast/saturation/temperature/smooth/sharpen/vignette)',
+  // ============================================================
+  // 分类 4: 同步写回 EditorForm（meta 不变）
+  // ============================================================
+  group('CapturePreviewTemplatePage — sync write-back', () {
+    testWidgets('tapping 同步到编辑器 writes back to previewEditorFormProvider and pops',
         (tester) async {
       setLargeViewport(tester);
-      await tester.pumpWidget(wrap(
-        themeKey: ThemeKey.warmWhite,
-        uiStyle: UIStyle.neumorphic,
-        initialLocation:
-            '/capture/preview-template?${RouteNames.paramTemplateId}=tpl-cafe-portrait',
-      ));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 展开面板
-      await tester.tap(find.text('参数调整'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 11 个 slider 行的 label
-      // 构图区
-      expect(find.text('叠图透明度'), findsOneWidget);
-      // 相机参数区
-      expect(find.text('曝光补偿'), findsOneWidget);
-      // 'ISO' 同时出现在参数 pill 栏（top）和 slider row label
-      expect(find.text('ISO'), findsNWidgets(2));
-      expect(find.text('色温 K'), findsOneWidget);
-      // 后期调色区
-      expect(find.text('亮度'), findsOneWidget);
-      expect(find.text('对比度'), findsOneWidget);
-      expect(find.text('饱和度'), findsOneWidget);
-      expect(find.text('色温'), findsOneWidget);
-      expect(find.text('磨皮'), findsOneWidget);
-      expect(find.text('锐化'), findsOneWidget);
-      expect(find.text('暗角'), findsOneWidget);
-
-      // 至少 8 个 LumiraSlider（实际 11 个）
-      expect(find.byType(LumiraSlider), findsNWidgets(11));
-    });
-
-    testWidgets(
-        'expanded panel renders 4 seg-btn groups (WB/Flash/Focus/LUT)',
-        (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(
-        themeKey: ThemeKey.warmWhite,
-        uiStyle: UIStyle.neumorphic,
-        initialLocation:
-            '/capture/preview-template?${RouteNames.paramTemplateId}=tpl-cafe-portrait',
-      ));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 展开面板
-      await tester.tap(find.text('参数调整'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 4 个 seg-btn 组的 label
-      expect(find.text('白平衡'), findsOneWidget);
-      expect(find.text('闪光'), findsOneWidget);
-      expect(find.text('对焦'), findsOneWidget);
-      expect(find.text('LUT 预设'), findsOneWidget);
-
-      // 验证部分 seg-btn 选项存在
-      // WB 选项
-      expect(find.text('日光'), findsOneWidget);
-      // Flash 选项
-      expect(find.text('关'), findsOneWidget);
-      // '自动' 同时出现在 Flash 和 Focus seg-btn 组（两者都有 value='auto' → label='自动'）
-      expect(find.text('自动'), findsNWidgets(2));
-      // LUT 选项
-      expect(find.text('原图'), findsOneWidget);
-      expect(find.text('电影感'), findsOneWidget);
-    });
-
-    testWidgets(
-        'tapping 同步调整到编辑器 shows SnackBar 已同步到编辑器 and pops after 800ms',
-        (tester) async {
-      setLargeViewport(tester);
-      // 从 home push 到 preview-template，使 canPop() 为 true
       final goRouter = GoRouter(
         initialLocation: '/home',
         routes: [
@@ -412,7 +317,6 @@ void main() {
         overrides: [
           themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
           uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
-          // Bug 12 修复：用占位 widget 替换 CameraAwesomeBuilder，避免 pumpAndSettle 超时
           cameraPreviewOverrideProvider.overrideWithValue(
             const ColoredBox(
               color: Color(0xFF181614),
@@ -424,68 +328,46 @@ void main() {
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // push 到 preview-template 页（带 templateId）
-      goRouter.push(
-          '/capture/preview-template?${RouteNames.paramTemplateId}=tpl-cafe-portrait');
+      goRouter.push(tplQuery);
       await settleOrPump(tester, UIStyle.neumorphic);
-
       expect(find.byType(CapturePreviewTemplatePage), findsOneWidget);
 
-      // 点击同步按钮
-      await tester.tap(find.text('同步调整到编辑器'));
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(CapturePreviewTemplatePage)),
+        listen: false,
+      );
+
+      // 模拟用户在拍摄页调整参数（EV +1.0），写入 editableTemplateProvider；
+      // 预览页点击「同步到编辑器」后应把该改动合并回 EditorForm。
+      final editable = container.read(CaptureState.editableTemplateProvider);
+      expect(editable, isNotNull);
+      container.read(CaptureState.editableTemplateProvider.notifier).state =
+          editable!.copyWith(
+        camera: editable.camera.copyWith(exposureCompensation: 1.0),
+      );
+
+      await tester.tap(find.text('同步到编辑器'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // SnackBar 已同步到编辑器 出现
-      expect(find.text('已同步到编辑器'), findsOneWidget);
-
-      // 推进时间至 800ms 之后
-      await tester.pump(const Duration(milliseconds: 900));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 已 pop：CapturePreviewTemplatePage 不存在，回到 home
+      // 已 pop：回到 home
       expect(find.byType(CapturePreviewTemplatePage), findsNothing);
       expect(find.text('HOME_PAGE'), findsOneWidget);
+
+      // 写回：previewEditorFormProvider 非空，且 meta.name 保持不变
+      final merged = container.read(previewEditorFormProvider);
+      expect(merged, isNotNull);
+      expect(merged!.meta.name, '咖啡馆人像');
+      // 参数改动已写回 EditorForm（EV 由用户调整为 +1.0）
+      expect(merged.camera.exposureCompensation, 1.0);
     });
   });
 
   // ============================================================
-  // 分类 4: 剪影拖动（1 test）
-  // ============================================================
-  group('CapturePreviewTemplatePage — silhouette dragging', () {
-    testWidgets('dragging silhouette updates pose position without error',
-        (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(
-        themeKey: ThemeKey.warmWhite,
-        uiStyle: UIStyle.neumorphic,
-        initialLocation:
-            '/capture/preview-template?${RouteNames.paramTemplateId}=tpl-cafe-portrait',
-      ));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 模板有 builtin silhouette 'sitting-cafe'（hasSilhouette = true）
-      // 拖动提示应可见
-      expect(find.text('拖动调整剪影位置'), findsOneWidget);
-
-      // 在取景器中心拖动剪影（剪影 GestureDetector 覆盖整个 AspectRatio 区域）
-      // 使用 dragFrom 从 viewfinder 中心点开始拖动
-      final viewfinderCenter = tester.getCenter(find.byType(AspectRatio));
-      await tester.dragFrom(viewfinderCenter, const Offset(50, 50));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 验证：拖动后页面仍正常渲染（无异常）
-      expect(find.text('咖啡馆人像'), findsOneWidget);
-      expect(find.text('同步调整到编辑器'), findsOneWidget);
-    });
-  });
-
-  // ============================================================
-  // 分类 5: Cross-theme/cross-style smoke（1 test，12 组合）
+  // 分类 5: Cross-theme/cross-style smoke
   // ============================================================
   group('CapturePreviewTemplatePage — smoke tests', () {
     testWidgets('renders without FlutterError under 8 themes + 4 styles',
         (tester) async {
-      // 8 主题 × 1 风格 (neumorphic) + 1 主题 (warmWhite) × 4 风格 = 12 组合
       final combinations = <_ThemeStyleCombo>[
         for (final t in ThemeKey.values)
           _ThemeStyleCombo(theme: t, style: UIStyle.neumorphic),
@@ -499,19 +381,16 @@ void main() {
         await tester.pumpWidget(wrap(
           themeKey: combo.theme,
           uiStyle: combo.style,
-          initialLocation:
-              '/capture/preview-template?${RouteNames.paramTemplateId}=tpl-cafe-portrait',
+          initialLocation: tplQuery,
         ));
         await settleOrPump(tester, combo.style);
 
-        // 验证关键元素渲染
-        expect(find.text('咖啡馆人像'), findsOneWidget,
+        expect(find.text('模板拍摄'), findsOneWidget,
             reason: 'theme=${combo.theme}, style=${combo.style}');
-        expect(find.text('同步调整到编辑器'), findsOneWidget,
+        expect(find.text('同步到编辑器'), findsOneWidget,
             reason: 'theme=${combo.theme}, style=${combo.style}');
-        expect(find.text('参数调整'), findsOneWidget,
+        expect(find.byType(ParamPanel), findsOneWidget,
             reason: 'theme=${combo.theme}, style=${combo.style}');
-        // 重置 viewport 为下一次迭代
         await tester.pumpWidget(const SizedBox.shrink());
       }
     });

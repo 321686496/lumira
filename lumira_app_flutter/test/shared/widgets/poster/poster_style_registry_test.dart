@@ -4,41 +4,48 @@ import 'package:lumira_app_flutter/shared/widgets/poster/poster_style_registry.d
 
 void main() {
   group('PosterStyleRegistry 模板样式（kind=template）', () {
-    test('9:16 提供 impV / pA / pC / s3', () {
+    test('9:16 提供 pA / pC / s3（对应选型稿）', () {
       final ids = _ids(PosterKind.template, PosterRatio.fullScreen);
-      expect(ids, containsAll(<String>['impV', 'pA', 'pC', 's3']));
-      expect(ids.length, 4);
+      expect(ids, <String>['pA', 'pC', 's3']);
     });
 
-    test('3:4 提供 impP / pA / pC / dK', () {
+    test('3:4 提供 pA / pC / dK（对应选型稿）', () {
       final ids = _ids(PosterKind.template, PosterRatio.ratio34);
-      expect(ids, containsAll(<String>['impP', 'pA', 'pC', 'dK']));
-      expect(ids.length, 4);
+      expect(ids, <String>['pA', 'pC', 'dK']);
     });
 
-    test('1:1 提供 impS / pC / v2a / dE / dD', () {
+    test('1:1 提供 v2a / dE / dD（对应选型稿）', () {
       final ids = _ids(PosterKind.template, PosterRatio.square);
-      expect(ids, containsAll(<String>['impS', 'pC', 'v2a', 'dE', 'dD']));
-      expect(ids.length, 5);
+      expect(ids, <String>['v2a', 'dE', 'dD']);
     });
 
-    test('16:9 提供 impC / pA / pC / p3 / pE', () {
+    test('16:9 提供 pA / p3 / pE（对应选型稿）', () {
       final ids = _ids(PosterKind.template, PosterRatio.ratio169);
-      expect(ids, containsAll(<String>['impC', 'pA', 'pC', 'p3', 'pE']));
-      expect(ids.length, 5);
+      expect(ids, <String>['pA', 'p3', 'pE']);
     });
 
-    test('4:3 提供 impL / pA / pC / pE / stage1', () {
+    test('4:3 提供 pA / stage1 / pE（对应选型稿）', () {
       final ids = _ids(PosterKind.template, PosterRatio.ratio43);
-      expect(ids, containsAll(<String>['impL', 'pA', 'pC', 'pE', 'stage1']));
-      expect(ids.length, 5);
+      expect(ids, <String>['pA', 'stage1', 'pE']);
     });
 
-    test('每位比例默认样式为对应扫码导入海报', () {
+    test('模板分享默认样式为选型稿首个样式（pA；1:1 为 v2a）', () {
       for (final ratio in PosterRatio.values) {
         final def = PosterStyleRegistry.defaultFor(PosterKind.template, ratio);
-        expect(def?.id, _defaultImportId(ratio),
-            reason: '$ratio 应默认选中扫码导入海报');
+        final expected = ratio == PosterRatio.square ? 'v2a' : 'pA';
+        expect(def?.id, expected,
+            reason: '$ratio 模板分享应默认选型稿首个样式 $expected');
+      }
+    });
+
+    test('模板样式不含「扫码导入」海报（走导出分享流程，不在样式切换条）', () {
+      for (final ratio in PosterRatio.values) {
+        final ids = _ids(PosterKind.template, ratio);
+        expect(
+          ids.where((id) => id.startsWith('imp')),
+          isEmpty,
+          reason: '$ratio 模板样式不应包含扫码导入海报',
+        );
       }
     });
   });
@@ -126,19 +133,3 @@ void main() {
 
 List<String> _ids(PosterKind kind, PosterRatio ratio) =>
     PosterStyleRegistry.stylesFor(kind, ratio).map((s) => s.id).toList();
-
-/// 各比例应默认选中的扫码导入海报 id。
-String? _defaultImportId(PosterRatio ratio) {
-  switch (ratio) {
-    case PosterRatio.fullScreen:
-      return 'impV';
-    case PosterRatio.ratio34:
-      return 'impP';
-    case PosterRatio.square:
-      return 'impS';
-    case PosterRatio.ratio43:
-      return 'impL';
-    case PosterRatio.ratio169:
-      return 'impC';
-  }
-}

@@ -40,3 +40,10 @@ lumira_app_flutter/packages/camerawesome/pubspec.lock
 **/build/
 __pycache__/
 *.pyc
+
+# Load testing binaries & result artifacts (scripts are tracked)
+loadtesting/k6.exe
+loadtesting/load_test_result.json
+
+# AI task screenshot results
+scripts/results/

@@ -184,28 +184,32 @@ class PosterBrandRow extends StatelessWidget {
 
 /// 叠在照片/深色背景上的品牌行（白色 + 阴影，保证可读）。
 class PosterBrandOnPhoto extends StatelessWidget {
-  const PosterBrandOnPhoto({super.key, this.logoSize = 15});
+  const PosterBrandOnPhoto({super.key, this.logoSize = 15, this.scale = 1});
   final double logoSize;
+
+  /// 设计稿（330 宽）固定尺寸 → 当前画布宽度的等比缩放系数。
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
+    final s = scale;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         PosterLogo(size: logoSize),
-        const SizedBox(width: 8),
+        SizedBox(width: 8 * s),
         Text(
           'LUMIRA',
           style: posterSerifEn(
-            11,
+            11 * s,
             color: Colors.white,
-            letterSpacing: 4,
+            letterSpacing: 4 * s,
           ).copyWith(shadows: const [Shadow(color: Colors.black38, blurRadius: 6)]),
         ),
-        const SizedBox(width: 6),
+        SizedBox(width: 6 * s),
         Text(
           '如画',
-          style: posterPlain(10, color: Colors.white70, letterSpacing: 2),
+          style: posterPlain(10 * s, color: Colors.white.withOpacity(.8), letterSpacing: 2 * s),
         ),
       ],
     );
@@ -220,6 +224,7 @@ class PosterBrandFoot extends StatelessWidget {
     this.borderTop = false,
     this.paddingTop = 0,
     this.borderColor = PosterPalette.line,
+    this.scale = 1,
   });
   final double logoSize;
 
@@ -228,18 +233,22 @@ class PosterBrandFoot extends StatelessWidget {
   final double paddingTop;
   final Color borderColor;
 
+  /// 设计稿（330 宽）固定尺寸 → 当前画布宽度的等比缩放系数。
+  final double scale;
+
   @override
   Widget build(BuildContext context) {
+    final s = scale;
     final row = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        PosterLogo(size: logoSize),
-        const SizedBox(width: 8),
-        Text('LUMIRA', style: posterSerifEn(10, color: PosterPalette.goldDeep, letterSpacing: 3)),
-        const SizedBox(width: 4),
-        Text('· 如画', style: posterPlain(10, color: PosterPalette.text3)),
+        PosterLogo(size: logoSize * s),
+        SizedBox(width: 8 * s),
+        Text('LUMIRA', style: posterSerifEn(10 * s, color: PosterPalette.goldDeep, letterSpacing: 3 * s)),
+        SizedBox(width: 4 * s),
+        Text('· 如画', style: posterPlain(10 * s, color: PosterPalette.text3)),
         const Spacer(),
-        Text('如你所见，皆成画卷', style: posterPlain(9, color: PosterPalette.text3, letterSpacing: 1)),
+        Text('如你所见，皆成画卷', style: posterPlain(9 * s, color: PosterPalette.text3, letterSpacing: 1 * s)),
       ],
     );
     if (!borderTop && paddingTop == 0) return row;
@@ -434,6 +443,10 @@ class PosterQrTip extends StatelessWidget {
     this.hint,
     this.sub,
     this.light = false,
+    this.scale = 1,
+    this.gap = 14,
+    this.qrBorderColor,
+    this.qrBackground,
   });
 
   final String data;
@@ -442,15 +455,35 @@ class PosterQrTip extends StatelessWidget {
   final String? sub;
   final bool light;
 
+  /// 设计稿（330 宽）固定尺寸 → 当前画布宽度的等比缩放系数。
+  final double scale;
+
+  /// 二维码与文案的间距（设计稿 pA/s3=14、pC=12）。
+  final double gap;
+
+  /// 二维码外框描边（设计稿 pA/s1 有 1px 品牌线描边）。
+  final Color? qrBorderColor;
+
+  /// 二维码底色（缺省 surfaceAlt）。
+  final Color? qrBackground;
+
   @override
   Widget build(BuildContext context) {
     final Color t = light ? Colors.white : PosterPalette.ink;
     final Color s = light ? Colors.white70 : PosterPalette.text3;
+    final sc = scale;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        PosterQr(data: data, size: qrSize, padding: 5, radius: 9),
-        const SizedBox(width: 14),
+        PosterQr(
+          data: data,
+          size: qrSize * sc,
+          padding: 5 * sc,
+          radius: 9 * sc,
+          background: qrBackground,
+          borderColor: qrBorderColor,
+        ),
+        SizedBox(width: gap * sc),
         Flexible(
           fit: FlexFit.loose,
           child: Column(
@@ -459,10 +492,10 @@ class PosterQrTip extends StatelessWidget {
             children: [
               if (hint != null)
                 Text(hint!,
-                    style: posterPlain(11, color: t, weight: FontWeight.w600, letterSpacing: 1)),
+                    style: posterPlain(11 * sc, color: t, weight: FontWeight.w600, letterSpacing: 1 * sc)),
               if (sub != null) ...[
-                const SizedBox(height: 3),
-                Text(sub!, style: posterPlain(9, color: s, letterSpacing: 1)),
+                SizedBox(height: 3 * sc),
+                Text(sub!, style: posterPlain(9 * sc, color: s, letterSpacing: 1 * sc)),
               ],
             ],
           ),
@@ -600,6 +633,7 @@ class PosterTitle extends StatelessWidget {
     this.letterSpacing = 2,
     this.height = 1.25,
     this.align,
+    this.shadows,
   });
   final String text;
   final Color color;
@@ -608,12 +642,16 @@ class PosterTitle extends StatelessWidget {
   final double height;
   final TextAlign? align;
 
+  /// 压图标题的投影（如 s3 全出血浮层）。
+  final List<Shadow>? shadows;
+
   @override
   Widget build(BuildContext context) {
     return Text(
       text,
       textAlign: align,
-      style: posterSerif(size, color: color, letterSpacing: letterSpacing, height: height),
+      style: posterSerif(size, color: color, letterSpacing: letterSpacing, height: height)
+          .copyWith(shadows: shadows),
     );
   }
 }
@@ -662,6 +700,7 @@ class PosterFootOnPhoto extends StatelessWidget {
     this.zhColor = const Color(0xB3FFFFFF),
     this.sloganColor = const Color(0xA6FFFFFF),
     this.includeSlogan = true,
+    this.scale = 1,
   });
   final String name;
   final String zh;
@@ -671,16 +710,20 @@ class PosterFootOnPhoto extends StatelessWidget {
   final Color sloganColor;
   final bool includeSlogan;
 
+  /// 设计稿（330 宽）固定尺寸 → 当前画布宽度的等比缩放系数。
+  final double scale;
+
   @override
   Widget build(BuildContext context) {
+    final s = scale;
     return Row(
       children: [
-        Text(name, style: posterPlain(10, color: nameColor, weight: FontWeight.w600, letterSpacing: 3)),
-        const SizedBox(width: 4),
-        Text(zh, style: posterPlain(10, color: zhColor)),
+        Text(name, style: posterPlain(10 * s, color: nameColor, weight: FontWeight.w600, letterSpacing: 3 * s)),
+        SizedBox(width: 4 * s),
+        Text(zh, style: posterPlain(10 * s, color: zhColor)),
         if (includeSlogan) ...[
           const Spacer(),
-          Text(slogan, style: posterPlain(9, color: sloganColor, letterSpacing: 1)),
+          Text(slogan, style: posterPlain(9 * s, color: sloganColor, letterSpacing: 1 * s)),
         ],
       ],
     );

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -18,7 +17,6 @@ import '../data/remote_templates_providers.dart';
 import '../data/templates_browse_mock_data.dart';
 import '../data/templates_mock_data.dart';
 import '../data/templates_providers.dart';
-import '../services/template_mapper.dart';
 import '../widgets/adaptive_cover_image.dart';
 import '../widgets/recommendation_card.dart';
 import '../widgets/template_grid.dart';
@@ -389,7 +387,7 @@ class _HeroSection extends ConsumerWidget {
                     itemCount: list.length,
                     separatorBuilder: (_, __) => const SizedBox(width: 10), // gap 20rpx → 10dp
                     itemBuilder: (_, index) {
-                      final rec = _recordToRecommendation(list[index]);
+                      final rec = templateRecordToRecommendation(list[index]);
                       return RecommendationCard(
                         recommendation: rec,
                         usageCount: usageCounts[rec.id] ?? 0,
@@ -691,28 +689,4 @@ class _AcademyEntrySection extends ConsumerWidget {
       ),
     );
   }
-}
-
-/// TemplateRecord → TemplateRecommendation 适配
-/// DAO 推荐模板数据 → RecommendationCard 所需类型
-TemplateRecommendation _recordToRecommendation(TemplateRecord r) {
-  // 来源 badge 文案由 TemplateSource.systemPick → '为你推荐'（见 sourceLabel）。
-  // 副行展示模板短描述，更有内容感、不再固定一句话。
-  final desc = r.shortDesc.isNotEmpty
-      ? r.shortDesc
-      : (r.description.isNotEmpty ? r.description : '为你推荐');
-  return TemplateRecommendation(
-    id: r.id,
-    name: r.name,
-    reason: desc,
-    source: TemplateSource.systemPick,
-    imageSeed: r.id,
-    category: r.category,
-    cover: r.cover.isEmpty ? null : TemplateMapper.normalizeAssetUrl(r.cover),
-    coverData: r.coverData,
-    // 与「全部模板页」卡片对齐的徽标数据：价格/自定义/氛围
-    price: r.price,
-    isCustom: r.source == 'custom',
-    ambience: TemplateMapper.ambienceFromJson(r.ambienceJson),
-  );
 }

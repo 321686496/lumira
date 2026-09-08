@@ -1,20 +1,21 @@
-﻿import 'package:lumira_app_flutter/features/checkin/widgets/checkin_poster_styles.dart';
+import 'package:lumira_app_flutter/features/checkin/widgets/checkin_poster_styles.dart';
 
 import 'photo_poster_styles.dart';
 import 'poster_ratio.dart';
 import 'poster_style_types.dart';
-import 'template_import_poster_styles.dart';
 import 'template_poster_styles.dart';
 
 export 'poster_style_types.dart' show PosterKind, PosterStyle, PosterStyleData;
 
 /// 海报样式注册表：按 kind + ratio 返回可选样式。
+///
+/// 样式清单严格对应选型稿 `docs/design/poster_mockup_selected.html`
+/// （模板 15 款 + 照片 11 款）；「扫码导入」海报走导出分享流程
+/// （`export_detail_page` 内 `TemplateImportPoster`），不在此注册。
 class PosterStyleRegistry {
   PosterStyleRegistry._();
 
   static final List<PosterStyle> _styles = [
-    // 「扫码导入」海报优先：作为 template kind 各比例的默认（首个）样式。
-    ...templateImportPosterStyles(),
     ...templatePosterStyles(),
     ...photoPosterStyles(),
     ...checkinPosterStyles(),

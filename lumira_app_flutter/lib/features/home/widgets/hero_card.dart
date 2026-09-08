@@ -168,31 +168,6 @@ class _HeroCardState extends ConsumerState<HeroCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 日期
-                if (inspiration.dateText.isNotEmpty)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.calendar_today_outlined,
-                        size: 14, // 28rpx → 14dp
-                        color: tokens.brand,
-                      ),
-                      const SizedBox(width: 6), // 12rpx → 6dp
-                      Flexible(
-                        child: Text(
-                          inspiration.dateText,
-                          style: TextStyle(
-                            fontSize: 12, // 24rpx → 12dp
-                            color: tokens.textTertiary,
-                            height: 1.3,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: 10), // 20rpx → 10dp
                 // 标题
                 Text(
                   inspiration.title,
@@ -290,32 +265,6 @@ class _HeroCardState extends ConsumerState<HeroCard> {
                     ),
                   );
                 }),
-                // 天气行（weatherText 为空时隐藏）
-                if (inspiration.weatherText.isNotEmpty) ...[
-                  const SizedBox(height: 16), // 32rpx → 16dp
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.wb_sunny_outlined,
-                        size: 14, // 28rpx → 14dp
-                        color: tokens.brand,
-                      ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          inspiration.weatherText,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: tokens.textTertiary,
-                            height: 1.3,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
               ],
             ),
           ),
