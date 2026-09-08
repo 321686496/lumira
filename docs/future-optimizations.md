@@ -373,3 +373,15 @@
 - **背景/动机**：首版聚焦「能投放、可埋点观测点击率」，暂不做复杂投放引擎。
 - **目标状态**：基于 `banner_id` 埋点做 A/B（同目标多套素材对比点击率）；运营位按用户画像字段做人群定向。
 - **状态**：⏳ 待优化
+
+---
+
+## iOS 白平衡极值色斑修复（2026-09-08）
+
+### P2 · 「全局色调映射」触发阈值标定与属性复位兜底
+
+- **模块**：拍摄 · iOS 白平衡（CameraPreview.m：SetWbGlobalToneMapping / GainsForTemperatureWithResidual）
+- **优化点**：极端色温中央色斑第二轮修复（第一轮为 49779953 增益软封顶+残差软件补足）采用「极端色温期间切 `globalToneMappingEnabled = YES`」规避局部色调映射对中央区域的归一化。当前触发条件为「任一通道**目标**增益 > 2.0」（kExtremeWbGain）：阈值是工程估值——若某些机型 3000K/8000K 档目标增益低于 2.0 则不触发全局映射（中央色斑残留）；反之阈值过低会让非极值档也进入全局映射，无谓牺牲 Deep Fusion。另 Apple 文档明确 `globalToneMappingEnabled` 在 activeFormat 变更 / 设备输入加入 session / session preset 变更时**自动复位为 false**，当前仅靠每次 setWhiteBalance 幂等重设自愈，未做 KVO 监听。
+- **背景/动机**：2.0 阈值待真机反馈校准；比例切换 / 分辨率档位切换等会触发属性复位的路径，需回归确认白平衡锁定状态下中央色斑不复发。
+- **目标状态**：真机（多机型）采集 3000K/8000K 档 `deviceWhiteBalanceGainsForTemperatureAndTintValues` 目标增益分布，据此校准阈值（或改为按色温 K 值直接判定）；必要时 KVO `isGlobalToneMappingEnabled` 在被系统复位且白平衡仍处极端锁定时自动补设。
+- **状态**：⏳ 待优化
