@@ -74,6 +74,7 @@ class PosterClassicPhoto extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final k = posterScale(data.ratio);
     final w = posterCanvasWidth(data.ratio);
     final h = height ?? w / posterPhotoAspect(data.ratio);
     return SizedBox(
@@ -84,10 +85,10 @@ class PosterClassicPhoto extends StatelessWidget {
         children: [
           data.photoBuilder(w, h),
           const PosterScrim(),
-          const Positioned(
-            top: 16,
-            left: 20,
-            child: PosterBrandOnPhoto(logoSize: 15),
+          Positioned(
+            top: 16 * k,
+            left: 20 * k,
+            child: PosterBrandOnPhoto(logoSize: 15 * k, scale: k),
           ),
         ],
       ),
@@ -103,35 +104,39 @@ class PosterClassicPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final d = data;
+    final k = posterScale(d.ratio);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 19),
+      padding: EdgeInsets.fromLTRB(24 * k, 20 * k, 24 * k, 19 * k),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          PosterKicker(text: posterKickerOf(d)),
-          const SizedBox(height: 6),
-          PosterTitle(text: d.title, size: 30),
-          const SizedBox(height: 8),
-          PosterCatText(category: d.category),
+          PosterKicker(text: posterKickerOf(d), size: 9 * k, letterSpacing: 3 * k),
+          SizedBox(height: 6 * k),
+          PosterTitle(text: d.title, size: 30 * k, letterSpacing: 2 * k),
+          SizedBox(height: 8 * k),
+          PosterCatText(category: d.category, size: 9 * k, letterSpacing: 3 * k),
           if (d.authorName.isNotEmpty) ...[
-            const SizedBox(height: 10),
+            SizedBox(height: 10 * k),
             PosterAuthorRow(name: d.authorName),
           ],
-          const SizedBox(height: 16),
+          SizedBox(height: 16 * k),
           Container(
-            padding: const EdgeInsets.only(top: 15),
+            padding: EdgeInsets.only(top: 15 * k),
             decoration: const BoxDecoration(
               border: Border(top: BorderSide(color: PosterPalette.line)),
             ),
             child: PosterQrTip(
               data: d.qrData,
+              qrSize: 54,
+              scale: k,
               hint: posterQrHintOf(d),
               sub: posterQrSubOf(d),
+              qrBorderColor: PosterPalette.line,
             ),
           ),
-          const SizedBox(height: 13),
-          const PosterBrandFoot(),
+          SizedBox(height: 13 * k),
+          PosterBrandFoot(scale: k),
         ],
       ),
     );
@@ -160,6 +165,10 @@ class PosterClassicCard extends StatelessWidget {
 }
 
 /// 相纸卡片（pC）：胶带贴纸 + 白底相片卡 + 手写标题 + 二维码条。
+///
+/// 设计稿：print 宽 = 内容宽（画布 − 边框 − 左右 padding 26）× 比例系数
+/// （9:16=72%、3:4=88%、1:1=82%、4:3/16:9=100%）；照片高 = 照片自身宽 × 比例
+/// （照片宽 = print 宽 − print 左右 padding 12）。
 class PosterPrintCard extends StatelessWidget {
   const PosterPrintCard({super.key, required this.data});
   final PosterStyleData data;
@@ -196,36 +205,43 @@ class PosterPrintCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final d = data;
+    final k = posterScale(d.ratio);
     final w = posterCanvasWidth(d.ratio);
     final isPhoto = d.authorName.isNotEmpty;
-    final printW = w * _printWidthFactor;
-    final phH = printW / posterPhotoAspect(d.ratio);
+    // 内容宽 = 画布 − 1px 画布边框 ×2 − 左右 padding 26（设计稿 box-sizing 基准）。
+    final contentW = w - 2 - 2 * 26 * k;
+    final printW = contentW * _printWidthFactor;
+    final innerW = printW - 2 * 12 * k;
+    final phH = innerW / posterPhotoAspect(d.ratio);
 
     return PosterCanvas(
       width: w,
       color: const Color(0xFFF1EADF),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(26, 32, 26, 26),
+        padding: EdgeInsets.fromLTRB(26 * k, 32 * k, 26 * k, 26 * k),
         child: Column(
           children: [
             Transform.rotate(
               angle: _rotate * 3.1415927 / 180,
               child: Container(
                 width: printW,
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                padding: EdgeInsets.fromLTRB(12 * k, 12 * k, 12 * k, 0),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(3),
-                  boxShadow: const [
+                  borderRadius: BorderRadius.circular(3 * k),
+                  boxShadow: [
+                    // 设计稿：0 20px 44px -20px rgba(70,55,30,.5)
                     BoxShadow(
-                      color: Color(0x8046371E),
-                      offset: Offset(0, 20),
-                      blurRadius: 44,
+                      color: const Color(0x8046371E),
+                      offset: Offset(0, 20 * k),
+                      blurRadius: 44 * k,
+                      spreadRadius: -20 * k,
                     ),
+                    // 设计稿：0 2px 6px rgba(70,55,30,.14)
                     BoxShadow(
-                      color: Color(0x2446371E),
-                      offset: Offset(0, 2),
-                      blurRadius: 6,
+                      color: const Color(0x2446371E),
+                      offset: Offset(0, 2 * k),
+                      blurRadius: 6 * k,
                     ),
                   ],
                 ),
@@ -234,52 +250,55 @@ class PosterPrintCard extends StatelessWidget {
                     Stack(
                       children: [
                         SizedBox(
-                          width: printW,
+                          width: innerW,
                           height: phH,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(2),
-                            child: d.photoBuilder(printW, phH),
-                          ),
+                          child: d.photoBuilder(innerW, phH),
                         ),
+                        // 胶带贴纸：设计稿 inset 0 -2px 4px 阴影用下缘渐变模拟。
                         Positioned(
-                          top: 10,
-                          left: 10,
-                          child: Container(
-                            width: 22,
-                            height: 22,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Color(0xFFD9BC8B),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Color(0x26000000),
-                                  offset: Offset(0, -2),
-                                  blurRadius: 4,
-                                  spreadRadius: -2,
+                          top: 10 * k,
+                          left: 10 * k,
+                          child: Opacity(
+                            opacity: .9,
+                            child: Container(
+                              width: 22 * k,
+                              height: 22 * k,
+                              decoration: const ShapeDecoration(
+                                shape: CircleBorder(),
+                                color: Color(0xFFD9BC8B),
+                              ),
+                              child: const DecoratedBox(
+                                decoration: ShapeDecoration(
+                                  shape: CircleBorder(),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [Colors.transparent, Color(0x1F000000)],
+                                  ),
                                 ),
-                              ],
+                              ),
                             ),
                           ),
                         ),
                       ],
                     ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 12, 8, 15),
+                      padding: EdgeInsets.fromLTRB(8 * k, 12 * k, 8 * k, 15 * k),
                       child: Column(
                         children: [
                           PosterKicker(
                             text: isPhoto ? 'LUMIRA · 如画出品' : 'LUMIRA · 模板',
-                            size: 8,
-                            letterSpacing: 3,
+                            size: 8 * k,
+                            letterSpacing: 3 * k,
                           ),
-                          const SizedBox(height: 5),
-                          PosterTitle(text: d.title, size: 22, letterSpacing: 3, height: 1.3),
+                          SizedBox(height: 5 * k),
+                          PosterTitle(text: d.title, size: 22 * k, letterSpacing: 3 * k, height: 1.3),
                           if (isPhoto) ...[
-                            const SizedBox(height: 7),
+                            SizedBox(height: 7 * k),
                             PosterAuthorRow(name: d.authorName, suffix: '用如画拍摄', avatarSize: 20, justifyCenter: true),
                           ] else ...[
-                            const SizedBox(height: 5),
-                            PosterCatText(category: d.category, size: 8, letterSpacing: 2, color: PosterPalette.text3),
+                            SizedBox(height: 5 * k),
+                            PosterCatText(category: d.category, size: 8 * k, letterSpacing: 2 * k, color: PosterPalette.text3),
                           ],
                         ],
                       ),
@@ -288,30 +307,34 @@ class PosterPrintCard extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 22),
+            SizedBox(height: 22 * k),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: EdgeInsets.symmetric(horizontal: 14 * k, vertical: 10 * k),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(16 * k),
                 border: Border.all(color: const Color(0x73C9A96E)),
-                boxShadow: const [
+                boxShadow: [
+                  // 设计稿：0 12px 26px -18px rgba(70,55,30,.45)
                   BoxShadow(
-                    color: Color(0x7346371E),
-                    offset: Offset(0, 12),
-                    blurRadius: 26,
+                    color: const Color(0x7346371E),
+                    offset: Offset(0, 12 * k),
+                    blurRadius: 26 * k,
+                    spreadRadius: -18 * k,
                   ),
                 ],
               ),
               child: PosterQrTip(
                 data: d.qrData,
                 qrSize: 50,
+                scale: k,
+                gap: 12,
                 hint: posterQrHintOf(d),
                 sub: posterQrSubOf(d),
               ),
             ),
-            const SizedBox(height: 14),
-            const PosterBrandFoot(),
+            SizedBox(height: 14 * k),
+            PosterBrandFoot(scale: k),
           ],
         ),
       ),

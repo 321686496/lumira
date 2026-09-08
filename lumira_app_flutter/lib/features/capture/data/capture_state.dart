@@ -10,7 +10,6 @@ import '../domain/scene_preset.dart';
 import '../data/template_registry.dart';
 import '../data/scene_presets_data.dart';
 import '../../templates/services/template_mapper.dart';
-import '../../../core/db/dao/templates_dao.dart';
 import '../../templates/data/templates_providers.dart';
 import '../../templates/data/remote_templates_providers.dart';
 import '../services/level_sensor_service.dart';
@@ -314,11 +313,24 @@ class CaptureState {
     return result;
   });
 
+  /// 预览页桥接源：EditorForm→PhotoTemplate 转换结果（EditorForm 从编辑器预览进入）。
+  ///
+  /// 模板预览页进入时写入「原始快照」的干净副本，令 [originalTemplateProvider]
+  /// 优先返回它，使 ParamPanel 的「重置」在预览场景仍然可用。
+  /// 非预览场景恒为 null，拍摄页行为完全不变。
+  static final previewTemplateSourceProvider =
+      StateProvider<PhotoTemplate?>((ref) => null);
+
   /// 原始模板（只读，派生自 currentTemplateIdProvider）
   /// 先查 TemplateRegistry（系统模板，同步快路径）
   /// 未找到 → 查 templateCacheProvider（含自定义模板的运行时缓存，加载中会保留上次完整值）
   /// 仍未找到且为远程模板（srv_ 前缀）→ 按需拉取详情
+  ///
+  /// 扩展：模板预览页桥接场景下优先返回 [previewTemplateSourceProvider]，
+  /// 让拍摄页组件（ParamPanel 等）以预览原始快照为基准工作。
   static final originalTemplateProvider = Provider<PhotoTemplate?>((ref) {
+    final preview = ref.watch(previewTemplateSourceProvider);
+    if (preview != null) return preview; // 预览桥接优先
     final id = ref.watch(currentTemplateIdProvider);
     if (id == null) return null;
     // 快路径：系统模板（同步）
@@ -910,6 +922,8 @@ class CaptureState {
     container.read(fillLightViewfinderScaleProvider.notifier).state = 0.5;
     container.read(fillLightViewfinderOffsetProvider.notifier).state =
         Offset.zero;
+    // 预览桥接源清空（若进入预览页时残留）
+    container.read(previewTemplateSourceProvider.notifier).state = null;
   }
 }
 

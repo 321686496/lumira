@@ -488,6 +488,218 @@ class TemplateMapper {
     );
   }
 
+  // === EditorForm ↔ PhotoTemplate（模板预览页桥接） ===
+
+  /// EditorForm → PhotoTemplate。
+  ///
+  /// 供模板预览页把编辑器表单桥接为拍摄页组件可消费的领域对象，使预览页在
+  /// 功能、布局、参数调整效果上与拍摄页完全一致。
+  /// 默认值补齐（EditorForm 缺失 / 模板组件用到的字段）：
+  /// - `postProcess.legStretch = 0`（EditorForm 无此字段，预览可调但**不回写**）
+  /// - `customCropRect` / `wbResidual` 置 null（会话态，不进编辑器表单）
+  /// - `meta.price = 0`、`author = ''`、`version = '1.0'`、`source = 'custom'`
+  /// - 空 meta.id 时生成 `preview_<ts>` 占位 id（避免与真实模板冲突）
+  static PhotoTemplate editorFormToPhotoTemplate(editor.EditorForm form, {String? id}) {
+    final formImages = form.meta.images;
+    return PhotoTemplate(
+      meta: TemplateMeta(
+        id: id ??
+            (form.meta.id.isNotEmpty
+                ? form.meta.id
+                : 'preview_${DateTime.now().millisecondsSinceEpoch}'),
+        name: form.meta.name,
+        author: '',
+        version: '1.0',
+        category: form.meta.category,
+        classification: TemplateClassification(
+          type: form.meta.category,
+          majorStyle: form.meta.style ?? '',
+          style: form.meta.style ?? '',
+          subStyle: form.meta.subStyle ?? '',
+          method: form.meta.method ?? '',
+        ),
+        tags: List<String>.from(form.meta.tags),
+        price: 0,
+        images: formImages.isEmpty
+            ? const <TemplateImage>[]
+            : <TemplateImage>[
+                for (final e in formImages) TemplateImage(url: '', data: e.data),
+              ],
+        description: form.meta.description,
+        referenceSource: form.meta.referenceSource,
+        shortDesc: form.meta.shortDesc,
+        ambience: form.meta.ambience ?? const RemoteTemplateAmbienceDto(),
+        source: 'custom',
+      ),
+      composition: Composition(
+        overlayType: form.composition.overlayType,
+        gridType: form.composition.gridType,
+        subjectFrame: form.composition.subjectFrame,
+        opacity: form.composition.opacity,
+        aspectRatio: form.composition.aspectRatio,
+        description: form.composition.description,
+      ),
+      poses: <Pose>[for (final p in form.poses) _editorPoseToPose(p)],
+      camera: CameraParams(
+        exposureCompensation: form.camera.exposureCompensation,
+        iso: form.camera.iso,
+        shutterSpeed: form.camera.shutterSpeed,
+        whiteBalance: form.camera.whiteBalance,
+        whiteBalanceK: form.camera.whiteBalanceK,
+        flashMode: form.camera.flashMode,
+        focusMode: form.camera.focusMode,
+        isoMode: form.camera.isoMode,
+        lensSuggestion: form.camera.lensSuggestion,
+        lensType: form.camera.lensType,
+      ),
+      sceneGuide: SceneGuide(
+        lightDirection: form.sceneGuide.lightDirection,
+        shootingDistance: form.sceneGuide.shootingDistance,
+        background: form.sceneGuide.background,
+        props: List<String>.from(form.sceneGuide.props),
+        bestTime: form.sceneGuide.bestTime,
+        tips: List<String>.from(form.sceneGuide.tips),
+      ),
+      postProcess: PostProcess(
+        cropRatio: form.postProcess.cropRatio,
+        color: _editorColorToDomain(form.postProcess.color),
+        smoothStrength: form.postProcess.smoothStrength,
+        sharpen: form.postProcess.sharpen,
+        vignette: form.postProcess.vignette,
+        grain: form.postProcess.grain,
+        legStretch: 0,
+        lut: form.postProcess.lut,
+        systemFilter: form.postProcess.systemFilter,
+        fillLight: _editorFillLightToDomain(form.fillLight),
+      ),
+    );
+  }
+
+  /// PhotoTemplate → EditorForm（回写，合并而非重建）。
+  ///
+  /// **不得从零重建 EditorForm**（会丢 `meta.style/subStyle/method/images/shortDesc/ambience`）。
+  /// 采用 `base.copy()` + 用 edited 覆盖 composition/poses/camera/sceneGuide/postProcess/fillLight
+  /// 可编辑字段；meta 保持不变。
+  static editor.EditorForm photoTemplateToEditorFormMerge(
+    PhotoTemplate edited,
+    editor.EditorForm base,
+  ) {
+    final result = base.copy();
+    result.composition = editor.EditorFormComposition(
+      overlayType: edited.composition.overlayType,
+      gridType: edited.composition.gridType,
+      subjectFrame: edited.composition.subjectFrame,
+      opacity: edited.composition.opacity,
+      aspectRatio: edited.composition.aspectRatio,
+      description: edited.composition.description,
+    );
+    result.poses = <editor.EditorFormPose>[
+      for (final p in edited.poses) _poseToEditorPose(p),
+    ];
+    result.camera = editor.EditorFormCamera(
+      exposureCompensation: edited.camera.exposureCompensation,
+      isoMode: edited.camera.isoMode ?? 'auto',
+      iso: edited.camera.iso,
+      shutterSpeed: edited.camera.shutterSpeed,
+      whiteBalance: edited.camera.whiteBalance,
+      whiteBalanceK: edited.camera.whiteBalanceK,
+      flashMode: edited.camera.flashMode,
+      focusMode: edited.camera.focusMode,
+      lensSuggestion: edited.camera.lensSuggestion ?? 'main',
+      lensType: edited.camera.lensType,
+    );
+    result.sceneGuide = editor.EditorFormSceneGuide(
+      lightDirection: edited.sceneGuide.lightDirection,
+      shootingDistance: edited.sceneGuide.shootingDistance,
+      background: edited.sceneGuide.background,
+      props: List<String>.from(edited.sceneGuide.props),
+      bestTime: edited.sceneGuide.bestTime,
+      tips: List<String>.from(edited.sceneGuide.tips),
+    );
+    result.postProcess = editor.EditorFormPostProcess(
+      cropRatio: edited.postProcess.cropRatio,
+      color: _domainColorToEditor(edited.postProcess.color),
+      smoothStrength: edited.postProcess.smoothStrength,
+      sharpen: edited.postProcess.sharpen,
+      vignette: edited.postProcess.vignette,
+      grain: edited.postProcess.grain,
+      lut: edited.postProcess.lut,
+      systemFilter: edited.postProcess.systemFilter,
+    );
+    result.fillLight = _domainFillLightToEditor(edited.postProcess.fillLight);
+    return result;
+  }
+
+  // === 私有 helper：EditorForm ↔ PhotoTemplate 子类型转换 ===
+
+  static Pose _editorPoseToPose(editor.EditorFormPose p) => Pose(
+        name: p.name,
+        silhouette: _toDomainSilhouette(p.silhouette),
+        position: Position(x: p.position.x, y: p.position.y),
+        scale: p.scale,
+        rotation: p.rotation,
+        description: p.description,
+        cameraDirection: p.cameraDirection,
+      );
+
+  static editor.EditorFormPose _poseToEditorPose(Pose p) => editor.EditorFormPose(
+        name: p.name,
+        silhouette: _toEditorSilhouette(p.silhouette),
+        position: editor.Position(x: p.position.x, y: p.position.y),
+        scale: p.scale,
+        rotation: p.rotation,
+        description: p.description,
+        cameraDirection: p.cameraDirection,
+      );
+
+  static SilhouetteResource _toDomainSilhouette(editor.SilhouetteResource s) =>
+      SilhouetteResource(
+        type: s.type,
+        data: s.data,
+        filename: s.filename,
+        sizeKB: s.sizeKB,
+      );
+
+  static PostProcessColor _editorColorToDomain(editor.PostProcessColor c) =>
+      PostProcessColor(
+        brightness: c.brightness,
+        contrast: c.contrast,
+        saturation: c.saturation,
+        temperature: c.temperature,
+        tint: c.tint,
+        highlights: c.highlights,
+        shadows: c.shadows,
+        blackPoint: c.blackPoint,
+        clarity: c.clarity,
+        vibrance: c.vibrance,
+        brilliance: c.brilliance,
+      );
+
+  static editor.PostProcessColor _domainColorToEditor(PostProcessColor c) =>
+      editor.PostProcessColor(
+        brightness: c.brightness,
+        contrast: c.contrast,
+        saturation: c.saturation,
+        temperature: c.temperature,
+        tint: c.tint,
+        highlights: c.highlights,
+        shadows: c.shadows,
+        blackPoint: c.blackPoint,
+        clarity: c.clarity,
+        vibrance: c.vibrance,
+        brilliance: c.brilliance,
+      );
+
+  static FillLightParams? _editorFillLightToDomain(editor.EditorFormFillLight? fl) =>
+      fl == null
+          ? null
+          : FillLightParams(enabled: fl.enabled, color: fl.color, intensity: fl.intensity);
+
+  static editor.EditorFormFillLight? _domainFillLightToEditor(FillLightParams? fl) =>
+      fl == null
+          ? null
+          : editor.EditorFormFillLight(enabled: fl.enabled, color: fl.color, intensity: fl.intensity);
+
   // === Silhouette 序列化 ===
 
   /// 氛围元数据 → JSON 字符串（落库用）。

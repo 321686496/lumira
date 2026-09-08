@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/router/route_names.dart';
+import '../effects/recessed_surface.dart';
 
 /// 如画应用悬浮 Tab 栏
 ///
@@ -65,7 +66,7 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
   }
   /// tab bar 表面（底色/描边/阴影 + 5 个 item 的 Row）。
   /// 与玻璃模糊解耦，便于在非玻璃风格跳过 BackdropFilter，只保留纯静态表面。
-  Widget _barContent(ThemeTokens tokens, bool isFemale, bool isGlass) {
+  Widget _barContent(ThemeTokens tokens, bool isFemale, bool isGlass, bool isNeu) {
     return Container(
       height: 54, // 108rpx → 54dp
       decoration: BoxDecoration(
@@ -120,6 +121,7 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
             onTap: () => _handleTabTap(0),
             tokens: tokens,
             isFemale: isFemale,
+            isNeu: isNeu,
           ),
           _TabItem(
             icon: Icons.grid_view_outlined,
@@ -128,6 +130,7 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
             onTap: () => _handleTabTap(1),
             tokens: tokens,
             isFemale: isFemale,
+            isNeu: isNeu,
           ),
           // 中间占位（capture button 由 Stack 顶层渲染）
           const SizedBox(width: 60),
@@ -138,6 +141,7 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
             onTap: () => _handleTabTap(3),
             tokens: tokens,
             isFemale: isFemale,
+            isNeu: isNeu,
           ),
           _TabItem(
             icon: Icons.person_outline,
@@ -146,6 +150,7 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
             onTap: () => _handleTabTap(4),
             tokens: tokens,
             isFemale: isFemale,
+            isNeu: isNeu,
           ),
         ],
       ),
@@ -156,6 +161,7 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
+    final isNeu = appTheme.style == UIStyle.neumorphic;
     final isFemale = appTheme.style == UIStyle.female;
     final isGlass = appTheme.style == UIStyle.glass;
 
@@ -193,9 +199,9 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
                     child: isGlass
                         ? BackdropFilter(
                             filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-                            child: _barContent(tokens, isFemale, isGlass),
+                            child: _barContent(tokens, isFemale, isGlass, isNeu),
                           )
-                        : _barContent(tokens, isFemale, isGlass),
+                        : _barContent(tokens, isFemale, isGlass, isNeu),
                   ),
                 ),
               ),
@@ -224,6 +230,7 @@ class _TabItem extends StatefulWidget {
     required this.onTap,
     required this.tokens,
     required this.isFemale,
+    required this.isNeu,
   });
 
   final IconData icon;
@@ -232,6 +239,7 @@ class _TabItem extends StatefulWidget {
   final VoidCallback onTap;
   final ThemeTokens tokens;
   final bool isFemale;
+  final bool isNeu;
 
   @override
   State<_TabItem> createState() => _TabItemState();
@@ -309,28 +317,66 @@ class _TabItemState extends State<_TabItem>
       child: Icon(widget.icon, size: 22, color: color),
     );
 
+    // 新拟态选中态：圆形内凹坑只罩住图标（「按下/嵌入」的圆形触点），
+    // 品牌色体现在图标/文字上，不用品牌实底（避免"发光"感），符合
+    // scene_filter_pills / academy_level_selector 的「方案 B：凸起↔凹陷翻转」选中范式。
+    final bool recessActive = widget.isNeu && widget.active;
+    final Widget tabContent;
+    if (recessActive) {
+      // 圆形坑底与 tab bar 表面同色（canvas），才能读出"在凸起栏里按下/嵌入"的内凹。
+      tabContent = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          RecessedSurface(
+            tokens: widget.tokens,
+            borderRadius: 36,
+            depth: 0.60,
+            rimFraction: 0.30,
+            color: widget.tokens.canvas,
+            child: SizedBox(
+              width: 34,
+              height: 34,
+              child: Center(child: iconGlow),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            widget.label,
+            style: TextStyle(
+              fontSize: 10, // 20rpx → 10dp
+              color: color,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.4, // 0.04em * 10
+              height: 1,
+            ),
+          ),
+        ],
+      );
+    } else {
+      tabContent = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(height: 26, child: Center(child: iconGlow)),
+          const SizedBox(height: 1), // gap 2rpx → 1dp
+          Text(
+            widget.label,
+            style: TextStyle(
+              fontSize: 10, // 20rpx → 10dp
+              color: color,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.4, // 0.04em * 10
+              height: 1,
+            ),
+          ),
+        ],
+      );
+    }
+
     return Expanded(
       child: GestureDetector(
         onTap: widget.onTap,
         behavior: HitTestBehavior.opaque,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(height: 26, child: Center(child: iconGlow)),
-            const SizedBox(height: 1), // gap 2rpx → 1dp
-            Text(
-              widget.label,
-              style: TextStyle(
-                fontSize: 10, // 20rpx → 10dp
-                color: color,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 0.4, // 0.04em * 10
-                height: 1,
-              ),
-            ),
-          ],
-        ),
+        child: Center(child: tabContent),
       ),
     );
   }

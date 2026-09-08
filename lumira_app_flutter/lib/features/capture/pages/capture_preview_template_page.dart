@@ -4,30 +4,39 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
-import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../templates/data/preview_form_provider.dart';
 import '../../templates/data/templates_editor_mock_data.dart';
-import '../../templates/widgets/pose_silhouette.dart';
+import '../../templates/services/template_mapper.dart';
 import '../data/capture_preview_mock_data.dart';
+import '../data/capture_state.dart';
+import '../domain/photo_template.dart';
 import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
+import '../widgets/aspect_ratio_selector.dart';
 import '../widgets/camera_preview.dart';
+import '../widgets/capture_bottom_controls.dart';
+import '../widgets/capture_nav.dart';
+import '../widgets/delay_timer_button.dart';
+import '../widgets/level_indicator.dart';
+import '../widgets/param_panel.dart';
+import '../widgets/param_pill_bar.dart';
+import '../widgets/shutter_feedback.dart';
 
-/// 模板预览页（Task 2.9A）
+/// 模板预览页（对齐拍摄页 capture_page.dart）
 ///
-/// 视觉规格来源：lumira-app/src/pages/capture/preview-template.vue (754 行)
-/// - 沉浸式自定义导航（不用 LumiraNav — brief §3.2 明示偏离）
-/// - 取景器（3:4 AspectRatio + 真实 CameraPreview + CompositionOverlay + 可拖动 PoseSilhouette）
-/// - 参数 pill 栏（EV/ISO/SS/WB）
-/// - 折叠调整面板（4 slider 区 + 4 seg-btn 组）
-/// - 拍照按钮（Bug 12 修复：预览页也支持拍照）
-/// - 同步按钮（写回 previewEditorFormProvider + pop）
+/// 「添加/编辑自定义模板」表单点「预览」进入。通过桥接方案把 EditorForm 转换为
+/// PhotoTemplate 喂给拍摄页公共组件，使功能、布局、参数调整效果与拍摄页完全一致：
+/// - 导航胶囊（CaptureNav）
+/// - 取景器（CameraPreview 走 editableTemplate 路径，与参数面板同源）
+/// - 顶部浮层（延时 / 比例切换 / 参数 pill）
+/// - 右侧多姿势切换（CapturePoseSwitchButton）
+/// - 底部控制区（CaptureBottomBar：缩放轮盘 + 5 页签工具栏 + 抽屉 + 拍照）
+/// - 参数面板（ParamPanel）、水平仪（LevelIndicator）、快门白闪（ShutterFeedback）
 ///
-/// Bug 12 修复：
-/// - 取景器改用真实 CameraPreview（替换 picsum 静态占位图）
-/// - 通过 previewEditorFormProvider 与编辑器双向同步参数
-/// - 同步按钮将修改后的 EditorForm 写回 provider，编辑器 await 返回后读取并同步到 _form
+/// 与拍摄页的不同（预览场景限定）：
+/// - 导航返回 / 右下「完成」均触发 [CaptureState.previewTemplateSourceProvider] 清理并回写。
+/// - 拍照仅预览、不入成片库（不写缩略图 / 水印 / gallery）。
 class CapturePreviewTemplatePage extends ConsumerStatefulWidget {
   const CapturePreviewTemplatePage({
     super.key,
@@ -48,10 +57,18 @@ class CapturePreviewTemplatePage extends ConsumerStatefulWidget {
 
 class _CapturePreviewTemplatePageState
     extends ConsumerState<CapturePreviewTemplatePage> {
+  /// 编辑器传入的 EditorForm 源（作为回写合并的 base，保留 meta 独有字段）
   EditorForm? _template;
-  bool _panelExpanded = false;
-  bool _flashOn = false;
-  bool _isDraggingSilhouette = false;
+
+  /// 是否已完成桥接（未桥接前不渲染拍摄组件，避免 editableTemplate 为空）
+  bool _hasBridged = false;
+
+  /// 快门白闪触发版本号
+  int _shutterTrigger = 0;
+
+  /// 取景器 RepaintBoundary key（facing 变化时重建以切换传感器）
+  GlobalKey? _viewfinderCaptureKey;
+  String _lastFacingForKey = '';
 
   @override
   void initState() {
@@ -59,275 +76,308 @@ class _CapturePreviewTemplatePageState
     _loadTemplate();
   }
 
+  @override
+  void dispose() {
+    // dispose 兜底清理预览桥接源，避免残留到真实拍摄页
+    _clearPreviewSource();
+    super.dispose();
+  }
+
   void _loadTemplate() {
-    // Bug 12 修复：优先读取 previewEditorFormProvider（来自编辑器的实时表单），
-    // 让预览页参数与编辑器参数双向同步。fallback 到 mock 数据兼容 templateId 直接预览场景。
+    // 优先读取 previewEditorFormProvider（来自编辑器的实时表单），
+    // fallback 到 mock 数据兼容 templateId / draftId 直接预览场景。
     EditorForm? loaded = ref.read(previewEditorFormProvider);
 
     if (loaded == null) {
-      // 回退：通过 draftId 或 templateId 从 mock 数据加载
       if (widget.draftId != null && widget.draftId!.isNotEmpty) {
         loaded = CapturePreviewMockData.loadDraftById(widget.draftId);
       } else if (widget.templateId != null && widget.templateId!.isNotEmpty) {
         loaded = CapturePreviewMockData.loadTemplateById(widget.templateId);
       }
-    } else {
-      // 从 provider 加载的 form 是编辑器的副本，预览页修改不影响编辑器原 form
-      // 同步按钮点击时再把修改后的 form 写回 provider
-      _template = loaded;
-      return;
     }
 
-    if (loaded != null) {
-      _template = loaded;
-    } else {
-      // 加载失败：Toast + 1000ms 后 pop（brief §3.2 + §6.3 mounted 检查）
+    if (loaded == null) {
+      // 加载失败：Toast + 1000ms 后 pop
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         LumiraToast.show(context, '模板加载失败');
         Future.delayed(const Duration(milliseconds: 1000), () {
           if (!mounted) return;
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
-          } else {
-            GoRouter.of(context).go(RouteNames.capture);
-          }
+          _finishAndPop();
         });
       });
+      return;
     }
-  }
 
-  // ===== 事件处理 =====
-
-  void _back() {
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      GoRouter.of(context).go(RouteNames.capture);
-    }
-  }
-
-  void _toggleFlash() {
-    setState(() {
-      _flashOn = !_flashOn;
-    });
-  }
-
-  void _togglePanel() {
-    setState(() {
-      _panelExpanded = !_panelExpanded;
-    });
-  }
-
-  // ===== 剪影拖动 =====
-
-  void _onSilhouetteDragStart(DragStartDetails details) {
-    setState(() {
-      _isDraggingSilhouette = true;
-    });
-  }
-
-  void _onSilhouetteDragUpdate(
-      DragUpdateDetails details, BoxConstraints constraints) {
-    final tpl = _template;
-    if (tpl == null) return;
-    setState(() {
-      final dx = details.delta.dx / constraints.maxWidth;
-      final dy = details.delta.dy / constraints.maxHeight;
-      tpl.pose.position.x = (tpl.pose.position.x + dx).clamp(0.0, 1.0);
-      tpl.pose.position.y = (tpl.pose.position.y + dy).clamp(0.0, 1.0);
-    });
-  }
-
-  void _onSilhouetteDragEnd(DragEndDetails details) {
-    setState(() {
-      _isDraggingSilhouette = false;
-    });
-  }
-
-  // ===== 表单变更 =====
-
-  void _mutate(void Function() mutator) {
-    setState(mutator);
-  }
-
-  // ===== 同步按钮 =====
-
-  void _onSyncBack() {
-    // Bug 12 修复：将当前 _template 写回 previewEditorFormProvider，
-    // 让编辑器 await push 返回后能读取到修改后的 form
-    final tpl = _template;
-    if (tpl != null) {
-      ref.read(previewEditorFormProvider.notifier).state = tpl;
-    }
-    LumiraToast.show(context, '已同步到编辑器');
-    Future.delayed(const Duration(milliseconds: 600), () {
+    _template = loaded;
+    // 桥接需在 widget 树构建完成后写入 provider（riverpod 禁止在 build/initState 直接写
+    // provider，否则抛 "Tried to modify a provider while the widget tree was building"）。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      } else {
-        GoRouter.of(context).go(RouteNames.templates);
-      }
+      _bridgeTemplate();
+      setState(() {});
     });
   }
 
-  // ===== 拍照 =====
+  /// 把 EditorForm 桥接进拍摄页状态，供拍摄页公共组件复用。
+  void _bridgeTemplate() {
+    final form = _template!;
+    final id = form.meta.id.isNotEmpty
+        ? form.meta.id
+        : 'preview_${DateTime.now().millisecondsSinceEpoch}';
+    final bridge = TemplateMapper.editorFormToPhotoTemplate(form, id: id);
 
-  /// Bug 12 修复：预览页也支持拍照。
-  /// 通过 CameraService 抽象层调用 capture()，与拍摄页一致。
+    // 清空拍摄残留状态（currentTemplateId/aspectRatio/facing/补光/参数面板等）
+    final container = ProviderScope.containerOf(context, listen: false);
+    CaptureState.resetAll(container);
+
+    // 1. 预览原始快照 → originalTemplateProvider 优先返回它（ParamPanel 重置可用）
+    ref.read(CaptureState.previewTemplateSourceProvider.notifier).state = bridge;
+    // 2. currentTemplateId → CaptureNav 识别「模板拍摄」+ 显示模板/剪影按钮
+    ref.read(CaptureState.currentTemplateIdProvider.notifier).state = bridge.meta.id;
+    // 3. 比例跟随模板 cropRatio（回退构图比例）
+    final cropRatio = bridge.postProcess.cropRatio;
+    ref.read(CaptureState.aspectRatioProvider.notifier).state =
+        cropRatio.isNotEmpty ? cropRatio : bridge.composition.aspectRatio;
+    // 4. 补光：模板启用补光时套用颜色/强度
+    final fl = form.fillLight;
+    if (fl != null && fl.enabled) {
+      ref.read(CaptureState.fillLightEnabledProvider.notifier).state = true;
+      ref.read(CaptureState.fillLightColorProvider.notifier).state = Color(fl.color);
+      ref.read(CaptureState.fillLightIntensityProvider.notifier).state =
+          fl.intensity;
+    }
+    // 5. 首姿势相机方向为前置时切前摄（补光仅前摄生效，需保证前置）
+    final poses = bridge.poses;
+    if (poses.isNotEmpty && poses[0].cameraDirection == 'front') {
+      ref.read(CaptureState.cameraFacingProvider.notifier).state = 'front';
+    }
+
+    _hasBridged = true;
+  }
+
+  /// 清除预览桥接源。必须在退出预览前调用，保证真实拍摄页无残留。
+  void _clearPreviewSource() {
+    try {
+      ref.read(CaptureState.previewTemplateSourceProvider.notifier).state = null;
+    } catch (_) {
+      // dispose 后 ref 不可读，静默忽略
+    }
+  }
+
+  // ── 相机副作用（对齐拍摄页，保证取景器随控件实时变化）──
+
+  CameraFlashMode _mapFlashMode(CaptureFlashMode mode) {
+    switch (mode) {
+      case CaptureFlashMode.off:
+        return CameraFlashMode.off;
+      case CaptureFlashMode.on:
+        return CameraFlashMode.on;
+      case CaptureFlashMode.auto:
+        return CameraFlashMode.auto;
+      case CaptureFlashMode.torch:
+        return CameraFlashMode.torch;
+    }
+  }
+
+  void _onZoomChanged(double multiplier) {
+    final minZoom = ref.read(CaptureState.deviceMinZoomProvider) ?? 1.0;
+    final maxZoom = ref.read(CaptureState.deviceMaxZoomProvider) ?? 10.0;
+    final clamped = multiplier.clamp(minZoom, maxZoom);
+    ref.read(CaptureState.apparentZoomProvider.notifier).state = clamped;
+    ref.read(CaptureState.zoomProvider.notifier).state = clamped;
+    ref.read(cameraServiceProvider).setZoomMultiplier(clamped);
+  }
+
+  void _switchCamera() {
+    final current = ref.read(CaptureState.cameraFacingProvider);
+    final next = current == 'back' ? 'front' : 'back';
+    ref.read(CaptureState.cameraFacingProvider.notifier).state = next;
+
+    // 前置无闪光灯硬件，切换时关闭
+    if (next == 'front' &&
+        ref.read(CaptureState.flashModeProvider) != CaptureFlashMode.off) {
+      ref.read(CaptureState.flashModeProvider.notifier).state =
+          CaptureFlashMode.off;
+    }
+    // 后置无屏幕补光，切换时关闭补光
+    if (next == 'back' && ref.read(CaptureState.fillLightEnabledProvider)) {
+      ref.read(CaptureState.fillLightEnabledProvider.notifier).state = false;
+    }
+    ref.read(CaptureState.apparentZoomProvider.notifier).state = 1.0;
+    ref.read(CaptureState.zoomProvider.notifier).state = 1.0;
+  }
+
+  // ── 拍照：仅预览，不入成片库 ──
+
   Future<void> _onCapture() async {
+    setState(() => _shutterTrigger++);
     try {
       await ref.read(cameraServiceProvider).capture(
             config: CaptureConfig(
-              facing: 'back',
-              zoomMultiplier: 1.0,
-              flashMode: _flashOn ? CameraFlashMode.on : CameraFlashMode.off,
+              facing: ref.read(CaptureState.cameraFacingProvider),
+              zoomMultiplier: ref.read(CaptureState.zoomProvider),
+              flashMode: _mapFlashMode(ref.read(CaptureState.flashModeProvider)),
             ),
           );
       if (!mounted) return;
-      LumiraToast.show(context, '已拍摄');
+      LumiraToast.show(context, '已拍摄（预览，不入图库）');
     } catch (e) {
       if (!mounted) return;
       LumiraToast.show(context, '拍摄失败：$e');
     }
   }
 
-  // ===== 格式化 =====
+  // ── 同步写回 ──
 
-  String _formatEvDisplay(double ev) {
-    return ev > 0 ? '+$ev' : '$ev';
+  /// 导航返回 / 「完成」按钮：把调整后的 editableTemplate 合并回 EditorForm 写进
+  /// previewEditorFormProvider，编辑器 await push 返回后读取并同步到 _form。
+  void _onSyncBack() {
+    final bridge = ref.read(CaptureState.editableTemplateProvider);
+    final base = _template;
+    if (bridge != null && base != null) {
+      final merged = TemplateMapper.photoTemplateToEditorFormMerge(bridge, base);
+      ref.read(previewEditorFormProvider.notifier).state = merged;
+    }
+    _finishAndPop();
   }
 
-  String _formatWbDisplay(int k) {
-    return '${k}K';
-  }
-
-  String get _categoryLabel {
-    const map = {
-      'portrait': '人像',
-      'landscape': '风光',
-      'food': '美食',
-      'street': '街拍',
-      'night': '夜景',
-      'macro': '微距',
-      'still-life': '静物',
-    };
-    final cat = _template?.meta.category ?? '';
-    return map[cat] ?? cat;
+  void _finishAndPop() {
+    _clearPreviewSource();
+    if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else if (mounted) {
+      GoRouter.of(context).go(RouteNames.templates);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final tokens = ref.watch(themeTokensProvider);
+    if (!_hasBridged || _template == null) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        ),
+      );
+    }
+
+    final isFullscreen = ref.watch(CaptureState.isFullscreenProvider);
+    final isTrialMode = ref.watch(CaptureState.trialModeProvider);
+    final facing = ref.watch(CaptureState.cameraFacingProvider);
+
+    // 监听闪光灯模式变化，同步相机引擎（对齐拍摄页）
+    ref.listen<CaptureFlashMode>(CaptureState.flashModeProvider, (prev, next) {
+      ref.read(cameraServiceProvider).setFlashMode(_mapFlashMode(next));
+    });
+
+    // EV 补偿 → 取景器亮度（[−3,+3] → brightness [0,1]）
+    ref.listen<CameraParams>(CaptureState.effectiveCameraProvider, (prev, next) {
+      if (prev?.exposureCompensation != next.exposureCompensation) {
+        final ev = next.exposureCompensation;
+        final brightness = (0.5 + ev / 6.0).clamp(0.0, 1.0);
+        ref.read(cameraServiceProvider).setBrightness(brightness);
+      }
+    });
+
+    // 比例切换时重新下发当前缩放（取景器容器变 + cover 裁切自动实现视觉切换）
+    ref.listen<String>(CaptureState.aspectRatioProvider, (prev, next) {
+      if (prev != next) {
+        final multiplier = ref.read(CaptureState.zoomProvider);
+        ref.read(cameraServiceProvider).setZoomMultiplier(multiplier);
+      }
+    });
+
+    // facing 变化时重建取景器 RepaintBoundary + CameraAwesomeBuilder
+    if (_lastFacingForKey != facing) {
+      _viewfinderCaptureKey = GlobalKey(debugLabel: 'preview_viewfinder_$facing');
+      _lastFacingForKey = facing;
+    }
 
     return Scaffold(
-      // 硬编码颜色，与 uni-app 一致 (capture-page bg #181614)
-      backgroundColor: const Color(0xFF181614),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _PreviewTemplateNav(
-              tokens: tokens,
-              template: _template,
-              categoryLabel: _categoryLabel,
-              flashOn: _flashOn,
-              onBack: _back,
-              onToggleFlash: _toggleFlash,
-            ),
-            Expanded(
-              child: _Viewfinder(
-                tokens: tokens,
-                template: _template,
-                isDragging: _isDraggingSilhouette,
-                onSilhouetteDragStart: _onSilhouetteDragStart,
-                onSilhouetteDragUpdate: _onSilhouetteDragUpdate,
-                onSilhouetteDragEnd: _onSilhouetteDragEnd,
-                formatEv: _formatEvDisplay,
-                formatWb: _formatWbDisplay,
-                onCapture: _onCapture,
-              ),
-            ),
-            if (_template != null)
-              _AdjustPanel(
-                tokens: tokens,
-                template: _template!,
-                panelExpanded: _panelExpanded,
-                onTogglePanel: _togglePanel,
-                onChange: _mutate,
-              ),
-            _SyncButton(onTap: _onSyncBack),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 顶部沉浸式导航（Stack 布局：返回按钮 / 标题+副标题 / 闪光灯切换）
-/// 不用 LumiraNav — brief §3.2 明示偏离（沉浸式自定义导航与 LumiraNav 视觉规格不同）
-class _PreviewTemplateNav extends StatelessWidget {
-  const _PreviewTemplateNav({
-    required this.tokens,
-    required this.template,
-    required this.categoryLabel,
-    required this.flashOn,
-    required this.onBack,
-    required this.onToggleFlash,
-  });
-
-  final ThemeTokens tokens;
-  final EditorForm? template;
-  final String categoryLabel;
-  final bool flashOn;
-  final VoidCallback onBack;
-  final VoidCallback onToggleFlash;
-
-  @override
-  Widget build(BuildContext context) {
-    final title = template?.meta.name ?? '模板预览';
-    final hasSub = template != null;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
         children: [
-          _NavCircleButton(
-            icon: Icons.arrow_back_ios_new,
-            onTap: onBack,
+          // 1. 取景器（含补光悬浮模式）
+          _PreviewViewfinderArea(
+            onZoomChanged: _onZoomChanged,
+            rawCaptureKey: _viewfinderCaptureKey,
           ),
-          const SizedBox(width: 12),
-          Expanded(
+
+          // 2. 导航胶囊（返回即同步写回）
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: CaptureNav(onBack: _onSyncBack),
+          ),
+
+          // 3. 顶部浮层组：延时 / 比例切换 / 参数 pill
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 76,
+            left: 0,
+            right: 0,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    // 硬编码颜色，与 uni-app 一致 (nav-title color #fff)
-                    color: Colors.white,
+                if (!isTrialMode)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: Center(child: DelayTimerButton()),
                   ),
-                ),
-                if (hasSub)
-                  Text(
-                    '$categoryLabel · ${template!.composition.aspectRatio}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      // 硬编码颜色，与 uni-app 一致 (nav-sub color rgba(255,255,255,0.7))
-                      color: Colors.white.withOpacity(0.7),
-                    ),
+                if (!isFullscreen) const Center(child: AspectRatioSelector()),
+                const SizedBox(height: 8),
+                if (!isFullscreen && !isTrialMode)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: ParamPillBar(),
                   ),
               ],
             ),
           ),
-          _NavCircleButton(
-            icon: flashOn ? Icons.flash_on : Icons.flash_off,
-            active: flashOn,
-            onTap: onToggleFlash,
+
+          // 4. 多姿势切换按钮（仅 poses>1 的模板显示）
+          if (!isTrialMode)
+            Positioned(
+              right: 12,
+              top: MediaQuery.of(context).size.height * 0.40,
+              child: const CapturePoseSwitchButton(),
+            ),
+
+          // 5. 底部控制区（缩放轮盘 + 5 页签工具栏 + 抽屉 + 拍摄按钮行）
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: CaptureBottomBar(
+              isFullscreen: isFullscreen,
+              isTrialMode: isTrialMode,
+              onZoomChanged: _onZoomChanged,
+              onCapture: _onCapture,
+              onSwitchCamera: _switchCamera,
+              // 预览页不产生成片缩略图（角标缩略图为空，点击无操作）
+              onThumbnailTap: () {},
+              rawCaptureKey: _viewfinderCaptureKey,
+            ),
+          ),
+
+          // 5.5 参数面板（底部滑入）
+          const ParamPanel(),
+
+          // 6. 水平仪
+          const LevelIndicator(),
+
+          // 7. 快门白闪反馈（最顶层，IgnorePointer 不拦截手势）
+          Positioned.fill(
+            child: ShutterFeedback(trigger: _shutterTrigger),
+          ),
+
+          // 8. 右下「完成」浮层胶囊（tokens.surface + 细边，叠照片浮层规范）
+          Positioned(
+            right: 14,
+            bottom: MediaQuery.of(context).size.height * 0.34,
+            child: _DoneFloatingButton(onTap: _onSyncBack),
           ),
         ],
       ),
@@ -335,409 +385,36 @@ class _PreviewTemplateNav extends StatelessWidget {
   }
 }
 
-class _NavCircleButton extends StatelessWidget {
-  const _NavCircleButton({
-    required this.icon,
-    required this.onTap,
-    this.active = false,
-  });
+/// 右下「完成」浮层胶囊：跟随主题（surface + 细边），不沿用旧硬编码金色渐变。
+class _DoneFloatingButton extends ConsumerWidget {
+  const _DoneFloatingButton({required this.onTap});
 
-  final IconData icon;
   final VoidCallback onTap;
-  final bool active;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        width: 32,
-        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
         decoration: BoxDecoration(
-          // 硬编码颜色，与 uni-app 一致 (nav-back bg rgba(0,0,0,0.35) / nav-action.active bg rgba(201,169,110,0.7))
-          color: active
-              ? const Color.fromRGBO(201, 169, 110, 0.7)
-              : const Color.fromRGBO(0, 0, 0, 0.35),
-          shape: BoxShape.circle,
+          color: tokens.surface.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(9999),
+          border: Border.all(color: tokens.surfaceAlt, width: 0.8),
         ),
-        child: Icon(
-          icon,
-          size: 16,
-          color: Colors.white,
-        ),
-      ),
-    );
-  }
-}
-
-/// 取景器（CameraPreview + 可拖动剪影 + 参数 pill + 拍照按钮）
-///
-/// Bug 12 修复：用真实 CameraPreview 替换 picsum 静态占位图，
-/// 通过 formOverride 参数将 EditorForm 的 postProcess/composition/silhouette
-/// 应用到取景器，让预览页与拍摄页体验一致。
-class _Viewfinder extends StatelessWidget {
-  const _Viewfinder({
-    required this.tokens,
-    required this.template,
-    required this.isDragging,
-    required this.onSilhouetteDragStart,
-    required this.onSilhouetteDragUpdate,
-    required this.onSilhouetteDragEnd,
-    required this.formatEv,
-    required this.formatWb,
-    required this.onCapture,
-  });
-
-  final ThemeTokens tokens;
-  final EditorForm? template;
-  final bool isDragging;
-  final void Function(DragStartDetails) onSilhouetteDragStart;
-  final void Function(DragUpdateDetails, BoxConstraints) onSilhouetteDragUpdate;
-  final void Function(DragEndDetails) onSilhouetteDragEnd;
-  final String Function(double) formatEv;
-  final String Function(int) formatWb;
-  final VoidCallback onCapture;
-
-  @override
-  Widget build(BuildContext context) {
-    if (template == null) {
-      return const SizedBox.shrink();
-    }
-    final tpl = template!;
-    // 取景示意框比例与拍摄取景/出片保持一致：优先用裁剪比例 cropRatio，
-    // 为空时才回退构图比例 aspectRatio（与后台 phone-preview / silhouette-preview 的 effectiveRatio 规则一致）
-    final cropRatio = tpl.postProcess.cropRatio;
-    final effectiveRatio =
-        cropRatio.isNotEmpty ? cropRatio : tpl.composition.aspectRatio;
-    final rawRatio = parseAspectRatio(effectiveRatio,
-        isPortrait: MediaQuery.of(context).orientation == Orientation.portrait);
-    final aspectRatio = rawRatio < 0
-        ? MediaQuery.of(context).size.width / MediaQuery.of(context).size.height
-        : rawRatio;
-    final hasSilhouette = !(tpl.pose.silhouette.type == 'builtin' &&
-        tpl.pose.silhouette.data == 'none');
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Center(
-          child: AspectRatio(
-            aspectRatio: aspectRatio,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return ClipRRect(
-                  borderRadius: BorderRadius.circular(0),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // Bug 12 修复：用真实 CameraPreview 替换 picsum 静态图
-                      // CameraPreview 内部已包裹 ColorFiltered/CompositionOverlay/PoseSilhouette
-                      // 通过 formOverride 参数应用 EditorForm 的滤镜/构图/剪影
-                      // 改造说明：移除 onCaptured/onCameraStateCreated 参数（CameraService 抽象层已封装），
-                      // 仅保留 formOverride。拍照由 _onCapture 通过 CameraService.capture() 实现。
-                      CameraPreview(
-                        formOverride: tpl,
-                      ),
-                      // 可拖动剪影叠加层（独立于 CameraPreview 内部的不可拖动剪影）
-                      // 这里保留可拖动的剪影交互层，CameraPreview 内部的剪影是 IgnorePointer 的
-                      if (hasSilhouette)
-                        GestureDetector(
-                          onPanStart: onSilhouetteDragStart,
-                          onPanUpdate: (details) =>
-                              onSilhouetteDragUpdate(details, constraints),
-                          onPanEnd: onSilhouetteDragEnd,
-                          behavior: HitTestBehavior.translucent,
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              Positioned.fill(
-                                child: SilhouetteLayer(
-                                  silhouetteType: tpl.pose.silhouette.type,
-                                  silhouetteData: tpl.pose.silhouette.data,
-                                  positionX: tpl.pose.position.x,
-                                  positionY: tpl.pose.position.y,
-                                  scale: tpl.pose.scale,
-                                  rotation: tpl.pose.rotation,
-                                ),
-                              ),
-                              // 拖动提示
-                              if (!isDragging)
-                                Positioned(
-                                  bottom: 12,
-                                  left: 0,
-                                  right: 0,
-                                  child: Center(
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        // 硬编码颜色，与 uni-app 一致 (drag-hint bg rgba(0,0,0,0.5))
-                                        color:
-                                            const Color.fromRGBO(0, 0, 0, 0.5),
-                                        borderRadius:
-                                            BorderRadius.circular(9999),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.open_with,
-                                            size: 12,
-                                            color:
-                                                Colors.white.withOpacity(0.8),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            '拖动调整剪影位置',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color:
-                                                  Colors.white.withOpacity(0.8),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-        // 参数 pill 栏（Positioned 在取景器上方）
-        Positioned(
-          top: 16,
-          left: 0,
-          right: 0,
-          child: _ParamPillBar(
-            template: tpl,
-            formatEv: formatEv,
-            formatWb: formatWb,
-          ),
-        ),
-        // 拍照按钮（Bug 12 修复：预览页也支持拍照）
-        Positioned(
-          bottom: 24,
-          left: 0,
-          right: 0,
-          child: Center(
-            child: GestureDetector(
-              onTap: onCapture,
-              behavior: HitTestBehavior.opaque,
-              child: Container(
-                width: 64,
-                height: 64,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  // 硬编码颜色，与 uni-app 一致 (capture-btn border #fff, inner bg #fff)
-                  border: Border.fromBorderSide(
-                    BorderSide(color: Colors.white, width: 3),
-                  ),
-                  color: Colors.white,
-                ),
-                child: Container(
-                  margin: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Color(0xFFC9A96E),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// 参数 pill 栏（4 个 pill：EV / ISO / SS / WB）
-class _ParamPillBar extends StatelessWidget {
-  const _ParamPillBar({
-    required this.template,
-    required this.formatEv,
-    required this.formatWb,
-  });
-
-  final EditorForm template;
-  final String Function(double) formatEv;
-  final String Function(int) formatWb;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _ParamPill(
-                label: 'EV',
-                value: formatEv(template.camera.exposureCompensation)),
-            const SizedBox(width: 8),
-            _ParamPill(label: 'ISO', value: '${template.camera.iso}'),
-            const SizedBox(width: 8),
-            _ParamPill(label: 'SS', value: template.camera.shutterSpeed),
-            const SizedBox(width: 8),
-            _ParamPill(
-                label: 'WB', value: formatWb(template.camera.whiteBalanceK)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ParamPill extends StatelessWidget {
-  const _ParamPill({required this.label, required this.value});
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        // 硬编码颜色，与 uni-app 一致 (param-pill bg rgba(0,0,0,0.5))
-        color: const Color.fromRGBO(0, 0, 0, 0.5),
-        borderRadius: BorderRadius.circular(9999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              // 硬编码颜色，与 uni-app 一致 (pill-label color rgba(255,255,255,0.6))
-              color: Colors.white.withOpacity(0.6),
-            ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 12,
-              // 硬编码颜色，与 uni-app 一致 (pill-value color #fff, font-family Courier New)
-              color: Colors.white,
-              fontFamily: 'SF Mono',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 折叠调整面板
-class _AdjustPanel extends StatelessWidget {
-  const _AdjustPanel({
-    required this.tokens,
-    required this.template,
-    required this.panelExpanded,
-    required this.onTogglePanel,
-    required this.onChange,
-  });
-
-  final ThemeTokens tokens;
-  final EditorForm template;
-  final bool panelExpanded;
-  final VoidCallback onTogglePanel;
-  final void Function(void Function() mutator) onChange;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      // 硬编码颜色，与 uni-app 一致 (adjust-panel bg rgba(24,22,20,0.9))
-      color: const Color.fromRGBO(24, 22, 20, 0.9),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _PanelHeader(
-            expanded: panelExpanded,
-            onTap: onTogglePanel,
-          ),
-          if (panelExpanded)
-            SizedBox(
-              height: 300,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _CompositionSection(
-                      template: template,
-                      onChange: onChange,
-                    ),
-                    _CameraSection(
-                      template: template,
-                      onChange: onChange,
-                    ),
-                    _PostProcessSection(
-                      template: template,
-                      onChange: onChange,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PanelHeader extends StatelessWidget {
-  const _PanelHeader({required this.expanded, required this.onTap});
-  final bool expanded;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Icon(
-              expanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
-              size: 14,
-              // 硬编码颜色，与 uni-app 一致 (panel-header .ph color rgba(255,255,255,0.6))
-              color: Colors.white.withOpacity(0.6),
-            ),
-            const SizedBox(width: 6),
-            const Text(
-              '参数调整',
+            Icon(Icons.check, size: 16, color: tokens.textPrimary),
+            const SizedBox(width: 4),
+            Text(
+              '同步到编辑器',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                // 硬编码颜色，与 uni-app 一致 (panel-title color #fff)
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                '实时调整模板参数',
-                textAlign: TextAlign.right,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  // 硬编码颜色，与 uni-app 一致 (panel-hint color rgba(255,255,255,0.4))
-                  color: Colors.white.withOpacity(0.4),
-                ),
+                color: tokens.textPrimary,
               ),
             ),
           ],
@@ -747,443 +424,169 @@ class _PanelHeader extends StatelessWidget {
   }
 }
 
-/// 构图区（叠图透明度 slider）
-class _CompositionSection extends StatelessWidget {
-  const _CompositionSection({required this.template, required this.onChange});
-  final EditorForm template;
-  final void Function(void Function() mutator) onChange;
+/// 取景器区域：按用户选定的比例约束相机预览（对齐 capture_page._ViewfinderArea）。
+/// 补光开启 + 前摄时切换为悬浮取景器（对齐 _FloatingViewfinder）。
+class _PreviewViewfinderArea extends ConsumerWidget {
+  const _PreviewViewfinderArea({required this.onZoomChanged, this.rawCaptureKey});
+
+  final ValueChanged<double> onZoomChanged;
+  final GlobalKey? rawCaptureKey;
 
   @override
-  Widget build(BuildContext context) {
-    return _AdjustSection(
-      title: '构图',
-      children: [
-        _SliderRow(
-          label: '叠图透明度',
-          value: template.composition.opacity * 100,
-          min: 0,
-          max: 100,
-          divisions: 20,
-          onChanged: (v) => onChange(() {
-            template.composition.opacity = v / 100;
-          }),
-          valueText: '${(template.composition.opacity * 100).round()}',
-        ),
-      ],
-    );
-  }
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ratioId = ref.watch(CaptureState.aspectRatioProvider);
+    final facing = ref.watch(CaptureState.cameraFacingProvider);
+    final fillLightEnabled = ref.watch(CaptureState.fillLightEnabledProvider);
+    final screenSize = MediaQuery.of(context).size;
+    final isPortrait = screenSize.height >= screenSize.width;
+    final screenRatio = screenSize.width / screenSize.height;
+    final targetRatio =
+        CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
+    final isFullscreen = ratioId == 'fullscreen';
 
-/// 相机参数区（EV/ISO/WBK sliders + WB/Flash/Focus seg-btns）
-class _CameraSection extends StatelessWidget {
-  const _CameraSection({required this.template, required this.onChange});
-  final EditorForm template;
-  final void Function(void Function() mutator) onChange;
+    // 补光悬浮模式：仅前置 + 补光开启时激活
+    final isFloating = fillLightEnabled && facing == 'front';
 
-  @override
-  Widget build(BuildContext context) {
-    return _AdjustSection(
-      title: '相机参数',
-      children: [
-        _SliderRow(
-          label: '曝光补偿',
-          value: template.camera.exposureCompensation,
-          min: -3,
-          max: 3,
-          divisions: 20,
-          onChanged: (v) => onChange(() {
-            template.camera.exposureCompensation =
-                double.parse(v.toStringAsFixed(1));
-          }),
-          valueText:
-              '${formatEvSlider(template.camera.exposureCompensation)} EV',
-        ),
-        _SliderRow(
-          label: 'ISO',
-          value: template.camera.iso.toDouble(),
-          min: 50,
-          max: 6400,
-          divisions: 127,
-          onChanged: (v) => onChange(() {
-            template.camera.iso = v.round();
-          }),
-          valueText: '${template.camera.iso}',
-        ),
-        _SliderRow(
-          label: '色温 K',
-          value: template.camera.whiteBalanceK.toDouble(),
-          min: 2500,
-          max: 10000,
-          divisions: 75,
-          onChanged: (v) => onChange(() {
-            template.camera.whiteBalanceK = v.round();
-          }),
-          valueText: '${template.camera.whiteBalanceK}K',
-        ),
-        _SegBtnRow(
-          label: '白平衡',
-          options: PreviewTemplateOptions.whiteBalance,
-          value: template.camera.whiteBalance,
-          onChanged: (v) => onChange(() {
-            template.camera.whiteBalance = v;
-          }),
-        ),
-        _SegBtnRow(
-          label: '闪光',
-          options: PreviewTemplateOptions.flashMode,
-          value: template.camera.flashMode,
-          onChanged: (v) => onChange(() {
-            template.camera.flashMode = v;
-          }),
-        ),
-        _SegBtnRow(
-          label: '对焦',
-          options: PreviewTemplateOptions.focusMode,
-          value: template.camera.focusMode,
-          onChanged: (v) => onChange(() {
-            template.camera.focusMode = v;
-          }),
-        ),
-      ],
-    );
-  }
-}
-
-/// 后期参数区（LUT seg-btns + brightness/contrast/saturation/temperature/smooth/sharpen/vignette sliders）
-class _PostProcessSection extends StatelessWidget {
-  const _PostProcessSection({required this.template, required this.onChange});
-  final EditorForm template;
-  final void Function(void Function() mutator) onChange;
-
-  @override
-  Widget build(BuildContext context) {
-    return _AdjustSection(
-      title: '后期调色',
-      children: [
-        _SegBtnRow(
-          label: 'LUT 预设',
-          options: PreviewTemplateOptions.lutPreset,
-          value: template.postProcess.lut,
-          onChanged: (v) => onChange(() {
-            template.postProcess.lut = v;
-          }),
-        ),
-        _SliderRow(
-          label: '亮度',
-          value: template.postProcess.color.brightness,
-          min: -100,
-          max: 100,
-          divisions: 200,
-          onChanged: (v) => onChange(() {
-            template.postProcess.color.brightness = v;
-          }),
-          valueText: formatSigned(template.postProcess.color.brightness),
-        ),
-        _SliderRow(
-          label: '对比度',
-          value: template.postProcess.color.contrast,
-          min: -100,
-          max: 100,
-          divisions: 200,
-          onChanged: (v) => onChange(() {
-            template.postProcess.color.contrast = v;
-          }),
-          valueText: formatSigned(template.postProcess.color.contrast),
-        ),
-        _SliderRow(
-          label: '饱和度',
-          value: template.postProcess.color.saturation,
-          min: -100,
-          max: 100,
-          divisions: 200,
-          onChanged: (v) => onChange(() {
-            template.postProcess.color.saturation = v;
-          }),
-          valueText: formatSigned(template.postProcess.color.saturation),
-        ),
-        _SliderRow(
-          label: '色温',
-          value: template.postProcess.color.temperature,
-          min: -100,
-          max: 100,
-          divisions: 200,
-          onChanged: (v) => onChange(() {
-            template.postProcess.color.temperature = v;
-          }),
-          valueText: formatSigned(template.postProcess.color.temperature),
-        ),
-        _SliderRow(
-          label: '磨皮',
-          value: template.postProcess.smoothStrength.toDouble(),
-          min: 0,
-          max: 100,
-          divisions: 100,
-          onChanged: (v) => onChange(() {
-            template.postProcess.smoothStrength = v.round();
-          }),
-          valueText: '${template.postProcess.smoothStrength}',
-        ),
-        _SliderRow(
-          label: '锐化',
-          value: template.postProcess.sharpen.toDouble(),
-          min: 0,
-          max: 100,
-          divisions: 100,
-          onChanged: (v) => onChange(() {
-            template.postProcess.sharpen = v.round();
-          }),
-          valueText: '${template.postProcess.sharpen}',
-        ),
-        _SliderRow(
-          label: '暗角',
-          value: template.postProcess.vignette.toDouble(),
-          min: 0,
-          max: 100,
-          divisions: 100,
-          onChanged: (v) => onChange(() {
-            template.postProcess.vignette = v.round();
-          }),
-          valueText: '${template.postProcess.vignette}',
-        ),
-      ],
-    );
-  }
-}
-
-/// 调整区容器
-class _AdjustSection extends StatelessWidget {
-  const _AdjustSection({required this.title, required this.children});
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: const BoxDecoration(
-        border: Border(
-          // 硬编码颜色，与 uni-app 一致 (adjust-section border-bottom rgba(255,255,255,0.06))
-          bottom: BorderSide(
-            color: Color.fromRGBO(255, 255, 255, 0.06),
-            width: 0.5,
-          ),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 12,
-                // 硬编码颜色，与 uni-app 一致 (section-title color rgba(201,169,110,0.9))
-                color: const Color(0xFFC9A96E).withOpacity(0.9),
-                letterSpacing: 0.4,
-              ),
+    if (!isFloating) {
+      double vfW, vfH;
+      if (isFullscreen) {
+        vfW = screenSize.width;
+        vfH = screenSize.height;
+      } else {
+        if (screenRatio > targetRatio) {
+          vfH = screenSize.height;
+          vfW = vfH * targetRatio;
+        } else {
+          vfW = screenSize.width;
+          vfH = vfW / targetRatio;
+        }
+      }
+      return Container(
+        color: Colors.black,
+        child: Center(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            width: vfW,
+            height: vfH,
+            child: CameraPreview(
+              key: ValueKey('camera_preview_preview_$facing'),
+              onZoomChanged: onZoomChanged,
+              previewFit: CameraPreviewFit.cover,
+              rawCaptureKey: rawCaptureKey,
             ),
           ),
-          ...children,
-        ],
-      ),
+        ),
+      );
+    }
+
+    // 补光悬浮模式：取景器缩小为可拖动窗口，背景显示补光色
+    return _PreviewFloatingViewfinder(
+      onZoomChanged: onZoomChanged,
+      rawCaptureKey: rawCaptureKey,
+      screenSize: screenSize,
     );
   }
 }
 
-/// 调整行 — slider
-class _SliderRow extends StatelessWidget {
-  const _SliderRow({
-    required this.label,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.divisions,
-    required this.onChanged,
-    required this.valueText,
+/// 悬浮取景器（对齐 capture_page._FloatingViewfinder）：可拖动、可缩放，背景为补光色。
+class _PreviewFloatingViewfinder extends ConsumerStatefulWidget {
+  const _PreviewFloatingViewfinder({
+    required this.onZoomChanged,
+    required this.rawCaptureKey,
+    required this.screenSize,
   });
 
-  final String label;
-  final double value;
-  final double min;
-  final double max;
-  final int? divisions;
-  final ValueChanged<double> onChanged;
-  final String valueText;
+  final ValueChanged<double> onZoomChanged;
+  final GlobalKey? rawCaptureKey;
+  final Size screenSize;
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 70,
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                // 硬编码颜色，与 uni-app 一致 (row-label color rgba(255,255,255,0.7))
-                color: Colors.white.withOpacity(0.7),
-              ),
-            ),
-          ),
-          Expanded(
-            child: LumiraSlider(
-              value: value,
-              min: min,
-              max: max,
-              divisions: divisions,
-              onChanged: onChanged,
-            ),
-          ),
-          SizedBox(
-            width: 56,
-            child: Text(
-              valueText,
-              textAlign: TextAlign.right,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 11,
-                // 硬编码颜色，与 uni-app 一致 (row-value color #fff, font-family Courier New)
-                color: Colors.white,
-                fontFamily: 'SF Mono',
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  ConsumerState<_PreviewFloatingViewfinder> createState() =>
+      _PreviewFloatingViewfinderState();
 }
 
-/// 调整行 — seg-btns
-class _SegBtnRow extends StatelessWidget {
-  const _SegBtnRow({
-    required this.label,
-    required this.options,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String label;
-  final List<PreviewTemplateOption> options;
-  final String value;
-  final ValueChanged<String> onChanged;
+class _PreviewFloatingViewfinderState
+    extends ConsumerState<_PreviewFloatingViewfinder> {
+  Offset _dragOffset = Offset.zero;
+  int _activePointers = 0;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                // 硬编码颜色，与 uni-app 一致 (row-label color rgba(255,255,255,0.7))
-                color: Colors.white.withOpacity(0.7),
-              ),
-            ),
-          ),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: options.map((o) {
-              final active = o.value == value;
-              return GestureDetector(
-                onTap: () => onChanged(o.value),
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                  decoration: BoxDecoration(
-                    // 硬编码颜色，与 uni-app 一致 (seg-btn.active bg rgba(201,169,110,0.9) / inactive bg rgba(255,255,255,0.08))
-                    color: active
-                        ? const Color(0xFFC9A96E).withOpacity(0.9)
-                        : Colors.white.withOpacity(0.08),
-                    // 硬编码颜色，与 uni-app 一致 (seg-btn border rgba(255,255,255,0.12))
-                    border: Border.all(
-                      color: active
-                          ? const Color(0xFFC9A96E)
-                          : Colors.white.withOpacity(0.12),
-                      width: 0.5,
-                    ),
-                    borderRadius: BorderRadius.circular(9999),
-                  ),
-                  child: Text(
-                    o.label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      // 硬编码颜色，与 uni-app 一致 (seg-btn text active #fff / inactive rgba(255,255,255,0.7))
-                      color:
-                          active ? Colors.white : Colors.white.withOpacity(0.7),
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-}
+    final color = ref.watch(CaptureState.fillLightColorProvider);
+    final intensity = ref.watch(CaptureState.fillLightIntensityProvider);
+    final scale = ref.watch(CaptureState.fillLightViewfinderScaleProvider);
+    final savedOffset =
+        ref.watch(CaptureState.fillLightViewfinderOffsetProvider);
+    final ratioId = ref.watch(CaptureState.aspectRatioProvider);
 
-/// 底部同步按钮
-class _SyncButton extends StatelessWidget {
-  const _SyncButton({required this.onTap});
-  final VoidCallback onTap;
+    final sw = widget.screenSize.width;
+    final sh = widget.screenSize.height;
+    final isPortrait = sh >= sw;
+    final screenRatio = sw / sh;
+    final windowRatio =
+        CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
+    final windowW = sw * scale;
+    final windowH = windowW / windowRatio;
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          height: 48,
-          decoration: BoxDecoration(
-            // 硬编码颜色，与 uni-app 一致 (sync-btn linear-gradient(135deg, #C9A96E 0%, #A88550 100%))
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFFC9A96E), Color(0xFFA88550)],
-            ),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(
-                Icons.refresh,
-                size: 16,
-                color: Colors.white,
+    final centerX = sw / 2 + savedOffset.dx + _dragOffset.dx;
+    final centerY = sh * 0.42 + savedOffset.dy + _dragOffset.dy;
+    final left = centerX - windowW / 2;
+    final top = centerY - windowH / 2;
+
+    final bgFull = intensity > 1.0
+        ? Color.lerp(color, Colors.white, (intensity - 1.0).clamp(0.0, 0.5))!
+        : color.withOpacity(intensity.clamp(0.0, 1.0));
+
+    return Stack(
+      fit: StackFit.expand,
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(child: ColoredBox(color: bgFull)),
+        Positioned(
+          left: left,
+          top: top,
+          width: windowW,
+          height: windowH,
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) => _activePointers++,
+            onPointerMove: (event) {
+              if (_activePointers == 1) {
+                setState(() => _dragOffset += event.delta);
+              }
+            },
+            onPointerUp: (_) {
+              _activePointers = (_activePointers - 1).clamp(0, 99);
+              if (_activePointers == 0 && _dragOffset != Offset.zero) {
+                ref
+                    .read(CaptureState.fillLightViewfinderOffsetProvider.notifier)
+                    .state = savedOffset + _dragOffset;
+                _dragOffset = Offset.zero;
+              }
+            },
+            onPointerCancel: (_) {
+              _activePointers = (_activePointers - 1).clamp(0, 99);
+              if (_activePointers == 0) _dragOffset = Offset.zero;
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white54, width: 2),
               ),
-              SizedBox(width: 6),
-              Text(
-                '同步调整到编辑器',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.white,
-                  letterSpacing: 0.4,
-                  height: 1,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: CameraPreview(
+                  key: const ValueKey('camera_preview_preview'),
+                  onZoomChanged: widget.onZoomChanged,
+                  previewFit: CameraPreviewFit.cover,
+                  rawCaptureKey: widget.rawCaptureKey,
                 ),
               ),
-            ],
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 }

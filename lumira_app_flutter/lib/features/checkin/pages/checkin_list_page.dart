@@ -259,7 +259,9 @@ class _CategoryPills extends StatelessWidget {
       height: 38,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+        // 外层 ListView 已提供 24px 水平内边距，此处不再叠加，
+        // 保证分类 tab 与下方排序 tab 左缘对齐
+        padding: EdgeInsets.zero,
         itemCount: categories.length + 1,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
@@ -307,15 +309,17 @@ class _SortToggle extends ConsumerWidget {
 
   Widget _sortChip(
       String label, String key, bool active, ThemeTokens tokens, bool isNeu) {
+    // 尺寸规格与 LumiraFilterChip 对齐（horizontal 14 / vertical 8 / 图标 14），
+    // 保证排序 tab 与分类 tab 高度一致
     final rowContent = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
           key == 'time' ? Icons.access_time : Icons.star,
-          size: 12,
+          size: 14,
           color: active ? tokens.brandText : tokens.textTertiary,
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 5),
         Text(
           label,
           style: TextStyle(
@@ -336,12 +340,12 @@ class _SortToggle extends ConsumerWidget {
               rimFraction: 0.32,
               child: Padding(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 child: rowContent,
               ),
             )
           : Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 // neumorphic：方案 B 选中/未选中同为 surface，仅凸起↔凹陷翻转；
                 // 非新拟态保持品牌淡底选中态
@@ -379,117 +383,120 @@ class _CheckinCard extends StatelessWidget {
     return NeuCard(
       onTap: onTap,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // 封面更大更圆润
+          // 封面
           ClipRRect(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(18),
             child: SizedBox(
-              width: 84,
-              height: 84,
+              width: 92,
+              height: 92,
               child: _cover(item, tokens),
             ),
           ),
           const SizedBox(width: 14),
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          record.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: tokens.textPrimary,
-                          ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 店名 + 分享（生成海报）
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        record.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.textPrimary,
                         ),
                       ),
-                      // 分享按钮（生成海报）
-                      GestureDetector(
-                        onTap: onShare,
-                        behavior: HitTestBehavior.opaque,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 6),
-                          child: Icon(
-                            Icons.share_outlined,
-                            size: 16,
-                            color: tokens.textTertiary,
-                          ),
+                    ),
+                    GestureDetector(
+                      onTap: onShare,
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: Icon(
+                          Icons.ios_share_rounded,
+                          size: 18,
+                          color: tokens.textTertiary,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      CheckinRatingStars(rating: record.rating, tokens: tokens),
-                      if (isHighRated) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: tokens.successSubtle,
-                            borderRadius: BorderRadius.circular(1000),
-                          ),
-                          child: Text(
-                            '值得一去',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                              color: tokens.success,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      CheckinCategoryTag(category: category, tokens: tokens),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                // 评分 + 值得一去
+                Row(
+                  children: [
+                    CheckinRatingStars(
+                      rating: record.rating,
+                      tokens: tokens,
+                      size: 13,
+                    ),
+                    if (isHighRated) ...[
                       const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          record.place,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: tokens.textTertiary,
-                          ),
-                        ),
-                      ),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                            horizontal: 6, vertical: 1),
                         decoration: BoxDecoration(
-                          color: tokens.surfaceAlt,
+                          color: tokens.successSubtle,
                           borderRadius: BorderRadius.circular(1000),
                         ),
                         child: Text(
-                          formatCheckinDate(record.visitedAt),
+                          '值得一去',
                           style: TextStyle(
-                            fontSize: 11,
-                            color: tokens.textSecondary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: tokens.success,
                           ),
                         ),
                       ),
                     ],
-                  ),
-                ],
-              ),
+                  ],
+                ),
+                const SizedBox(height: 7),
+                // 分类 + 地点（地点独占剩余空间，不再与日期挤压）
+                Row(
+                  children: [
+                    CheckinCategoryTag(category: category, tokens: tokens),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        record.place,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: tokens.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                // 到访时间（轻量行，避免底部徽章拥挤）
+                Row(
+                  children: [
+                    Icon(Icons.schedule_rounded,
+                        size: 12, color: tokens.textTertiary),
+                    const SizedBox(width: 4),
+                    Text(
+                      formatCheckinDate(record.visitedAt),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: tokens.textTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 4),
-          Icon(Icons.chevron_right, size: 18, color: tokens.textTertiary),
         ],
       ),
     );
@@ -502,10 +509,10 @@ class _CheckinCard extends StatelessWidget {
     if (url == null || url.isEmpty) {
       return Container(
         color: category.iconBgColor,
-        child: Icon(category.icon, size: 32, color: category.iconColor),
+        child: Icon(category.icon, size: 34, color: category.iconColor),
       );
     }
-    return CheckinPhotoImage(url: url, tokens: tokens, width: 84, height: 84);
+    return CheckinPhotoImage(url: url, tokens: tokens, width: 92, height: 92);
   }
 }
 
