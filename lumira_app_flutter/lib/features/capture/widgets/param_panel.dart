@@ -355,9 +355,12 @@ class _CameraTab extends ConsumerWidget {
 
   /// 应用白平衡设置：写入会话 provider + 实时下发取景器。
   /// 仅实时会话调节，**不写入 CameraParams**。
+  /// 随后拉取 iOS 硬件「残差」（软封顶削减比），供软件矩阵补足
+  ///（极值色温下取景器局部冷/暖色丢失的修复，见 white_balance.dart）。
   static void _applyWhiteBalance(WidgetRef ref, WhiteBalanceSettings s) {
     ref.read(whiteBalanceSessionProvider.notifier).state = s;
     ref.read(cameraServiceProvider).setWhiteBalance(s);
+    refreshWbResidual(ref);
   }
 
   @override

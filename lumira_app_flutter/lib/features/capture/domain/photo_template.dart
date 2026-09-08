@@ -690,6 +690,12 @@ class PostProcess {
   /// 补光灯配置（模板启用时非 null）。用于套用模板时自动激活拍摄页补光灯。
   final FillLightParams? fillLight;
 
+  /// iOS 硬件白平衡「残差」（目标/实际增益比，见 [WbResidual]）。
+  /// 由取景器实时状态注入（iOS 极值色温下硬件增益被软封顶削减的部分由
+  /// 软件矩阵补足），拍照时刻随 JSON 持久化，保证编辑页「从原图重新
+  /// 处理」与首次成片一致。
+  final WbResidual? wbResidual;
+
   const PostProcess({
     this.cropRatio = '3:4',
     required this.color,
@@ -702,6 +708,7 @@ class PostProcess {
     this.systemFilter,
     this.customCropRect,
     this.fillLight,
+    this.wbResidual,
   });
 
   /// copyWith 的 systemFilter 和 customCropRect 参数使用 [_unset] 哨兵区分两种情况：
@@ -719,6 +726,7 @@ class PostProcess {
     Object? systemFilter = _unset,
     Object? customCropRect = _unset,
     Object? fillLight = _unset,
+    Object? wbResidual = _unset,
   }) =>
       PostProcess(
         cropRatio: cropRatio ?? this.cropRatio,
@@ -738,6 +746,9 @@ class PostProcess {
         fillLight: identical(fillLight, _unset)
             ? this.fillLight
             : fillLight as FillLightParams?,
+        wbResidual: identical(wbResidual, _unset)
+            ? this.wbResidual
+            : wbResidual as WbResidual?,
       );
 
   @override
@@ -754,11 +765,13 @@ class PostProcess {
           lut == other.lut &&
           systemFilter == other.systemFilter &&
           customCropRect == other.customCropRect &&
-          fillLight == other.fillLight;
+          fillLight == other.fillLight &&
+          wbResidual == other.wbResidual;
 
   @override
   int get hashCode => Object.hash(cropRatio, color, smoothStrength, sharpen,
-      vignette, grain, legStretch, lut, systemFilter, customCropRect, fillLight);
+      vignette, grain, legStretch, lut, systemFilter, customCropRect, fillLight,
+      wbResidual);
 
   Map<String, dynamic> toJson() => {
         'cropRatio': cropRatio,
@@ -772,6 +785,11 @@ class PostProcess {
         if (systemFilter != null) 'systemFilter': systemFilter,
         if (customCropRect != null) 'customCropRect': customCropRect!.toJson(),
         if (fillLight != null) 'fillLight': fillLight!.toJson(),
+        // iOS 白平衡残差持久化：拍照时刻硬件封顶削减比的固有记录（类似曝光
+        // 元数据），保证任何「从原图重新处理」（编辑保存/跨会话再编辑）与
+        // 首次成片一致；旧记录无此字段 → null（无软件补足，向后兼容）。
+        if (wbResidual != null)
+          'wbResidual': {'r': wbResidual!.r, 'g': wbResidual!.g, 'b': wbResidual!.b},
       };
 
   /// 将另一个 PostProcess（增量）合并到当前参数上，返回全量参数。
@@ -793,6 +811,9 @@ class PostProcess {
         systemFilter: delta.systemFilter ?? systemFilter,
         customCropRect: delta.customCropRect ?? customCropRect,
         fillLight: delta.fillLight ?? fillLight,
+        // 残差为会话态：增量带新残差用增量（重新拉取过），否则保留烘焙值，
+        // 保证「编辑页保存→从原图重新处理」时硬件封顶削减的部分仍被补足。
+        wbResidual: delta.wbResidual ?? wbResidual,
       );
 
   factory PostProcess.fromJson(Map<String, dynamic> json) => PostProcess(
@@ -811,7 +832,60 @@ class PostProcess {
         fillLight: (json['fillLight'] as Map<String, dynamic>?) != null
             ? FillLightParams.fromJson(json['fillLight'] as Map<String, dynamic>)
             : null,
+        wbResidual: (json['wbResidual'] as Map<String, dynamic>?) != null
+            ? WbResidual.fromJson(json['wbResidual'] as Map<String, dynamic>)
+            : null,
       );
+}
+
+/// iOS 硬件白平衡「残差」：目标增益 / 实际锁定增益（每通道比值）。
+///
+/// iOS 手动色温/预设走 `setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains`
+/// 锁定硬件增益；极值色温（如 3000K）会把蓝/红通道增益顶到传感器饱和区，
+/// 该区间镜头渐晕校正（lens shading）失效，表现为取景器局部（如下方区域）
+/// 冷/暖色丢失。因此原生侧对增益做「软封顶」（maxWhiteBalanceGain×0.70），
+/// 并把被封顶削减的比值暴露给 Dart：软件色彩矩阵按此比值补足，全图均匀
+/// （无 ISP shading 交互），取景器与成片同源一致（composePostProcessMatrix）。
+///
+/// 拍照时刻的残差随 PostProcess JSON 持久化（类似曝光元数据），保证编辑页
+/// 「从原图重新处理」与首次成片一致；仅 iOS + 手动白平衡时非 identity。
+class WbResidual {
+  final double r;
+  final double g;
+  final double b;
+
+  const WbResidual({this.r = 1.0, this.g = 1.0, this.b = 1.0});
+
+  /// 恒等残差（硬件完整达成，无需软件补足）。
+  bool get isIdentity =>
+      (r - 1.0).abs() < 0.001 && (g - 1.0).abs() < 0.001 && (b - 1.0).abs() < 0.001;
+
+  /// 从 iOS MethodChannel 返回的 map（{r,g,b}）解析；无效/缺失返回 null。
+  static WbResidual? fromPlatformMap(Map<Object?, Object?>? map) {
+    if (map == null) return null;
+    final r = (map['r'] as num?)?.toDouble();
+    final g = (map['g'] as num?)?.toDouble();
+    final b = (map['b'] as num?)?.toDouble();
+    if (r == null || g == null || b == null) return null;
+    return WbResidual(r: r, g: g, b: b);
+  }
+
+  factory WbResidual.fromJson(Map<String, dynamic> json) => WbResidual(
+        r: (json['r'] as num?)?.toDouble() ?? 1.0,
+        g: (json['g'] as num?)?.toDouble() ?? 1.0,
+        b: (json['b'] as num?)?.toDouble() ?? 1.0,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WbResidual && r == other.r && g == other.g && b == other.b;
+
+  @override
+  int get hashCode => Object.hash(r, g, b);
+
+  @override
+  String toString() => 'WbResidual(r=$r, g=$g, b=$b)';
 }
 
 /// 补光灯配置（模板内嵌，启用时随模板一起保存/套用）。

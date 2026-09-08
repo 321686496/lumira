@@ -1117,6 +1117,31 @@ class CameraInterface {
     }
   }
 
+  /// 读取手动白平衡「残差」（目标/实际增益比 r/g/b，iOS 专用）。
+  /// 硬件增益被软封顶削减的部分由软件矩阵按此比值补足；
+  /// 非 iOS 平台无 handler，返回 null。
+  Future<Map<Object?, Object?>?> getWbResidual() async {
+    final BasicMessageChannel<Object?> channel = BasicMessageChannel<Object?>(
+        'dev.flutter.pigeon.CameraInterface.getWbResidual', codec,
+        binaryMessenger: _binaryMessenger);
+    final List<Object?>? replyList =
+        await channel.send(null) as List<Object?>?;
+    if (replyList == null) {
+      throw PlatformException(
+        code: 'channel-error',
+        message: 'Unable to establish connection on channel.',
+      );
+    } else if (replyList.length > 1) {
+      throw PlatformException(
+        code: replyList[0]! as String,
+        message: replyList[1] as String?,
+        details: replyList[2],
+      );
+    } else {
+      return (replyList[0] as Map<Object?, Object?>?);
+    }
+  }
+
   Future<void> setFocusAndExposureLock(bool arg_locked, double arg_x,
       double arg_y, double arg_previewWidth, double arg_previewHeight) async {
     final BasicMessageChannel<Object?> channel = BasicMessageChannel<Object?>(

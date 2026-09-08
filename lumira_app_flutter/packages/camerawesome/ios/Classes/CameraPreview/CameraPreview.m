@@ -9,8 +9,22 @@
 #import <ImageIO/ImageIO.h>
 #import <CoreGraphics/CoreGraphics.h>
 
+// 白平衡「残差」：目标增益 / 实际锁定增益（每通道比值，1.0 = 硬件已完整达成）。
+// 硬件被封顶削减的色温强度由软件矩阵按此比值补足，全图均匀（无 ISP shading
+// 交互），取景器（effectivePost 矩阵）与成片（composePostProcessMatrix）同源。
+typedef struct {
+  float r, g, b;
+} WbResidual;
+
+static WbResidual WbResidualIdentity = { 1.0f, 1.0f, 1.0f };
+
 @implementation CameraPreview {
   dispatch_queue_t _dispatchQueue;
+  // 手动白平衡残差（目标/实际增益比）与手动锁定标志：
+  // 残差供 getWbResidual 暴露给 Dart 侧软件矩阵补足；手动锁定标志
+  // 供 restoreAutoWhiteBalance 跳过「拍照后恢复自动白平衡」。
+  WbResidual _wbResidual;
+  BOOL _wbManuallyLocked;
 }
 
 - (instancetype)initWithCameraSensor:(CameraSensor)sensor
@@ -25,6 +39,8 @@
   
   _completion = completion;
   _dispatchQueue = dispatchQueue;
+  _wbResidual = WbResidualIdentity;
+  _wbManuallyLocked = NO;
 
   // 取景器逐帧效果处理器（锐化/磨皮/暗角/颗粒 + 全屏均匀色矩阵）。
   _previewEffectProcessor = [[PreviewEffectProcessor alloc] init];
@@ -329,14 +345,17 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
   return gains;
 }
 
-// 温和钳制（手动色温/预设锁定用）：比 ClampWhiteBalanceGains 多留 15% 增益余量。
+// 温和钳制（手动色温/预设锁定用）：比 ClampWhiteBalanceGains 多留 30% 增益余量。
 // 目的：阻止极端色温（如 3000K 或 8000K 档）把蓝/红通道增益顶到
 // maxWhiteBalanceGain 饱和区——该区间镜头渐晕（lens shading）校正在中心与边缘
 // 会出现明显色差，表现为「白平衡最低值时取景器画面中间出现一片与其他位置
-// 颜色不同的色斑」。软封顶后效果仍是强冷/暖色偏（观感与成片一致），但避开
-// 饱和带 → 无中心色斑，且不改变取景器/成片的一致性（两侧复用同一组原生增益）。
+// 颜色不同的色斑」（2026-09-04，margin 0.85）。2026-09-08 用户反馈 0.85 仍有
+// 残留：3000K 时取景器「下方区域」冷色效果丢失（shading 校正失效区随增益
+// 饱和位置移动）→ margin 进一步收紧到 0.70，同时新增「残差软件补足」机制：
+// 被封顶削减的增益量由 Dart 侧矩阵补回（取景器/成片双侧一致，见
+// GainsForTemperatureWithResidual 与 plugin 的 getWbResidual），视觉总量不损。
 static AVCaptureWhiteBalanceGains SoftClampWhiteBalanceGains(AVCaptureWhiteBalanceGains gains, float maxGain) {
-  const float margin = 0.85f;
+  const float margin = 0.70f;
   float cap = maxGain * margin;
   gains.redGain   = MAX(1.0f, MIN(cap, gains.redGain));
   gains.greenGain = MAX(1.0f, MIN(cap, gains.greenGain));
@@ -344,12 +363,29 @@ static AVCaptureWhiteBalanceGains SoftClampWhiteBalanceGains(AVCaptureWhiteBalan
   return gains;
 }
 
-// 手动色温（k != nil）与预设模式分支共用：目标 K → gains → 温和软封顶。
-static AVCaptureWhiteBalanceGains GainsForTemperature(CGFloat k, AVCaptureDevice *device) {
+// 手动色温（k != nil）与预设模式分支共用：目标 K → gains → 温和软封顶，
+// 并输出「目标/实际」残差供软件补足。含一次性取证日志（真机确认增益
+// 饱和区间用：目标 K、换算 gains、maxGain、封顶后 gains、残差）。
+static AVCaptureWhiteBalanceGains GainsForTemperatureWithResidual(CGFloat k,
+                                                                  AVCaptureDevice *device,
+                                                                  WbResidual *residual) {
   AVCaptureWhiteBalanceTemperatureAndTintValues tt = { .temperature = k, .tint = 0.0f };
-  AVCaptureWhiteBalanceGains gains =
+  AVCaptureWhiteBalanceGains target =
       [device deviceWhiteBalanceGainsForTemperatureAndTintValues:tt];
-  return SoftClampWhiteBalanceGains(gains, device.maxWhiteBalanceGain);
+  AVCaptureWhiteBalanceGains applied = SoftClampWhiteBalanceGains(target, device.maxWhiteBalanceGain);
+  if (residual != NULL) {
+    residual->r = applied.redGain   > 0.001f ? target.redGain   / applied.redGain   : 1.0f;
+    residual->g = applied.greenGain > 0.001f ? target.greenGain / applied.greenGain : 1.0f;
+    residual->b = applied.blueGain  > 0.001f ? target.blueGain  / applied.blueGain  : 1.0f;
+  }
+  NSLog(@"[WB] k=%.0f maxGain=%.2f target=(%.3f,%.3f,%.3f) applied=(%.3f,%.3f,%.3f) residual=(%.3f,%.3f,%.3f)",
+        k, device.maxWhiteBalanceGain,
+        target.redGain, target.greenGain, target.blueGain,
+        applied.redGain, applied.greenGain, applied.blueGain,
+        residual != NULL ? residual->r : 1.0f,
+        residual != NULL ? residual->g : 1.0f,
+        residual != NULL ? residual->b : 1.0f);
+  return applied;
 }
 
 - (void)setWhiteBalance:(NSString *)mode temperatureK:(NSNumber *_Nullable)k
@@ -361,28 +397,40 @@ static AVCaptureWhiteBalanceGains GainsForTemperature(CGFloat k, AVCaptureDevice
   }
 
   if (k != nil) {
-    // 手动色温：用目标 K 得到 gains，锁定（温和钳制避免越界崩溃 + 规避中心色斑）
-    AVCaptureWhiteBalanceGains gains = GainsForTemperature([k floatValue], _captureDevice);
+    // 手动色温：用目标 K 得到 gains，锁定（温和钳制避免越界崩溃 + 规避中心色斑）；
+    // 被封顶削减的部分记入残差，由 Dart 侧软件矩阵补足（见 wbResidual）。
+    WbResidual residual = WbResidualIdentity;
+    AVCaptureWhiteBalanceGains gains = GainsForTemperatureWithResidual([k floatValue], _captureDevice, &residual);
     if ([_captureDevice isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeLocked]) {
       [_captureDevice setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains:gains completionHandler:nil];
+      _wbResidual = residual;
+      _wbManuallyLocked = YES;
     } else {
       *error = [FlutterError errorWithCode:@"WB_MODE_UNSUPPORTED" message:@"locked white balance not supported" details:nil];
     }
   } else if ([mode isEqualToString:@"auto"]) {
-    // 恢复自动（连续自动白平衡）
+    // 恢复自动（连续自动白平衡）：残差与手动锁定标志一并复位
     AVCaptureWhiteBalanceMode wbMode = AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance;
-    if ([_captureDevice isWhiteBalanceModeSupported:wbMode]) _captureDevice.whiteBalanceMode = wbMode;
+    if ([_captureDevice isWhiteBalanceModeSupported:wbMode]) {
+      _captureDevice.whiteBalanceMode = wbMode;
+      _wbResidual = WbResidualIdentity;
+      _wbManuallyLocked = NO;
+    }
     else *error = [FlutterError errorWithCode:@"WB_MODE_UNSUPPORTED" message:@"continuous auto white balance not supported" details:nil];
   } else {
-    // 模式预设：映射到目标 K 再锁定（温和钳制避免越界崩溃 + 规避中心色斑）
+    // 模式预设：映射到目标 K 再锁定（温和钳制避免越界崩溃 + 规避中心色斑），
+    // 残差机制与手动色温分支一致。
     float presetK = 5500.0f;
     if      ([mode isEqualToString:@"daylight"])     presetK = 5500.0f;
     else if ([mode isEqualToString:@"cloudy"])       presetK = 6500.0f;
     else if ([mode isEqualToString:@"fluorescent"])  presetK = 4200.0f;
     else if ([mode isEqualToString:@"incandescent"]) presetK = 3000.0f;
-    AVCaptureWhiteBalanceGains gains = GainsForTemperature(presetK, _captureDevice);
+    WbResidual residual = WbResidualIdentity;
+    AVCaptureWhiteBalanceGains gains = GainsForTemperatureWithResidual(presetK, _captureDevice, &residual);
     if ([_captureDevice isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeLocked]) {
       [_captureDevice setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains:gains completionHandler:nil];
+      _wbResidual = residual;
+      _wbManuallyLocked = YES;
     } else {
       *error = [FlutterError errorWithCode:@"WB_MODE_UNSUPPORTED" message:@"locked white balance not supported" details:nil];
     }
@@ -394,6 +442,17 @@ static AVCaptureWhiteBalanceGains GainsForTemperature(CGFloat k, AVCaptureDevice
 /// 更新取景器逐帧效果参数（线程安全，可任意线程调用）。
 - (void)updatePreviewEffects:(PreviewEffectsParams)params {
   [_previewEffectProcessor updateEffects:params];
+}
+
+/// 读取当前白平衡残差（目标/实际增益比，每通道）。
+/// Dart 侧在设置手动色温/预设后调用，把硬件封顶削减的部分用软件矩阵补足，
+/// 保证取景器与成片在极值色温下仍呈现完整冷/暖效果。
+- (NSDictionary *)getWbResidual {
+  return @{
+    @"r": @(_wbResidual.r),
+    @"g": @(_wbResidual.g),
+    @"b": @(_wbResidual.b),
+  };
 }
 
 /// 拍照前把设备白平衡锁定到「当前取景器白平衡增益」。
@@ -422,8 +481,12 @@ static AVCaptureWhiteBalanceGains GainsForTemperature(CGFloat k, AVCaptureDevice
 }
 
 /// 拍照完成后恢复连续自动白平衡。
+/// 用户手动锁定过色温/预设时跳过恢复（保持 Locked 增益），否则拍照一次
+/// 就会把用户设置的白平衡冲掉（2026-09-08）。lockWhiteBalanceToCurrentPreview
+/// 在手动锁定状态下重锁同一增益，等效无操作，无需在此补偿。
 - (void)restoreAutoWhiteBalance {
   if (_captureDevice == nil) return;
+  if (_wbManuallyLocked) return;
   NSError *e = nil;
   if (![_captureDevice lockForConfiguration:&e]) return;
   AVCaptureWhiteBalanceMode mode = AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance;

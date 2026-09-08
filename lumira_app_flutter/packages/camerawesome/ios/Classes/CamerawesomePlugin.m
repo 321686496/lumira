@@ -237,6 +237,9 @@ FlutterEventSink physicalButtonEventSink;
 - (void)setWhiteBalanceMode:(nonnull NSString *)mode temperatureK:(NSNumber * _Nullable)k error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error {
   [_camera setWhiteBalance:mode temperatureK:k error:error];
 }
+- (nullable NSDictionary<NSString *, NSNumber *> *)getWbResidualWithError:(FlutterError *_Nullable __autoreleasing *_Nonnull)error {
+  return [_camera getWbResidual];
+}
 - (void)setFocusAndExposureLockLocked:(NSNumber *)locked x:(NSNumber *)x y:(NSNumber *)y previewWidth:(NSNumber *)previewWidth previewHeight:(NSNumber *)previewHeight error:(FlutterError *_Nullable __autoreleasing *_Nonnull)error {
   [_camera setFocusAndExposureLock:[locked boolValue]
                           position:CGPointMake([x floatValue], [y floatValue])

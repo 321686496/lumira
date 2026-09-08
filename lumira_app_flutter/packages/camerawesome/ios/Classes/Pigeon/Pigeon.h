@@ -213,6 +213,10 @@ NSObject<FlutterMessageCodec> *CameraInterfaceGetCodec(void);
 - (void)setSensorSensor:(NSString *)sensor deviceId:(nullable NSString *)deviceId error:(FlutterError *_Nullable *_Nonnull)error;
 - (void)setCorrectionBrightness:(NSNumber *)brightness error:(FlutterError *_Nullable *_Nonnull)error;
 - (void)setWhiteBalanceMode:(NSString *)mode temperatureK:(nullable NSNumber *)temperatureK error:(FlutterError *_Nullable *_Nonnull)error;
+/// 读取手动白平衡「残差」（目标/实际增益比 r/g/b，iOS 专用）。
+/// 硬件增益被软封顶削减的部分由 Dart 侧软件矩阵按此比值补足。
+/// @return `nil` only when `error != nil`.
+- (nullable NSDictionary<NSString *, NSNumber *> *)getWbResidualWithError:(FlutterError *_Nullable *_Nonnull)error;
 /// 锁定/解锁对焦与曝光（长按锁定 AE/AF）。
 - (void)setFocusAndExposureLockLocked:(NSNumber *)locked x:(NSNumber *)x y:(NSNumber *)y previewWidth:(NSNumber *)previewWidth previewHeight:(NSNumber *)previewHeight error:(FlutterError *_Nullable *_Nonnull)error;
 /// @return `nil` only when `error != nil`.

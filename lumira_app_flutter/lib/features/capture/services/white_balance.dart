@@ -1,4 +1,8 @@
+import 'package:camerawesome/camerawesome_plugin.dart' as ca;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../domain/photo_template.dart' show WbResidual;
 
 /// 白平衡模式。
 ///
@@ -61,3 +65,27 @@ class WhiteBalanceSettings {
 /// 后白平衡选择得以保留并同步到传感器。
 final whiteBalanceSessionProvider =
     StateProvider<WhiteBalanceSettings>((ref) => const WhiteBalanceSettings());
+
+/// iOS 硬件白平衡「残差」会话状态（见 [WbResidual]）。
+///
+/// 极值色温下 iOS 硬件增益被软封顶（规避传感器饱和导致镜头渐晕校正失效
+/// ——取景器局部冷/暖色丢失），封顶削减的比值由此 provider 记录，经
+/// [CaptureState.effectivePostProcessProvider] 注入 composePostProcessMatrix
+/// 补足，取景器与成片同源一致。仅 iOS + 手动白平衡时非 null。
+final wbResidualSessionProvider = StateProvider<WbResidual?>((ref) => null);
+
+/// 下发白平衡到传感器后，从 iOS 拉取硬件「残差」刷新会话状态。
+///
+/// 必须在 `CameraService.setWhiteBalance` 之后调用：两者走同一 platform
+/// channel（FIFO），iOS 端残差读取必然在增益锁定之后执行，读到的是本次
+/// 设置的目标/实际增益比。auto / 非 iOS / 读取失败时置 null（无软件补足）。
+Future<void> refreshWbResidual(WidgetRef ref) async {
+  try {
+    final map = await ca.CamerawesomePlugin.getWbResidual();
+    final residual = WbResidual.fromPlatformMap(map);
+    ref.read(wbResidualSessionProvider.notifier).state =
+        (residual == null || residual.isIdentity) ? null : residual;
+  } catch (e) {
+    debugPrint('[wb] getWbResidual failed: $e');
+  }
+}

@@ -14,6 +14,7 @@ import '../../../core/db/dao/templates_dao.dart';
 import '../../templates/data/templates_providers.dart';
 import '../../templates/data/remote_templates_providers.dart';
 import '../services/level_sensor_service.dart';
+import '../services/white_balance.dart';
 
 /// 闪光灯模式
 enum CaptureFlashMode { off, on, auto, torch }
@@ -609,10 +610,17 @@ class CaptureState {
   });
 
   /// 统一的可编辑后期参数（无论是否有模板）
+  ///
+  /// 在源参数（模板/自由模式）之上注入 iOS 白平衡「残差」会话态
+  ///（[wbResidualSessionProvider]）：极值色温下硬件增益被软封顶削减的
+  /// 部分由 composePostProcessMatrix 的残差对角矩阵补足，取景器与成片
+  /// 同源一致。总是覆盖源值（auto → null），避免模板 JSON 带入陈旧残差。
   static final effectivePostProcessProvider = Provider<PostProcess>((ref) {
     final editable = ref.watch(editableTemplateProvider);
-    if (editable != null) return editable.postProcess;
-    return ref.watch(freeModePostProcessProvider);
+    final base = editable != null
+        ? editable.postProcess
+        : ref.watch(freeModePostProcessProvider);
+    return base.copyWith(wbResidual: ref.watch(wbResidualSessionProvider));
   });
 
   /// 统一的可编辑构图参数（无论是否有模板）
