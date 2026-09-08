@@ -378,10 +378,10 @@
 
 ## iOS 白平衡极值色斑修复（2026-09-08）
 
-### P2 · 「全局色调映射」触发阈值标定与属性复位兜底
+### P2 · 极端色温「K 边界 + LSC 限幅」真机标定
 
-- **模块**：拍摄 · iOS 白平衡（CameraPreview.m：SetWbGlobalToneMapping / GainsForTemperatureWithResidual）
-- **优化点**：极端色温中央色斑第二轮修复（第一轮为 49779953 增益软封顶+残差软件补足）采用「极端色温期间切 `globalToneMappingEnabled = YES`」规避局部色调映射对中央区域的归一化。当前触发条件为「任一通道**目标**增益 > 2.0」（kExtremeWbGain）：阈值是工程估值——若某些机型 3000K/8000K 档目标增益低于 2.0 则不触发全局映射（中央色斑残留）；反之阈值过低会让非极值档也进入全局映射，无谓牺牲 Deep Fusion。另 Apple 文档明确 `globalToneMappingEnabled` 在 activeFormat 变更 / 设备输入加入 session / session preset 变更时**自动复位为 false**，当前仅靠每次 setWhiteBalance 幂等重设自愈，未做 KVO 监听。
-- **背景/动机**：2.0 阈值待真机反馈校准；比例切换 / 分辨率档位切换等会触发属性复位的路径，需回归确认白平衡锁定状态下中央色斑不复发。
-- **目标状态**：真机（多机型）采集 3000K/8000K 档 `deviceWhiteBalanceGainsForTemperatureAndTintValues` 目标增益分布，据此校准阈值（或改为按色温 K 值直接判定）；必要时 KVO `isGlobalToneMappingEnabled` 在被系统复位且白平衡仍处极端锁定时自动补设。
+- **模块**：拍摄 · iOS 白平衡（CameraPreview.m：IsExtremeWbTemperature / ClampExtremeWbGains / SetWbGlobalToneMapping）
+- **优化点**：极端色温中央色斑第三轮修复（第一轮 49779953 增益软封顶+残差补足；第二轮 全局色调映射增益阈值>2.0——两轮均因触发条件从未命中而失效：maxGain×0.70≈5.6 远高于 3000K 目标增益 2~3.5，封顶不咬合；部分机型 3000K 目标增益 ~1.8 低于 2.0 阈值）。第三轮改为按 K 值判定（≤3400K / ≥7600K 为极端，覆盖滑杆 3000/8000，不含模板 3600-7200），极端时硬件增益限幅 2.0x（LSC 安全区）+ 残差软件补足 + 全局色调映射 + 状态回读日志。待标定项：(1) 3400/7600 边界是否与真机色斑实际出现的区间一致（若 3500K 仍现色斑需放宽）；(2) 2.0x 限幅是否足以让 LSC 保持在校准范围（若仍现色斑降至 1.5x 或 1.0x 全软件）；(3) 论坛 130735 报告的「全局映射 true→false→true 后不再生效」在当前 iOS 版本是否复现（回读日志 `toneMapping=local` 且 extreme=1 即命中，需改设顺序绕过）。
+- **背景/动机**：三处参数均为工程估值，需真机 `[WB] k=... extreme=... toneMapping=...` 日志与观感反馈校准。
+- **目标状态**：真机多机型验证 3000-8000K 全滑杆无中央色斑；若 LSC 限幅仍不足，评估极端档全软件白平衡（硬件增益锁 1.0x，全部色温偏移由矩阵承担，代价是高光通道软件裁切）。
 - **状态**：⏳ 待优化
