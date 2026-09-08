@@ -3,6 +3,7 @@
 
 import { Injectable, NotFoundException, BadRequestException, ConflictException, Inject } from '@nestjs/common';
 import { eq, and, or, asc, sql, isNull } from 'drizzle-orm';
+import Jimp from 'jimp';
 import { DatabaseService } from '../../database/database.service';
 import { templateCategories, templates } from '../../database/schema';
 import { CreateCategoryDto } from './dto/create-category.dto';
@@ -14,6 +15,41 @@ import type { StorageAdapter } from '../../common/storage/storage-adapter.interf
 import { RedisService } from '../../common/redis/redis.service';
 import type { TemplateCategory } from '@lumira/shared';
 import type { UploadFile } from './admin-templates.service';
+
+/** 分类封面/图标压缩策略：与缩略图 JPEG 品质保持一致，控制最终存储体积 */
+const CATEGORY_ICON_MAX_SIZE = 1440; // 长边最大像素，超出则等比缩放
+const CATEGORY_ICON_JPEG_QUALITY = 88; // 与 thumbs.service 一致
+/** 体积低于该阈值的小图不做重编码，避免无谓的 CPU 开销与画质损耗 */
+const CATEGORY_ICON_SKIP_BYTES = 200 * 1024;
+/** 仅对可重编码为 JPEG 的位图格式压缩；svg/gif/webp 等原样存储 */
+const CATEGORY_ICON_COMPRESS_EXTS = new Set(['jpg', 'jpeg', 'png']);
+
+/**
+ * 上传压缩：把分类封面/图标按长边缩放并重编码为 JPEG，减小存储体积。
+ * - 小图（≤200KB）直接返回原图，避免无谓重编码；
+ * - jimp 不支持的格式或解码失败时回退返回原始 buffer 与原始扩展名。
+ * @returns 压缩后的 buffer 与实际存储扩展名
+ */
+async function compressIcon(file: UploadFile): Promise<{ buffer: Buffer; ext: string }> {
+  const ext = extractIconExt(file);
+  if (!CATEGORY_ICON_COMPRESS_EXTS.has(ext) || file.buffer.byteLength <= CATEGORY_ICON_SKIP_BYTES) {
+    return { buffer: file.buffer, ext };
+  }
+  try {
+    const img = await Jimp.read(Buffer.from(file.buffer));
+    const maxSide = Math.max(img.bitmap.width, img.bitmap.height);
+    if (maxSide > CATEGORY_ICON_MAX_SIZE) {
+      const scale = CATEGORY_ICON_MAX_SIZE / maxSide;
+      img.resize(Math.round(img.bitmap.width * scale), Math.round(img.bitmap.height * scale));
+    }
+    const buffer = await img
+      .quality(CATEGORY_ICON_JPEG_QUALITY)
+      .getBufferAsync(Jimp.MIME_JPEG);
+    return { buffer, ext: 'jpg' };
+  } catch {
+    return { buffer: file.buffer, ext };
+  }
+}
 
 /** 从文件名/mimetype 提取扩展名（小写，不含点） */
 function extractIconExt(file: UploadFile): string {
@@ -109,12 +145,12 @@ export class AdminCategoriesService {
       throw new ConflictException(`Category key already exists: ${meta.key} under parent ${parentKey ?? '(root)'}`);
     }
 
-    // 处理图标 URL：若上传了图标文件，保存并构造相对 storageKey；否则用 meta.iconUrl 或空字符串
+    // 处理图标 URL：若上传了图标文件，压缩后保存并构造相对 storageKey；否则用 meta.iconUrl 或空字符串
     let iconUrl = meta.iconUrl || '';
     if (icon) {
-      const ext = extractIconExt(icon);
+      const { buffer, ext } = await compressIcon(icon);
       const filename = `icon.${ext}`;
-      iconUrl = await this.storage.write('categories', meta.key, filename, icon.buffer);
+      iconUrl = await this.storage.write('categories', meta.key, filename, buffer);
     }
 
     await db.insert(templateCategories).values({
@@ -153,9 +189,9 @@ export class AdminCategoriesService {
     // 处理图标
     let iconUrl = existing.iconUrl;
     if (icon) {
-      const ext = extractIconExt(icon);
+      const { buffer, ext } = await compressIcon(icon);
       const filename = `icon.${ext}`;
-      iconUrl = await this.storage.write('categories', key, filename, icon.buffer);
+      iconUrl = await this.storage.write('categories', key, filename, buffer);
     } else if (meta.iconUrl !== undefined) {
       iconUrl = meta.iconUrl;
     }
