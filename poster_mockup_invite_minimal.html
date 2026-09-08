@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>如画 LUMIRA · 邀请海报（iPhone 美学 · 留白版）</title>
+<style>
+  /* PosterPalette 色板基础上，做 iPhone 式柔和渐变 */
+  :root{
+    --gold:#C9A96E; --goldDeep:#B08D4F;
+    --ink:#2A2622; --text2:#7A736A; --text3:#9C9488;
+    --line:rgba(201,169,110,.30);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+    background:linear-gradient(180deg,#ECE7DC,#E5E0D4); padding:48px 16px 64px;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",system-ui,sans-serif; -webkit-font-smoothing:antialiased;}
+  .caption{font-size:12px; color:#8A8478; letter-spacing:1.5px; text-align:center; line-height:1.9; max-width:880px;}
+
+  .scale-wrap{width:420px; height:746px; position:relative;}
+  /* PosterCanvas：300×533.33（9:16）· 圆角 24 · 柔和渐变（非纯平纸面） */
+  .poster{position:absolute; left:0; top:0; width:300px; height:533.33px;
+    transform:scale(1.4); transform-origin:top left; overflow:hidden; border-radius:24px;
+    background:linear-gradient(165deg,#FBF8F1 0%,#F3EBDC 46%,#EADFCA 100%);
+    display:flex; flex-direction:column; align-items:center; text-align:center;
+    padding:22px 24px 18px;
+    box-shadow:0 44px 90px -38px rgba(120,96,60,.5);}
+
+  /* ===== 品牌行（轻） ===== */
+  .brandrow{display:flex; align-items:center; gap:8px;
+    font-size:11px; font-weight:600; letter-spacing:4px; color:var(--goldDeep); padding-top:4px;}
+  .brandrow .zh{font-size:10px; letter-spacing:2.5px; color:var(--text3); font-weight:500;}
+
+  /* ===== 主视觉：一张模板成片（圆角卡，大留白环绕） ===== */
+  .photo{position:relative; margin-top:18px; width:206px; height:270px; flex:none;
+    border-radius:22px; overflow:hidden;
+    box-shadow:0 28px 60px -28px rgba(100,80,50,.55);}
+  /* 本地占位视觉（不依赖外网）：暖色渐变 + 取景器图形 + 虚影人像 */
+  .photo .ph{position:absolute; inset:0;
+    background:linear-gradient(165deg,#E7D9C2 0%,#D3C1A5 45%,#BDA98A 100%);}
+  .photo .ph .view{position:absolute; inset:0;
+    background:
+      linear-gradient(rgba(255,255,255,.34),rgba(255,255,255,.34)),
+      repeating-linear-gradient(90deg,transparent 0,transparent 51px,#fff 51px,#fff 52px),
+      repeating-linear-gradient(0deg,transparent 0,transparent 51px,#fff 51px,#fff 52px),
+      radial-gradient(120% 100% at 72% 26%,rgba(255,250,240,.55),transparent 55%);
+    opacity:.5; mix-blend-mode:overlay;}
+  .photo .ph .ring{position:absolute; left:50%; top:42%; transform:translate(-50%,-50%);
+    width:52px; height:76px; border:2px solid rgba(42,38,34,.5); border-radius:50%/60%;
+    box-shadow:0 14px 40px -14px rgba(60,40,20,.6);
+    background:linear-gradient(160deg,rgba(255,255,255,.5),rgba(255,255,255,.05));}
+  .photo .ph .ring::after{content:""; position:absolute; left:-2px; top:50%; right:-2px; height:2px;
+    background:rgba(42,38,34,.5);}
+  /* 底部轻压暗 + 印章 */
+  .photo::after{content:""; position:absolute; inset:0;
+    background:linear-gradient(180deg,rgba(0,0,0,0) 55%,rgba(0,0,0,.28));}
+  .seal{position:absolute; left:50%; bottom:12px; transform:translateX(-50%); z-index:2;
+    display:flex; align-items:center; gap:5px; padding:4px 11px 4px 9px;
+    border:1px solid rgba(255,235,205,.7); border-radius:999px;
+    background:rgba(26,26,22,.22); backdrop-filter:blur(6px);}
+  .seal span{font-size:8.5px; letter-spacing:2px; color:#fff; line-height:1.1;}
+
+  /* ===== ① 口号：大而无负担 ===== */
+  .title{margin-top:18px; font-family:"Noto Serif SC","Songti SC","SimSun",serif;
+    font-size:24px; font-weight:700; letter-spacing:2px; line-height:1.35; color:var(--ink);}
+  .title em{font-style:normal; color:var(--goldDeep);}
+
+  /* ===== ② 痛点：一行轻小字 ===== */
+  .pains{margin-top:11px; font-size:10px; letter-spacing:1.2px; color:var(--text2); line-height:1.5;}
+  .pains i{font-style:normal; color:var(--gold); padding:0 2px;}
+
+  /* ===== 邀请人：轻签名 ===== */
+  .inviter{margin-top:12px; display:flex; align-items:center; gap:8px;}
+  .ava{width:20px; height:20px; border-radius:50%;
+    background:linear-gradient(135deg,var(--gold),#8E867B);
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-size:8.5px; font-weight:600; line-height:1;}
+  .who{font-size:10.5px; font-weight:600; letter-spacing:1px; color:var(--ink); line-height:1.2;}
+  .suf{font-size:8.5px; letter-spacing:1px; color:var(--text3); line-height:1.2;}
+
+  /* ===== ④⑤ 奖励 + 用处：柔和圆角胶囊（iPhone 组件感） ===== */
+  .reward{margin-top:auto; width:100%; background:rgba(255,255,255,.72);
+    border-radius:18px; padding:14px 16px 13px;
+    backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,.6);
+    box-shadow:0 18px 44px -26px rgba(100,80,50,.4);
+    display:flex; align-items:center; gap:15px;}
+  .reward .col{flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-start; text-align:left;}
+  .reward .cap{font-size:8px; font-weight:600; letter-spacing:3px; color:var(--goldDeep); line-height:1.2;}
+  .reward .numrow{margin-top:6px; display:flex; align-items:baseline; gap:4px;}
+  .reward .plus{font-family:Georgia,serif; font-size:16px; font-weight:700; color:var(--goldDeep);}
+  .reward .num{font-family:Georgia,serif; font-size:36px; font-weight:700; color:var(--ink); line-height:1;}
+  .reward .unit{font-size:12px; font-weight:700; color:var(--goldDeep);}
+  .reward .use{margin-top:7px; font-size:9px; letter-spacing:.6px; color:var(--text3); line-height:1.4;}
+  .qr{flex:none; width:62px; height:62px; padding:4px; border-radius:13px;
+    background:#fff; border:1px solid var(--line);}
+  .qr img{width:100%; height:100%; display:block;}
+
+  /* ===== 落款 ===== */
+  .foot{margin-top:13px; width:100%; display:flex; align-items:baseline; justify-content:center; gap:8px;
+    border-top:1px solid rgba(201,169,110,.22); padding-top:11px;}
+  .foot .en{font-family:Georgia,serif; font-size:9.5px; font-weight:600; letter-spacing:3px; color:var(--goldDeep);}
+  .foot .zh{font-size:9px; color:var(--text3); letter-spacing:1.5px;}
+  .foot .sl{font-size:8.5px; color:var(--text3); letter-spacing:1.5px;}
+</style>
+</head>
+<body>
+  <div class="scale-wrap">
+    <div class="poster">
+      <!-- 品牌行 -->
+      <div class="brandrow">
+        <svg width="14" height="14" viewBox="0 0 15 15" fill="none"><path d="M1.2 4.2V1.2h3M10.8 1.2h3v3M13.8 10.8v3h-3M4.2 13.8h-3v-3" stroke="#B08D4F" stroke-width="1.4" stroke-linecap="round"/></svg>
+        <span>LUMIRA</span>
+        <span class="zh">· 如画</span>
+      </div>
+
+      <!-- 主视觉：模板成片占位图（定稿时换成 App 内真实模板成片） -->
+      <div class="photo">
+        <img src="https://picsum.photos/seed/lumira-ipho/412/540.jpg" alt="template result" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;"/>
+        <div class="seal">
+          <svg width="9" height="9" viewBox="0 0 15 15" fill="none"><path d="M1.2 4.2V1.2h3M10.8 1.2h3v3M13.8 10.8v3h-3M4.2 13.8h-3v-3" stroke="#FFEBCD" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span>套模板 · 随手拍</span>
+        </div>
+      </div>
+
+      <!-- ① 口号 -->
+      <div class="title">不会拍照？<br/><em>套个模板</em>就会</div>
+
+      <!-- ② 痛点 -->
+      <div class="pains">调参数<i>·</i>摆姿势<i>·</i>找角度<i>·</i>照片普通，模板都配方好</div>
+
+      <!-- ③ 邀请人 -->
+      <div class="inviter">
+        <div class="ava">满</div>
+        <span class="who">@小满</span>
+        <span class="suf">· 邀你加入如画</span>
+      </div>
+
+      <!-- ④⑤ 奖励 + 用处 + 二维码 -->
+      <div class="reward">
+        <div class="col">
+          <div class="cap">新 人 礼 · 双 方 同 得</div>
+          <div class="numrow"><span class="plus">+</span><span class="num">30</span><span class="unit">积分</span></div>
+          <div class="use">积分可解锁精美模板</div>
+        </div>
+        <div class="qr"><svg viewBox="0 0 21 21" width="100%" height="100%">
+            <!-- 离线二维码占位（encode K2A9XQ，定稿时换 PosterQr 真码） -->
+            <rect width="21" height="21" fill="#fff"/>
+            <g fill="#2A2622">
+              <rect x="1" y="1" width="7" height="7"/><rect x="2" y="2" width="5" height="5" fill="#fff"/><rect x="3" y="3" width="3" height="3"/>
+              <rect x="13" y="1" width="7" height="7"/><rect x="14" y="2" width="5" height="5" fill="#fff"/><rect x="15" y="3" width="3" height="3"/>
+              <rect x="1" y="13" width="7" height="7"/><rect x="2" y="14" width="5" height="5" fill="#fff"/><rect x="3" y="15" width="3" height="3"/>
+              <rect x="9" y="1" width="1" height="1"/><rect x="11" y="1" width="1" height="1"/><rect x="12" y="2" width="2" height="1"/>
+              <rect x="10" y="4" width="2" height="1"/><rect x="1" y="9" width="2" height="1"/><rect x="4" y="9" width="1" height="1"/><rect x="6" y="9" width="2" height="1"/>
+              <rect x="9" y="12" width="1" height="1"/><rect x="12" y="11" width="1" height="1"/><rect x="14" y="11" width="2" height="1"/><rect x="10" y="13" width="1" height="1"/>
+              <rect x="17" y="10" width="1" height="1"/><rect x="19" y="10" width="1" height="1"/><rect x="9" y="15" width="1" height="1"/><rect x="12" y="16" width="1" height="1"/>
+              <rect x="15" y="17" width="2" height="1"/><rect x="8" y="18" width="1" height="1"/><rect x="10" y="19" width="1" height="1"/><rect x="12" y="19" width="2" height="1"/>
+              <rect x="18" y="18" width="2" height="1"/><rect x="17" y="14" width="1" height="1"/><rect x="18" y="16" width="1" height="1"/><rect x="10" y="10" width="1" height="1"/>
+            </g>
+          </svg></div>
+      </div>
+
+      <!-- 落款 -->
+      <div class="foot">
+        <span class="en">LUMIRA</span>
+        <span class="zh">· 如画</span>
+        <span class="sl">如你所见，皆成画卷</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="caption">
+    iPhone 美学 · 留白版：柔和渐变底（非纯平纸面）· 单个圆角主视觉（模板成片）· 大量留白 · 字大而少 · 奖励做柔和圆角玻璃卡（毛玻璃 + 细高光）<br/>
+    与之前所有版本的差异：去掉金色发丝内框/取景器角标/书脊/编号等"装饰堆砌"，回到克制的组件感（照片→标题→痛点→签名→奖励卡）<br/>
+    画布 300×533.33（9:16）· 柔和白金 + 品牌金 · 照片/昵称/邀请码为占位
+  </div>
+</body>
+</html>
