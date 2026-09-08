@@ -88,6 +88,37 @@ void main() {
       }
     });
 
+    testWidgets('divisions 离散步进：拖动值吸附到整档而非连续值', (tester) async {
+      double? changed;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: AdjustSlider(
+              label: 'EV',
+              value: 0,
+              min: -3,
+              max: 3,
+              divisions: 60,
+              onChanged: (v) => changed = v,
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      // 滑块中心向右拖 100：落点约 62.5% 处，连续值应为 0.75（非 0.1 整数倍）；
+      // 离散化后应吸附到最近的 0.1 整数倍档位
+      await tester.drag(find.byType(AdjustSlider), const Offset(100, 0));
+      await tester.pumpAndSettle();
+
+      expect(changed, isNotNull);
+      final v = changed!;
+      expect(v, isNot(equals(0.75))); // 不停留在连续拖动值上
+      const step = (3 - (-3)) / 60;
+      final k = (v - (-3)) / step;
+      expect((k - k.roundToDouble()).abs(), lessThan(1e-6)); // 落在整档上
+    });
+
     testWidgets('AdjustPanel accentColor 传递到选中 chip', (tester) async {
       const accent = Color(0xFF00AA00);
       await tester.pumpWidget(MaterialApp(

@@ -39,7 +39,7 @@ class ParamPanel extends ConsumerStatefulWidget {
 
 class _ParamPanelState extends ConsumerState<ParamPanel> {
   /// 控件区固定高度：pill 行 + 滑块 / AdjustPanel 均按此设计
-  static const _controlH = 132.0;
+  static const _controlH = 124.0;
 
   _ParamTool? _activeTool;
 
@@ -248,7 +248,7 @@ class _ParamPanelState extends ConsumerState<ParamPanel> {
           accentColor: accent,
         );
       case _ParamTool.composition:
-        return const _CompositionControl();
+        return _CompositionControl(accent: accent);
       case _ParamTool.scene:
         return const _SceneControl();
     }
@@ -332,7 +332,8 @@ class _HandleRow extends StatelessWidget {
             icon: Icons.close,
             onPressed: onClose,
             color: Colors.white70,
-            size: 16,
+            size: 14,
+            padding: const EdgeInsets.all(4),
           ),
         ],
       ),
@@ -490,6 +491,7 @@ class _EvControl extends ConsumerWidget {
         value: cam.exposureCompensation,
         min: -3,
         max: 3,
+        divisions: 60,
         accentColor: accent,
         format: (v) =>
             v >= 0 ? '+${v.toStringAsFixed(1)}' : v.toStringAsFixed(1),
@@ -621,7 +623,9 @@ class _FlashControl extends ConsumerWidget {
 
 /// 构图：辅助线类型 pill + 透明度滑块
 class _CompositionControl extends ConsumerWidget {
-  const _CompositionControl();
+  const _CompositionControl({required this.accent});
+
+  final Color accent;
 
   static const _overlayTypes = [
     _ChoiceItem('rule_of_thirds', '三分法'),
@@ -635,7 +639,6 @@ class _CompositionControl extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final comp = ref.watch(CaptureState.effectiveCompositionProvider);
-    final accent = ref.watch(appThemeProvider).tokens.brand;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
       children: [
@@ -652,6 +655,7 @@ class _CompositionControl extends ConsumerWidget {
           value: comp.opacity,
           min: 0,
           max: 1,
+          divisions: 100,
           accentColor: accent,
           format: (v) => '${(v * 100).round()}%',
           onChanged: (v) => CaptureState.updateComposition(

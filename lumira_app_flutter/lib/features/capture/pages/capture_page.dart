@@ -2165,7 +2165,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
           // 4.5 抽屉浮层已移除，恢复 Column 流式布局
 
-          // 5. 参数面板（底部滑入，使用 AnimatedPositioned，必须在 Stack 内）
+          // 5. 参数面板（底部滑入，面板内部 AnimatedSlide 进出，必须在 Stack 内）
           const ParamPanel(),
 
           // 6. 水平仪（使用 Positioned，必须在 Stack 内）
