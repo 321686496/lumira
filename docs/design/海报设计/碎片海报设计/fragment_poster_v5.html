@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 碎片收集分享海报（第四轮 · 自适应晒片）</title>
+<style>
+  :root{
+    --gold:#C9A96E;--gold-deep:#B08D4F;--ink:#2A2620;
+    --text2:#6B645C;--text3:#9A8F7C;
+    --surface:#FDFBF7;--surface-alt:#F6F1E8;--line:rgba(201,169,110,.32);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#EFEAE1;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:44px 20px 110px;display:flex;flex-direction:column;align-items:center;gap:14px;-webkit-font-smoothing:antialiased}
+  .serif{font-family:"Noto Serif SC","Songti SC",Georgia,serif}
+  .page-title{color:#4A4238;font-size:18px;letter-spacing:3px;font-weight:600;display:flex;align-items:center;gap:12px}
+  .page-title::before,.page-title::after{content:"";width:44px;height:1px;background:var(--line)}
+  .page-sub{color:#8A7F6E;font-size:12px;letter-spacing:1.5px;text-align:center;line-height:2;max-width:780px}
+  .page-sub b{color:#A08A5F;font-weight:600}
+
+  /* ===== 随机重掷控件 ===== */
+  .ctrl{margin-top:20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:center}
+  .btn{cursor:pointer;background:var(--surface);border:1px solid var(--gold);color:var(--gold-deep);font-size:12px;letter-spacing:2px;padding:9px 22px;border-radius:999px;font-weight:600;transition:all .2s}
+  .btn:hover{background:var(--gold);color:#FDFBF7}
+  .ctrl .hint{font-size:10.5px;color:#8A7F6E;letter-spacing:1px}
+
+  /* ===== 海报矩阵 ===== */
+  #posters{margin-top:26px;display:flex;flex-wrap:wrap;gap:44px;justify-content:center;align-items:flex-start;max-width:1240px}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .sys-label{font-size:10px;color:#A08A5F;letter-spacing:1.5px;background:#F3ECE0;border:1px solid var(--line);padding:3px 12px;border-radius:12px}
+
+  /* ============ 海报 G · 自适应晒片 ============ */
+  .poster{width:340px;aspect-ratio:3/4;position:relative;overflow:hidden;background:linear-gradient(180deg,#FDFBF7 0%,#FBF6EC 100%);border:1px solid var(--line);box-shadow:0 24px 60px -28px rgba(60,48,28,.35);border-radius:3px;display:flex;flex-direction:column;padding:18px 20px 15px}
+  .g-top{display:flex;align-items:center;justify-content:space-between;flex:none}
+  .g-brand{display:inline-flex;align-items:baseline;gap:7px}
+  .g-brand .en{font-size:11px;letter-spacing:4px;color:var(--gold-deep);font-weight:700}
+  .g-brand .zh{font-size:10px;letter-spacing:3px;color:var(--text3)}
+  .g-seal{font-size:9px;letter-spacing:2px;color:var(--gold-deep);border:1px solid var(--gold-deep);padding:2px 9px;border-radius:999px;white-space:nowrap}
+  .g-seal.on{background:var(--gold-deep);color:#FDFBF7}
+  .g-kicker{text-align:center;font-size:9px;letter-spacing:3px;color:var(--gold-deep);margin-top:13px;flex:none}
+  .g-title{text-align:center;font-size:17px;line-height:1.55;color:var(--ink);font-weight:700;margin-top:6px;flex:none}
+  .g-line{width:34px;height:2px;background:var(--gold);margin:10px auto 0;flex:none}
+
+  /* 照片区：高度固定，内部行由求解器现场计算 */
+  .g-gallery{height:192px;margin-top:11px;display:flex;flex-direction:column;justify-content:space-evenly;overflow:hidden;flex:none}
+  .g-row{display:flex;justify-content:center;gap:6px;flex:none}
+  .g-ph{position:relative;border:1px solid var(--line);background:var(--surface-alt);line-height:0;flex:none}
+  .g-ph img{width:100%;height:100%;object-fit:cover;display:block}
+  .g-idx{position:absolute;left:0;bottom:0;background:rgba(20,16,10,.45);color:#FDFBF7;font-size:7px;letter-spacing:1px;padding:1.5px 5px;line-height:1.4;z-index:2}
+
+  /* 未集齐：纯文字条，不预设任何形状 */
+  .g-strip{margin-top:10px;border:1px dashed rgba(201,169,110,.55);background:rgba(246,241,232,.5);padding:6px 0;text-align:center;font-size:9px;letter-spacing:2px;color:var(--text2);flex:none}
+
+  .g-invite{margin-top:auto;display:flex;align-items:center;gap:12px;flex:none}
+  .g-invite::before,.g-invite::after{content:"";flex:1;height:1px;background:var(--line)}
+  .g-invite span{font-size:10.5px;color:#4A4238;line-height:1.7;letter-spacing:.5px;text-align:center;max-width:236px}
+
+  .g-foot{margin-top:10px;padding-top:8px;border-top:1px solid rgba(201,169,110,.22);display:flex;flex-direction:column;align-items:center;gap:5px;flex:none}
+  .g-dots{display:flex;gap:6px}
+  .g-dots i{width:5px;height:5px;transform:rotate(45deg);border:1px solid var(--gold-deep)}
+  .g-dots i.on{background:var(--gold-deep)}
+  .g-cnt{font-size:9.5px;letter-spacing:2px;color:var(--text2)}
+  .g-cnt b{font-family:"Noto Serif SC",serif;color:var(--gold-deep);font-size:12px;font-weight:700;padding:0 1px}
+  .g-slogan{font-size:7.5px;letter-spacing:2.5px;color:var(--text3)}
+
+  /* ===== 文案表 & 说明 ===== */
+  .copywrap{margin-top:46px;width:min(880px,94vw);background:#F7F2E9;border:1px solid var(--line);border-radius:6px;padding:26px 30px 24px}
+  .copywrap h3{font-size:14px;letter-spacing:3px;color:#4A4238;font-weight:700;display:flex;align-items:center;gap:10px}
+  .copywrap h3::before{content:"";width:20px;height:1px;background:var(--gold)}
+  .copywrap .cp-sub{font-size:10.5px;color:#8A7F6E;letter-spacing:1px;margin-top:6px;line-height:1.9}
+  table{width:100%;border-collapse:collapse;margin-top:16px}
+  th{font-size:9.5px;letter-spacing:2px;color:var(--gold-deep);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{font-size:11px;color:#4A4238;letter-spacing:.5px;padding:10px;border-bottom:1px solid rgba(201,169,110,.14);line-height:1.7;vertical-align:top}
+  td.cat{font-weight:700;white-space:nowrap}
+
+  .note{margin-top:42px;width:min(880px,94vw);background:rgba(253,251,247,.6);border:1px solid rgba(201,169,110,.2);border-radius:6px;padding:22px 28px}
+  .note h3{font-size:13px;letter-spacing:2.5px;color:#4A4238;font-weight:700;margin-bottom:12px}
+  .note p{font-size:11.5px;color:#6B645C;line-height:2;letter-spacing:.5px}
+  .note p b{color:var(--gold-deep)}
+  .note code{font-family:Consolas,monospace;font-size:10.5px;background:rgba(201,169,110,.12);padding:1px 5px;border-radius:3px}
+</style>
+</head>
+<body>
+  <div class="page-title">碎片收集 · 分享海报（第四轮 · 方向 G）</div>
+  <div class="page-sub">
+    回归<b>分享海报本体</b>：照片是主角、情绪文案说人话、无二维码 · 品牌基因不变（暖白 · 金 · 衬线 · 3:4 竖版）<br>
+    核心修正：<b>没有固定槽位</b>——照片区是「求解式自适应排版」，几张照片、什么比例，全由算法现场计算<br>
+    下方 6 张海报演示 6 种比例场景（全同比例 / 混合 / 极端竖图 / 单张），点按钮可无限重掷随机比例
+  </div>
+
+  <div class="ctrl">
+    <button class="btn" id="reroll">随机换一批照片（比例随机）</button>
+    <span class="hint">每点一次，6 张海报的照片比例全部重新随机——验证布局对任意比例组合都成立</span>
+  </div>
+
+  <div id="posters"></div>
+
+  <!-- ================= 文案系统 ================= -->
+  <div class="copywrap">
+    <h3>情绪文案系统（接地气 · 但回到晒美好的正轨）</h3>
+    <div class="cp-sub">原则：说人话、不装、带一点小得意；夸的是照片，不是 App。所有文案只用真实数据（碎片名、进度），不虚构日期等信息。</div>
+    <table>
+      <thead>
+        <tr><th>碎片类型</th><th>小句（kicker）</th><th>情绪标题 · 进行中</th><th>情绪标题 · 已集齐</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="cat">光线碎片</td>
+          <td>攒光中 / 第叁辑 · 完</td>
+          <td>最近的好光，<br>都被我一张张存下来了。</td>
+          <td>5 枚光，一枚没漏。<br>今天全部晒出来。</td>
+        </tr>
+        <tr>
+          <td class="cat">室外碎片</td>
+          <td>收集远方 / 远方辑 · 完</td>
+          <td>去过的地方，<br>都收进这一张里了。</td>
+          <td>远方集齐了，<br>晒晒我的收藏。</td>
+        </tr>
+        <tr>
+          <td class="cat">室内碎片</td>
+          <td>屋檐下 / 屋檐辑 · 完</td>
+          <td>我的小屋，<br>也有很好看的光。</td>
+          <td>屋檐下的光存满了，<br>忍不住晒一下。</td>
+        </tr>
+        <tr>
+          <td class="cat">情绪碎片</td>
+          <td>心情底片 / 心情辑 · 完</td>
+          <td>说不出口的心情，<br>照片替我说了。</td>
+          <td>那些心情，<br>终于都有了形状。</td>
+        </tr>
+      </tbody>
+    </table>
+    <table style="margin-top:8px">
+      <thead>
+        <tr><th>位置</th><th>文案</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="cat">晒图邀请 · 进行中</td>
+          <td>我的先晒到这儿——你们的碎片，收集到第几枚了？</td>
+        </tr>
+        <tr>
+          <td class="cat">晒图邀请 · 已集齐</td>
+          <td>集齐了，先晒为敬。你们拍到过最好看的一张，是哪张？</td>
+        </tr>
+        <tr>
+          <td class="cat">空位文字条</td>
+          <td>还差 N 枚 · 拍到好光马上补上（纯文字，不预设形状——下一张什么比例，谁都不知道）</td>
+        </tr>
+        <tr>
+          <td class="cat">底部</td>
+          <td>已集 叁 / 伍（菱形进度点）· 如画 LUMIRA · 记录每一帧光影</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================= 设计说明 ================= -->
+  <div class="note">
+    <h3>本轮修正了什么</h3>
+    <p>
+      <b>① 回归分享海报本体</b>：砍掉「小票 / 选片单」的猎奇形态——那是在炫排版创意，不是在帮用户晒照片。
+      本轮海报结构回归经典：品牌 → 情绪标题 → <b>照片墙（主角）</b> → 晒图邀请 → 进度落款，暖白 + 金 + 衬线，安静衬照片。<br><br>
+      <b>② 没有固定槽位 · 求解式自适应排版</b>：照片区只有一个固定高度的「画框」，内部怎么排由算法现场计算——
+      枚举所有行分组方案（≤5 张照片只有 16 种分法），每种算出各行的等高值，选「能装下且最填满」的那一种；行内每张照片的宽度 = 行高 × 自身原生比例，
+      所以<b>格子天然等于照片比例</b>，1:1 / 3:4 / 4:3 / 9:16 / 16:9 任意组合、任意数量，全部完整露出、零裁切、零变形。
+      演示覆盖：全 1:1、全 16:9、全 9:16（极端竖图）、五档混合、单张——并且可点按钮无限随机重掷。<br>
+      <b>空位只用文字条表达</b>（「还差 N 枚 · 拍到好光马上补上」），不画任何预设形状的虚线框；收集到新照片后整个区域重新求解重排，任何比例都接得住。<br><br>
+      <b>③ Flutter 落地成本低</b>：同一套求解器约 80 行 Dart（枚举行分组 + 等高计算），照片真实宽高比的异步解析
+      <code>fragment_poster_generator.dart</code> 里已有现成的 <code>_resolveAspectRatio</code> 可直接复用；现有 <code>galleryStrip</code> 只处理固定 3+2 分行，替换为求解器即可。
+    </p>
+  </div>
+
+<script>
+/* ================= 基础数据 ================= */
+const CN = ['壹','贰','叁','肆','伍','陆','柒','捌','玖','拾'];
+const RVAL = {'16:9':16/9,'1:1':1,'9:16':9/16,'4:3':4/3,'3:4':3/4};
+const RKEYS = Object.keys(RVAL);
+const SIZE = {'16:9':'landscape_16_9','1:1':'square','9:16':'portrait_16_9','4:3':'landscape_4_3','3:4':'portrait_4_3'};
+const PROMPTS = [
+  'warm golden hour sunlight streaming through a window, soft long shadows on a minimalist wall, cozy warm tone, photography',
+  'sunbeam through tree leaves casting light spots on the ground, golden bokeh, warm atmosphere, photography',
+  'warm lamp glow in a cozy room, soft golden light and gentle shadow, cinematic warm tone, photography',
+  'golden sunset silhouette portrait, warm rim light, emotional warm atmosphere, photography',
+  'city street lights at dusk bokeh, warm golden glow, cinematic night, photography',
+  'morning mist in a forest with soft light rays between trees, dreamy atmosphere, photography',
+  'cafe window light falling on a wooden table with a coffee cup, warm cozy tone, photography',
+  'seaside at golden hour, gentle waves shimmering with warm light, photography'
+];
+let imgCursor = 0;
+function imgFor(rKey){
+  const p = PROMPTS[imgCursor++ % PROMPTS.length];
+  return 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt='
+    + encodeURIComponent(p) + '&image_size=' + SIZE[rKey];
+}
+
+/* ================= 求解式自适应排版 =================
+   输入：照片比例数组 + 画框宽高 + 间距
+   枚举所有「行分组」方案（n 张照片 2^(n-1) 种），
+   每行等高、行内宽度 = 行高 × 各自原生比例；
+   行高超过画框高度时封顶并整行居中。
+   选「能装下且最填满」的方案。 */
+function solveRows(ratios, W, H, gap){
+  const n = ratios.length;
+  if(n === 0) return {rows:[]};
+  let best = null;
+  const total = 1 << (n - 1);
+  for(let mask = 0; mask < total; mask++){
+    const rows = []; let cur = [0];
+    for(let i = 1; i < n; i++){
+      if(mask & (1 << (i - 1))){ rows.push(cur); cur = [i]; }
+      else cur.push(i);
+    }
+    rows.push(cur);
+    const hs = rows.map(idx => {
+      const k = idx.length;
+      const sum = idx.reduce((a, i) => a + ratios[i], 0);
+      let h = (W - gap * (k - 1)) / sum;
+      if(h > H) h = H;           // 单行过高：封顶，整行居中（行宽自然小于画框）
+      return h;
+    });
+    const tot = hs.reduce((a, b) => a + b, 0) + gap * (rows.length - 1);
+    const over = tot - H;        // ≤0 可行（负数=留白），>0 溢出
+    const score = over <= 0.5 ? over : over + 1e6;  // 可行者优先；可行者里留白越少越好
+    if(!best || score > best.score){
+      best = {score, rows: rows.map((idx, r) => ({idx, h: hs[r]}))};
+    }
+  }
+  return best;
+}
+
+/* ================= 场景定义 =================
+   ratios 初始给定，点「随机换一批」后全部重掷 */
+const SCENES = [
+  { name:'光线碎片', kicker:'光线碎片 · 攒光中',  current:3, max:5,
+    ratios:['16:9','1:1','9:16'],
+    titleIng:'最近的好光，<br>都被我一张张存下来了。',
+    titleDone:'5 枚光，一枚没漏。<br>今天全部晒出来。' },
+  { name:'室外碎片', kicker:'室外碎片 · 收集远方', current:5, max:5,
+    ratios:['1:1','1:1','1:1','1:1','1:1'],
+    titleDone:'远方集齐了，<br>晒晒我的收藏。',
+    titleIng:'去过的地方，<br>都收进这一张里了。' },
+  { name:'室内碎片', kicker:'室内碎片 · 屋檐下',  current:5, max:5,
+    ratios:['16:9','16:9','16:9','16:9','16:9'],
+    titleDone:'屋檐下的光存满了，<br>忍不住晒一下。',
+    titleIng:'我的小屋，<br>也有很好看的光。' },
+  { name:'情绪碎片', kicker:'情绪碎片 · 心情底片', current:5, max:5,
+    ratios:['1:1','9:16','16:9','4:3','3:4'],
+    titleDone:'那些心情，<br>终于都有了形状。',
+    titleIng:'说不出口的心情，<br>照片替我说了。' },
+  { name:'光线碎片', kicker:'光线碎片 · 攒光中',  current:5, max:5,
+    ratios:['9:16','9:16','9:16','9:16','9:16'],
+    titleDone:'5 枚光，一枚没漏。<br>今天全部晒出来。',
+    titleIng:'最近的好光，<br>都被我一张张存下来了。' },
+  { name:'情绪碎片', kicker:'情绪碎片 · 心情底片', current:1, max:5,
+    ratios:['4:3'],
+    titleIng:'说不出口的心情，<br>照片替我说了。',
+    titleDone:'那些心情，<br>终于都有了形状。' },
+];
+
+function describeRatios(ratios){
+  const u = [...new Set(ratios)];
+  if(ratios.length === 1) return '单张';
+  if(u.length === 1) return '全是' + u[0];
+  return '混合' + u.length + '档比例';
+}
+
+/* ================= 渲染 ================= */
+const GALLERY_H = 192, GAP = 6;
+
+function buildPoster(sc){
+  const done = sc.current >= sc.max;
+  const remain = sc.max - sc.current;
+  const cell = document.createElement('div');
+  cell.className = 'cell';
+  cell.innerHTML =
+    '<span class="sys-label">' + sc.name + ' · ' + (done ? '已集齐' : '进行中') +
+      ' · ' + describeRatios(sc.ratios) + ' · ' + sc.current + '/' + sc.max + '</span>' +
+    '<div class="poster">' +
+      '<div class="g-top">' +
+        '<div class="g-brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>' +
+        '<div class="g-seal' + (done ? ' on' : '') + '">' + (done ? '已集齐' : '收集中 · ' + sc.current + '/' + sc.max) + '</div>' +
+      '</div>' +
+      '<div class="g-kicker">' + sc.kicker + '</div>' +
+      '<div class="g-title serif">' + (done ? sc.titleDone : sc.titleIng) + '</div>' +
+      '<div class="g-line"></div>' +
+      '<div class="g-gallery"></div>' +
+      (done ? '' : '<div class="g-strip">还差 ' + CN[remain - 1] + ' 枚 · 拍到好光马上补上</div>') +
+      '<div class="g-invite"><span class="serif">' +
+        (done ? '集齐了，先晒为敬。<br>你们拍到过最好看的一张，是哪张？'
+              : '我的先晒到这儿——<br>你们的碎片，收集到第几枚了？') +
+      '</span></div>' +
+      '<div class="g-foot">' +
+        '<div class="g-dots">' +
+          Array.from({length: sc.max}, (_, i) => '<i class="' + (i < sc.current ? 'on' : '') + '"></i>').join('') +
+        '</div>' +
+        '<div class="g-cnt">' + (done ? '已集齐 <b>' + CN[sc.max - 1] + '</b>/ ' + CN[sc.max - 1]
+                                      : '已集 <b>' + CN[sc.current - 1] + '</b>/ ' + CN[sc.max - 1]) + '</div>' +
+        '<div class="g-slogan">如画 LUMIRA · 记录每一帧光影</div>' +
+      '</div>' +
+    '</div>';
+  return cell;
+}
+
+function renderAll(){
+  const wrap = document.getElementById('posters');
+  wrap.innerHTML = '';
+  for(const sc of SCENES){
+    const urls = sc.ratios.map(imgFor);
+    const cell = buildPoster(sc);
+    wrap.appendChild(cell);          // 先挂载，才能量到画框宽度
+    const gal = cell.querySelector('.g-gallery');
+    const W = gal.clientWidth;
+    const ratios = sc.ratios.map(r => RVAL[r]);
+    const sol = solveRows(ratios, W, GALLERY_H, GAP);
+    let idx = 0;
+    for(const row of sol.rows){
+      const rdiv = document.createElement('div');
+      rdiv.className = 'g-row';
+      rdiv.style.height = row.h + 'px';
+      for(const i of row.idx){
+        const w = row.h * ratios[i];
+        const ph = document.createElement('div');
+        ph.className = 'g-ph';
+        ph.style.width = w.toFixed(1) + 'px';
+        ph.style.height = row.h.toFixed(1) + 'px';
+        ph.innerHTML = '<span class="g-idx">' + CN[idx] + '</span><img src="' + urls[i] + '" alt="">';
+        rdiv.appendChild(ph);
+        idx++;
+      }
+      gal.appendChild(rdiv);
+    }
+  }
+}
+
+document.getElementById('reroll').addEventListener('click', () => {
+  for(const sc of SCENES){
+    sc.ratios = sc.ratios.map(() => RKEYS[Math.floor(Math.random() * RKEYS.length)]);
+  }
+  renderAll();
+});
+
+renderAll();
+</script>
+</body>
+</html>

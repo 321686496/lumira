@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 碎片收集分享海报 V2（情绪化文案 + 晒图邀请）</title>
+<style>
+  :root{
+    --gold:#C9A96E;--gold-deep:#B08D4F;--ink:#2A2620;
+    --text2:#6B645C;--text3:#9A8F7C;
+    --surface:#FDFBF7;--surface-alt:#F6F1E8;--line:rgba(201,169,110,.32);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#E9E4DB;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:44px 20px 110px;display:flex;flex-direction:column;align-items:center;gap:14px;-webkit-font-smoothing:antialiased}
+  .serif{font-family:"Noto Serif SC","Songti SC",Georgia,serif}
+  .kai{font-family:"Kaiti SC","KaiTi","STKaiti","DFKai-SB","Noto Serif SC",serif}
+  .page-title{color:#4A4238;font-size:18px;letter-spacing:3px;font-weight:600;display:flex;align-items:center;gap:12px}
+  .page-title::before,.page-title::after{content:"";width:44px;height:1px;background:var(--line)}
+  .page-sub{color:#8A7F6E;font-size:12px;letter-spacing:1.5px;text-align:center;line-height:2;max-width:720px}
+  .page-sub b{color:#A08A5F;font-weight:600}
+
+  /* ===== 区块标题 ===== */
+  .dir-head{margin-top:44px;display:flex;align-items:baseline;gap:14px}
+  .dir-head .no{font-family:Georgia,serif;font-size:30px;color:var(--gold);font-style:italic}
+  .dir-head .name{font-size:17px;color:#4A4238;letter-spacing:2px;font-weight:700}
+  .dir-head .pos{font-size:11px;color:#8A7F6E;letter-spacing:1px}
+  .row{display:flex;gap:48px;flex-wrap:wrap;justify-content:center;align-items:flex-start;margin-top:22px}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .sys-label{font-size:10px;color:#A08A5F;letter-spacing:2px;background:#F3ECE0;border:1px solid var(--line);padding:3px 12px;border-radius:12px}
+
+  /* ===== 海报通用（3:4 竖版 · 暖白纸感 + 微渐变） ===== */
+  .poster{width:340px;aspect-ratio:3/4;position:relative;overflow:hidden;border:1px solid var(--line);box-shadow:0 24px 60px -28px rgba(60,48,28,.35);border-radius:3px;display:flex;flex-direction:column;padding:24px 24px 20px;background:linear-gradient(178deg,#FDFBF7 0%,#FBF6ED 62%,#F6EFE2 100%)}
+
+  /* ============ 方向 A · 光影收藏册 ============ */
+  .pa-top{display:flex;align-items:center;justify-content:space-between}
+  .brand{display:inline-flex;align-items:baseline;gap:7px}
+  .brand .en{font-size:11px;letter-spacing:4px;color:var(--gold-deep);font-weight:700}
+  .brand .zh{font-size:10px;letter-spacing:3px;color:var(--text3)}
+  .pa-seal{font-size:9px;letter-spacing:2px;color:var(--gold-deep);border:1px solid var(--gold-deep);padding:2px 9px;border-radius:999px}
+  .pa-seal.on{background:var(--gold-deep);color:#FDFBF7}
+  .pa-rule{height:1px;background:linear-gradient(90deg,var(--line),transparent);margin:12px 0 14px}
+  .pa-kicker{font-size:9.5px;letter-spacing:3px;color:var(--gold-deep)}
+  .pa-kicker span{color:var(--text3);letter-spacing:1px;margin-left:8px}
+  .pa-title{font-size:23px;font-weight:700;color:var(--ink);letter-spacing:2px;line-height:1.4;margin-top:8px}
+  .pa-title em{font-style:normal;color:var(--gold-deep)}
+  .pa-sub{font-size:11px;color:var(--text2);letter-spacing:1.5px;margin-top:5px}
+  .pa-line{width:30px;height:2px;background:var(--gold);margin:12px 0 0}
+  .pa-photos{flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;margin-top:12px}
+  .pa-row{display:flex;gap:8px}
+  .pa-row.r2{justify-content:center}
+  .pa-slot{flex:1;display:flex;flex-direction:column;gap:4px}
+  .pa-row.r2 .pa-slot{flex:0 0 93px}
+  .pa-frame{position:relative;aspect-ratio:4/3;border:1px solid var(--line);background:var(--surface-alt);line-height:0}
+  .pa-frame::before,.pa-frame::after{content:"";position:absolute;width:11px;height:11px;pointer-events:none}
+  .pa-frame::before{top:-2px;left:-2px;border-top:2px solid var(--gold);border-left:2px solid var(--gold)}
+  .pa-frame::after{bottom:-2px;right:-2px;border-bottom:2px solid var(--gold);border-right:2px solid var(--gold)}
+  .pa-frame img{width:100%;height:100%;object-fit:cover;display:block}
+  .pa-cap{font-size:8.5px;color:var(--text3);letter-spacing:1px;text-align:center}
+  .pa-cap b{font-family:"Noto Serif SC",serif;color:var(--gold-deep);font-weight:700;margin-right:4px}
+  .pa-empty{aspect-ratio:4/3;border:1.5px dashed rgba(201,169,110,.55);background:rgba(246,241,232,.55);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+  .pa-empty .plus{font-size:15px;color:var(--gold);font-weight:300;line-height:1}
+  .pa-empty .lab{font-size:8px;letter-spacing:1.5px;color:var(--text3)}
+  .pa-invite{border-left:2px solid var(--gold);padding-left:11px;margin-top:14px}
+  .pa-invite .lead{font-size:8.5px;letter-spacing:2.5px;color:var(--gold-deep);margin-bottom:3px}
+  .pa-invite .q{font-size:13px;color:var(--ink);letter-spacing:1px;line-height:1.55;font-weight:700}
+  .pa-foot{display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:11px;border-top:1px solid rgba(201,169,110,.22)}
+  .pa-dots{display:flex;gap:5px;align-items:center}
+  .pa-dots i{width:5px;height:5px;border-radius:50%;border:1px solid var(--gold-deep)}
+  .pa-dots i.on{background:var(--gold-deep)}
+  .pa-cnt{font-size:9.5px;letter-spacing:2px;color:var(--text2)}
+  .pa-cnt b{font-family:"Noto Serif SC",serif;color:var(--gold-deep);font-size:12px;font-weight:700;padding:0 1px}
+  .pa-slogan{font-size:8px;letter-spacing:2px;color:var(--text3)}
+
+  /* ============ 方向 B · 寄给你的明信片 ============ */
+  .pb-head{display:flex;justify-content:space-between;align-items:flex-start;min-height:78px}
+  .pb-to{font-size:11px;letter-spacing:2px;color:var(--ink);margin-top:14px;font-weight:600}
+  .pb-to small{display:block;font-size:8.5px;letter-spacing:2px;color:var(--text3);font-weight:400;margin-top:4px}
+  .pb-stamp{width:76px;padding:5px 5px 16px;background:#FFFEFA;border:1px dashed rgba(201,169,110,.6);box-shadow:0 5px 16px -6px rgba(60,48,28,.3);transform:rotate(2.5deg);position:relative;flex:none}
+  .pb-stamp img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
+  .pb-stamp .val{position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7px;letter-spacing:2px;color:var(--gold-deep)}
+  .pb-mark{position:absolute;top:52px;right:16px;width:62px;height:62px;border:1.5px solid rgba(176,141,79,.75);border-radius:50%;transform:rotate(-11deg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.5px;z-index:6;background:rgba(253,251,247,.4)}
+  .pb-mark::before{content:"";position:absolute;inset:4px;border:1px solid rgba(176,141,79,.4);border-radius:50%}
+  .pb-mark b{font-size:8px;letter-spacing:1.5px;color:var(--gold-deep)}
+  .pb-mark span{font-size:7px;letter-spacing:1px;color:var(--text2)}
+  .pb-rule{height:1px;background:linear-gradient(90deg,transparent,var(--line),transparent);margin:2px 0 12px}
+  .pb-photos{display:flex;flex-direction:column;gap:9px}
+  .pb-row{display:flex;gap:9px}
+  .pb-row.r2{justify-content:center}
+  .pb-cell{flex:1;position:relative}
+  .pb-row.r2 .pb-cell{flex:0 0 93px}
+  .pb-cell figure{aspect-ratio:4/3;background:#FFFEFA;padding:4px;box-shadow:0 4px 12px -5px rgba(60,48,28,.28);transform:rotate(-1.2deg)}
+  .pb-cell:nth-child(2) figure{transform:rotate(1deg)}
+  .pb-cell:nth-child(3) figure{transform:rotate(-0.6deg)}
+  .pb-cell figure img{width:100%;height:100%;object-fit:cover;display:block}
+  .pb-cell .tape{position:absolute;top:-5px;left:50%;transform:translateX(-50%) rotate(-3deg);width:32px;height:11px;background:rgba(201,169,110,.3);z-index:2}
+  .pb-empty{aspect-ratio:4/3;border:1.5px dashed rgba(201,169,110,.55);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;margin:4px;background:rgba(246,241,232,.5)}
+  .pb-empty .plus{font-size:14px;color:var(--gold);font-weight:300;line-height:1}
+  .pb-empty .lab{font-size:8px;letter-spacing:1.5px;color:var(--text3)}
+  .pb-msg{margin-top:16px;padding:2px 4px 6px 2px;font-size:12.5px;line-height:27px;color:#4A4238;letter-spacing:1px;background:repeating-linear-gradient(180deg,transparent 0 26px,rgba(201,169,110,.22) 26px 27px)}
+  .pb-msg em{font-style:normal;color:var(--gold-deep);font-weight:700}
+  .pb-from{display:flex;justify-content:space-between;align-items:baseline;margin-top:12px}
+  .pb-from .who{font-size:10px;letter-spacing:2px;color:var(--ink);font-weight:600}
+  .pb-from .who small{color:var(--text3);font-weight:400;letter-spacing:1px}
+  .pb-from .cnt{font-size:9px;letter-spacing:2px;color:var(--text2)}
+  .pb-from .cnt b{font-family:"Noto Serif SC",serif;color:var(--gold-deep);font-size:12px;font-weight:700;padding:0 1px}
+  .pb-invite{margin-top:auto;display:flex;align-items:center;justify-content:space-between;background:var(--gold-deep);padding:9px 13px;margin-top:13px}
+  .pb-invite .t{font-size:11px;letter-spacing:1.5px;color:#FDFBF7;font-weight:600}
+  .pb-invite .t small{display:block;font-size:8px;letter-spacing:2px;opacity:.75;font-weight:400;margin-top:2px}
+  .pb-invite .arr{width:7px;height:7px;border-top:1.5px solid #FDFBF7;border-right:1.5px solid #FDFBF7;transform:rotate(45deg);flex:none}
+  .pb-brand{margin-top:9px;text-align:center;font-size:7.5px;letter-spacing:2.5px;color:var(--text3)}
+
+  /* ===== 文案系统表 ===== */
+  .copywrap{margin-top:40px;width:min(860px,94vw);background:#F7F2E9;border:1px solid var(--line);border-radius:6px;padding:26px 30px 24px}
+  .copywrap h3{font-size:14px;letter-spacing:3px;color:#4A4238;font-weight:700;display:flex;align-items:center;gap:10px}
+  .copywrap h3::before{content:"";width:20px;height:1px;background:var(--gold)}
+  .copywrap .cp-sub{font-size:10.5px;color:#8A7F6E;letter-spacing:1px;margin-top:6px;line-height:1.9}
+  table{width:100%;border-collapse:collapse;margin-top:16px}
+  th{font-size:9.5px;letter-spacing:2px;color:var(--gold-deep);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{font-size:11px;color:#4A4238;letter-spacing:.5px;padding:10px;border-bottom:1px solid rgba(201,169,110,.14);line-height:1.7;vertical-align:top}
+  td.cat{font-weight:700;white-space:nowrap}
+  td.cat small{display:block;font-weight:400;font-size:9px;color:var(--text3);letter-spacing:1px;margin-top:2px}
+  .invite-block{margin-top:18px;display:flex;gap:14px;flex-wrap:wrap}
+  .invite-card{flex:1;min-width:240px;background:#FDFBF7;border:1px solid var(--line);border-radius:5px;padding:14px 16px}
+  .invite-card .k{font-size:9px;letter-spacing:2.5px;color:var(--gold-deep);margin-bottom:7px}
+  .invite-card .v{font-size:12.5px;color:var(--ink);line-height:1.8;letter-spacing:.5px}
+  .invite-card .v.serif{font-weight:700}
+
+  .note{margin-top:46px;width:min(860px,94vw);background:rgba(253,251,247,.6);border:1px solid rgba(201,169,110,.2);border-radius:6px;padding:22px 28px}
+  .note h3{font-size:13px;letter-spacing:2.5px;color:#4A4238;font-weight:700;margin-bottom:12px}
+  .note p{font-size:11.5px;color:#6B645C;line-height:2;letter-spacing:.5px}
+  .note p b{color:var(--gold-deep)}
+</style>
+</head>
+<body>
+  <div class="page-title">碎片收集 · 分享海报 V2</div>
+  <div class="page-sub">
+    重新设计目标：<b>情绪化文案</b> + <b>晒图邀请</b>（这是我收集的光影碎片，看看你们的）<br>
+    品牌语言不变：暖白纸感 · 金色发丝线 · 衬线标题 · 3:4 竖版 · 不放二维码，纯社交晒图定位
+  </div>
+
+  <!-- ================= 文案系统 ================= -->
+  <div class="copywrap">
+    <h3>情绪文案系统（四类碎片通用）</h3>
+    <div class="cp-sub">每类碎片有专属情绪标题（进行中 / 已集齐两版）+ 分类小句；空位不再是干巴巴的「待收集」，而是留有悬念的期待感文案。</div>
+    <table>
+      <thead>
+        <tr><th>碎片类型</th><th>收集进行中 · 情绪标题</th><th>已集齐 · 情绪标题</th><th>分类小句</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="cat">光线碎片<small>light</small></td>
+          <td>有些光，只出现一次。<br>我正在一枚一枚，把它们接住。</td>
+          <td>五枚光，集齐了。<br>像攒下了一小片星图。</td>
+          <td>收集会发光的瞬间</td>
+        </tr>
+        <tr>
+          <td class="cat">室外碎片<small>outdoor</small></td>
+          <td>风经过的地方，<br>我都替你去看过了。</td>
+          <td>山与海，<br>都进了我的口袋。</td>
+          <td>把远方装进口袋</td>
+        </tr>
+        <tr>
+          <td class="cat">室内碎片<small>indoor</small></td>
+          <td>屋檐下的光，<br>一格一格收好。</td>
+          <td>这个屋檐下，<br>温柔已经存满。</td>
+          <td>我的小屋光影志</td>
+        </tr>
+        <tr>
+          <td class="cat">情绪碎片<small>mood</small></td>
+          <td>说不出口的心情，<br>照片替我说。</td>
+          <td>那些心情，<br>终于都有了形状。</td>
+          <td>心情的底片</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="invite-block">
+      <div class="invite-card">
+        <div class="k">晒图邀请句 · 方向 A（收藏册）</div>
+        <div class="v serif">这是我收集的光影碎片——<br>你的那一本，翻开给我看看？</div>
+      </div>
+      <div class="invite-card">
+        <div class="k">晒图邀请句 · 方向 B（明信片）</div>
+        <div class="v serif">这是我收集的光影碎片，<br>轮到你，晒出你的了。</div>
+      </div>
+      <div class="invite-card">
+        <div class="k">空位文案（替代「待收集」）</div>
+        <div class="v">A 册：肆 · 留给下一场好光 / 伍 · 在下一张照片里等我<br>B 片：下一枚，在路上了</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 方向 A ================= -->
+  <div class="dir-head">
+    <span class="no">A</span>
+    <span class="name">光影收藏册</span>
+    <span class="pos">珍藏感路线 · 碎片是编号入册的光影标本 · 激发「晒宝贝」心理</span>
+  </div>
+  <div class="row">
+    <!-- A · 收集进行中 3/5 -->
+    <div class="cell">
+      <span class="sys-label">收集进行中 · 3/5</span>
+      <div class="poster">
+        <div class="pa-top">
+          <div class="brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+          <div class="pa-seal">收集中</div>
+        </div>
+        <div class="pa-rule"></div>
+        <div class="pa-kicker">光线碎片 · 光影收藏册<span>VOL.03</span></div>
+        <div class="pa-title serif">有些光，只出现一次。<br>我正在一枚一枚，把它们<em>接住</em>。</div>
+        <div class="pa-line"></div>
+        <div class="pa-photos">
+          <div class="pa-row">
+            <div class="pa-slot">
+              <div class="pa-frame"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20golden%20hour%20sunlight%20streaming%20through%20a%20window%2C%20soft%20long%20shadows%20on%20a%20minimalist%20wall%2C%20cozy%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""></div>
+              <div class="pa-cap"><b>壹</b>8月2日</div>
+            </div>
+            <div class="pa-slot">
+              <div class="pa-frame"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sunbeam%20through%20tree%20leaves%20casting%20light%20spots%20on%20the%20ground%2C%20golden%20bokeh%2C%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""></div>
+              <div class="pa-cap"><b>贰</b>8月9日</div>
+            </div>
+            <div class="pa-slot">
+              <div class="pa-frame"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20lamp%20glow%20in%20a%20cozy%20room%2C%20soft%20golden%20light%20and%20gentle%20shadow%2C%20cinematic%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""></div>
+              <div class="pa-cap"><b>叁</b>8月15日</div>
+            </div>
+          </div>
+          <div class="pa-row r2">
+            <div class="pa-slot">
+              <div class="pa-empty"><span class="plus">+</span><span class="lab">肆 · 留给下一场好光</span></div>
+            </div>
+            <div class="pa-slot">
+              <div class="pa-empty"><span class="plus">+</span><span class="lab">伍 · 在下一张照片里等我</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="pa-invite">
+          <div class="lead">晒图邀请</div>
+          <div class="q serif">这是我收集的光影碎片——<br>你的那一本，翻开给我看看？</div>
+        </div>
+        <div class="pa-foot">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="pa-dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div>
+            <div class="pa-cnt">已收录 <b>叁</b>/ 伍</div>
+          </div>
+          <div class="pa-slogan">如画 LUMIRA · 记录每一帧光影</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- A · 已集齐 5/5 -->
+    <div class="cell">
+      <span class="sys-label">已集齐 · 5/5</span>
+      <div class="poster">
+        <div class="pa-top">
+          <div class="brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+          <div class="pa-seal on">已集齐</div>
+        </div>
+        <div class="pa-rule"></div>
+        <div class="pa-kicker">光线碎片 · 光影收藏册<span>VOL.03 · 完</span></div>
+        <div class="pa-title serif">五枚光，集齐了。<br>像攒下了<em>一小片星图</em>。</div>
+        <div class="pa-line"></div>
+        <div class="pa-photos">
+          <div class="pa-row">
+            <div class="pa-slot">
+              <div class="pa-frame"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20golden%20hour%20sunlight%20streaming%20through%20a%20window%2C%20soft%20long%20shadows%20on%20a%20minimalist%20wall%2C%20cozy%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""></div>
+              <div class="pa-cap"><b>壹</b>8月2日</div>
+            </div>
+            <div class="pa-slot">
+              <div class="pa-frame"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sunbeam%20through%20tree%20leaves%20casting%20light%20spots%20on%20the%20ground%2C%20golden%20bokeh%2C%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""></div>
+              <div class="pa-cap"><b>贰</b>8月9日</div>
+            </div>
+            <div class="pa-slot">
+              <div class="pa-frame"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20lamp%20glow%20in%20a%20cozy%20room%2C%20soft%20golden%20light%20and%20gentle%20shadow%2C%20cinematic%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""></div>
+              <div class="pa-cap"><b>叁</b>8月15日</div>
+            </div>
+          </div>
+          <div class="pa-row r2">
+            <div class="pa-slot">
+              <div class="pa-frame"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=golden%20sunset%20silhouette%20portrait%2C%20warm%20rim%20light%2C%20emotional%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""></div>
+              <div class="pa-cap"><b>肆</b>8月21日</div>
+            </div>
+            <div class="pa-slot">
+              <div class="pa-frame"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=city%20street%20lights%20at%20dusk%20bokeh%2C%20warm%20golden%20glow%2C%20cinematic%20night%2C%20photography&image_size=landscape_4_3" alt=""></div>
+              <div class="pa-cap"><b>伍</b>8月30日</div>
+            </div>
+          </div>
+        </div>
+        <div class="pa-invite">
+          <div class="lead">晒图邀请</div>
+          <div class="q serif">这是我收集的光影碎片——<br>你的那一本，翻开给我看看？</div>
+        </div>
+        <div class="pa-foot">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="pa-dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+            <div class="pa-cnt">已集齐 <b>伍</b>/ 伍</div>
+          </div>
+          <div class="pa-slogan">如画 LUMIRA · 记录每一帧光影</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 方向 B ================= -->
+  <div class="dir-head">
+    <span class="no">B</span>
+    <span class="name">寄给你的明信片</span>
+    <span class="pos">分享感路线 · 海报即一张寄给朋友的明信片 · 进行中是承诺，集齐是兑现</span>
+  </div>
+  <div class="row">
+    <!-- B · 收集进行中 3/5 -->
+    <div class="cell">
+      <span class="sys-label">收集进行中 · 3/5</span>
+      <div class="poster">
+        <div class="pb-head">
+          <div class="pb-to">TO. 每一个爱拍照的你<small>这张明信片，由一枚枚快门寄出</small></div>
+          <div class="pb-stamp">
+            <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20golden%20hour%20sunlight%20streaming%20through%20a%20window%2C%20soft%20long%20shadows%20on%20a%20minimalist%20wall%2C%20cozy%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt="">
+            <div class="val">LUMIRA · 光</div>
+          </div>
+        </div>
+        <div class="pb-mark"><b>LUMIRA</b><span>光线碎片</span><span>已集 3/5</span></div>
+        <div class="pb-rule"></div>
+        <div class="pb-photos">
+          <div class="pb-row">
+            <div class="pb-cell"><span class="tape"></span><figure><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20golden%20hour%20sunlight%20streaming%20through%20a%20window%2C%20soft%20long%20shadows%20on%20a%20minimalist%20wall%2C%20cozy%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""></figure></div>
+            <div class="pb-cell"><span class="tape"></span><figure><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sunbeam%20through%20tree%20leaves%20casting%20light%20spots%20on%20the%20ground%2C%20golden%20bokeh%2C%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""></figure></div>
+            <div class="pb-cell"><span class="tape"></span><figure><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20lamp%20glow%20in%20a%20cozy%20room%2C%20soft%20golden%20light%20and%20gentle%20shadow%2C%20cinematic%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""></figure></div>
+          </div>
+          <div class="pb-row r2">
+            <div class="pb-cell"><span class="tape"></span><figure><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=golden%20sunset%20silhouette%20portrait%2C%20warm%20rim%20light%2C%20emotional%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""></figure></div>
+            <div class="pb-cell"><div class="pb-empty"><span class="plus">+</span><span class="lab">下一枚，在路上了</span></div></div>
+          </div>
+        </div>
+        <div class="pb-msg kai">
+          最近在收集光——<br>
+          窗边的、树隙的、路灯下的。<br>
+          这是第 <em>3</em> 枚，还差 <em>2</em> 枚，<br>
+          等集齐了，第一个寄给你看。
+        </div>
+        <div class="pb-from">
+          <div class="who">FROM. 我的光影碎片册 <small>光线辑</small></div>
+          <div class="cnt">已集 <b>叁</b>/ 伍</div>
+        </div>
+        <div class="pb-invite">
+          <div class="t">这是我收集的光影碎片，轮到你晒出你的了<small>SHOW ME YOURS</small></div>
+          <div class="arr"></div>
+        </div>
+        <div class="pb-brand">如画 LUMIRA · 记录每一帧光影</div>
+      </div>
+    </div>
+
+    <!-- B · 已集齐 5/5 -->
+    <div class="cell">
+      <span class="sys-label">已集齐 · 5/5</span>
+      <div class="poster">
+        <div class="pb-head">
+          <div class="pb-to">TO. 每一个爱拍照的你<small>说好的，集齐就寄给你</small></div>
+          <div class="pb-stamp">
+            <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=city%20street%20lights%20at%20dusk%20bokeh%2C%20warm%20golden%20glow%2C%20cinematic%20night%2C%20photography&image_size=landscape_4_3" alt="">
+            <div class="val">LUMIRA · 光</div>
+          </div>
+        </div>
+        <div class="pb-mark"><b>LUMIRA</b><span>光线碎片</span><span>已集齐 5/5</span></div>
+        <div class="pb-rule"></div>
+        <div class="pb-photos">
+          <div class="pb-row">
+            <div class="pb-cell"><span class="tape"></span><figure><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20golden%20hour%20sunlight%20streaming%20through%20a%20window%2C%20soft%20long%20shadows%20on%20a%20minimalist%20wall%2C%20cozy%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""></figure></div>
+            <div class="pb-cell"><span class="tape"></span><figure><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sunbeam%20through%20tree%20leaves%20casting%20light%20spots%20on%20the%20ground%2C%20golden%20bokeh%2C%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""></figure></div>
+            <div class="pb-cell"><span class="tape"></span><figure><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20lamp%20glow%20in%20a%20cozy%20room%2C%20soft%20golden%20light%20and%20gentle%20shadow%2C%20cinematic%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""></figure></div>
+          </div>
+          <div class="pb-row r2">
+            <div class="pb-cell"><span class="tape"></span><figure><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=golden%20sunset%20silhouette%20portrait%2C%20warm%20rim%20light%2C%20emotional%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""></figure></div>
+            <div class="pb-cell"><span class="tape"></span><figure><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=city%20street%20lights%20at%20dusk%20bokeh%2C%20warm%20golden%20glow%2C%20cinematic%20night%2C%20photography&image_size=landscape_4_3" alt=""></figure></div>
+          </div>
+        </div>
+        <div class="pb-msg kai">
+          说好集齐就寄给你的——<br>
+          五枚光，<em>一枚不少</em>。<br>
+          现在把它们摊开，<br>
+          这下，你也有份了。
+        </div>
+        <div class="pb-from">
+          <div class="who">FROM. 我的光影碎片册 <small>光线辑 · 完</small></div>
+          <div class="cnt">已集齐 <b>伍</b>/ 伍</div>
+        </div>
+        <div class="pb-invite">
+          <div class="t">这是我收集的光影碎片，轮到你晒出你的了<small>SHOW ME YOURS</small></div>
+          <div class="arr"></div>
+        </div>
+        <div class="pb-brand">如画 LUMIRA · 记录每一帧光影</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 设计说明 ================= -->
+  <div class="note">
+    <h3>两个方向的差异与共同点</h3>
+    <p>
+      <b>方向 A · 光影收藏册</b>：把碎片拍成「编号入册的标本」——每枚有中文编号与收藏日期，空位写着期待（肆 · 留给下一场好光）。
+      情绪基调是<b>珍藏与成就</b>：「看我攒下的宝贝」，适合激发收藏炫耀欲，与 App 内碎片册的仪式感一脉相承。<br><br>
+      <b>方向 B · 寄给你的明信片</b>：海报本身就是一张「寄给朋友的明信片」——邮票、邮戳、TO./FROM.、手写体留言一应俱全。
+      情绪基调是<b>亲密与分享</b>，且自带叙事闭环：<b>进行中版本是承诺</b>（等集齐了，第一个寄给你看），
+      <b>集齐版本是兑现</b>（说好寄给你的，一枚不少）——用户会被推动在集齐后<b>再分享一次</b>，天然形成两波传播。<br><br>
+      <b>共同点</b>：暖白纸感 + 金色发丝线 + 衬线标题的品牌语言不变；3:4 竖版；照片完整露出；无二维码，纯晒图社交定位；
+      晒图邀请句统一围绕「这是我收集的光影碎片，看看你们的」，不谈拉新奖励，只做纯粹的分享互动。
+    </p>
+  </div>
+</body>
+</html>

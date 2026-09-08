@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 碎片收集分享海报（第三轮 · 光影小票 & 选片单）</title>
+<style>
+  :root{
+    --gold:#C9A96E;--gold-deep:#B08D4F;--ink:#2A2620;
+    --text2:#6B645C;--text3:#9A8F7C;
+    --surface:#FDFBF7;--surface-alt:#F6F1E8;--line:rgba(201,169,110,.32);
+    --paper:#FEFCF9;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#EFEAE1;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:44px 20px 110px;display:flex;flex-direction:column;align-items:center;gap:14px;-webkit-font-smoothing:antialiased}
+  .serif{font-family:"Noto Serif SC","Songti SC",Georgia,serif}
+  .kai{font-family:"Kaiti SC","KaiTi","STKaiti","DFKai-SB","Noto Serif SC",serif}
+  .page-title{color:#4A4238;font-size:18px;letter-spacing:3px;font-weight:600;display:flex;align-items:center;gap:12px}
+  .page-title::before,.page-title::after{content:"";width:44px;height:1px;background:var(--line)}
+  .page-sub{color:#8A7F6E;font-size:12px;letter-spacing:1.5px;text-align:center;line-height:2;max-width:760px}
+  .page-sub b{color:#A08A5F;font-weight:600}
+
+  .dir-head{margin-top:42px;display:flex;align-items:baseline;gap:14px}
+  .dir-head .no{font-family:Georgia,serif;font-size:30px;color:var(--gold);font-style:italic}
+  .dir-head .name{font-size:17px;color:#4A4238;letter-spacing:2px;font-weight:700}
+  .dir-head .pos{font-size:11px;color:#8A7F6E;letter-spacing:1px}
+  .row{display:flex;gap:48px;flex-wrap:wrap;justify-content:center;align-items:flex-start;margin-top:22px}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .sys-label{font-size:10px;color:#A08A5F;letter-spacing:2px;background:#F3ECE0;border:1px solid var(--line);padding:3px 12px;border-radius:12px}
+
+  .poster{width:340px;aspect-ratio:3/4;position:relative;overflow:hidden;border:1px solid var(--line);box-shadow:0 24px 60px -28px rgba(60,48,28,.35);border-radius:3px;display:flex;flex-direction:column}
+
+  /* ===== 顶部比例系统示意 ===== */
+  .ratio-strip{margin-top:26px;display:flex;align-items:flex-end;gap:14px;background:#F7F2E9;border:1px solid var(--line);border-radius:6px;padding:16px 22px 13px}
+  .ratio-strip .rb{display:flex;flex-direction:column;align-items:center;gap:5px}
+  .ratio-strip .bx{border:1.5px dashed var(--gold);background:rgba(201,169,110,.07)}
+  .ratio-strip .lb{font-size:9px;letter-spacing:1px;color:var(--text2)}
+  .ratio-strip .cap{margin-left:auto;writing-mode:horizontal-tb;text-align:right}
+  .ratio-strip .cap b{display:block;font-size:11px;letter-spacing:2px;color:var(--gold-deep)}
+  .ratio-strip .cap span{font-size:9px;letter-spacing:1px;color:var(--text3)}
+
+  /* ============ 零裁切 · 等高自适应画廊（通用） ============ */
+  .jrow{display:flex;gap:7px}
+  .jrow .ph{position:relative;border:1px solid var(--line);background:var(--surface-alt);line-height:0}
+  .jrow .ph img{width:100%;height:100%;object-fit:contain;display:block}
+  .tag{position:absolute;top:0;left:0;background:rgba(20,16,10,.42);color:#FDFBF7;font-size:7px;letter-spacing:1px;padding:2px 5px;line-height:1.4;z-index:2}
+
+  /* ============ 方向 E · 光影小票 ============ */
+  .poster.e{padding:0;background:#EFEAE1;border:none;box-shadow:none;border-radius:0}
+  .rcpt{width:100%;height:100%;background:var(--paper);box-shadow:0 24px 60px -28px rgba(60,48,28,.4);display:flex;flex-direction:column;padding:16px 20px 12px;position:relative}
+  .zz{height:7px;background:linear-gradient(-45deg,var(--paper) 4.5px,transparent 0) 0 0/9px 9px repeat-x,linear-gradient(45deg,var(--paper) 4.5px,transparent 0) 0 0/9px 9px repeat-x;flex:none}
+  .zz.up{transform:scaleY(-1)}
+  .r-head{text-align:center}
+  .r-head .store{font-size:15px;font-weight:700;color:var(--ink);letter-spacing:2px}
+  .r-head .sub{font-size:7px;letter-spacing:2.5px;color:var(--text3);margin-top:3px}
+  .r-dash{border-top:1px dashed rgba(42,38,32,.25);margin:9px 0}
+  .r-meta{font-size:8px;letter-spacing:1px;color:var(--text2);display:flex;justify-content:space-between;gap:8px}
+  .r-sec{display:flex;align-items:center;gap:7px;justify-content:center;margin:10px 0 8px}
+  .r-sec i{width:5px;height:5px;background:var(--gold);transform:rotate(45deg);flex:none}
+  .r-sec span{font-size:9.5px;letter-spacing:2.5px;color:var(--gold-deep);font-weight:700}
+  .r-strip{display:flex;flex-direction:column;gap:7px}
+  .r-items{margin-top:9px;display:flex;flex-direction:column;gap:4px}
+  .it{display:flex;align-items:baseline;gap:6px;font-size:9px;letter-spacing:.5px;color:var(--ink)}
+  .it .no{color:var(--gold-deep);font-weight:700;font-family:"Noto Serif SC",serif}
+  .it .nm{white-space:nowrap}
+  .it .sp{color:var(--text3);font-size:8px;white-space:nowrap}
+  .it .dots{flex:1;border-bottom:1px dotted rgba(42,38,32,.35);transform:translateY(-2px)}
+  .it .qt{font-weight:700;white-space:nowrap}
+  .it .qt.wait{color:var(--gold-deep)}
+  .r-total{display:flex;align-items:baseline;justify-content:center;gap:5px;margin:4px 0 2px}
+  .r-total .big{font-family:"Noto Serif SC",serif;font-size:22px;font-weight:700;color:var(--gold-deep);line-height:1}
+  .r-total .t{font-size:9.5px;letter-spacing:1.5px;color:var(--ink);font-weight:700}
+  .r-total .t small{font-size:8px;color:var(--text2);font-weight:400;letter-spacing:1px}
+  .r-say{text-align:center;font-size:8.5px;letter-spacing:1.5px;color:var(--text2);margin-top:3px}
+  .r-invite{margin-top:9px;border:1px dashed var(--gold);padding:8px 10px;text-align:center;background:rgba(201,169,110,.05)}
+  .r-invite .k{font-size:7px;letter-spacing:2.5px;color:var(--gold-deep);margin-bottom:3px}
+  .r-invite .q{font-size:10.5px;line-height:1.65;color:var(--ink);letter-spacing:.5px}
+  .r-foot{margin-top:auto;padding-top:8px;display:flex;flex-direction:column;align-items:center;gap:4px}
+  .barcode{width:150px;height:22px;background:repeating-linear-gradient(90deg,#37322A 0 2px,transparent 2px 5px,#37322A 5px 6px,transparent 6px 8px,#37322A 8px 11px,transparent 11px 15px)}
+  .r-serial{font-size:7px;letter-spacing:2px;color:var(--text3)}
+  .r-thanks{font-size:8px;letter-spacing:3px;color:var(--text2);font-weight:600}
+
+  /* ============ 方向 F · 选片单 ============ */
+  .poster.f{padding:14px 18px 12px;background:linear-gradient(180deg,#FDFBF7 0%,#FBF5EA 100%)}
+  .film{height:16px;background:repeating-linear-gradient(90deg,#2A2620 0 6px,#FDFBF7 6px 12px,#2A2620 12px 17px);flex:none}
+  .f-head{display:flex;align-items:baseline;justify-content:space-between;margin-top:11px}
+  .f-head .zh{font-size:19px;font-weight:700;color:var(--ink);letter-spacing:3px}
+  .f-head .en{font-size:7.5px;letter-spacing:3px;color:var(--text3)}
+  .f-info{font-size:8px;letter-spacing:1.5px;color:var(--text2);margin-top:5px;display:flex;justify-content:space-between}
+  .f-info b{color:var(--gold-deep);font-weight:700}
+  .f-title{margin-top:10px;font-size:15.5px;letter-spacing:1px;font-weight:700;color:var(--ink);line-height:1.45}
+  .f-title em{font-style:normal;color:var(--gold-deep)}
+  .f-rule{height:1px;background:linear-gradient(90deg,var(--gold),transparent);margin:9px 0 10px}
+  .f-grid{display:flex;flex-direction:column;gap:8px}
+  .f-cap{font-size:8px;letter-spacing:1px;color:var(--text2);text-align:center;margin-top:3px}
+  .f-cap b{color:var(--gold-deep);font-family:"Noto Serif SC",serif}
+  .f-empty{flex:1;border:1.5px dashed rgba(201,169,110,.55);background:rgba(246,241,232,.5);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:62px}
+  .dia{width:8px;height:8px;border:1.2px solid var(--gold);transform:rotate(45deg)}
+  .f-empty .lab{font-size:8px;letter-spacing:1px;color:var(--text3);line-height:1.5;text-align:center}
+  .f-empty .lab b{color:var(--gold-deep);font-family:"Noto Serif SC",serif;letter-spacing:2px}
+  .ring{position:absolute;inset:-4px;border:2px solid rgba(176,141,79,.85);border-radius:48% 52% 50% 50%/55% 48% 52% 45%;transform:rotate(-3deg);pointer-events:none;z-index:3}
+  .ring-note{position:absolute;right:-2px;bottom:-6px;font-size:8.5px;color:var(--gold-deep);transform:rotate(-4deg);z-index:3;letter-spacing:1px}
+  .f-pick{margin-top:11px;display:flex;align-items:center;gap:8px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:7px 2px}
+  .f-pick .k{font-size:8.5px;letter-spacing:2px;color:var(--text2);white-space:nowrap}
+  .ck{width:10px;height:10px;border:1px solid var(--gold-deep);border-radius:2px;position:relative;flex:none}
+  .ck.on{background:var(--gold-deep)}
+  .ck.on::after{content:"";position:absolute;left:1.5px;top:2.5px;width:4px;height:2px;border-left:1.5px solid #FDFBF7;border-bottom:1.5px solid #FDFBF7;transform:rotate(-45deg)}
+  .ck.off{border-style:dashed;border-color:rgba(176,141,79,.6)}
+  .f-pick .v{margin-left:auto;font-size:9px;letter-spacing:1.5px;color:var(--ink);font-weight:700;white-space:nowrap}
+  .f-pick .v small{color:var(--text2);font-weight:400}
+  .f-stub{margin-top:auto;border-top:1.5px dashed rgba(42,38,32,.3);padding-top:8px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .f-stub .l{font-size:7px;letter-spacing:1.5px;color:var(--text3);line-height:1.7}
+  .f-stub .l b{display:block;font-size:8.5px;letter-spacing:2px;color:var(--gold-deep)}
+  .f-stub .q{font-size:11px;font-weight:700;color:var(--ink);letter-spacing:.5px;line-height:1.5;text-align:right}
+  .f-stub .q small{display:block;font-size:7px;letter-spacing:2px;color:var(--text3);font-weight:400;margin-top:2px}
+  .f-stub .arr{width:7px;height:7px;border-top:1.5px solid var(--gold-deep);border-right:1.5px solid var(--gold-deep);transform:rotate(45deg);flex:none}
+
+  /* ===== 文案表 & 说明 ===== */
+  .copywrap{margin-top:38px;width:min(880px,94vw);background:#F7F2E9;border:1px solid var(--line);border-radius:6px;padding:26px 30px 24px}
+  .copywrap h3{font-size:14px;letter-spacing:3px;color:#4A4238;font-weight:700;display:flex;align-items:center;gap:10px}
+  .copywrap h3::before{content:"";width:20px;height:1px;background:var(--gold)}
+  .copywrap .cp-sub{font-size:10.5px;color:#8A7F6E;letter-spacing:1px;margin-top:6px;line-height:1.9}
+  table{width:100%;border-collapse:collapse;margin-top:16px}
+  th{font-size:9.5px;letter-spacing:2px;color:var(--gold-deep);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{font-size:11px;color:#4A4238;letter-spacing:.5px;padding:10px;border-bottom:1px solid rgba(201,169,110,.14);line-height:1.7;vertical-align:top}
+  td.cat{font-weight:700;white-space:nowrap}
+
+  .note{margin-top:42px;width:min(880px,94vw);background:rgba(253,251,247,.6);border:1px solid rgba(201,169,110,.2);border-radius:6px;padding:22px 28px}
+  .note h3{font-size:13px;letter-spacing:2.5px;color:#4A4238;font-weight:700;margin-bottom:12px}
+  .note p{font-size:11.5px;color:#6B645C;line-height:2;letter-spacing:.5px}
+  .note p b{color:var(--gold-deep)}
+  .note code{font-family:Consolas,monospace;font-size:10.5px;background:rgba(201,169,110,.12);padding:1px 5px;border-radius:3px}
+</style>
+</head>
+<body>
+  <div class="page-title">碎片收集 · 分享海报（第三轮）</div>
+  <div class="page-sub">
+    本轮三件事：<b>① 混合比例零裁切</b>（16:9 / 1:1 / 9:16 / 4:3 / 3:4 全部完整入册）· <b>② 文案接地气</b>（说人话、带拍照人的梗）· <b>③ 排版全新</b>（两种「纸品」形态：小票 & 选片单）<br>
+    品牌基因不变：暖白 · 金 · 衬线 · 3:4 竖版 · 无二维码 · 纯晒图社交
+  </div>
+
+  <!-- ===== 比例系统示意 ===== -->
+  <div class="ratio-strip">
+    <div class="rb"><div class="bx" style="width:64px;height:36px"></div><span class="lb">16:9</span></div>
+    <div class="rb"><div class="bx" style="width:36px;height:36px"></div><span class="lb">1:1</span></div>
+    <div class="rb"><div class="bx" style="width:21px;height:36px"></div><span class="lb">9:16</span></div>
+    <div class="rb"><div class="bx" style="width:48px;height:36px"></div><span class="lb">4:3</span></div>
+    <div class="rb"><div class="bx" style="width:27px;height:36px"></div><span class="lb">3:4</span></div>
+    <div class="cap"><b>五档原生比例 · 零裁切</b><span>等高画廊：行内等高、宽度按比例分配<br>空位不预设形状，新照片进来整版重排</span></div>
+  </div>
+
+  <!-- ================= 方向 E · 光影小票 ================= -->
+  <div class="dir-head">
+    <span class="no">E</span>
+    <span class="name">光影小票</span>
+    <span class="pos">收银小票形态 · 把收集讲成「进货对账」· 接地气文案主场</span>
+  </div>
+  <div class="row">
+    <!-- E · 收集进行中 3/5 -->
+    <div class="cell">
+      <span class="sys-label">收集进行中 · 3/5</span>
+      <div class="poster e">
+        <div class="zz up"></div>
+        <div class="rcpt">
+          <div class="r-head">
+            <div class="store serif">LUMIRA 光影百货</div>
+            <div class="sub">收银小票 · CUSTOMER COPY</div>
+          </div>
+          <div class="r-dash"></div>
+          <div class="r-meta"><span>NO.0908-003</span><span>2026.09.08</span><span>天气：晴，光线正好</span></div>
+          <div class="r-sec"><i></i><span>本期进货 · 光线碎片专柜</span><i></i></div>
+          <div class="r-strip">
+            <div class="jrow" style="height:88px">
+              <div class="ph" style="flex:178"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20golden%20hour%20sunlight%20streaming%20through%20a%20window%2C%20soft%20long%20shadows%20on%20a%20minimalist%20wall%2C%20cozy%20warm%20tone%2C%20photography&image_size=landscape_16_9" alt=""></div>
+              <div class="ph" style="flex:100"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sunbeam%20through%20tree%20leaves%20casting%20light%20spots%20on%20the%20ground%2C%20golden%20bokeh%2C%20warm%20atmosphere%2C%20photography&image_size=square" alt=""></div>
+              <div class="ph" style="flex:56"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=city%20street%20lamp%20just%20lit%20at%20dusk%2C%20warm%20golden%20glow%2C%20cinematic%20night%20atmosphere%2C%20photography&image_size=portrait_16_9" alt=""></div>
+            </div>
+          </div>
+          <div class="r-items">
+            <div class="it"><span class="no">壹</span><span class="nm">窗边那道金光</span><span class="sp">16:9 · 08.02</span><span class="dots"></span><span class="qt">×1</span></div>
+            <div class="it"><span class="no">贰</span><span class="nm">树下的光斑</span><span class="sp">1:1 · 08.09</span><span class="dots"></span><span class="qt">×1</span></div>
+            <div class="it"><span class="no">叁</span><span class="nm">路灯刚亮那秒</span><span class="sp">9:16 · 08.15</span><span class="dots"></span><span class="qt">×1</span></div>
+            <div class="it"><span class="no">肆</span><span class="nm">比例随缘 · 拍到啥算啥</span><span class="dots"></span><span class="qt wait">待进</span></div>
+            <div class="it"><span class="no">伍</span><span class="nm">位置留好了 · 就等它了</span><span class="dots"></span><span class="qt wait">待进</span></div>
+          </div>
+          <div class="r-dash"></div>
+          <div class="r-total"><span class="t">已入账</span><span class="big">3</span><span class="t">张<small> · 还欠 2 张</small></span></div>
+          <div class="r-say">欠的这两张，下次一定</div>
+          <div class="r-invite">
+            <div class="k">晒 图 邀 请</div>
+            <div class="q">都是亲手拍的，不吹不黑。<br>你们的光影小票长啥样？晒出来对个账。</div>
+          </div>
+          <div class="r-foot">
+            <div class="barcode"></div>
+            <div class="r-serial">NO. LUMIRA-20260908-003</div>
+            <div class="r-thanks">谢谢晒图 · 欢迎攀比</div>
+          </div>
+        </div>
+        <div class="zz"></div>
+      </div>
+    </div>
+
+    <!-- E · 已集齐 5/5 -->
+    <div class="cell">
+      <span class="sys-label">已集齐 · 5/5</span>
+      <div class="poster e">
+        <div class="zz up"></div>
+        <div class="rcpt">
+          <div class="r-head">
+            <div class="store serif">LUMIRA 光影百货</div>
+            <div class="sub">收银小票 · CUSTOMER COPY</div>
+          </div>
+          <div class="r-dash"></div>
+          <div class="r-meta"><span>NO.0908-009</span><span>2026.09.08</span><span>天气：晴，出片率极高</span></div>
+          <div class="r-sec"><i></i><span>本期进货 · 光线碎片专柜 · 结清</span><i></i></div>
+          <div class="r-strip">
+            <div class="jrow" style="height:78px">
+              <div class="ph" style="flex:178"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20golden%20hour%20sunlight%20streaming%20through%20a%20window%2C%20soft%20long%20shadows%20on%20a%20minimalist%20wall%2C%20cozy%20warm%20tone%2C%20photography&image_size=landscape_16_9" alt=""></div>
+              <div class="ph" style="flex:100"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sunbeam%20through%20tree%20leaves%20casting%20light%20spots%20on%20the%20ground%2C%20golden%20bokeh%2C%20warm%20atmosphere%2C%20photography&image_size=square" alt=""></div>
+            </div>
+            <div class="jrow" style="height:78px">
+              <div class="ph" style="flex:56"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=city%20street%20lamp%20just%20lit%20at%20dusk%2C%20warm%20golden%20glow%2C%20cinematic%20night%20atmosphere%2C%20photography&image_size=portrait_16_9" alt=""></div>
+              <div class="ph" style="flex:133"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=golden%20sunset%20silhouette%20portrait%2C%20warm%20rim%20light%2C%20emotional%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""></div>
+              <div class="ph" style="flex:75"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20lamp%20glow%20in%20a%20cozy%20room%2C%20soft%20golden%20light%20and%20gentle%20shadow%2C%20cinematic%20warm%20tone%2C%20photography&image_size=portrait_4_3" alt=""></div>
+            </div>
+          </div>
+          <div class="r-items">
+            <div class="it"><span class="no">壹</span><span class="nm">窗边那道金光</span><span class="sp">16:9</span><span class="dots"></span><span class="qt">×1</span></div>
+            <div class="it"><span class="no">贰</span><span class="nm">树下的光斑</span><span class="sp">1:1</span><span class="dots"></span><span class="qt">×1</span></div>
+            <div class="it"><span class="no">叁</span><span class="nm">路灯刚亮那秒</span><span class="sp">9:16</span><span class="dots"></span><span class="qt">×1</span></div>
+            <div class="it"><span class="no">肆</span><span class="nm">天边那场日落</span><span class="sp">4:3</span><span class="dots"></span><span class="qt">×1</span></div>
+            <div class="it"><span class="no">伍</span><span class="nm">台灯下的房间</span><span class="sp">3:4</span><span class="dots"></span><span class="qt">×1</span></div>
+          </div>
+          <div class="r-dash"></div>
+          <div class="r-total"><span class="t">结清</span><span class="big">5</span><span class="t">张<small> · 一张不欠</small></span></div>
+          <div class="r-say">这波，可以吹一年</div>
+          <div class="r-invite">
+            <div class="k">晒 图 邀 请</div>
+            <div class="q">五张全齐，先晒为敬。<br>还差你们的——晒出来，评论区见。</div>
+          </div>
+          <div class="r-foot">
+            <div class="barcode"></div>
+            <div class="r-serial">NO. LUMIRA-20260908-009</div>
+            <div class="r-thanks">谢谢晒图 · 欢迎攀比</div>
+          </div>
+        </div>
+        <div class="zz"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 方向 F · 选片单 ================= -->
+  <div class="dir-head">
+    <span class="no">F</span>
+    <span class="name">选片单</span>
+    <span class="pos">冲印选片单形态 · 把收集讲成「勾片选片」· 胶片齿孔 + 油性笔圈选</span>
+  </div>
+  <div class="row">
+    <!-- F · 收集进行中 3/5 -->
+    <div class="cell">
+      <span class="sys-label">收集进行中 · 3/5</span>
+      <div class="poster f">
+        <div class="film"></div>
+        <div class="f-head"><span class="zh serif">选片单</span><span class="en">CONTACT SHEET</span></div>
+        <div class="f-info"><span>卷号 <b>GX-35</b> · 光线碎片</span><span>冲印 <b>2026.09.08</b></span></div>
+        <div class="f-title serif">这一卷，都是我<em>亲手拍</em>的光。</div>
+        <div class="f-rule"></div>
+        <div class="f-grid">
+          <div>
+            <div class="jrow" style="height:96px">
+              <div class="ph" style="flex:178"><span class="tag">01 · 16:9</span><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20golden%20hour%20sunlight%20streaming%20through%20a%20window%2C%20soft%20long%20shadows%20on%20a%20minimalist%20wall%2C%20cozy%20warm%20tone%2C%20photography&image_size=landscape_16_9" alt=""></div>
+              <div class="ph" style="flex:100"><span class="tag">02 · 1:1</span><span class="ring"></span><span class="ring-note kai">这张绝了</span><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sunbeam%20through%20tree%20leaves%20casting%20light%20spots%20on%20the%20ground%2C%20golden%20bokeh%2C%20warm%20atmosphere%2C%20photography&image_size=square" alt=""></div>
+              <div class="ph" style="flex:56"><span class="tag">03 · 9:16</span><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=city%20street%20lamp%20just%20lit%20at%20dusk%2C%20warm%20golden%20glow%2C%20cinematic%20night%20atmosphere%2C%20photography&image_size=portrait_16_9" alt=""></div>
+            </div>
+            <div class="f-cap"><b>壹</b> 窗边 · 手稳住了 &nbsp;/&nbsp; <b>贰</b> 光斑 · 连拍二十张挑的 &nbsp;/&nbsp; <b>叁</b> 路灯 · 刚亮那秒</div>
+          </div>
+          <div class="jrow">
+            <div class="f-empty"><span class="dia"></span><span class="lab"><b>肆</b><br>比例随缘，拍到啥算啥</span></div>
+            <div class="f-empty"><span class="dia"></span><span class="lab"><b>伍</b><br>位置留好了，就等它了</span></div>
+          </div>
+        </div>
+        <div class="f-pick">
+          <span class="k">选片结果</span>
+          <span class="ck on"></span><span class="ck on"></span><span class="ck on"></span><span class="ck off"></span><span class="ck off"></span>
+          <span class="v">已选 3<small> · 待补 2</small></span>
+        </div>
+        <div class="f-stub">
+          <div class="l"><b>取件凭证 · STUB</b>GX-35 · 光线碎片<br>冲印部凭此条取件</div>
+          <div class="q serif">先晒为敬——你们拍到过<br>最好的光，是哪一张？<small>SHOW ME YOURS · 评论区蹲一个同好</small></div>
+          <i class="arr"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- F · 已集齐 5/5 -->
+    <div class="cell">
+      <span class="sys-label">已集齐 · 5/5</span>
+      <div class="poster f">
+        <div class="film"></div>
+        <div class="f-head"><span class="zh serif">选片单</span><span class="en">CONTACT SHEET</span></div>
+        <div class="f-info"><span>卷号 <b>GX-35</b> · 光线碎片 · 整卷</span><span>冲印 <b>2026.09.08</b></span></div>
+        <div class="f-title serif">整卷冲完，<em>张张能看</em>。</div>
+        <div class="f-rule"></div>
+        <div class="f-grid">
+          <div>
+            <div class="jrow" style="height:88px">
+              <div class="ph" style="flex:178"><span class="tag">01 · 16:9</span><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20golden%20hour%20sunlight%20streaming%20through%20a%20window%2C%20soft%20long%20shadows%20on%20a%20minimalist%20wall%2C%20cozy%20warm%20tone%2C%20photography&image_size=landscape_16_9" alt=""></div>
+              <div class="ph" style="flex:100"><span class="tag">02 · 1:1</span><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sunbeam%20through%20tree%20leaves%20casting%20light%20spots%20on%20the%20ground%2C%20golden%20bokeh%2C%20warm%20atmosphere%2C%20photography&image_size=square" alt=""></div>
+            </div>
+            <div class="f-cap"><b>壹</b> 窗边 · 手稳住了 &nbsp;/&nbsp; <b>贰</b> 光斑 · 连拍二十张挑的</div>
+          </div>
+          <div>
+            <div class="jrow" style="height:88px">
+              <div class="ph" style="flex:56"><span class="tag">03 · 9:16</span><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=city%20street%20lamp%20just%20lit%20at%20dusk%2C%20warm%20golden%20glow%2C%20cinematic%20night%20atmosphere%2C%20photography&image_size=portrait_16_9" alt=""></div>
+              <div class="ph" style="flex:133"><span class="tag">04 · 4:3</span><span class="ring"></span><span class="ring-note kai">这张绝了</span><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=golden%20sunset%20silhouette%20portrait%2C%20warm%20rim%20light%2C%20emotional%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""></div>
+              <div class="ph" style="flex:75"><span class="tag">05 · 3:4</span><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20lamp%20glow%20in%20a%20cozy%20room%2C%20soft%20golden%20light%20and%20gentle%20shadow%2C%20cinematic%20warm%20tone%2C%20photography&image_size=portrait_4_3" alt=""></div>
+            </div>
+            <div class="f-cap"><b>叁</b> 路灯 · 刚亮那秒 &nbsp;/&nbsp; <b>肆</b> 日落 · 占了个好机位 &nbsp;/&nbsp; <b>伍</b> 台灯 · 拍完自己都愣了</div>
+          </div>
+        </div>
+        <div class="f-pick">
+          <span class="k">选片结果</span>
+          <span class="ck on"></span><span class="ck on"></span><span class="ck on"></span><span class="ck on"></span><span class="ck on"></span>
+          <span class="v">全要<small> · 一张不落</small></span>
+        </div>
+        <div class="f-stub">
+          <div class="l"><b>取件凭证 · STUB</b>GX-35 · 光线碎片 · 完卷<br>选片师傅（我自己）盖章通过</div>
+          <div class="q serif">整卷齐活，轮到你们了——<br>晒出来比比？<small>SHOW ME YOURS · 评论区蹲一个同好</small></div>
+          <i class="arr"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 接地气文案表 ================= -->
+  <div class="copywrap">
+    <h3>接地气文案系统</h3>
+    <div class="cp-sub">原则：说人话、带拍照人才懂的梗（连拍二十张挑一张 / 手一抖反而绝了 / 占个好机位），自嘲与得意并存；精致排版 × 大实话文案 = 反差萌，分享不装。</div>
+    <table>
+      <thead>
+        <tr><th>位置</th><th>小票系（E）</th><th>选片系（F）</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="cat">情绪标题 · 进行中</td>
+          <td>本期进货：已入账 3 张，还欠 2 张<br>「欠的这两张，下次一定」</td>
+          <td>这一卷，都是我亲手拍的光。<br>冲出来了，先睹为快</td>
+        </tr>
+        <tr>
+          <td class="cat">情绪标题 · 已集齐</td>
+          <td>结清！5 张，一张不欠<br>「这波，可以吹一年」</td>
+          <td>整卷冲完，张张能看。<br>选片师傅（我自己）盖章通过</td>
+        </tr>
+        <tr>
+          <td class="cat">单枚碎片叫法</td>
+          <td>窗边那道金光 / 树下的光斑 / 路灯刚亮那秒 /<br>天边那场日落 / 台灯下的房间</td>
+          <td>窗边 · 手稳住了 / 光斑 · 连拍二十张挑的 /<br>路灯 · 刚亮那秒 / 日落 · 占了个好机位 / 台灯 · 拍完自己都愣了</td>
+        </tr>
+        <tr>
+          <td class="cat">空位文案</td>
+          <td>肆 · 比例随缘，拍到啥算啥（待进）<br>伍 · 位置留好了，就等它了（待进）</td>
+          <td>肆 · 比例随缘，拍到啥算啥<br>伍 · 位置留好了，就等它了</td>
+        </tr>
+        <tr>
+          <td class="cat">晒图邀请</td>
+          <td>都是亲手拍的，不吹不黑。<br>你们的光影小票长啥样？晒出来对个账。<br>（集齐）五张全齐，先晒为敬。还差你们的——晒出来，评论区见。</td>
+          <td>先晒为敬——你们拍到过最好的光，是哪一张？<br>（集齐）整卷齐活，轮到你们了——晒出来比比？<br>落款：评论区蹲一个同好</td>
+        </tr>
+        <tr>
+          <td class="cat">彩蛋小字</td>
+          <td>天气：晴，光线正好 / 谢谢晒图 · 欢迎攀比</td>
+          <td>油性笔圈选批注：这张绝了</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================= 技术与差异说明 ================= -->
+  <div class="note">
+    <h3>零裁切方案 · 与前两轮差异</h3>
+    <p>
+      <b>① 混合比例零裁切（本轮核心）</b>：照片区采用「<b>等高自适应画廊</b>」——同一行照片等高、宽度按各自<b>原生比例</b>分配
+      （实现上按 <code>flex-grow = 宽高比</code> 分配，格子天然与照片同比例，<code>contain</code> 即满幅贴合）。
+      16:9 / 1:1 / 9:16 / 4:3 / 3:4 五档比例混排，全部完整入册、零裁切、零变形。每张照片带比例标签（<code>01 · 16:9</code>）明示系统。<br>
+      <b>空位不预设形状</b>：因为下一张照片比例未知，空位不再画固定比例的虚线框，而用文字占位（「比例随缘，拍到啥算啥」）——
+      收集到新照片后整版自动重排（reflow），任何比例都接得住。<br>
+      Flutter 落地提示：现有 <code>fragment_poster_generator.dart</code> 的 <code>galleryStrip</code>（等高画廊带）已是这套逻辑，本轮设计可直接复用其照片区实现，成本低。<br><br>
+      <b>② 排版全新</b>：E 把海报做成一张「收银小票」——锯齿撕边、虚线分隔、点线对账栏、条码流水号（纯装饰，不编码任何信息）；
+      F 做成一张「冲印选片单」——胶片齿孔条、帧号标签、油性笔手绘圈选（这张绝了）、勾选框选片结果、撕线取件凭证。
+      进度表达也随之更新：E 用「入账 / 结清」，F 用「已选 / 全要」。与第一轮（外框印章册页）、第二轮（星图连线 / 杂志页码）完全不同。<br><br>
+      <b>③ 文案接地气</b>：全程说人话——「不吹不黑」「先晒为敬」「评论区蹲一个同好」「连拍二十张挑的」「这波可以吹一年」，
+      晒的是成绩单也是心态，让刷到的人会心一笑、愿意跟一条「我也拍过」。
+    </p>
+  </div>
+</body>
+</html>

@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 碎片收集分享海报（第二轮 · 拾光星图 & 光影手记）</title>
+<style>
+  :root{
+    --gold:#C9A96E;--gold-deep:#B08D4F;--ink:#2A2620;
+    --text2:#6B645C;--text3:#9A8F7C;
+    --surface:#FDFBF7;--surface-alt:#F6F1E8;--line:rgba(201,169,110,.32);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#EDE8DE;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:44px 20px 110px;display:flex;flex-direction:column;align-items:center;gap:14px;-webkit-font-smoothing:antialiased}
+  .serif{font-family:"Noto Serif SC","Songti SC",Georgia,serif}
+  .page-title{color:#4A4238;font-size:18px;letter-spacing:3px;font-weight:600;display:flex;align-items:center;gap:12px}
+  .page-title::before,.page-title::after{content:"";width:44px;height:1px;background:var(--line)}
+  .page-sub{color:#8A7F6E;font-size:12px;letter-spacing:1.5px;text-align:center;line-height:2;max-width:720px}
+  .page-sub b{color:#A08A5F;font-weight:600}
+
+  .dir-head{margin-top:42px;display:flex;align-items:baseline;gap:14px}
+  .dir-head .no{font-family:Georgia,serif;font-size:30px;color:var(--gold);font-style:italic}
+  .dir-head .name{font-size:17px;color:#4A4238;letter-spacing:2px;font-weight:700}
+  .dir-head .pos{font-size:11px;color:#8A7F6E;letter-spacing:1px}
+  .row{display:flex;gap:48px;flex-wrap:wrap;justify-content:center;align-items:flex-start;margin-top:22px}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .sys-label{font-size:10px;color:#A08A5F;letter-spacing:2px;background:#F3ECE0;border:1px solid var(--line);padding:3px 12px;border-radius:12px}
+  .brand{display:inline-flex;align-items:baseline;gap:7px}
+  .brand .en{font-size:11px;letter-spacing:4px;color:var(--gold-deep);font-weight:700}
+  .brand .zh{font-size:10px;letter-spacing:3px;color:var(--text3)}
+
+  .poster{width:340px;aspect-ratio:3/4;position:relative;overflow:hidden;border:1px solid var(--line);box-shadow:0 24px 60px -28px rgba(60,48,28,.35);border-radius:3px;display:flex;flex-direction:column;padding:18px}
+
+  /* ===== 四角星（通用装饰元素，非 emoji） ===== */
+  .spark{display:inline-block;clip-path:polygon(50% 0%,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0% 50%,38% 38%);background:var(--gold-deep)}
+  .spark.dim{opacity:.16}
+  .spark-ring{position:relative;width:13px;height:13px;display:inline-block}
+  .spark-ring::before{content:"";position:absolute;inset:0;background:var(--gold);clip-path:polygon(50% 0%,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0% 50%,38% 38%)}
+  .spark-ring::after{content:"";position:absolute;inset:3px;background:var(--surface);clip-path:polygon(50% 0%,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0% 50%,38% 38%)}
+
+  /* ============ 方向 C · 拾光星图 ============ */
+  .poster.c{padding:18px;background:linear-gradient(172deg,#FDFBF7 0%,#FAF5EA 58%,#F5EEDF 100%)}
+  .c-top{display:flex;align-items:center;justify-content:space-between}
+  .c-pill{font-size:9px;letter-spacing:2px;color:var(--gold-deep);border:1px solid var(--gold-deep);padding:2px 9px;border-radius:999px}
+  .c-pill.on{background:var(--gold-deep);color:#FDFBF7}
+  .c-main{display:flex;gap:14px;margin-top:12px}
+  .c-map{position:relative;width:250px;height:272px;flex:none}
+  .c-map::before{content:"";position:absolute;inset:-8px;background:radial-gradient(circle at 42% 38%,rgba(201,169,110,.10),transparent 62%);pointer-events:none}
+  .c-lines{position:absolute;inset:0;pointer-events:none}
+  .pnode{position:absolute;border:1px solid var(--line);background:var(--surface-alt);line-height:0;box-shadow:0 4px 10px -6px rgba(60,48,28,.3)}
+  .pnode img{width:100%;height:100%;object-fit:cover;display:block}
+  .ptag{position:absolute;top:-7px;right:-7px;width:19px;height:19px;border-radius:50%;background:var(--gold-deep);color:#FDFBF7;font-family:"Noto Serif SC",serif;font-size:9px;display:flex;align-items:center;justify-content:center;line-height:1;z-index:3}
+  .enode{position:absolute;border:1.5px dashed rgba(201,169,110,.55);background:rgba(246,241,232,.45);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px}
+  .enode .lab{font-size:8px;letter-spacing:1px;color:var(--text3);line-height:1}
+  .c-map .free{position:absolute;background:var(--gold)}
+  .c-strip{writing-mode:vertical-rl;height:272px}
+  .c-strip .v-title{font-family:"Noto Serif SC",serif;font-size:21px;font-weight:700;letter-spacing:9px;color:var(--ink)}
+  .c-strip .v-sub{font-size:9px;letter-spacing:4px;color:var(--text3);margin-right:11px;margin-top:6px}
+  .c-progress{display:flex;align-items:center;gap:8px;margin-top:12px}
+  .c-progress .pl{font-size:9px;letter-spacing:2.5px;color:var(--text2)}
+  .c-progress .sparks{display:flex;gap:5px;align-items:center}
+  .c-progress .spark{width:9px;height:9px}
+  .c-progress .pc{font-size:13px;font-weight:700;color:var(--gold-deep);letter-spacing:1px}
+  .c-invite{border-left:2px solid var(--gold);padding-left:11px;margin-top:12px}
+  .c-invite .q{font-size:12.5px;color:var(--ink);letter-spacing:1px;line-height:1.65;font-weight:700}
+  .c-foot{margin-top:auto;font-size:7.5px;letter-spacing:2px;color:var(--text3)}
+
+  /* ============ 方向 D · 光影手记 ============ */
+  .poster.d{padding:18px 20px;background:linear-gradient(180deg,#FDFBF7 0%,#FBF6EC 100%)}
+  .d-top{display:flex;align-items:center;justify-content:space-between}
+  .d-vol{font-size:8.5px;letter-spacing:2.5px;color:var(--text3)}
+  .d-rule{height:1px;background:var(--line);margin:9px 0 10px}
+  .d-head{font-size:17px;line-height:1.5;letter-spacing:1.5px;font-weight:700;color:var(--ink)}
+  .d-head em{font-style:normal;color:var(--gold-deep)}
+  .d-folio{display:flex;align-items:baseline;gap:7px;margin:9px 0 10px}
+  .d-folio .big{font-family:Georgia,"Noto Serif SC",serif;font-size:40px;color:var(--gold-deep);line-height:.9;font-weight:700}
+  .d-folio .of{font-size:10.5px;letter-spacing:1px;color:var(--text2)}
+  .d-folio .date{margin-left:auto;font-size:8.5px;letter-spacing:2px;color:var(--text3)}
+  .d-photos .d-row{display:flex;gap:8px;margin-bottom:8px}
+  .d-photos .d-row:last-child{margin-bottom:0}
+  .d-cell{position:relative;flex:1;height:92px;border:1px solid var(--line);background:var(--surface-alt);line-height:0}
+  .d-row.three .d-cell{height:70px}
+  .d-cell img{width:100%;height:100%;object-fit:cover;display:block}
+  .d-cap{position:absolute;left:0;bottom:0;background:rgba(20,16,10,.38);color:#FDFBF7;font-size:7.5px;letter-spacing:1.5px;padding:2px 6px;line-height:1.5;z-index:2}
+  .d-empty{flex:1;height:70px;border:1.5px dashed rgba(201,169,110,.55);background:rgba(246,241,232,.5);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+  .d-empty .plus{font-size:13px;color:var(--gold);font-weight:300;line-height:1}
+  .d-empty .lab{font-size:8px;letter-spacing:1px;color:var(--text3)}
+  .d-note{border-left:2px solid var(--gold);padding-left:10px;margin-top:12px;font-size:11px;line-height:1.8;letter-spacing:.5px;color:#4A4238}
+  .d-invite{margin-top:12px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px 2px;display:flex;align-items:center;justify-content:space-between}
+  .d-invite .t{font-size:12px;font-weight:700;color:var(--ink);letter-spacing:1px}
+  .d-invite .t small{display:block;font-size:7.5px;letter-spacing:2px;color:var(--text3);font-weight:400;margin-top:3px}
+  .d-invite .arr{width:8px;height:8px;border-top:1.5px solid var(--gold-deep);border-right:1.5px solid var(--gold-deep);transform:rotate(45deg);flex:none}
+  .d-foot{margin-top:auto;font-size:7.5px;letter-spacing:2px;color:var(--text3)}
+
+  /* ===== 文案语感表 ===== */
+  .copywrap{margin-top:38px;width:min(860px,94vw);background:#F7F2E9;border:1px solid var(--line);border-radius:6px;padding:26px 30px 24px}
+  .copywrap h3{font-size:14px;letter-spacing:3px;color:#4A4238;font-weight:700;display:flex;align-items:center;gap:10px}
+  .copywrap h3::before{content:"";width:20px;height:1px;background:var(--gold)}
+  .copywrap .cp-sub{font-size:10.5px;color:#8A7F6E;letter-spacing:1px;margin-top:6px;line-height:1.9}
+  table{width:100%;border-collapse:collapse;margin-top:16px}
+  th{font-size:9.5px;letter-spacing:2px;color:var(--gold-deep);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{font-size:11px;color:#4A4238;letter-spacing:.5px;padding:10px;border-bottom:1px solid rgba(201,169,110,.14);line-height:1.7;vertical-align:top}
+  td.cat{font-weight:700;white-space:nowrap}
+
+  .note{margin-top:42px;width:min(860px,94vw);background:rgba(253,251,247,.6);border:1px solid rgba(201,169,110,.2);border-radius:6px;padding:22px 28px}
+  .note h3{font-size:13px;letter-spacing:2.5px;color:#4A4238;font-weight:700;margin-bottom:12px}
+  .note p{font-size:11.5px;color:#6B645C;line-height:2;letter-spacing:.5px}
+  .note p b{color:var(--gold-deep)}
+</style>
+</head>
+<body>
+  <div class="page-title">碎片收集 · 分享海报（第二轮）</div>
+  <div class="page-sub">
+    全新排版体系，与第一轮「收藏册 / 明信片」完全不同：<b>C · 拾光星图</b>（不对称星图 + 虚线连线 + 竖排标题）· <b>D · 光影手记</b>（杂志编辑式 + 大字号页码 + 错落拼版）<br>
+    品牌基因不变：暖白纸感 · 金色发丝线 · 衬线标题 · 3:4 竖版 · 无二维码 · 纯晒图社交定位
+  </div>
+
+  <!-- ================= 第二轮文案语感 ================= -->
+  <div class="copywrap">
+    <h3>第二轮 · 情绪文案语感</h3>
+    <div class="cp-sub">两条新叙事线：星图系把「收集」讲成「点亮星星」，手记系把「收集」讲成「逐页存档」。空位文案继续留悬念，晒图邀请继续围绕「我晒我的，换你晒你的」。</div>
+    <table>
+      <thead>
+        <tr><th>方向</th><th>叙事线</th><th>进行中 · 情绪标题（以光线碎片为例）</th><th>已集齐 · 情绪标题</th><th>空位文案</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="cat">C · 拾光星图</td>
+          <td>拾光 · 点亮星图</td>
+          <td>有些光，正在被我<br>一枚一枚，点亮成图。</td>
+          <td>五颗星都亮了——<br>我捡到了一片小星河。</td>
+          <td>肆 · 虚位以待<br>伍 · 等一颗好光</td>
+        </tr>
+        <tr>
+          <td class="cat">D · 光影手记</td>
+          <td>手记 · 逐页存档</td>
+          <td>今天，也捡到了<br>一块会发光的生活。</td>
+          <td>这一辑的光，一页不缺，<br>轻轻合上了。</td>
+          <td>肆 · 等一个晴天<br>伍 · 留给下个转角</td>
+        </tr>
+      </tbody>
+    </table>
+    <table style="margin-top:8px">
+      <thead>
+        <tr><th>碎片类型</th><th>星图系小句</th><th>手记系小句</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="cat">光线碎片</td><td>会发光的瞬间，都成了星</td><td>会发光的日子，按页存好</td></tr>
+        <tr><td class="cat">室外碎片</td><td>走过的远方，连成了星河</td><td>远方寄来的风，贴进了手记</td></tr>
+        <tr><td class="cat">室内碎片</td><td>屋檐下的光，也上了星图</td><td>屋檐下的光，写满一页</td></tr>
+        <tr><td class="cat">情绪碎片</td><td>说不出口的心情，有了星座</td><td>心情的底片，逐页归档</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================= 方向 C · 拾光星图 ================= -->
+  <div class="dir-head">
+    <span class="no">C</span>
+    <span class="name">拾光星图</span>
+    <span class="pos">不对称星图排版 · 碎片是挂在夜空里的星 · 点亮一枚，连一条线</span>
+  </div>
+  <div class="row">
+    <!-- C · 收集进行中 3/5 -->
+    <div class="cell">
+      <span class="sys-label">收集进行中 · 3/5</span>
+      <div class="poster c">
+        <div class="c-top">
+          <div class="brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+          <div class="c-pill">进行中 · 3/5</div>
+        </div>
+        <div class="c-main">
+          <div class="c-map">
+            <svg class="c-lines" viewBox="0 0 250 272" fill="none">
+              <line x1="55" y1="64" x2="196" y2="38" stroke="rgba(201,169,110,.5)" stroke-width="1.1" stroke-dasharray="1.5 5.5" stroke-linecap="round"/>
+              <line x1="196" y1="38" x2="114" y2="162" stroke="rgba(201,169,110,.5)" stroke-width="1.1" stroke-dasharray="1.5 5.5" stroke-linecap="round"/>
+              <line x1="55" y1="64" x2="114" y2="162" stroke="rgba(201,169,110,.5)" stroke-width="1.1" stroke-dasharray="1.5 5.5" stroke-linecap="round"/>
+              <line x1="114" y1="162" x2="209" y2="195" stroke="rgba(201,169,110,.5)" stroke-width="1.1" stroke-dasharray="1.5 5.5" stroke-linecap="round"/>
+              <line x1="114" y1="162" x2="36" y2="234" stroke="rgba(201,169,110,.5)" stroke-width="1.1" stroke-dasharray="1.5 5.5" stroke-linecap="round"/>
+              <circle cx="150" cy="47" r="1.4" fill="rgba(201,169,110,.8)"/>
+              <circle cx="155" cy="100" r="1.4" fill="rgba(201,169,110,.8)"/>
+              <circle cx="161" cy="178" r="1.4" fill="rgba(201,169,110,.8)"/>
+              <circle cx="75" cy="198" r="1.4" fill="rgba(201,169,110,.8)"/>
+            </svg>
+            <div class="pnode" style="left:2px;top:24px;width:106px;height:80px"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20golden%20hour%20sunlight%20streaming%20through%20a%20window%2C%20soft%20long%20shadows%20on%20a%20minimalist%20wall%2C%20cozy%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""><span class="ptag">壹</span></div>
+            <div class="pnode" style="left:148px;top:2px;width:96px;height:72px"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sunbeam%20through%20tree%20leaves%20casting%20light%20spots%20on%20the%20ground%2C%20golden%20bokeh%2C%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""><span class="ptag">贰</span></div>
+            <div class="pnode" style="left:58px;top:120px;width:112px;height:84px"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20lamp%20glow%20in%20a%20cozy%20room%2C%20soft%20golden%20light%20and%20gentle%20shadow%2C%20cinematic%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""><span class="ptag">叁</span></div>
+            <div class="enode" style="left:172px;top:166px;width:74px;height:58px"><span class="spark-ring"></span><span class="lab">肆 · 虚位以待</span></div>
+            <div class="enode" style="left:0;top:206px;width:72px;height:56px"><span class="spark-ring"></span><span class="lab">伍 · 等一颗好光</span></div>
+            <i class="spark free" style="left:228px;top:118px;width:9px;height:9px"></i>
+            <i class="spark free" style="left:18px;top:142px;width:6px;height:6px"></i>
+            <i class="spark free" style="left:206px;top:248px;width:7px;height:7px"></i>
+          </div>
+          <div class="c-strip">
+            <div class="v-title">拾光星图</div>
+            <div class="v-sub">光线碎片 · 已点亮叁枚</div>
+          </div>
+        </div>
+        <div class="c-progress">
+          <span class="pl">已点亮</span>
+          <span class="sparks"><i class="spark"></i><i class="spark"></i><i class="spark"></i><i class="spark dim"></i><i class="spark dim"></i></span>
+          <span class="pc serif">3 / 5</span>
+        </div>
+        <div class="c-invite">
+          <div class="q serif">这是我捡的光，正在拼一片小星图——<br>你的那片星空，亮到第几颗了？</div>
+        </div>
+        <div class="c-foot">如画 LUMIRA · 记录每一帧光影</div>
+      </div>
+    </div>
+
+    <!-- C · 已集齐 5/5 -->
+    <div class="cell">
+      <span class="sys-label">已集齐 · 5/5</span>
+      <div class="poster c">
+        <div class="c-top">
+          <div class="brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+          <div class="c-pill on">已集齐 · 5/5</div>
+        </div>
+        <div class="c-main">
+          <div class="c-map">
+            <svg class="c-lines" viewBox="0 0 250 272" fill="none">
+              <line x1="55" y1="64" x2="196" y2="38" stroke="rgba(201,169,110,.5)" stroke-width="1.1" stroke-dasharray="1.5 5.5" stroke-linecap="round"/>
+              <line x1="196" y1="38" x2="114" y2="162" stroke="rgba(201,169,110,.5)" stroke-width="1.1" stroke-dasharray="1.5 5.5" stroke-linecap="round"/>
+              <line x1="55" y1="64" x2="114" y2="162" stroke="rgba(201,169,110,.5)" stroke-width="1.1" stroke-dasharray="1.5 5.5" stroke-linecap="round"/>
+              <line x1="114" y1="162" x2="209" y2="195" stroke="rgba(201,169,110,.5)" stroke-width="1.1" stroke-dasharray="1.5 5.5" stroke-linecap="round"/>
+              <line x1="114" y1="162" x2="36" y2="234" stroke="rgba(201,169,110,.5)" stroke-width="1.1" stroke-dasharray="1.5 5.5" stroke-linecap="round"/>
+              <circle cx="150" cy="47" r="1.4" fill="rgba(201,169,110,.8)"/>
+              <circle cx="155" cy="100" r="1.4" fill="rgba(201,169,110,.8)"/>
+              <circle cx="161" cy="178" r="1.4" fill="rgba(201,169,110,.8)"/>
+              <circle cx="75" cy="198" r="1.4" fill="rgba(201,169,110,.8)"/>
+            </svg>
+            <div class="pnode" style="left:2px;top:24px;width:106px;height:80px"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20golden%20hour%20sunlight%20streaming%20through%20a%20window%2C%20soft%20long%20shadows%20on%20a%20minimalist%20wall%2C%20cozy%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""><span class="ptag">壹</span></div>
+            <div class="pnode" style="left:148px;top:2px;width:96px;height:72px"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sunbeam%20through%20tree%20leaves%20casting%20light%20spots%20on%20the%20ground%2C%20golden%20bokeh%2C%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""><span class="ptag">贰</span></div>
+            <div class="pnode" style="left:58px;top:120px;width:112px;height:84px"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20lamp%20glow%20in%20a%20cozy%20room%2C%20soft%20golden%20light%20and%20gentle%20shadow%2C%20cinematic%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""><span class="ptag">叁</span></div>
+            <div class="pnode" style="left:172px;top:166px;width:74px;height:58px"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=golden%20sunset%20silhouette%20portrait%2C%20warm%20rim%20light%2C%20emotional%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""><span class="ptag">肆</span></div>
+            <div class="pnode" style="left:0;top:206px;width:72px;height:56px"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=city%20street%20lights%20at%20dusk%20bokeh%2C%20warm%20golden%20glow%2C%20cinematic%20night%2C%20photography&image_size=landscape_4_3" alt=""><span class="ptag">伍</span></div>
+            <i class="spark free" style="left:228px;top:118px;width:9px;height:9px"></i>
+            <i class="spark free" style="left:18px;top:142px;width:6px;height:6px"></i>
+            <i class="spark free" style="left:206px;top:248px;width:7px;height:7px"></i>
+          </div>
+          <div class="c-strip">
+            <div class="v-title">拾光星图</div>
+            <div class="v-sub">光线碎片 · 全辑点亮 · 完</div>
+          </div>
+        </div>
+        <div class="c-progress">
+          <span class="pl">已点亮</span>
+          <span class="sparks"><i class="spark"></i><i class="spark"></i><i class="spark"></i><i class="spark"></i><i class="spark"></i></span>
+          <span class="pc serif">5 / 5</span>
+        </div>
+        <div class="c-invite">
+          <div class="q serif">五颗星，全部点亮——这是我捡的光，<br>你的那片星空，收集到第几颗了？</div>
+        </div>
+        <div class="c-foot">如画 LUMIRA · 记录每一帧光影</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 方向 D · 光影手记 ================= -->
+  <div class="dir-head">
+    <span class="no">D</span>
+    <span class="name">光影手记</span>
+    <span class="pos">杂志编辑式排版 · 左对齐大标题 + 大字号页码 · 收集是逐页存档的生活手记</span>
+  </div>
+  <div class="row">
+    <!-- D · 收集进行中 3/5 -->
+    <div class="cell">
+      <span class="sys-label">收集进行中 · 3/5</span>
+      <div class="poster d">
+        <div class="d-top">
+          <div class="brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+          <div class="d-vol">光影手记 · VOL.03</div>
+        </div>
+        <div class="d-rule"></div>
+        <div class="d-head serif">今天，也捡到了一块<br><em>会发光</em>的生活。</div>
+        <div class="d-folio">
+          <span class="big">3</span><span class="of">/ 5 枚</span>
+          <span class="date">AUG 02 — 进行中</span>
+        </div>
+        <div class="d-photos">
+          <div class="d-row">
+            <div class="d-cell"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20golden%20hour%20sunlight%20streaming%20through%20a%20window%2C%20soft%20long%20shadows%20on%20a%20minimalist%20wall%2C%20cozy%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""><span class="d-cap">08.02 · 壹</span></div>
+            <div class="d-cell"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sunbeam%20through%20tree%20leaves%20casting%20light%20spots%20on%20the%20ground%2C%20golden%20bokeh%2C%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""><span class="d-cap">08.09 · 贰</span></div>
+          </div>
+          <div class="d-row three">
+            <div class="d-cell"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20lamp%20glow%20in%20a%20cozy%20room%2C%20soft%20golden%20light%20and%20gentle%20shadow%2C%20cinematic%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""><span class="d-cap">08.15 · 叁</span></div>
+            <div class="d-empty"><span class="plus">+</span><span class="lab">肆 · 等一个晴天</span></div>
+            <div class="d-empty"><span class="plus">+</span><span class="lab">伍 · 留给下个转角</span></div>
+          </div>
+        </div>
+        <div class="d-note serif">窗边的、树隙的、路灯下的光——都按日期贴好了。手记写到第 3 页，还会继续写下去。</div>
+        <div class="d-invite">
+          <div class="t serif">轮到你了——晒出你的光影手记<small>YOUR TURN · SHOW ME YOURS</small></div>
+          <i class="arr"></i>
+        </div>
+        <div class="d-foot">如画 LUMIRA · 记录每一帧光影</div>
+      </div>
+    </div>
+
+    <!-- D · 已集齐 5/5 -->
+    <div class="cell">
+      <span class="sys-label">已集齐 · 5/5</span>
+      <div class="poster d">
+        <div class="d-top">
+          <div class="brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+          <div class="d-vol">光影手记 · VOL.03 · 完</div>
+        </div>
+        <div class="d-rule"></div>
+        <div class="d-head serif">这一辑的光，一页不缺，<br>轻轻<em>合上</em>了。</div>
+        <div class="d-folio">
+          <span class="big">5</span><span class="of">/ 5 枚 · 完</span>
+          <span class="date">AUG 02 — AUG 30</span>
+        </div>
+        <div class="d-photos">
+          <div class="d-row">
+            <div class="d-cell"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20golden%20hour%20sunlight%20streaming%20through%20a%20window%2C%20soft%20long%20shadows%20on%20a%20minimalist%20wall%2C%20cozy%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""><span class="d-cap">08.02 · 壹</span></div>
+            <div class="d-cell"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sunbeam%20through%20tree%20leaves%20casting%20light%20spots%20on%20the%20ground%2C%20golden%20bokeh%2C%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""><span class="d-cap">08.09 · 贰</span></div>
+          </div>
+          <div class="d-row three">
+            <div class="d-cell"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20lamp%20glow%20in%20a%20cozy%20room%2C%20soft%20golden%20light%20and%20gentle%20shadow%2C%20cinematic%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""><span class="d-cap">08.15 · 叁</span></div>
+            <div class="d-cell"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=golden%20sunset%20silhouette%20portrait%2C%20warm%20rim%20light%2C%20emotional%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""><span class="d-cap">08.21 · 肆</span></div>
+            <div class="d-cell"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=city%20street%20lights%20at%20dusk%20bokeh%2C%20warm%20golden%20glow%2C%20cinematic%20night%2C%20photography&image_size=landscape_4_3" alt=""><span class="d-cap">08.30 · 伍</span></div>
+          </div>
+        </div>
+        <div class="d-note serif">从第壹枚到第伍枚，一枚没漏。合上这一辑的时候，心里轻轻亮了一下。</div>
+        <div class="d-invite">
+          <div class="t serif">这一辑写完了——你的那本，翻到第几页了？<small>YOUR TURN · SHOW ME YOURS</small></div>
+          <i class="arr"></i>
+        </div>
+        <div class="d-foot">如画 LUMIRA · 记录每一帧光影</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 与第一轮的差异说明 ================= -->
+  <div class="note">
+    <h3>第二轮与第一轮的差异</h3>
+    <p>
+      <b>第一轮（A 收藏册 / B 明信片）</b>：对称结构、自上而下线性编排、金线外框 + 四角金标、规整的 3+2 照片网格。<br><br>
+      <b>第二轮 C · 拾光星图</b>：去掉外框与网格——照片作为「星」<b>不对称散落</b>在暖白纸面上，金色<b>虚线星座连线</b>把已点亮的碎片串成图，
+      未收集的空位是「虚位以待」的星位描点；右侧<b>竖排衬线标题</b>如卷轴落款；进度用「点亮了几颗星」表达。收集行为被重新讲成「把光挂上夜空」。<br><br>
+      <b>第二轮 D · 光影手记</b>：整体是<b>杂志内页</b>的编辑排版——左对齐衬线大标题 + <b>大字号页码数字（3/5）</b> + 日期区间，
+      照片按 2+3 <b>错落拼版</b>、日期标签压图（半透明深底白字），底部「手记」段落用金色侧线引出，邀请句做成上下细线的编辑部按语。收集行为被重新讲成「给生活记页码」。<br><br>
+      <b>共同保留</b>：暖白 + 金 + 衬线的品牌基因、3:4 竖版、每枚碎片的中文章节编号（壹贰叁肆伍）、空位悬念文案、
+      「我晒我的，换你晒你的」晒图邀请、无二维码纯社交定位。
+    </p>
+  </div>
+</body>
+</html>
