@@ -20,6 +20,13 @@ FlutterEventSink physicalButtonEventSink;
 @implementation CamerawesomePlugin {
   dispatch_queue_t _dispatchQueue;
   dispatch_queue_t _dispatchQueueAnalysis;
+  // 最近一次下发的取景器特效参数缓存：相机（重）初始化窗口期（PreparingCameraState
+  // 有 500ms 启动延迟、setupCameraSensor 会销毁旧 CameraPreview 新建全新
+  // PreviewEffectProcessor）内到达的参数若不缓存重放，会被静默丢弃或随旧实例销毁，
+  // 表现为「套用模板后参数不生效」。与 OHOS 插件的 lastEffects* + applyPreviewEffects
+  // 重放机制对齐。仅在主线程（method channel / setupCameraSensor）访问，无需加锁。
+  BOOL _hasLastPreviewEffects;
+  PreviewEffectsParams _lastPreviewEffects;
 }
 
 - (instancetype)init:(NSObject<FlutterPluginRegistrar>*)registrar {
@@ -59,32 +66,36 @@ FlutterEventSink physicalButtonEventSink;
       result(FlutterMethodNotImplemented);
       return;
     }
-    if (instance.camera != nil) {
-      NSDictionary *args = call.arguments;
-      PreviewEffectsParams params;
-      params.hasMatrix = NO;
-      params.hasVignette = NO;
-      params.hasSmooth = NO;
-      params.hasSharpen = NO;
-      params.hasGrain = NO;
-      memset(params.matrix, 0, sizeof(params.matrix));
+    NSDictionary *args = call.arguments;
+    PreviewEffectsParams params;
+    params.hasMatrix = NO;
+    params.hasVignette = NO;
+    params.hasSmooth = NO;
+    params.hasSharpen = NO;
+    params.hasGrain = NO;
+    memset(params.matrix, 0, sizeof(params.matrix));
 
-      NSArray *matrix = args[@"matrix"];
-      if ([matrix isKindOfClass:[NSArray class]] && matrix.count >= 20) {
-        params.hasMatrix = YES;
-        for (int i = 0; i < 20; i++) {
-          params.matrix[i] = [matrix[i] doubleValue];
-        }
+    NSArray *matrix = args[@"matrix"];
+    if ([matrix isKindOfClass:[NSArray class]] && matrix.count >= 20) {
+      params.hasMatrix = YES;
+      for (int i = 0; i < 20; i++) {
+        params.matrix[i] = [matrix[i] doubleValue];
       }
-      NSNumber *vignette = args[@"vignette"];
-      if (vignette != nil && [vignette doubleValue] > 0) { params.hasVignette = YES; params.vignette = [vignette doubleValue]; }
-      NSNumber *smooth = args[@"smooth"];
-      if (smooth != nil && [smooth doubleValue] > 0) { params.hasSmooth = YES; params.smooth = [smooth doubleValue]; }
-      NSNumber *sharpen = args[@"sharpen"];
-      if (sharpen != nil && [sharpen doubleValue] > 0) { params.hasSharpen = YES; params.sharpen = [sharpen doubleValue]; }
-      NSNumber *grain = args[@"grain"];
-      if (grain != nil && [grain doubleValue] > 0) { params.hasGrain = YES; params.grain = [grain doubleValue]; }
+    }
+    NSNumber *vignette = args[@"vignette"];
+    if (vignette != nil && [vignette doubleValue] > 0) { params.hasVignette = YES; params.vignette = [vignette doubleValue]; }
+    NSNumber *smooth = args[@"smooth"];
+    if (smooth != nil && [smooth doubleValue] > 0) { params.hasSmooth = YES; params.smooth = [smooth doubleValue]; }
+    NSNumber *sharpen = args[@"sharpen"];
+    if (sharpen != nil && [sharpen doubleValue] > 0) { params.hasSharpen = YES; params.sharpen = [sharpen doubleValue]; }
+    NSNumber *grain = args[@"grain"];
+    if (grain != nil && [grain doubleValue] > 0) { params.hasGrain = YES; params.grain = [grain doubleValue]; }
 
+    // 无论相机当前是否存活都缓存：相机重建（切前后摄/返回拍摄页/App 恢复）后
+    // setupCameraSensor 会新建全新 PreviewEffectProcessor（默认无参数），届时重放。
+    instance->_hasLastPreviewEffects = YES;
+    instance->_lastPreviewEffects = params;
+    if (instance.camera != nil) {
       [instance.camera updatePreviewEffects:params];
     }
     result(nil);
@@ -359,6 +370,14 @@ FlutterEventSink physicalButtonEventSink;
                                                 captureMode:captureModeType
                                                  completion:completion
                                               dispatchQueue:dispatch_queue_create("camerawesome.dispatchqueue", NULL)];
+
+  // 重放最近一次取景器特效参数：Dart 侧 _PostEffectSync 的推送（16ms 去抖）可能落在
+  // 相机初始化窗口期（本方法被 PreparingCameraState 的 500ms 延迟推迟），此前该参数
+  // 被静默丢弃或随旧实例销毁 → 套用模板后特效不生效。此处对齐 OHOS 插件的
+  // applyPreviewEffects() 重放语义，保证新 PreviewEffectProcessor 一出生即带最新参数。
+  if (_hasLastPreviewEffects) {
+    [self.camera updatePreviewEffects:_lastPreviewEffects];
+  }
   [self->_registry textureFrameAvailable:self->_textureId];
   
   __weak typeof(self) weakSelf = self;

@@ -19,6 +19,7 @@ import 'package:lumira_app_flutter/features/templates/widgets/pose_silhouette.da
 import '../data/capture_state.dart';
 import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
+import '../services/white_balance.dart';
 
 /// 将 EditorFormPostProcess 转换为 domain PostProcess（用于 fromPostProcess）
 ///
@@ -353,6 +354,17 @@ class CameraPreview extends ConsumerWidget {
     // 恢复当前缩放（不重置为 1x，保留用户已调整的值）
     final currentZoom = ref.read(CaptureState.zoomProvider);
     cameraService.setZoomMultiplier(currentZoom);
+
+    // 重放白平衡会话状态：相机重建（切前后摄 / 返回拍摄页 / App 恢复 / 拍照后
+    // 重建）后，新会话的硬件白平衡回到默认 auto，而模板白平衡只在模板应用时
+    // 下发过一次（可能落在旧会话上）→ 丢失。相机就绪时按会话状态重放一次，
+    // 与 flash/EV/zoom 的重放语义一致；重锁同一增益幂等无害。非 auto 时还需
+    // 刷新 iOS 硬件残差（不同摄像头增益特性不同，旧残差对新相机不成立）。
+    final wb = ref.read(whiteBalanceSessionProvider);
+    if (!wb.isAuto) {
+      cameraService.setWhiteBalance(wb);
+      refreshWbResidual(ref);
+    }
   }
 
   /// 异步查询设备缩放能力（最大/最小倍数、是否支持超广角），
