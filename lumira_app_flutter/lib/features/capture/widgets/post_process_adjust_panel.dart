@@ -330,7 +330,8 @@ class _AdjustStripChip extends StatelessWidget {
 ///
 /// 公开复用：拍摄页 ParamPanel（EV/色温/透明度）与编辑面板共用同一质感。
 /// [accentColor]：暗色语境强调色（null 时走 tokens / 默认 fallback）；
-/// [format]：数值格式化（null 时默认整型 +/-）。
+/// [format]：数值格式化（null 时默认整型 +/-）；
+/// [divisions]：离散步进档数，拖动值吸附到最近整档（null 时连续）。
 class AdjustSlider extends StatefulWidget {
   final String label;
   final double value;
@@ -341,6 +342,7 @@ class AdjustSlider extends StatefulWidget {
   final String? hint;
   final Color? accentColor;
   final String Function(double)? format;
+  final int? divisions;
 
   const AdjustSlider({
     super.key,
@@ -353,6 +355,7 @@ class AdjustSlider extends StatefulWidget {
     this.hint,
     this.accentColor,
     this.format,
+    this.divisions,
   });
 
   @override
@@ -364,6 +367,17 @@ class _AdjustSliderState extends State<AdjustSlider> {
 
   double get _effectiveValue =>
       _dragValue.isNaN ? widget.value : _dragValue;
+
+  /// 把连续拖动值吸附到 divisions 的最近整档；null / ≤0 时保持连续。
+  double _snapToDivisions(double v) {
+    final divisions = widget.divisions;
+    if (divisions == null || divisions <= 0) return v;
+    final span = widget.max - widget.min;
+    final step = span / divisions;
+    final index =
+        ((v - widget.min) / step).round().clamp(0, divisions).toInt();
+    return widget.min + span * index / divisions;
+  }
 
   @override
   void didUpdateWidget(AdjustSlider oldWidget) {
@@ -442,19 +456,19 @@ class _AdjustSliderState extends State<AdjustSlider> {
               return GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onPanStart: (d) {
-                  final newV =
+                  final newV = _snapToDivisions(
                       ((d.localPosition.dx / trackWidth).clamp(0.0, 1.0) *
                               (widget.max - widget.min)) +
-                          widget.min;
+                          widget.min);
                   setState(() => _dragValue = newV);
                   widget.onChanged(newV);
                   HapticFeedback.selectionClick();
                 },
                 onPanUpdate: (d) {
-                  final newV =
+                  final newV = _snapToDivisions(
                       ((d.localPosition.dx / trackWidth).clamp(0.0, 1.0) *
                               (widget.max - widget.min)) +
-                          widget.min;
+                          widget.min);
                   setState(() => _dragValue = newV);
                   widget.onChanged(newV);
                 },

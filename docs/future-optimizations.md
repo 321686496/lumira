@@ -385,3 +385,35 @@
 - **背景/动机**：三处参数均为工程估值，需真机 `[WB] k=... extreme=... toneMapping=...` 日志与观感反馈校准。
 - **目标状态**：真机多机型验证 3000-8000K 全滑杆无中央色斑；若 LSC 限幅仍不足，评估极端档全软件白平衡（硬件增益锁 1.0x，全部色温偏移由矩阵承担，代价是高光通道软件裁切）。
 - **状态**：⏳ 待优化
+
+---
+
+## 搜索页比例筛选 + 抖音式标签搜索（2026-09-09）
+
+### P2 · 远端模板比例筛选依赖本地已缓存详情
+
+- **模块**：搜索页 · 模板比例筛选（`docs/specs/2026-09-08-search-page-ratio-and-tag-filter-design.md`）
+- **优化点**：比例筛选（`SearchFilters.ratio`）为纯本地过滤（`TemplateSearchService._templateRatio` 读 `composition['aspectRatio']`，回退 `postProcess['cropRatio']`）。远端（后台运营）模板仅当本地已同步过详情（RDB 中 composition 有 aspectRatio）时才参与比例命中；未拉取详情的远端模板不进入比例筛选结果。且 `ratio` 非空时 `isBackendCapable` 返回 false，整页回退本地全量检索，放弃后端实时结果。
+- **背景/动机**：后端搜索接口（GET /templates/search）不支持比例参数，设计时明确「暂不改后端/不引入新增字段」先以本地过滤落地（已知限制）。
+- **目标状态**：后端搜索接口支持 `ratio` 参数（或模板列表/搜索响应附带 `aspectRatio` 字段），App 端远端模板无需本地详情缓存即可参与比例筛选，并恢复后端实时检索路径。
+- **状态**：⏳ 待优化
+
+---
+
+## 拍摄页参数面板工具条化重构终审遗留（2026-09-08）
+
+### P2 · 面板空白区点击穿透
+
+- **模块**：拍摄页参数面板（param_panel.dart）
+- **优化点**：ParamPanel 把手行 Spacer、工具项间隙、控件区 padding 均不吸收命中，点击面板自身空白处会落到全屏 translucent overlay（点面板外关闭整栏）从而误关整栏，且 translucent 会把事件透传到 Stack 底层控件。建议在 shell 内加命中吸收层。
+- **背景/动机**：2026-09-08 ParamPanel 工具条化重构终审遗留（plan-mandated 结构）。
+- **目标状态**：面板空白区点击不关闭整栏、不透传底层。
+- **状态**：⏳ 待优化
+
+### P3 · 构图建议文案失去展示面
+
+- **模块**：拍摄页参数面板（param_panel.dart）
+- **优化点**：旧 _CompositionTab 的 comp.description 提示卡在重构后无对应物，构图工具仅剩类型 pill + 透明度滑块，只读信息净减少。
+- **背景/动机**：2026-09-08 ParamPanel 工具条化重构（plan verbatim 如此）。
+- **目标状态**：构图控件区以紧凑形式恢复 description 展示（如 pill 行下方一行小字或可展开提示）。
+- **状态**：⏳ 待优化
