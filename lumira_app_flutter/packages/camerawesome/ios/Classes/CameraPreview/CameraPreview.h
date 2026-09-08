@@ -102,6 +102,7 @@ AVCaptureAudioDataOutputSampleBufferDelegate>
 - (void)setUpCaptureSessionForAudioError:(nonnull void (^)(NSError *))error;
 - (void)setBrightness:(NSNumber *)brightness error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error;
 - (void)setWhiteBalance:(NSString *)mode temperatureK:(NSNumber * _Nullable)k error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error;
+- (NSDictionary *)getWbResidual;
 - (void)updatePreviewEffects:(PreviewEffectsParams)params;
 @end
 

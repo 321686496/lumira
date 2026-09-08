@@ -627,6 +627,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
     ref.read(CaptureState.aspectRatioProvider.notifier).state = s.aspectRatio;
     ref.read(whiteBalanceSessionProvider.notifier).state = s.wb;
     ref.read(cameraServiceProvider).setWhiteBalance(s.wb);
+    refreshWbResidual(ref);
     ref.read(CaptureState.zoomProvider.notifier).state = s.zoom;
     ref.read(CaptureState.apparentZoomProvider.notifier).state = s.apparentZoom;
     ref.read(cameraServiceProvider).setZoomMultiplier(s.zoom);
@@ -1940,6 +1941,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
       // 同步 UI 会话状态 + 下发传感器
       ref.read(whiteBalanceSessionProvider.notifier).state = settings;
       ref.read(cameraServiceProvider).setWhiteBalance(settings);
+      // 拉取 iOS 硬件残差（软封顶削减比）供软件矩阵补足
+      refreshWbResidual(ref);
       debugPrint(
           '[capture] 模板套用白平衡: ${settings.mode} K=${settings.temperatureK}');
     });

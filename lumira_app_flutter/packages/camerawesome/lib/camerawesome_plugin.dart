@@ -361,6 +361,14 @@ class CamerawesomePlugin {
     return CameraInterface().setWhiteBalance(mode, k);
   }
 
+  /// 读取手动白平衡「残差」（目标/实际增益比 r/g/b，iOS 专用）。
+  /// 极值色温下硬件增益被软封顶削减的部分，由软件矩阵按此比值补足，
+  /// 保证取景器与成片冷/暖效果完整。非 iOS 平台返回 null。
+  static Future<Map<Object?, Object?>?> getWbResidual() {
+    if (!Platform.isIOS) return Future.value();
+    return CameraInterface().getWbResidual();
+  }
+
   /// 更新取景器逐帧效果（iOS/OHOS 原生 GPU 实时预览）。参数源自 Dart effectivePost：
   /// matrix 为 Flutter ColorFilter 20 元素（含白平衡温度折叠，全屏均匀）；vignette/
   /// smooth/sharpen/grain 为 0..100 强度（0 = 关闭）。

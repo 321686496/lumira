@@ -470,6 +470,18 @@ List<double> composePostProcessMatrix(PostProcess process) {
 
   // Base color: brightness applied first (rightmost), tint applied last (leftmost)
   var matrix = _brightnessMatrix(color.brightness);
+  // iOS 白平衡残差：最内层（先于一切调色作用于原始像素）。硬件锁定增益
+  //（软封顶后）已作用于 sensor 数据，被封顶削减的比值由此对角矩阵补足，
+  // 保证极值色温下全图冷/暖效果完整且均匀（取景器/成片同源）。
+  final wb = process.wbResidual;
+  if (wb != null && !wb.isIdentity) {
+    matrix = _multiplyMatrices(<double>[
+      wb.r, 0, 0, 0, 0,
+      0, wb.g, 0, 0, 0,
+      0, 0, wb.b, 0, 0,
+      0, 0, 0, 1, 0,
+    ], matrix);
+  }
   matrix = _multiplyMatrices(_contrastMatrix(color.contrast), matrix);
   matrix = _multiplyMatrices(_saturationMatrix(color.saturation), matrix);
   matrix = _multiplyMatrices(_temperatureMatrix(color.temperature), matrix);
