@@ -364,68 +364,87 @@ static AVCaptureWhiteBalanceGains SoftClampWhiteBalanceGains(AVCaptureWhiteBalan
 }
 
 // ── 极端色温下的局部色调映射规避（2026-09-08 第二轮根因修复）─────────────────
-// 现象：白平衡拉到最低（3000K）时取景器「中间区域」冷色始终不生效；增益软封顶
-// 0.85→0.70 逐级收紧只让色斑缩小/移动，无法根除——说明色斑并非纯增益饱和问题。
-// 根因：iOS ISP 对视频流默认启用「局部色调映射」，即使白平衡/曝光已锁定，仍按
-// 场景对不同区域施加不同色调曲线（Apple 官方确认，论坛 780406；文档
-// isGlobalToneMappingEnabled：默认 false 时 "the framework may apply different
-// tone maps to different pixels in an image"）。极端色温下中央（主体）区域被局部
-// 曲线「归一化」→ 中央色斑；这也是 09-04/09-08 两轮增益封顶只能移动色斑的原因。
-// 修复：极端色温期间切 globalToneMappingEnabled = YES（全帧统一曲线），回到
-// 中性色温/自动白平衡时恢复默认局部映射。
-// 副作用权衡（Apple 文档）：开启全局映射会使 photoOutput 禁用 still image
-// fusion（Deep Fusion）——故仅在极端色温（任一通道目标增益 > 2.0，即偏离中性
-// 2 倍以上）开启。自动白平衡与全部模板（whiteBalanceK 3600-7200，目标增益 < 2）
-// 保持默认局部映射，成片 Smart HDR/Deep Fusion 画质不受影响。
-static const float kExtremeWbGain = 2.0f;
+// 现象：白平衡拉到最低（3000K）时取景器「中间区域」冷色始终不生效。
+//
+// 复盘（2026-09-08 第三轮，真机反馈前两轮「还是一样」）：前两轮修复可能从未
+// 生效——软封顶上限 = maxGain×0.70 ≈ 5.6（iPhone maxGain 通常为 8），而 3000K
+// 目标增益通常仅 2~3.5 → 封顶从未咬合，残差恒为 1.0，ISP 仍以全量极端增益运行；
+// 第二轮的全局映射触发条件「目标增益 > 2.0」在部分机型 3000K 时只有 ~1.8 →
+// 从未开启。两轮都在等一个从未到达的条件。
+//
+// 两个相互独立、需同时压制的机制：
+// 1) 镜头渐晕校正（LSC）超出校准范围：极端色温下单通道增益 3x+ 时，LSC 分通道
+//    校正图随增益等比放大，边缘过校正 →「边缘比中央更冷」，视觉上即中央色斑。
+//    修复：极端色温下硬件增益限幅到 2.0x（LSC 安全区），削减部分由残差软件矩阵
+//    补足（全图均匀，取景器/成片同源）。
+// 2) 局部色调映射（Apple 官方确认，论坛 780406）：视频流默认按场景对不同区域
+//    施加不同色调曲线，WB/曝光锁定后依然生效。修复：极端色温期间切
+//    globalToneMappingEnabled = YES（全帧统一曲线）；非极端/自动时恢复局部映射。
+//
+// 判定改为按色温 K 值（与设备增益校准解耦）：≤3400K 或 ≥7600K 为极端，覆盖
+// 滑杆两端（3000/8000K），不含全部模板（whiteBalanceK 3600-7200，保住 Deep
+// Fusion）。副作用权衡：极端档成片高光通道软件裁切略硬（创意档可接受）。
+static const float kExtremeWbColdK = 3400.0f;
+static const float kExtremeWbWarmK = 7600.0f;
+static const float kExtremeWbGainCap = 2.0f;
 
-static BOOL IsExtremeWbGains(AVCaptureWhiteBalanceGains gains) {
-  return gains.redGain > kExtremeWbGain || gains.greenGain > kExtremeWbGain ||
-         gains.blueGain > kExtremeWbGain;
+static BOOL IsExtremeWbTemperature(CGFloat k) {
+  return k <= kExtremeWbColdK || k >= kExtremeWbWarmK;
 }
 
-// 设置全局/局部色调映射（幂等，仅状态变化时打日志）。需在 lockForConfiguration
-// 内、且先于 whiteBalanceMode setter 调用（属性作为模式 setter 的修饰先生效，
-// 见论坛 130735 Apple 回复的顺序建议）。iOS 13+，不支持的设备静默跳过。
-static void SetWbGlobalToneMapping(AVCaptureDevice *device, BOOL global, AVCaptureWhiteBalanceGains target) {
+// 极端色温硬件限幅（LSC 安全区）：单通道 ≤2.0x；同时不超过常规软封顶上限
+//（maxGain×0.70），防止越界 NSException（见 ClampWhiteBalanceGains 注释）。
+static AVCaptureWhiteBalanceGains ClampExtremeWbGains(AVCaptureWhiteBalanceGains gains, float maxGain) {
+  const float cap = MIN(kExtremeWbGainCap, maxGain * 0.70f);
+  gains.redGain   = MAX(1.0f, MIN(cap, gains.redGain));
+  gains.greenGain = MAX(1.0f, MIN(cap, gains.greenGain));
+  gains.blueGain  = MAX(1.0f, MIN(cap, gains.blueGain));
+  return gains;
+}
+
+// 设置全局/局部色调映射。返回最终生效状态：1=global / 0=local / -1=format 不支持。
+// 设置后回读实际值——论坛 130735 有「true→false→true 后全局映射不再生效」的报告，
+// 回读让日志能暴露此类失效。需在 lockForConfiguration 内、且先于 whiteBalanceMode
+// setter 调用（属性作为模式 setter 的修饰先生效，Apple 顺序建议）。iOS 13+。
+static int SetWbGlobalToneMapping(AVCaptureDevice *device, BOOL global) {
   if (@available(iOS 13.0, *)) {
-    if (![device.activeFormat isGlobalToneMappingSupported]) return;
+    if (![device.activeFormat isGlobalToneMappingSupported]) return -1;
     if (device.isGlobalToneMappingEnabled != global) {
       device.globalToneMappingEnabled = global;
-      NSLog(@"[WB] toneMapping=%@ (maxTargetGain=%.2f r=%.2f g=%.2f b=%.2f)",
-            global ? @"global" : @"local",
-            MAX(target.redGain, MAX(target.greenGain, target.blueGain)),
-            target.redGain, target.greenGain, target.blueGain);
     }
+    return device.isGlobalToneMappingEnabled ? 1 : 0;
   }
+  return -1;
 }
 
-// 手动色温（k != nil）与预设模式分支共用：目标 K → gains → 温和软封顶，
-// 并输出「目标/实际」残差供软件补足。含一次性取证日志（真机确认增益
-// 饱和区间用：目标 K、换算 gains、maxGain、封顶后 gains、残差）。
+// 手动色温（k != nil）与预设模式分支共用：目标 K → gains → 极端判定与限幅，
+// 并输出「目标/实际」残差供软件补足。一条日志含全部取证信息（真机定位用）。
 static AVCaptureWhiteBalanceGains GainsForTemperatureWithResidual(CGFloat k,
                                                                   AVCaptureDevice *device,
                                                                   WbResidual *residual) {
   AVCaptureWhiteBalanceTemperatureAndTintValues tt = { .temperature = k, .tint = 0.0f };
   AVCaptureWhiteBalanceGains target =
       [device deviceWhiteBalanceGainsForTemperatureAndTintValues:tt];
-  // 极端色温 → 切全局色调映射（先于锁定，顺序要求见 SetWbGlobalToneMapping 注释）；
-  // 中性色温 → 恢复默认局部映射。用未封顶的 target 判定：残差软件补足会把总
-  // 视觉量恢复到 target 水平，色斑可见性与 target（而非封顶后 applied）挂钩。
-  SetWbGlobalToneMapping(device, IsExtremeWbGains(target), target);
-  AVCaptureWhiteBalanceGains applied = SoftClampWhiteBalanceGains(target, device.maxWhiteBalanceGain);
+  // 极端色温 → 全局色调映射（先于锁定，顺序要求见 SetWbGlobalToneMapping 注释）
+  // + LSC 安全区限幅；非极端 → 恢复默认局部映射 + 常规软封顶。
+  BOOL extreme = IsExtremeWbTemperature(k);
+  int toneMapping = SetWbGlobalToneMapping(device, extreme);
+  AVCaptureWhiteBalanceGains applied = extreme
+      ? ClampExtremeWbGains(target, device.maxWhiteBalanceGain)
+      : SoftClampWhiteBalanceGains(target, device.maxWhiteBalanceGain);
   if (residual != NULL) {
     residual->r = applied.redGain   > 0.001f ? target.redGain   / applied.redGain   : 1.0f;
     residual->g = applied.greenGain > 0.001f ? target.greenGain / applied.greenGain : 1.0f;
     residual->b = applied.blueGain  > 0.001f ? target.blueGain  / applied.blueGain  : 1.0f;
   }
-  NSLog(@"[WB] k=%.0f maxGain=%.2f target=(%.3f,%.3f,%.3f) applied=(%.3f,%.3f,%.3f) residual=(%.3f,%.3f,%.3f)",
-        k, device.maxWhiteBalanceGain,
+  NSLog(@"[WB] k=%.0f extreme=%d maxGain=%.2f target=(%.3f,%.3f,%.3f) applied=(%.3f,%.3f,%.3f) residual=(%.3f,%.3f,%.3f) toneMapping=%@",
+        k, extreme, device.maxWhiteBalanceGain,
         target.redGain, target.greenGain, target.blueGain,
         applied.redGain, applied.greenGain, applied.blueGain,
         residual != NULL ? residual->r : 1.0f,
         residual != NULL ? residual->g : 1.0f,
-        residual != NULL ? residual->b : 1.0f);
+        residual != NULL ? residual->b : 1.0f,
+        toneMapping < 0 ? @"unsupported" : (toneMapping > 0 ? @"global" : @"local"));
   return applied;
 }
 
@@ -455,7 +474,7 @@ static AVCaptureWhiteBalanceGains GainsForTemperatureWithResidual(CGFloat k,
     if ([_captureDevice isWhiteBalanceModeSupported:wbMode]) {
       // 恢复默认局部色调映射（先于模式 setter）：自动白平衡下画质最优，
       // 且 photoOutput 的 Deep Fusion/Smart HDR 可用（见 SetWbGlobalToneMapping 注释）。
-      SetWbGlobalToneMapping(_captureDevice, NO, (AVCaptureWhiteBalanceGains){1.0, 1.0, 1.0});
+      SetWbGlobalToneMapping(_captureDevice, NO);
       _captureDevice.whiteBalanceMode = wbMode;
       _wbResidual = WbResidualIdentity;
       _wbManuallyLocked = NO;
