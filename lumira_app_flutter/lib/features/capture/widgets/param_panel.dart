@@ -1,113 +1,138 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/lumira/_internal/lumira_theme_resolver.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/capture_state.dart';
-import '../domain/photo_template.dart';
 import '../services/camera_service_provider.dart';
 import '../services/white_balance.dart';
+import 'post_process_adjust_panel.dart';
 
-/// 底部抽屉式参数编辑面板。
-/// 5 个 Tab：相机 / 色彩 / 细节 / 构图 / 场景。
-/// 通过 panelExpandedProvider 控制展开/收起（AnimatedPositioned）。
+/// 参数面板工具条条目
+enum _ParamTool { ev, wb, flash, color, detail, composition, scene }
+
+/// 拍摄页底部参数面板：图标工具条 + 点选滑出控件区（总高 ≤220）。
 ///
-/// UI 美化：深色背景 + 金色强调色、卡片式分组、自定义滑块外观、
-/// 可滚动标签条、统一间距系统。
-class ParamPanel extends ConsumerWidget {
+/// 交互与预览页编辑工具条 / iPhone 原生相机一致：
+/// - 点工具图标 → 控件区滑出该组控件；再点同图标 → 收起控件区
+/// - 点把手行关闭图标 / 面板外取景器区域 → 关闭整栏（panelExpandedProvider）
+///
+/// 视觉：容器与强调色全部从当前 UI 风格 + 主题 tokens 派生；叠在取景器
+/// 动态画面上，新拟态走「半透明暗底 + 细边」取向（无阴影无模糊铁律，
+/// 色值由 [LumiraThemeResolver.darkNeuPalette] 从主题 canvas lerp 派生），
+/// 暗色语境文字用白色系（与 ParamPillBar 拍摄页先例一致）。
+///
+/// 白平衡应用逻辑（预设→色温联动、OHOS 隐藏色温滑块、iOS 残差拉取）
+/// 与旧版一致，仅迁移位置。
+class ParamPanel extends ConsumerStatefulWidget {
   const ParamPanel({super.key});
 
-  void _close(WidgetRef ref) {
+  @override
+  ConsumerState<ParamPanel> createState() => _ParamPanelState();
+}
+
+class _ParamPanelState extends ConsumerState<ParamPanel> {
+  /// 控件区固定高度：pill 行 + 滑块 / AdjustPanel 均按此设计
+  static const _controlH = 132.0;
+
+  _ParamTool? _activeTool;
+
+  void _close() {
     ref.read(CaptureState.panelExpandedProvider.notifier).state = false;
   }
 
+  void _toggleTool(_ParamTool tool) {
+    setState(() => _activeTool = _activeTool == tool ? null : tool);
+    HapticFeedback.lightImpact();
+  }
+
+  void _reset() {
+    final editable = ref.read(CaptureState.editableTemplateProvider);
+    final original = ref.read(CaptureState.originalTemplateProvider);
+    if (editable != null && original != null) {
+      // 模板模式：重置为模板原始值
+      ref.read(CaptureState.editableTemplateProvider.notifier).state =
+          original.copyWith();
+    } else {
+      // 自由模式：重置为默认值并持久化
+      CaptureState.resetFreeModeParams(ref);
+    }
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final expanded = ref.watch(CaptureState.panelExpandedProvider);
-    final editable = ref.watch(CaptureState.editableTemplateProvider);
-    final original = ref.watch(CaptureState.originalTemplateProvider);
+    final theme = ref.watch(appThemeProvider);
+    final tokens = theme.tokens;
+    final style = theme.style;
+    final accent = tokens.brand;
+    final hasTemplate =
+        ref.watch(CaptureState.editableTemplateProvider) != null;
+    final bottomInset = MediaQuery.of(context).viewPadding.bottom;
 
     return Stack(
       children: [
-        // 透明抽屉：不使用全屏遮罩，取景器可见
-        // 仅在展开时用透明 GestureDetector 拦截顶部点击以关闭面板
+        // 点击面板外取景器区域关闭整栏（面板本体在其上层，不受影响）
         if (expanded)
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 520,
+          Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
-              onTap: () => _close(ref),
+              onTap: _close,
               child: const SizedBox.expand(),
             ),
           ),
-        AnimatedPositioned(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
+        // 面板本体：底部贴边 + AnimatedSlide 进出（高度由内容自然撑开，
+        // 控件区用 AnimatedSize 滑出，避免固定高容器在动画期溢出）
+        Positioned(
           left: 0,
           right: 0,
-          bottom: expanded ? 0 : -520,
-          height: 520,
-          child: Container(
-            decoration: BoxDecoration(
-              // 透明背景弹出样式：与其他工具一致（0.4 透明度），
-              // 取景器可见，backdrop-filter 模糊增强文字可读性
-              color: Colors.black.withOpacity(0.4),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x44000000),
-                  blurRadius: 12,
-                  offset: Offset(0, -2),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              child: DefaultTabController(
-                length: 5,
-                child: Column(
-                  children: [
-                    _PanelHeader(
-                      hasTemplate: editable != null,
-                      onClose: () => _close(ref),
-                    ),
-                    _TabBarSection(
-                      tabs: const ['相机', '色彩', '细节', '构图', '场景'],
-                    ),
-                    Expanded(
-                      child: TabBarView(
-                        children: [
-                          _CameraTab(),
-                          _ColorTab(),
-                          _DetailTab(),
-                          _CompositionTab(),
-                          _SceneTab(),
-                        ],
-                      ),
-                    ),
-                    _PanelFooter(
-                      hasTemplate: editable != null && original != null,
-                      isModified: editable != null &&
-                          original != null &&
-                          editable != original,
-                      onReset: () {
-                        if (editable != null && original != null) {
-                          // 模板模式：重置为模板原始值
-                          ref
-                              .read(CaptureState.editableTemplateProvider.notifier)
-                              .state = original.copyWith();
-                        } else {
-                          // 自由模式：重置为默认值并持久化
-                          CaptureState.resetFreeModeParams(ref);
-                        }
-                      },
-                      onDone: () => _close(ref),
-                    ),
-                  ],
-                ),
+          bottom: 0,
+          child: AnimatedSlide(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            offset: expanded ? Offset.zero : const Offset(0, 1.2),
+            child: _panelShell(
+              style: style,
+              tokens: tokens,
+              bottomInset: bottomInset,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _HandleRow(
+                    hasTemplate: hasTemplate,
+                    accent: accent,
+                    onReset: _reset,
+                    onClose: _close,
+                  ),
+                  _ToolbarRow(
+                    activeTool: _activeTool,
+                    accent: accent,
+                    onToolTap: _toggleTool,
+                  ),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: _activeTool == null
+                        ? const SizedBox.shrink()
+                        : SizedBox(
+                            height: _controlH,
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 180),
+                              child: KeyedSubtree(
+                                key: ValueKey(_activeTool),
+                                child: _buildControl(accent),
+                              ),
+                            ),
+                          ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -115,215 +140,199 @@ class ParamPanel extends ConsumerWidget {
       ],
     );
   }
+
+  // ── 面板外壳：按当前 UI 风格派生暗色语境视觉 ──
+
+  Widget _panelShell({
+    required UIStyle style,
+    required ThemeTokens tokens,
+    required double bottomInset,
+    required Widget child,
+  }) {
+    const radius = BorderRadius.vertical(top: Radius.circular(24));
+    final palette = LumiraThemeResolver.darkNeuPalette(tokens);
+    Widget body;
+    switch (style) {
+      case UIStyle.glass:
+        // 暗玻璃：毛玻璃 + 近黑半透明底（ParamPillBar 玻璃胶囊同取向）
+        body = ClipRRect(
+          borderRadius: radius,
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: Container(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              decoration: BoxDecoration(
+                color: palette.surface.withOpacity(0.80),
+                borderRadius: radius,
+                border: Border.all(
+                    color: Colors.white.withOpacity(0.10), width: 0.5),
+              ),
+              child: child,
+            ),
+          ),
+        );
+        break;
+      case UIStyle.female:
+        // 暗渐变：黑 → 品牌微染，柔和细边
+        body = Container(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black.withOpacity(0.82),
+                Color.lerp(Colors.black, tokens.brand, 0.16)!
+                    .withOpacity(0.84),
+              ],
+            ),
+            borderRadius: radius,
+            border: Border.all(
+                color: Colors.white.withOpacity(0.08), width: 0.6),
+          ),
+          child: child,
+        );
+        break;
+      case UIStyle.neumorphic:
+        // 新拟态叠动态画面：半透明暗底 + 细边（无阴影无模糊铁律）
+        body = Container(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          decoration: BoxDecoration(
+            color: palette.surface.withOpacity(0.94),
+            borderRadius: radius,
+            border: Border.all(
+                color: Colors.white.withOpacity(0.14), width: 0.6),
+          ),
+          child: child,
+        );
+        break;
+      case UIStyle.flat:
+        // 扁平：半透明暗底 + 细边
+        body = Container(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          decoration: BoxDecoration(
+            color: palette.surface.withOpacity(0.92),
+            borderRadius: radius,
+            border: Border.all(
+                color: Colors.white.withOpacity(0.08), width: 0.5),
+          ),
+          child: child,
+        );
+        break;
+    }
+    return body;
+  }
+
+  // ── 控件区内容分发 ──
+
+  Widget _buildControl(Color accent) {
+    switch (_activeTool!) {
+      case _ParamTool.ev:
+        return _EvControl(accent: accent);
+      case _ParamTool.wb:
+        return _WbControl(accent: accent);
+      case _ParamTool.flash:
+        return _FlashControl(accent: accent);
+      case _ParamTool.color:
+        return AdjustPanel(
+          defs: colorAdjustDefs(),
+          full: ref.watch(CaptureState.effectivePostProcessProvider),
+          onChanged: (p) => CaptureState.updatePostProcess(ref, (_) => p),
+          accentColor: accent,
+        );
+      case _ParamTool.detail:
+        return AdjustPanel(
+          defs: detailAdjustDefs(),
+          full: ref.watch(CaptureState.effectivePostProcessProvider),
+          onChanged: (p) => CaptureState.updatePostProcess(ref, (_) => p),
+          accentColor: accent,
+        );
+      case _ParamTool.composition:
+        return const _CompositionControl();
+      case _ParamTool.scene:
+        return const _SceneControl();
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// 面板头部
+// 把手行
 // ─────────────────────────────────────────────────────────────────────
-class _PanelHeader extends StatelessWidget {
-  const _PanelHeader({required this.hasTemplate, required this.onClose});
+
+/// 把手行：拖动条 + 模板/自由徽标 + 重置 pill + 关闭图标
+class _HandleRow extends StatelessWidget {
+  const _HandleRow({
+    required this.hasTemplate,
+    required this.accent,
+    required this.onReset,
+    required this.onClose,
+  });
 
   final bool hasTemplate;
+  final Color accent;
+  final VoidCallback onReset;
   final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 8, 16, 8),
-      child: Column(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 12, 6),
+      child: Row(
         children: [
-          // 拖动条
+          // 拖动条（装饰）
           Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 10),
+            width: 24,
+            height: 3,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withOpacity(0.22),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          // 标题行
-          Row(
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFC9A96E).withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.tune,
-                  color: Color(0xFFC9A96E),
-                  size: 16,
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Text(
-                '参数调整',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.3,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: hasTemplate
-                      ? const Color(0xFFC9A96E).withOpacity(0.15)
-                      : Colors.white.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  hasTemplate ? '模板' : '自由',
-                  style: TextStyle(
-                    color: hasTemplate
-                        ? const Color(0xFFC9A96E)
-                        : Colors.white60,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              LumiraIconButton(
-                icon: Icons.close,
-                onPressed: onClose,
-                color: Colors.white70,
-                size: 16,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// TabBar
-// ─────────────────────────────────────────────────────────────────────
-class _TabBarSection extends StatelessWidget {
-  const _TabBarSection({required this.tabs});
-  final List<String> tabs;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: Colors.white.withOpacity(0.06),
-            width: 0.5,
-          ),
-        ),
-      ),
-      child: TabBar(
-        tabs: tabs.map((t) => Tab(text: t)).toList(),
-        labelColor: const Color(0xFFC9A96E),
-        unselectedLabelColor: Colors.white38,
-        indicatorColor: const Color(0xFFC9A96E),
-        indicatorSize: TabBarIndicatorSize.label,
-        indicatorWeight: 2.5,
-        labelStyle: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-        ),
-        unselectedLabelStyle: const TextStyle(fontSize: 13),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// 面板底部
-// ─────────────────────────────────────────────────────────────────────
-class _PanelFooter extends StatelessWidget {
-  const _PanelFooter({
-    required this.hasTemplate,
-    required this.isModified,
-    required this.onReset,
-    required this.onDone,
-  });
-
-  final bool hasTemplate;
-  final bool isModified;
-  final VoidCallback onReset;
-  final VoidCallback onDone;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(
-            color: Colors.white.withOpacity(0.06),
-            width: 0.5,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          // 始终显示重置按钮（模板模式仅在已修改时有意义，但保留可点；
-          // 自由模式重置为默认值并持久化）
-          GestureDetector(
-            onTap: onReset,
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.refresh, size: 14, color: Colors.white70),
-                  SizedBox(width: 4),
-                  Text('重置', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                ],
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: hasTemplate
+                  ? accent.withOpacity(0.15)
+                  : Colors.white.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              hasTemplate ? '模板' : '自由',
+              style: TextStyle(
+                color: hasTemplate ? accent : Colors.white60,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
           const Spacer(),
           GestureDetector(
-            onTap: onDone,
+            onTap: onReset,
             behavior: HitTestBehavior.opaque,
             child: Container(
-              width: 100,
-              height: 38,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFC9A96E), Color(0xFFB8954E)],
-                ),
-                borderRadius: BorderRadius.circular(19),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFC9A96E).withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
+                color: Colors.white.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.refresh, size: 12, color: Colors.white70),
+                  SizedBox(width: 4),
+                  Text('重置',
+                      style: TextStyle(color: Colors.white70, fontSize: 11)),
                 ],
               ),
-              child: const Center(
-                child: Text(
-                  '完成',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
             ),
+          ),
+          const SizedBox(width: 8),
+          LumiraIconButton(
+            icon: Icons.close,
+            onPressed: onClose,
+            color: Colors.white70,
+            size: 16,
           ),
         ],
       ),
@@ -332,9 +341,171 @@ class _PanelFooter extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// 相机 Tab
+// 图标工具条
 // ─────────────────────────────────────────────────────────────────────
-class _CameraTab extends ConsumerWidget {
+
+/// 图标工具条：7 项单行（曝光/白平衡/闪光/色彩/细节/构图/场景）
+class _ToolbarRow extends StatelessWidget {
+  const _ToolbarRow({
+    required this.activeTool,
+    required this.accent,
+    required this.onToolTap,
+  });
+
+  final _ParamTool? activeTool;
+  final Color accent;
+  final ValueChanged<_ParamTool> onToolTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 2, 8, 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _ToolItem(
+            icon: Icons.exposure,
+            label: '曝光',
+            selected: activeTool == _ParamTool.ev,
+            accent: accent,
+            onTap: () => onToolTap(_ParamTool.ev),
+          ),
+          _ToolItem(
+            icon: Icons.wb_sunny_outlined,
+            label: '白平衡',
+            selected: activeTool == _ParamTool.wb,
+            accent: accent,
+            onTap: () => onToolTap(_ParamTool.wb),
+          ),
+          _ToolItem(
+            icon: Icons.flash_on_outlined,
+            label: '闪光',
+            selected: activeTool == _ParamTool.flash,
+            accent: accent,
+            onTap: () => onToolTap(_ParamTool.flash),
+          ),
+          _ToolItem(
+            icon: Icons.tune,
+            label: '色彩',
+            selected: activeTool == _ParamTool.color,
+            accent: accent,
+            onTap: () => onToolTap(_ParamTool.color),
+          ),
+          _ToolItem(
+            icon: Icons.auto_fix_high_outlined,
+            label: '细节',
+            selected: activeTool == _ParamTool.detail,
+            accent: accent,
+            onTap: () => onToolTap(_ParamTool.detail),
+          ),
+          _ToolItem(
+            icon: Icons.grid_4x4_outlined,
+            label: '构图',
+            selected: activeTool == _ParamTool.composition,
+            accent: accent,
+            onTap: () => onToolTap(_ParamTool.composition),
+          ),
+          _ToolItem(
+            icon: Icons.tips_and_updates_outlined,
+            label: '场景',
+            selected: activeTool == _ParamTool.scene,
+            accent: accent,
+            onTap: () => onToolTap(_ParamTool.scene),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 单个工具项：图标 + 文字，选中态 accent 高亮 + 胶囊底
+class _ToolItem extends StatelessWidget {
+  const _ToolItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.accent,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final Color accent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? accent : Colors.white70;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected ? accent.withOpacity(0.16) : Colors.transparent,
+          borderRadius: BorderRadius.circular(1000),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 9,
+                color: color,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// 控件区：曝光 / 白平衡 / 闪光 / 构图 / 场景
+// ─────────────────────────────────────────────────────────────────────
+
+/// 曝光 EV 单滑块
+class _EvControl extends ConsumerWidget {
+  const _EvControl({required this.accent});
+
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cam = ref.watch(CaptureState.effectiveCameraProvider);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+      child: AdjustSlider(
+        label: 'EV',
+        value: cam.exposureCompensation,
+        min: -3,
+        max: 3,
+        accentColor: accent,
+        format: (v) =>
+            v >= 0 ? '+${v.toStringAsFixed(1)}' : v.toStringAsFixed(1),
+        onChanged: (v) => CaptureState.updateCamera(
+            ref, (c) => c.copyWith(exposureCompensation: v)),
+      ),
+    );
+  }
+}
+
+/// 白平衡：预设 pill + 色温滑块（自旧 _CameraTab 原样迁移）
+class _WbControl extends ConsumerWidget {
+  const _WbControl({required this.accent});
+
+  final Color accent;
+
   /// 白平衡预设 pill（mode → 显示名）。
   static const _wbPresets = <WhiteBalanceMode, String>{
     WhiteBalanceMode.auto: '自动',
@@ -357,7 +528,7 @@ class _CameraTab extends ConsumerWidget {
   /// 仅实时会话调节，**不写入 CameraParams**。
   /// 随后拉取 iOS 硬件「残差」（软封顶削减比），供软件矩阵补足
   ///（极值色温下取景器局部冷/暖色丢失的修复，见 white_balance.dart）。
-  static void _applyWhiteBalance(WidgetRef ref, WhiteBalanceSettings s) {
+  void _apply(WidgetRef ref, WhiteBalanceSettings s) {
     ref.read(whiteBalanceSessionProvider.notifier).state = s;
     ref.read(cameraServiceProvider).setWhiteBalance(s);
     refreshWbResidual(ref);
@@ -365,418 +536,150 @@ class _CameraTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cam = ref.watch(CaptureState.effectiveCameraProvider);
     final wb = ref.watch(whiteBalanceSessionProvider);
     // OHOS 连续色温（setWhiteBalance/getWhiteBalanceRange）真机不可用，
     // 传感器级手动值无法落地，仅保留预设 pill，隐藏色温滑块。
     final showWbSlider = Platform.isAndroid || Platform.isIOS;
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
       children: [
-        _SectionCard(
-          title: '曝光',
-          children: [
-            _SliderRow(
-              label: 'EV',
-              value: cam.exposureCompensation,
-              min: -3.0,
-              max: 3.0,
-              divisions: 60,
-              display:
-                  '${cam.exposureCompensation >= 0 ? '+' : ''}${cam.exposureCompensation.toStringAsFixed(1)}',
-              onChanged: (v) => CaptureState.updateCamera(
-                  ref, (c) => c.copyWith(exposureCompensation: v)),
-            ),
-          ],
+        _WbPresetRow(
+          presets: _wbPresets,
+          selected: wb.mode,
+          accent: accent,
+          onSelected: (mode) {
+            if (mode == WhiteBalanceMode.auto) {
+              // 切回 Auto：temperatureK 置 null，插件端 auto 复位
+              _apply(ref, const WhiteBalanceSettings());
+            } else {
+              // 非 Auto 预设。iOS/Android：预设与色温滑块底层同为“锁定色温”，
+              // 预设点击时把 temperatureK 联动到对应档位，使滑块跟随；
+              // OHOS：预设走原生 mode 分支，temperatureK 保持 null。
+              _apply(
+                ref,
+                showWbSlider
+                    ? WhiteBalanceSettings(
+                        mode: mode, temperatureK: _wbPresetK[mode])
+                    : WhiteBalanceSettings(mode: mode),
+              );
+            }
+          },
         ),
-        _SectionCard(
-          title: '白平衡',
-          children: [
-            _WbPresetRow(
-              presets: _wbPresets,
-              selected: wb.mode,
-              onSelected: (mode) {
-                if (mode == WhiteBalanceMode.auto) {
-                  // 切回 Auto：temperatureK 置 null，插件端 auto 复位
-                  _applyWhiteBalance(ref, const WhiteBalanceSettings());
-                } else {
-                  // 非 Auto 预设。iOS/Android：预设与色温滑块底层同为"锁定色温"，
-                  // 预设点击时把 temperatureK 联动到对应档位，使滑块跟随；
-                  // OHOS：预设走原生 mode 分支，temperatureK 保持 null。
-                  _applyWhiteBalance(
-                    ref,
-                    showWbSlider
-                        ? WhiteBalanceSettings(
-                            mode: mode,
-                            temperatureK: _wbPresetK[mode],
-                          )
-                        : WhiteBalanceSettings(mode: mode),
-                  );
-                }
-              },
-            ),
-            if (showWbSlider && !wb.isAuto)
-              _SliderRow(
-                label: '色温',
-                value: (wb.temperatureK ?? 5500).toDouble(),
-                min: 3000,
-                max: 8000,
-                divisions: 50,
-                display: '${wb.temperatureK ?? 5500} K',
-                onChanged: (v) => _applyWhiteBalance(
-                  ref,
-                  WhiteBalanceSettings(
-                    mode: wb.mode,
-                    temperatureK: (v / 100).round() * 100,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        _SectionCard(
-          title: '其他',
-          children: [
-            _PopupRow(
-              label: '闪光',
-              value: cam.flashMode,
-              items: const ['off', 'on', 'auto', 'torch'],
-              displayLabels: const {
-                'off': '关闭',
-                'on': '常亮',
-                'auto': '自动',
-                'torch': '手电筒',
-              },
-              onChanged: (v) => CaptureState.updateCamera(
-                  ref, (c) => c.copyWith(flashMode: v)),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.03),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.info_outline, color: Colors.white24, size: 14),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'EV 可实时影响取景器亮度',
-                  style: TextStyle(color: Colors.white24, fontSize: 10, height: 1.4),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// 色彩 Tab
-// ─────────────────────────────────────────────────────────────────────
-class _ColorTab extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final color = ref.watch(CaptureState.effectivePostProcessProvider).color;
-
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      children: [
-        _SectionCard(
-          title: '基础调整',
-          children: [
-            _SliderRow(
-              label: '亮度',
-              value: color.brightness,
-              min: -100,
-              max: 100,
-              divisions: 200,
-              display: color.brightness.toStringAsFixed(0),
-              onChanged: (v) => _setColor(ref, (c) => c.copyWith(brightness: v)),
-            ),
-            _SliderRow(
-              label: '对比度',
-              value: color.contrast,
-              min: -100,
-              max: 100,
-              divisions: 200,
-              display: color.contrast.toStringAsFixed(0),
-              onChanged: (v) => _setColor(ref, (c) => c.copyWith(contrast: v)),
-            ),
-            _SliderRow(
-              label: '饱和度',
-              value: color.saturation,
-              min: -100,
-              max: 100,
-              divisions: 200,
-              display: color.saturation.toStringAsFixed(0),
-              onChanged: (v) => _setColor(ref, (c) => c.copyWith(saturation: v)),
-            ),
-            _SliderRow(
+        if (showWbSlider && !wb.isAuto)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: AdjustSlider(
               label: '色温',
-              value: color.temperature,
-              min: -100,
-              max: 100,
-              divisions: 200,
-              display: color.temperature.toStringAsFixed(0),
-              onChanged: (v) => _setColor(ref, (c) => c.copyWith(temperature: v)),
+              value: (wb.temperatureK ?? 5500).toDouble(),
+              min: 3000,
+              max: 8000,
+              accentColor: accent,
+              format: (v) => '${(v / 100).round() * 100} K',
+              onChanged: (v) => _apply(
+                ref,
+                WhiteBalanceSettings(
+                  mode: wb.mode,
+                  temperatureK: (v / 100).round() * 100,
+                ),
+              ),
             ),
-            _SliderRow(
-              label: '色调',
-              value: color.tint,
-              min: -100,
-              max: 100,
-              divisions: 200,
-              display: color.tint.toStringAsFixed(0),
-              onChanged: (v) => _setColor(ref, (c) => c.copyWith(tint: v)),
-            ),
-          ],
-        ),
-        _SectionCard(
-          title: '局部调整',
-          children: [
-            _SliderRow(
-              label: '高光',
-              value: color.highlights ?? 0,
-              min: -100,
-              max: 100,
-              divisions: 200,
-              display: (color.highlights ?? 0).toStringAsFixed(0),
-              onChanged: (v) => _setColor(ref, (c) => c.copyWith(highlights: v)),
-            ),
-            _SliderRow(
-              label: '阴影',
-              value: color.shadows ?? 0,
-              min: -100,
-              max: 100,
-              divisions: 200,
-              display: (color.shadows ?? 0).toStringAsFixed(0),
-              onChanged: (v) => _setColor(ref, (c) => c.copyWith(shadows: v)),
-            ),
-            _SliderRow(
-              label: '黑点',
-              value: color.blackPoint ?? 0,
-              min: -100,
-              max: 100,
-              divisions: 200,
-              display: (color.blackPoint ?? 0).toStringAsFixed(0),
-              onChanged: (v) => _setColor(ref, (c) => c.copyWith(blackPoint: v)),
-            ),
-            _SliderRow(
-              label: '鲜明度',
-              value: color.vibrance ?? 0,
-              min: -100,
-              max: 100,
-              divisions: 200,
-              display: (color.vibrance ?? 0).toStringAsFixed(0),
-              onChanged: (v) => _setColor(ref, (c) => c.copyWith(vibrance: v)),
-            ),
-            _SliderRow(
-              label: '明度',
-              value: color.brilliance ?? 0,
-              min: -100,
-              max: 100,
-              divisions: 200,
-              display: (color.brilliance ?? 0).toStringAsFixed(0),
-              onChanged: (v) => _setColor(ref, (c) => c.copyWith(brilliance: v)),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
+          ),
       ],
     );
   }
-
-  static void _setColor(
-      WidgetRef ref, PostProcessColor Function(PostProcessColor) updater) {
-    CaptureState.updatePostProcess(ref, (p) {
-      final newColor = updater(p.color);
-      return p.copyWith(color: newColor);
-    });
-  }
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// 细节 Tab
-// ─────────────────────────────────────────────────────────────────────
-class _DetailTab extends ConsumerWidget {
+/// 闪光：4 选项 pill 单选
+class _FlashControl extends ConsumerWidget {
+  const _FlashControl({required this.accent});
+
+  final Color accent;
+
+  static const _flashChoices = [
+    _ChoiceItem('off', '关闭'),
+    _ChoiceItem('on', '常亮'),
+    _ChoiceItem('auto', '自动'),
+    _ChoiceItem('torch', '手电筒'),
+  ];
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final post = ref.watch(CaptureState.effectivePostProcessProvider);
-    final color = post.color;
-
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      children: [
-        _SectionCard(
-          title: '画质',
-          children: [
-            _SliderRow(
-              label: '清晰度',
-              value: color.clarity ?? 0,
-              min: -100,
-              max: 100,
-              divisions: 200,
-              display: (color.clarity ?? 0).toStringAsFixed(0),
-              onChanged: (v) => CaptureState.updatePostProcess(
-                  ref, (p) => p.copyWith(color: p.color.copyWith(clarity: v))),
-            ),
-            _SliderRow(
-              label: '锐化',
-              value: post.sharpen.toDouble(),
-              min: 0,
-              max: 100,
-              divisions: 100,
-              display: post.sharpen.toString(),
-              onChanged: (v) => CaptureState.updatePostProcess(
-                  ref, (p) => p.copyWith(sharpen: v.round())),
-            ),
-            _SliderRow(
-              label: '磨皮',
-              value: post.smoothStrength.toDouble(),
-              min: 0,
-              max: 100,
-              divisions: 100,
-              display: post.smoothStrength.toString(),
-              onChanged: (v) => CaptureState.updatePostProcess(
-                  ref, (p) => p.copyWith(smoothStrength: v.round())),
-            ),
-          ],
-        ),
-        _SectionCard(
-          title: '特效',
-          children: [
-            _SliderRow(
-              label: '暗角',
-              value: post.vignette.toDouble(),
-              min: 0,
-              max: 100,
-              divisions: 100,
-              display: post.vignette.toString(),
-              onChanged: (v) => CaptureState.updatePostProcess(
-                  ref, (p) => p.copyWith(vignette: v.round())),
-            ),
-            _SliderRow(
-              label: '颗粒',
-              value: post.grain.toDouble(),
-              min: 0,
-              max: 100,
-              divisions: 100,
-              display: post.grain.toString(),
-              onChanged: (v) => CaptureState.updatePostProcess(
-                  ref, (p) => p.copyWith(grain: v.round())),
-            ),
-            _SliderRow(
-              label: '拉腿',
-              value: post.legStretch.toDouble(),
-              min: 0,
-              max: 100,
-              divisions: 100,
-              display: post.legStretch.toString(),
-              onChanged: (v) => CaptureState.updatePostProcess(
-                  ref, (p) => p.copyWith(legStretch: v.round())),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-      ],
+    final cam = ref.watch(CaptureState.effectiveCameraProvider);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+      child: _ChoicePillRow(
+        items: _flashChoices,
+        selected: cam.flashMode,
+        accent: accent,
+        onSelected: (v) =>
+            CaptureState.updateCamera(ref, (c) => c.copyWith(flashMode: v)),
+      ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// 构图 Tab
-// ─────────────────────────────────────────────────────────────────────
-class _CompositionTab extends ConsumerWidget {
-  static const _overlayTypes = {
-    'rule_of_thirds': '三分法',
-    'golden_ratio': '黄金比例',
-    'center': '居中',
-    'diagonal': '对角线',
-    'symmetry': '对称',
-    'none': '无',
-  };
+/// 构图：辅助线类型 pill + 透明度滑块
+class _CompositionControl extends ConsumerWidget {
+  const _CompositionControl();
+
+  static const _overlayTypes = [
+    _ChoiceItem('rule_of_thirds', '三分法'),
+    _ChoiceItem('golden_ratio', '黄金比例'),
+    _ChoiceItem('center', '居中'),
+    _ChoiceItem('diagonal', '对角线'),
+    _ChoiceItem('symmetry', '对称'),
+    _ChoiceItem('none', '无'),
+  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final comp = ref.watch(CaptureState.effectiveCompositionProvider);
-
+    final accent = ref.watch(appThemeProvider).tokens.brand;
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
       children: [
-        _SectionCard(
-          title: '构图辅助线',
-          children: [
-            _PopupRow(
-              label: '类型',
-              value: comp.overlayType,
-              items: _overlayTypes.keys.toList(),
-              displayLabels: _overlayTypes,
-              onChanged: (v) => CaptureState.updateComposition(
-                  ref, (c) => c.copyWith(overlayType: v)),
-            ),
-            _SliderRow(
-              label: '透明度',
-              value: comp.opacity,
-              min: 0,
-              max: 1,
-              divisions: 100,
-              display: '${(comp.opacity * 100).round()}%',
-              onChanged: (v) => CaptureState.updateComposition(
-                  ref, (c) => c.copyWith(opacity: v)),
-            ),
-          ],
+        _ChoicePillRow(
+          items: _overlayTypes,
+          selected: comp.overlayType,
+          accent: accent,
+          onSelected: (v) => CaptureState.updateComposition(
+              ref, (c) => c.copyWith(overlayType: v)),
         ),
-        if (comp.description.isNotEmpty)
-          Container(
-            margin: const EdgeInsets.only(top: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFC9A96E).withOpacity(0.06),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: const Color(0xFFC9A96E).withOpacity(0.12),
-                width: 0.5,
-              ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.lightbulb_outline,
-                    color: Color(0xFFC9A96E), size: 16),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    comp.description,
-                    style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        height: 1.5),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
+        AdjustSlider(
+          label: '透明度',
+          value: comp.opacity,
+          min: 0,
+          max: 1,
+          accentColor: accent,
+          format: (v) => '${(v * 100).round()}%',
+          onChanged: (v) => CaptureState.updateComposition(
+              ref, (c) => c.copyWith(opacity: v)),
+        ),
       ],
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// 场景 Tab
-// ─────────────────────────────────────────────────────────────────────
-class _SceneTab extends ConsumerWidget {
+/// 场景指南：紧凑 label:value 只读列表（自旧 _SceneTab 迁移）
+class _SceneControl extends ConsumerWidget {
+  const _SceneControl();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sg = ref.watch(CaptureState.effectiveSceneGuideProvider);
+
+    // 自由模式返回空 SceneGuide（字段全空）：所有展示字段均无内容 → 空态
+    final hasGuide = sg.lightDirection.isNotEmpty ||
+        sg.shootingDistance.isNotEmpty ||
+        sg.background.isNotEmpty ||
+        sg.bestTime.isNotEmpty ||
+        sg.presetId != null ||
+        sg.bestTimeFrom != null ||
+        sg.bestTimeTo != null ||
+        sg.props.isNotEmpty ||
+        sg.tips.isNotEmpty;
 
     final rows = <MapEntry<String, String>>[
       MapEntry('光线方向', sg.lightDirection),
@@ -790,57 +693,41 @@ class _SceneTab extends ConsumerWidget {
       if (sg.tips.isNotEmpty) MapEntry('拍摄贴士', sg.tips.join('\n• ')),
     ];
 
-    if (rows.isEmpty) {
+    if (!hasGuide) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.info_outline, color: Colors.white24, size: 48),
-            const SizedBox(height: 12),
-            const Text(
-              '当前为自由模式，无场景指南',
-              style: TextStyle(color: Colors.white38, fontSize: 13),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              '选择场景预设或套用模板后可查看场景指南',
-              style: TextStyle(color: Colors.white24, fontSize: 11),
-            ),
+          children: const [
+            Text('当前为自由模式，无场景指南',
+                style: TextStyle(color: Colors.white38, fontSize: 12)),
+            SizedBox(height: 4),
+            Text('选择场景预设或套用模板后可查看',
+                style: TextStyle(color: Colors.white24, fontSize: 10)),
           ],
         ),
       );
     }
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
       children: [
         for (final row in rows)
-          Container(
-            margin: const EdgeInsets.only(bottom: 6),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.04),
-              borderRadius: BorderRadius.circular(10),
-            ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(
-                  width: 72,
-                  child: Text(
-                    row.key,
-                    style: const TextStyle(
-                      color: Color(0xFFC9A96E),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  width: 64,
+                  child: Text(row.key,
+                      style: const TextStyle(
+                          color: Colors.white54, fontSize: 10)),
                 ),
                 Expanded(
                   child: Text(
                     row.value.isEmpty ? '—' : row.value,
                     style: const TextStyle(
-                        color: Colors.white, fontSize: 13, height: 1.5),
+                        color: Colors.white, fontSize: 11, height: 1.4),
                   ),
                 ),
               ],
@@ -852,233 +739,85 @@ class _SceneTab extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Helper widgets
+// 通用 pill 组件
 // ─────────────────────────────────────────────────────────────────────
 
-/// 卡片式分区分组容器
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.title, required this.children});
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.05),
-          width: 0.5,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 2),
-            child: Row(
-              children: [
-                Container(
-                  width: 3,
-                  height: 11,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFC9A96E),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          ...children,
-        ],
-      ),
-    );
-  }
-}
-
-/// 滑块行 — label + slider + value
-class _SliderRow extends StatelessWidget {
-  final String label;
-  final double value;
-  final double min;
-  final double max;
-  final int divisions;
-  final String display;
-  final ValueChanged<double> onChanged;
-  const _SliderRow({
-    required this.label,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.divisions,
-    required this.display,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 52,
-            child: Text(label,
-                style: TextStyle(
-                    color: Colors.white.withOpacity(0.6), fontSize: 12)),
-          ),
-          Expanded(
-            child: SliderTheme(
-              data: SliderThemeData(
-                activeTrackColor: const Color(0xFFC9A96E),
-                inactiveTrackColor: Colors.white.withOpacity(0.1),
-                thumbColor: Colors.white,
-                overlayColor: const Color(0xFFC9A96E).withOpacity(0.2),
-                thumbShape:
-                    const RoundSliderThumbShape(enabledThumbRadius: 6),
-                overlayShape:
-                    const RoundSliderOverlayShape(overlayRadius: 12),
-                trackHeight: 3,
-              ),
-              child: Slider(
-                value: value.clamp(min, max),
-                min: min,
-                max: max,
-                divisions: divisions,
-                label: display,
-                onChanged: onChanged,
-              ),
-            ),
-          ),
-          SizedBox(
-            width: 44,
-            child: Text(
-              display,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontFamily: 'SF Mono'),
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 弹出菜单行 — label + popup button
-class _PopupRow extends StatelessWidget {
-  final String label;
+/// 选项键值对（泛型 pill 行的条目）
+class _ChoiceItem {
   final String value;
-  final List<String> items;
-  final Map<String, String>? displayLabels;
-  final ValueChanged<String> onChanged;
-  const _PopupRow({
-    required this.label,
-    required this.value,
+  final String label;
+  const _ChoiceItem(this.value, this.label);
+}
+
+/// 通用选项 pill 行（暗色语境）：胶囊单选，选中态 accent
+class _ChoicePillRow extends StatelessWidget {
+  const _ChoicePillRow({
     required this.items,
-    this.displayLabels,
-    required this.onChanged,
+    required this.selected,
+    required this.accent,
+    required this.onSelected,
   });
 
-  String _display(String v) => displayLabels?[v] ?? v;
+  final List<_ChoiceItem> items;
+  final String selected;
+  final Color accent;
+  final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    final hasValue = items.contains(value);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 52,
-            child: Text(label,
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final item in items)
+          GestureDetector(
+            onTap: () => onSelected(item.value),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: item.value == selected
+                    ? accent.withOpacity(0.18)
+                    : Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: item.value == selected
+                      ? accent.withOpacity(0.6)
+                      : Colors.white.withOpacity(0.08),
+                  width: item.value == selected ? 1 : 0.5,
+                ),
+              ),
+              child: Text(
+                item.label,
                 style: TextStyle(
-                    color: Colors.white.withOpacity(0.6), fontSize: 12)),
-          ),
-          Expanded(
-            child: PopupMenuButton<String>(
-              tooltip: '选择$label',
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              color: const Color(0xFF2A2A2C),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                      color: Colors.white.withOpacity(0.08), width: 0.5),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        hasValue ? _display(value) : '请选择',
-                        style: TextStyle(
-                          color: hasValue ? Colors.white : Colors.white38,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    Icon(Icons.arrow_drop_down,
-                        color: Colors.white38, size: 16),
-                  ],
+                  color: item.value == selected ? accent : Colors.white70,
+                  fontSize: 12,
+                  fontWeight: item.value == selected
+                      ? FontWeight.w600
+                      : FontWeight.w500,
                 ),
               ),
-              itemBuilder: (ctx) => items
-                  .map((v) => PopupMenuItem<String>(
-                        value: v,
-                        child: Row(
-                          children: [
-                            if (v == value)
-                              const Icon(Icons.check,
-                                  color: Color(0xFFC9A96E), size: 14)
-                            else
-                              const SizedBox(width: 14),
-                            const SizedBox(width: 6),
-                            Text(_display(v),
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 13)),
-                          ],
-                        ),
-                      ))
-                  .toList(),
-              onSelected: (v) => onChanged(v),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 }
 
-/// 白平衡预设 pill 行 — 胶囊式单选。
+/// 白平衡预设 pill 行 — 胶囊式单选（自旧版迁移，强调色主题化）
 class _WbPresetRow extends StatelessWidget {
-  final Map<WhiteBalanceMode, String> presets;
-  final WhiteBalanceMode selected;
-  final ValueChanged<WhiteBalanceMode> onSelected;
   const _WbPresetRow({
     required this.presets,
     required this.selected,
+    required this.accent,
     required this.onSelected,
   });
+
+  final Map<WhiteBalanceMode, String> presets;
+  final WhiteBalanceMode selected;
+  final Color accent;
+  final ValueChanged<WhiteBalanceMode> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -1089,17 +828,17 @@ class _WbPresetRow extends StatelessWidget {
         final active = e.key == selected;
         return GestureDetector(
           onTap: () => onSelected(e.key),
+          behavior: HitTestBehavior.opaque,
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
               color: active
-                  ? const Color(0xFFC9A96E).withOpacity(0.18)
+                  ? accent.withOpacity(0.18)
                   : Colors.white.withOpacity(0.05),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: active
-                    ? const Color(0xFFC9A96E).withOpacity(0.6)
+                    ? accent.withOpacity(0.6)
                     : Colors.white.withOpacity(0.08),
                 width: active ? 1 : 0.5,
               ),
@@ -1107,9 +846,7 @@ class _WbPresetRow extends StatelessWidget {
             child: Text(
               e.value,
               style: TextStyle(
-                color: active
-                    ? const Color(0xFFC9A96E)
-                    : Colors.white.withOpacity(0.7),
+                color: active ? accent : Colors.white70,
                 fontSize: 12,
                 fontWeight: active ? FontWeight.w600 : FontWeight.w500,
               ),

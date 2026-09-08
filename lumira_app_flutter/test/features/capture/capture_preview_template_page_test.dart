@@ -261,7 +261,7 @@ void main() {
       expect(find.byIcon(Icons.flashlight_on), findsOneWidget);
     });
 
-    testWidgets('tapping 参数 tool opens ParamPanel with 5 tabs', (tester) async {
+    testWidgets('tapping 参数 tool opens ParamPanel toolbar', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
@@ -273,11 +273,11 @@ void main() {
       await tester.tap(find.text('参数'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // ParamPanel Tab 栏展开：相机 / 色彩 / 细节 / 构图 / 场景
+      // ParamPanel 工具条展开：曝光/白平衡/闪光/色彩/细节/构图/场景
       // （"场景" 也出现在底部工具栏按钮，故限定在 ParamPanel 内查找）
       final inPanel = (String t) =>
           find.descendant(of: find.byType(ParamPanel), matching: find.text(t));
-      expect(inPanel('相机'), findsOneWidget);
+      expect(inPanel('曝光'), findsOneWidget);
       expect(inPanel('色彩'), findsOneWidget);
       expect(inPanel('构图'), findsOneWidget);
       expect(inPanel('场景'), findsOneWidget);
