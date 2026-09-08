@@ -1492,6 +1492,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
         radius: 20,
         clip: true,
+        darkContext: true,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
