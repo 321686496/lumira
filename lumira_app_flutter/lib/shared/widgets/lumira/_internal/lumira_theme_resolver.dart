@@ -115,15 +115,35 @@ class LumiraThemeResolver {
   ///
   /// - [radiusDp]：已转换为 dp 的圆角值
   /// - [emphasize]：true 用强浮雕 [shadowConvex]，false 用轻量 [shadowConvexSubtle]
+  /// - [darkContext]：true = 渲染在黑画布上（如预览页沉浸式看图）。
+  ///   仅对 neumorphic 生效：卡面近黑带主题色调 + 深暗影 + 微亮高光
+  ///   （见 [darkNeuPalette]）；其余风格不受影响。
   static ContainerVisual cardVisual({
     required ThemeTokens tokens,
     required UIStyle style,
     required double radiusDp,
     bool emphasize = false,
+    bool darkContext = false,
   }) {
     final convex = emphasize ? tokens.shadowConvex : tokens.shadowConvexSubtle;
     switch (style) {
       case UIStyle.neumorphic:
+        if (darkContext) {
+          // 黑画布浮雕：近黑卡面 + 更深暗影 + 微亮高光（明暗梯度见 darkNeuPalette）
+          final p = darkNeuPalette(tokens);
+          final offset = emphasize ? const Offset(6, 6) : const Offset(4, 4);
+          final blur = emphasize ? 14.0 : 8.0;
+          return ContainerVisual(
+            background: p.surface,
+            border: null,
+            shadows: [
+              BoxShadow(color: p.shadow, offset: offset, blurRadius: blur),
+              BoxShadow(color: p.highlight, offset: -offset, blurRadius: blur),
+            ],
+            backdropBlurSigma: 0,
+            glassOverlay: null,
+          );
+        }
         return ContainerVisual(
           background: tokens.surface,
           border: null,
@@ -179,6 +199,18 @@ class LumiraThemeResolver {
         );
     }
   }
+
+  /// 暗色语境（黑画布，如拍摄预览页沉浸式看图）新拟态配色。
+  ///
+  /// 「组件与背景同色」铁律在黑画布上的推论：卡面近黑带主题色调
+  /// （canvas 10%），右下暗影更深（3%）、左上高光比卡面微亮（22%），
+  /// 形成黑底上的真浮雕明暗梯度。亮/暗主题均适用：全部从当前主题
+  /// canvas lerp 派生，不复制 ink 色值。
+  static DarkNeuPalette darkNeuPalette(ThemeTokens tokens) => DarkNeuPalette(
+        surface: Color.lerp(Colors.black, tokens.canvas, 0.10)!,
+        shadow: Color.lerp(Colors.black, tokens.canvas, 0.03)!,
+        highlight: Color.lerp(Colors.black, tokens.canvas, 0.22)!,
+      );
 
   /// 解析「叠在图片/动态画面上」的浮层视觉规格（改良悬浮新拟态）。
   ///
@@ -243,6 +275,19 @@ class ContainerVisual {
     required this.shadows,
     required this.backdropBlurSigma,
     required this.glassOverlay,
+  });
+}
+
+/// 暗色语境新拟态三色配色（卡面/暗影/高光），
+/// 由 [LumiraThemeResolver.darkNeuPalette] 派生。
+class DarkNeuPalette {
+  final Color surface;
+  final Color shadow;
+  final Color highlight;
+  const DarkNeuPalette({
+    required this.surface,
+    required this.shadow,
+    required this.highlight,
   });
 }
 

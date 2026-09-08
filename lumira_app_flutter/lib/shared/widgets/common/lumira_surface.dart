@@ -22,6 +22,7 @@ class LumiraSurface extends ConsumerWidget {
     this.emphasize = false,
     this.color,
     this.clip = false,
+    this.darkContext = false,
   });
 
   /// 内容
@@ -45,6 +46,10 @@ class LumiraSurface extends ConsumerWidget {
   /// 是否裁剪内容到圆角内（子组件可能溢出时用）
   final bool clip;
 
+  /// true = 渲染在黑画布上（如预览页沉浸式看图）：新拟态走暗色浮雕
+  /// （近黑卡面 + 深暗影 + 微亮高光）；其余风格不受影响
+  final bool darkContext;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appTheme = ref.watch(appThemeProvider);
@@ -55,6 +60,7 @@ class LumiraSurface extends ConsumerWidget {
       style: appTheme.style,
       radiusDp: radius ?? 14,
       emphasize: emphasize,
+      darkContext: darkContext,
     );
 
     Widget surface = Container(
