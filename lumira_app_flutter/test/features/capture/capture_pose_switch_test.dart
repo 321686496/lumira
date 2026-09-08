@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumira_app_flutter/features/capture/data/capture_state.dart';
 import 'package:lumira_app_flutter/features/capture/domain/photo_template.dart';
+import 'package:lumira_app_flutter/features/capture/services/white_balance.dart';
 
 /// 构造一个含 n 个姿势的模板（供测试 Provider 逻辑，不涉及相机/不挂 widget 树）。
 PhotoTemplate tplN(String id, int n) => PhotoTemplate(
@@ -66,6 +67,26 @@ void main() {
       container.read(CaptureState.currentPoseIndexProvider.notifier).state = 4;
       CaptureState.resetAll(container);
       expect(container.read(CaptureState.currentPoseIndexProvider), 0);
+    });
+  });
+
+  // ── 白平衡会话态的跨会话重置（修复：套用模板参数在相机重建后不生效）──
+  // resetAll 不清白平衡会话时，模板白平衡会跨会话残留到自由模式，且陈旧的
+  // wbResidual 会持续注入 effectivePostProcess 调色矩阵污染成片。
+  group('resetAll 白平衡会话态', () {
+    test('resetAll 复位白平衡会话与残差', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      container.read(whiteBalanceSessionProvider.notifier).state =
+          const WhiteBalanceSettings(
+        mode: WhiteBalanceMode.daylight,
+        temperatureK: 5500,
+      );
+      container.read(wbResidualSessionProvider.notifier).state =
+          const WbResidual(r: 1.2, g: 1.0, b: 0.9);
+      CaptureState.resetAll(container);
+      expect(container.read(whiteBalanceSessionProvider).isAuto, isTrue);
+      expect(container.read(wbResidualSessionProvider), isNull);
     });
   });
 

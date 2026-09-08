@@ -924,6 +924,12 @@ class CaptureState {
         Offset.zero;
     // 预览桥接源清空（若进入预览页时残留）
     container.read(previewTemplateSourceProvider.notifier).state = null;
+    // 白平衡会话态（模板/手动调节写入）：跨会话不应残留——否则下次进入自由模式时
+    // 拍摄页会话仍持有上一会话的模板白平衡（相机就绪时被重放）+ 陈旧残差矩阵
+    //（wbResidual 会注入 effectivePostProcess 的调色矩阵，污染自由模式成片）。
+    container.read(whiteBalanceSessionProvider.notifier).state =
+        const WhiteBalanceSettings();
+    container.read(wbResidualSessionProvider.notifier).state = null;
   }
 }
 
