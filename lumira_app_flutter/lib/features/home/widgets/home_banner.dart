@@ -96,7 +96,12 @@ class _HomeBannerState extends ConsumerState<HomeBanner>
   void _maybeRefreshBanners() {
     final last = _lastFetchedAt;
     final now = DateTime.now();
-    if (last != null && now.difference(last) < _kRefreshTtl) return;
+    if (last == null) {
+      // 冷启动：初始拉取已由首次 watch 触发，仅记录时间戳，不重复拉取
+      _lastFetchedAt = now;
+      return;
+    }
+    if (now.difference(last) < _kRefreshTtl) return;
     _lastFetchedAt = now;
     ref.invalidate(bannerRecommendationProvider);
   }
