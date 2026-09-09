@@ -6,6 +6,7 @@ import '../tables.dart';
 import '../../theme/capture_appearance.dart';
 import '../../theme/theme_tokens.dart';
 import '../../../features/capture/domain/photo_template.dart';
+import '../../../features/home/data/operation_banners.dart';
 import '../../../features/watermark/models/watermark_settings.dart';
 
 /// 用户设置 DAO（单行表 user_settings，id=1）
@@ -491,6 +492,53 @@ class SettingsDao {
       Tables.userSettings,
       {
         Tables.colCaptureAppearance: value.name,
+        Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+  }
+
+  /// 读取运营 Banner 离线缓存（后端下发条目）。
+  /// null = 无可用缓存（首次安装/从未成功拉取/解析失败）→ 调用方回退静态配置。
+  /// 空列表是合法状态（后台全部停用），原样返回。
+  Future<List<OperationBanner>?> getOperationBannersCache() async {
+    final rows = await _db.query(
+      Tables.userSettings,
+      columns: [Tables.colOperationBannersCache],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return null;
+    final raw = rows.first[Tables.colOperationBannersCache] as String?;
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final list = jsonDecode(raw) as List;
+      return list
+          .map((e) => e is Map<String, dynamic> ? operationBannerFromJson(e) : null)
+          .whereType<OperationBanner>()
+          .toList();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 写入运营 Banner 离线缓存（远端拉取成功后调用）
+  Future<void> setOperationBannersCache(List<OperationBanner> banners) async {
+    await _db.update(
+      Tables.userSettings,
+      {
+        Tables.colOperationBannersCache: jsonEncode([
+          for (final b in banners)
+            {
+              'id': b.id,
+              'title': b.title,
+              'subtitle': b.subtitle,
+              'tag': b.tag,
+              'route': b.route,
+              'condition': b.condition.name,
+            },
+        ]),
         Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
       },
       where: 'id = ?',

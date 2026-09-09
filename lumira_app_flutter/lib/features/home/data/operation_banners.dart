@@ -104,12 +104,46 @@ bool _isConditionSatisfied(
   }
 }
 
+/// 运营位路由白名单（与后端 OPERATION_BANNER_ROUTES 一致）。
+/// 远端下发数据 route 不在名单内时整条丢弃（fail-safe，防旧版 App 跳转崩溃）。
+const List<String> kOperationBannerRoutes = [
+  '/invite',
+  '/points/wallet',
+  '/templates/unlock',
+];
+
+/// 后端下发条目 → 运营位模型；字段缺失/route 越白名单/condition 无法识别 → null（丢弃）。
+OperationBanner? operationBannerFromJson(Map<String, dynamic> json) {
+  final id = json['id'];
+  final title = json['title'];
+  final subtitle = json['subtitle'];
+  final tag = json['tag'];
+  final route = json['route'];
+  if (id is! String || title is! String || subtitle is! String || tag is! String || route is! String) {
+    return null;
+  }
+  if (!kOperationBannerRoutes.contains(route)) return null;
+  OperationCondition? condition;
+  for (final c in OperationCondition.values) {
+    if (c.name == json['condition']) condition = c;
+  }
+  if (condition == null) return null;
+  return OperationBanner(
+    id: id, title: title, subtitle: subtitle, tag: tag,
+    route: route, condition: condition,
+  );
+}
+
 /// 按目录顺序取第一条满足条件的运营条目；无则返回 null（slot 0 让位个性化）。
+///
+/// [banners] 为运营条目目录（默认静态 [kOperationBanners]；远端拉取成功后
+/// 注入后台下发列表，空列表为合法状态=后台全部停用，不出运营位）。
 OperationBanner? matchOperationBanner({
   required bool isNewUser,
+  List<OperationBanner> banners = kOperationBanners,
   OperationUserInputs inputs = const OperationUserInputs(),
 }) {
-  for (final banner in kOperationBanners) {
+  for (final banner in banners) {
     if (_isConditionSatisfied(banner.condition, isNewUser, inputs)) {
       return banner;
     }

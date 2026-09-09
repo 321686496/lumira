@@ -100,6 +100,10 @@ class Tables {
   // 套用模板时顶部的可折叠模板信息卡是否被用户隐藏（1=隐藏，0=显示，默认显示）
   static const String colTemplateInfoCardHidden = 'template_info_card_hidden';
 
+  // === user_settings 扩展列（v56 迁移新增，运营 Banner 离线缓存） ===
+  // 存储后端下发的运营 Banner 列表 JSON（远端拉取成功后写入，离线时兜底读取）
+  static const String colOperationBannersCache = 'operation_banners_cache';
+
   // === composition_kits 表（M2 用，v4 迁移同步创建） ===
   // 注：colSceneId / colTemplateId 复用 gallery_items 段已声明的同名常量
   static const String compositionKits = 'composition_kits';
