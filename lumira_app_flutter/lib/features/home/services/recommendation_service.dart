@@ -325,7 +325,9 @@ class RecommendationService {
     return _truncate(tpl.description, 30);
   }
 
-  /// 构建单条探索新鲜感 banner（槽位 5 复用）
+  /// 构建单条探索新鲜感 banner。
+  /// idSuffix 为空 = slot 3 探索位；`_extra` = 老用户补位探索
+  /// （slot 0 无运营位时维持 4 条）。
   Future<void> _buildExplorationBanner({
     required List<HomeBannerItem> banners,
     required Map<String, int> categoryCounts,
