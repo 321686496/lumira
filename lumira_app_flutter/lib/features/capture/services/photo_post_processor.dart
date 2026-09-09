@@ -237,9 +237,12 @@ class PhotoPostProcessor {
         try {
           // 载荷失败/渲染异常一律回退 CPU 路径，不抛出、不阻塞成片。
           program = await loadFragmentProgramFromCandidates(
-            Platform.operatingSystem == 'ohos'
-                ? ['assets/shaders/skin_smooth.frag', 'shaders/skin_smooth.frag']
-                : ['shaders/skin_smooth.frag'],
+            // asset key 带 assets/ 前缀（pubspec shaders 段声明路径原样保留，
+            // 见 detail_effects_layer.dart 同款修复说明）。
+            const [
+              'assets/shaders/skin_smooth.frag',
+              'shaders/skin_smooth.frag',
+            ],
           );
         } catch (_) {
           program = null;

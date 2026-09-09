@@ -1,4 +1,3 @@
-import 'dart:io' show Platform;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -11,7 +10,7 @@ import '../services/preview_beauty_shader.dart'
 /// - `enabled && strength>0` 且着色器程序加载成功 → 走 shader 渲染（GPU，零读回）。
 /// - 否则快速路径：直接画 [image]。
 /// - [loadProgram] 供测试注入 / 降级探测；缺省时组件内部用
-///   `FragmentProgram.fromAsset('shaders/skin_smooth.frag')` 异步加载。
+///   `FragmentProgram.fromAsset('assets/shaders/skin_smooth.frag')` 异步加载。
 /// - 渲染期异常一律降级：捕获后画原图，不抛出（不阻塞编辑页、不白屏）。
 class SkinSmoothPreview extends StatefulWidget {
   const SkinSmoothPreview({
@@ -105,7 +104,7 @@ class _SkinSmoothPreviewState extends State<SkinSmoothPreview> {
 /// 真正使用 FragmentProgram + CustomPainter 渲染 shader 的层。
 ///
 /// 在其 `initState` 中异步加载 FragmentProgram（生产默认
-/// `FragmentProgram.fromAsset('shaders/skin_smooth.frag')`），
+/// `FragmentProgram.fromAsset('assets/shaders/skin_smooth.frag')`），
 /// 成功后在 [build] 中把已加载的 program 交给 [SkinSmoothPainter]；
 /// 加载失败 / 抛异常则将 [_prog] 置 null 并降级画原图，不白屏。
 class _ShaderCanvas extends StatefulWidget {
@@ -150,9 +149,12 @@ class _ShaderCanvasState extends State<_ShaderCanvas> {
       final result = loader != null
           ? await loader()
           : await loadFragmentProgramFromCandidates(
-              Platform.operatingSystem == 'ohos'
-                  ? ['assets/shaders/skin_smooth.frag', 'shaders/skin_smooth.frag']
-                  : ['shaders/skin_smooth.frag'],
+              // asset key 带 assets/ 前缀（pubspec shaders 段声明路径原样保留，
+              // 见 detail_effects_layer.dart 同款修复说明）。
+              const [
+                'assets/shaders/skin_smooth.frag',
+                'shaders/skin_smooth.frag',
+              ],
             );
       prog = result is ui.FragmentProgram ? result : null;
     } catch (_) {
