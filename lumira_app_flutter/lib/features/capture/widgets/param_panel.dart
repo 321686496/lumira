@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/capture_appearance.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/lumira/_internal/lumira_theme_resolver.dart';
@@ -23,10 +24,9 @@ enum _ParamTool { ev, wb, flash, color, detail, composition, scene }
 /// - 点工具图标 → 控件区滑出该组控件；再点同图标 → 收起控件区
 /// - 点把手行关闭图标 / 面板外取景器区域 → 关闭整栏（panelExpandedProvider）
 ///
-/// 视觉：容器与强调色全部从当前 UI 风格 + 主题 tokens 派生；叠在取景器
-/// 动态画面上，新拟态走「半透明暗底 + 细边」取向（无阴影无模糊铁律，
-/// 色值由 [LumiraThemeResolver.darkNeuPalette] 从主题 canvas lerp 派生），
-/// 暗色语境文字用白色系（与 ParamPillBar 拍摄页先例一致）。
+/// 视觉：由 [LumiraThemeResolver.captureOverlayVisual] 统一解析——
+/// immersive=跨风格暗色面板；theme=按当前风格的「叠照片浮层」取向
+/// （面板叠在取景器动态画面上，新拟态不使用双向浮雕外阴影铁律）。
 ///
 /// 白平衡应用逻辑（预设→色温联动、OHOS 隐藏色温滑块、iOS 残差拉取）
 /// 与旧版一致，仅迁移位置。
@@ -71,7 +71,14 @@ class _ParamPanelState extends ConsumerState<ParamPanel> {
     final theme = ref.watch(appThemeProvider);
     final tokens = theme.tokens;
     final style = theme.style;
-    final accent = tokens.brand;
+    // 双模式视觉：immersive=暗色面板 / theme=当前风格叠照片浮层取向
+    final visual = LumiraThemeResolver.captureOverlayVisual(
+      tokens: tokens,
+      style: style,
+      appearance: ref.watch(CaptureState.captureAppearanceProvider),
+      role: CaptureOverlayRole.panel,
+      radiusDp: 24,
+    );
     final hasTemplate =
         ref.watch(CaptureState.editableTemplateProvider) != null;
     final bottomInset = MediaQuery.of(context).viewPadding.bottom;
@@ -98,21 +105,20 @@ class _ParamPanelState extends ConsumerState<ParamPanel> {
             curve: Curves.easeOutCubic,
             offset: expanded ? Offset.zero : const Offset(0, 1.2),
             child: _panelShell(
-              style: style,
-              tokens: tokens,
               bottomInset: bottomInset,
+              visual: visual,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _HandleRow(
                     hasTemplate: hasTemplate,
-                    accent: accent,
+                    visual: visual,
                     onReset: _reset,
                     onClose: _close,
                   ),
                   _ToolbarRow(
                     activeTool: _activeTool,
-                    accent: accent,
+                    visual: visual,
                     onToolTap: _toggleTool,
                   ),
                   AnimatedSize(
@@ -127,7 +133,7 @@ class _ParamPanelState extends ConsumerState<ParamPanel> {
                               duration: const Duration(milliseconds: 180),
                               child: KeyedSubtree(
                                 key: ValueKey(_activeTool),
-                                child: _buildControl(accent),
+                                child: _buildControl(visual),
                               ),
                             ),
                           ),
@@ -141,103 +147,63 @@ class _ParamPanelState extends ConsumerState<ParamPanel> {
     );
   }
 
-  // ── 面板外壳：按当前 UI 风格派生暗色语境视觉 ──
+  // ── 面板外壳：captureOverlayVisual 统一解析（immersive 暗色 / theme 按风格） ──
 
   Widget _panelShell({
-    required UIStyle style,
-    required ThemeTokens tokens,
     required double bottomInset,
+    required CaptureOverlayVisual visual,
     required Widget child,
   }) {
     const radius = BorderRadius.vertical(top: Radius.circular(24));
-    final palette = LumiraThemeResolver.darkNeuPalette(tokens);
-    Widget body;
-    switch (style) {
-      case UIStyle.glass:
-        // 暗玻璃：毛玻璃 + 近黑半透明底（ParamPillBar 玻璃胶囊同取向）
-        body = ClipRRect(
-          borderRadius: radius,
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: Container(
-              padding: EdgeInsets.only(bottom: bottomInset),
-              decoration: BoxDecoration(
-                color: palette.surface.withOpacity(0.80),
-                borderRadius: radius,
-                border: Border.all(
-                    color: Colors.white.withOpacity(0.10), width: 0.5),
-              ),
-              child: child,
-            ),
+    Widget body = Container(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      decoration: BoxDecoration(
+        color: visual.background,
+        borderRadius: radius,
+        border: visual.border,
+        boxShadow: visual.shadows,
+      ),
+      child: child,
+    );
+    // glass（及 immersive 非 neu 风格）带毛玻璃
+    if (visual.backdropBlurSigma > 0) {
+      body = ClipRRect(
+        borderRadius: radius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: visual.backdropBlurSigma,
+            sigmaY: visual.backdropBlurSigma,
           ),
-        );
-        break;
-      case UIStyle.female:
-        // 暗渐变：黑 → 品牌微染，柔和细边
-        body = Container(
-          padding: EdgeInsets.only(bottom: bottomInset),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.black.withOpacity(0.82),
-                Color.lerp(Colors.black, tokens.brand, 0.16)!
-                    .withOpacity(0.84),
-              ],
-            ),
-            borderRadius: radius,
-            border: Border.all(
-                color: Colors.white.withOpacity(0.08), width: 0.6),
-          ),
-          child: child,
-        );
-        break;
-      case UIStyle.neumorphic:
-        // 新拟态叠动态画面：半透明暗底 + 细边（无阴影无模糊铁律）
-        body = Container(
-          padding: EdgeInsets.only(bottom: bottomInset),
-          decoration: BoxDecoration(
-            color: palette.surface.withOpacity(0.94),
-            borderRadius: radius,
-            border: Border.all(
-                color: Colors.white.withOpacity(0.14), width: 0.6),
-          ),
-          child: child,
-        );
-        break;
-      case UIStyle.flat:
-        // 扁平：半透明暗底 + 细边
-        body = Container(
-          padding: EdgeInsets.only(bottom: bottomInset),
-          decoration: BoxDecoration(
-            color: palette.surface.withOpacity(0.92),
-            borderRadius: radius,
-            border: Border.all(
-                color: Colors.white.withOpacity(0.08), width: 0.5),
-          ),
-          child: child,
-        );
-        break;
+          child: body,
+        ),
+      );
     }
     return body;
   }
 
   // ── 控件区内容分发 ──
 
-  Widget _buildControl(Color accent) {
+  Widget _buildControl(CaptureOverlayVisual visual) {
+    final accent = visual.accent;
+    // theme 模式下内部滑块/调节条传主题色板（浅色可读）；
+    // immersive 传 null 走组件内置暗色回退
+    final isTheme =
+        ref.watch(CaptureState.captureAppearanceProvider) ==
+            CaptureAppearance.theme;
+    final adjustTokens = isTheme ? ref.watch(themeTokensProvider) : null;
     switch (_activeTool!) {
       case _ParamTool.ev:
-        return _EvControl(accent: accent);
+        return _EvControl(visual: visual, tokens: adjustTokens);
       case _ParamTool.wb:
-        return _WbControl(accent: accent);
+        return _WbControl(visual: visual, tokens: adjustTokens);
       case _ParamTool.flash:
-        return _FlashControl(accent: accent);
+        return _FlashControl(visual: visual);
       case _ParamTool.color:
         return AdjustPanel(
           defs: colorAdjustDefs(),
           full: ref.watch(CaptureState.effectivePostProcessProvider),
           onChanged: (p) => CaptureState.updatePostProcess(ref, (_) => p),
+          tokens: adjustTokens,
           accentColor: accent,
         );
       case _ParamTool.detail:
@@ -245,12 +211,13 @@ class _ParamPanelState extends ConsumerState<ParamPanel> {
           defs: detailAdjustDefs(),
           full: ref.watch(CaptureState.effectivePostProcessProvider),
           onChanged: (p) => CaptureState.updatePostProcess(ref, (_) => p),
+          tokens: adjustTokens,
           accentColor: accent,
         );
       case _ParamTool.composition:
-        return _CompositionControl(accent: accent);
+        return _CompositionControl(visual: visual, tokens: adjustTokens);
       case _ParamTool.scene:
-        return const _SceneControl();
+        return _SceneControl(visual: visual);
     }
   }
 }
@@ -263,18 +230,19 @@ class _ParamPanelState extends ConsumerState<ParamPanel> {
 class _HandleRow extends StatelessWidget {
   const _HandleRow({
     required this.hasTemplate,
-    required this.accent,
+    required this.visual,
     required this.onReset,
     required this.onClose,
   });
 
   final bool hasTemplate;
-  final Color accent;
+  final CaptureOverlayVisual visual;
   final VoidCallback onReset;
   final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
+    final accent = visual.accent;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 10, 12, 6),
       child: Row(
@@ -284,7 +252,7 @@ class _HandleRow extends StatelessWidget {
             width: 24,
             height: 3,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.22),
+              color: visual.fillSubtle,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -292,15 +260,14 @@ class _HandleRow extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: hasTemplate
-                  ? accent.withOpacity(0.15)
-                  : Colors.white.withOpacity(0.06),
+              color:
+                  hasTemplate ? accent.withOpacity(0.15) : visual.fillSubtle,
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
               hasTemplate ? '模板' : '自由',
               style: TextStyle(
-                color: hasTemplate ? accent : Colors.white60,
+                color: hasTemplate ? accent : visual.foregroundMuted,
                 fontSize: 10,
                 fontWeight: FontWeight.w500,
               ),
@@ -313,16 +280,18 @@ class _HandleRow extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.06),
+                color: visual.fillSubtle,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.refresh, size: 12, color: Colors.white70),
-                  SizedBox(width: 4),
+                children: [
+                  Icon(Icons.refresh,
+                      size: 12, color: visual.foregroundSecondary),
+                  const SizedBox(width: 4),
                   Text('重置',
-                      style: TextStyle(color: Colors.white70, fontSize: 11)),
+                      style: TextStyle(
+                          color: visual.foregroundSecondary, fontSize: 11)),
                 ],
               ),
             ),
@@ -331,7 +300,7 @@ class _HandleRow extends StatelessWidget {
           LumiraIconButton(
             icon: Icons.close,
             onPressed: onClose,
-            color: Colors.white70,
+            color: visual.foregroundSecondary,
             size: 14,
             padding: const EdgeInsets.all(4),
           ),
@@ -349,12 +318,12 @@ class _HandleRow extends StatelessWidget {
 class _ToolbarRow extends StatelessWidget {
   const _ToolbarRow({
     required this.activeTool,
-    required this.accent,
+    required this.visual,
     required this.onToolTap,
   });
 
   final _ParamTool? activeTool;
-  final Color accent;
+  final CaptureOverlayVisual visual;
   final ValueChanged<_ParamTool> onToolTap;
 
   @override
@@ -368,49 +337,49 @@ class _ToolbarRow extends StatelessWidget {
             icon: Icons.exposure,
             label: '曝光',
             selected: activeTool == _ParamTool.ev,
-            accent: accent,
+            visual: visual,
             onTap: () => onToolTap(_ParamTool.ev),
           ),
           _ToolItem(
             icon: Icons.wb_sunny_outlined,
             label: '白平衡',
             selected: activeTool == _ParamTool.wb,
-            accent: accent,
+            visual: visual,
             onTap: () => onToolTap(_ParamTool.wb),
           ),
           _ToolItem(
             icon: Icons.flash_on_outlined,
             label: '闪光',
             selected: activeTool == _ParamTool.flash,
-            accent: accent,
+            visual: visual,
             onTap: () => onToolTap(_ParamTool.flash),
           ),
           _ToolItem(
             icon: Icons.tune,
             label: '色彩',
             selected: activeTool == _ParamTool.color,
-            accent: accent,
+            visual: visual,
             onTap: () => onToolTap(_ParamTool.color),
           ),
           _ToolItem(
             icon: Icons.auto_fix_high_outlined,
             label: '细节',
             selected: activeTool == _ParamTool.detail,
-            accent: accent,
+            visual: visual,
             onTap: () => onToolTap(_ParamTool.detail),
           ),
           _ToolItem(
             icon: Icons.grid_4x4_outlined,
             label: '构图',
             selected: activeTool == _ParamTool.composition,
-            accent: accent,
+            visual: visual,
             onTap: () => onToolTap(_ParamTool.composition),
           ),
           _ToolItem(
             icon: Icons.tips_and_updates_outlined,
             label: '场景',
             selected: activeTool == _ParamTool.scene,
-            accent: accent,
+            visual: visual,
             onTap: () => onToolTap(_ParamTool.scene),
           ),
         ],
@@ -425,19 +394,20 @@ class _ToolItem extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.selected,
-    required this.accent,
+    required this.visual,
     required this.onTap,
   });
 
   final IconData icon;
   final String label;
   final bool selected;
-  final Color accent;
+  final CaptureOverlayVisual visual;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? accent : Colors.white70;
+    final accent = visual.accent;
+    final color = selected ? accent : visual.foregroundSecondary;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -477,9 +447,10 @@ class _ToolItem extends StatelessWidget {
 
 /// 曝光 EV 单滑块
 class _EvControl extends ConsumerWidget {
-  const _EvControl({required this.accent});
+  const _EvControl({required this.visual, required this.tokens});
 
-  final Color accent;
+  final CaptureOverlayVisual visual;
+  final ThemeTokens? tokens;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -492,7 +463,8 @@ class _EvControl extends ConsumerWidget {
         min: -3,
         max: 3,
         divisions: 60,
-        accentColor: accent,
+        tokens: tokens,
+        accentColor: visual.accent,
         format: (v) =>
             v >= 0 ? '+${v.toStringAsFixed(1)}' : v.toStringAsFixed(1),
         onChanged: (v) => CaptureState.updateCamera(
@@ -504,9 +476,10 @@ class _EvControl extends ConsumerWidget {
 
 /// 白平衡：预设 pill + 色温滑块（自旧 _CameraTab 原样迁移）
 class _WbControl extends ConsumerWidget {
-  const _WbControl({required this.accent});
+  const _WbControl({required this.visual, required this.tokens});
 
-  final Color accent;
+  final CaptureOverlayVisual visual;
+  final ThemeTokens? tokens;
 
   /// 白平衡预设 pill（mode → 显示名）。
   static const _wbPresets = <WhiteBalanceMode, String>{
@@ -549,7 +522,7 @@ class _WbControl extends ConsumerWidget {
         _WbPresetRow(
           presets: _wbPresets,
           selected: wb.mode,
-          accent: accent,
+          visual: visual,
           onSelected: (mode) {
             if (mode == WhiteBalanceMode.auto) {
               // 切回 Auto：temperatureK 置 null，插件端 auto 复位
@@ -576,7 +549,8 @@ class _WbControl extends ConsumerWidget {
               value: (wb.temperatureK ?? 5500).toDouble(),
               min: 3000,
               max: 8000,
-              accentColor: accent,
+              tokens: tokens,
+              accentColor: visual.accent,
               format: (v) => '${(v / 100).round() * 100} K',
               onChanged: (v) => _apply(
                 ref,
@@ -594,9 +568,9 @@ class _WbControl extends ConsumerWidget {
 
 /// 闪光：4 选项 pill 单选
 class _FlashControl extends ConsumerWidget {
-  const _FlashControl({required this.accent});
+  const _FlashControl({required this.visual});
 
-  final Color accent;
+  final CaptureOverlayVisual visual;
 
   static const _flashChoices = [
     _ChoiceItem('off', '关闭'),
@@ -613,7 +587,7 @@ class _FlashControl extends ConsumerWidget {
       child: _ChoicePillRow(
         items: _flashChoices,
         selected: cam.flashMode,
-        accent: accent,
+        visual: visual,
         onSelected: (v) =>
             CaptureState.updateCamera(ref, (c) => c.copyWith(flashMode: v)),
       ),
@@ -623,9 +597,10 @@ class _FlashControl extends ConsumerWidget {
 
 /// 构图：辅助线类型 pill + 透明度滑块
 class _CompositionControl extends ConsumerWidget {
-  const _CompositionControl({required this.accent});
+  const _CompositionControl({required this.visual, required this.tokens});
 
-  final Color accent;
+  final CaptureOverlayVisual visual;
+  final ThemeTokens? tokens;
 
   static const _overlayTypes = [
     _ChoiceItem('rule_of_thirds', '三分法'),
@@ -645,7 +620,7 @@ class _CompositionControl extends ConsumerWidget {
         _ChoicePillRow(
           items: _overlayTypes,
           selected: comp.overlayType,
-          accent: accent,
+          visual: visual,
           onSelected: (v) => CaptureState.updateComposition(
               ref, (c) => c.copyWith(overlayType: v)),
         ),
@@ -656,7 +631,8 @@ class _CompositionControl extends ConsumerWidget {
           min: 0,
           max: 1,
           divisions: 100,
-          accentColor: accent,
+          tokens: tokens,
+          accentColor: visual.accent,
           format: (v) => '${(v * 100).round()}%',
           onChanged: (v) => CaptureState.updateComposition(
               ref, (c) => c.copyWith(opacity: v)),
@@ -668,7 +644,9 @@ class _CompositionControl extends ConsumerWidget {
 
 /// 场景指南：紧凑 label:value 只读列表（自旧 _SceneTab 迁移）
 class _SceneControl extends ConsumerWidget {
-  const _SceneControl();
+  const _SceneControl({required this.visual});
+
+  final CaptureOverlayVisual visual;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -701,12 +679,14 @@ class _SceneControl extends ConsumerWidget {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
+          children: [
             Text('当前为自由模式，无场景指南',
-                style: TextStyle(color: Colors.white38, fontSize: 12)),
-            SizedBox(height: 4),
+                style:
+                    TextStyle(color: visual.foregroundMuted, fontSize: 12)),
+            const SizedBox(height: 4),
             Text('选择场景预设或套用模板后可查看',
-                style: TextStyle(color: Colors.white24, fontSize: 10)),
+                style:
+                    TextStyle(color: visual.foregroundMuted, fontSize: 10)),
           ],
         ),
       );
@@ -724,14 +704,16 @@ class _SceneControl extends ConsumerWidget {
                 SizedBox(
                   width: 64,
                   child: Text(row.key,
-                      style: const TextStyle(
-                          color: Colors.white54, fontSize: 10)),
+                      style: TextStyle(
+                          color: visual.foregroundMuted, fontSize: 10)),
                 ),
                 Expanded(
                   child: Text(
                     row.value.isEmpty ? '—' : row.value,
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 11, height: 1.4),
+                    style: TextStyle(
+                        color: visual.foreground,
+                        fontSize: 11,
+                        height: 1.4),
                   ),
                 ),
               ],
@@ -753,22 +735,23 @@ class _ChoiceItem {
   const _ChoiceItem(this.value, this.label);
 }
 
-/// 通用选项 pill 行（暗色语境）：胶囊单选，选中态 accent
+/// 通用选项 pill 行：胶囊单选，选中态 accent
 class _ChoicePillRow extends StatelessWidget {
   const _ChoicePillRow({
     required this.items,
     required this.selected,
-    required this.accent,
+    required this.visual,
     required this.onSelected,
   });
 
   final List<_ChoiceItem> items;
   final String selected;
-  final Color accent;
+  final CaptureOverlayVisual visual;
   final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
+    final accent = visual.accent;
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -783,19 +766,21 @@ class _ChoicePillRow extends StatelessWidget {
               decoration: BoxDecoration(
                 color: item.value == selected
                     ? accent.withOpacity(0.18)
-                    : Colors.white.withOpacity(0.05),
+                    : visual.fillSubtle,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: item.value == selected
                       ? accent.withOpacity(0.6)
-                      : Colors.white.withOpacity(0.08),
+                      : visual.fillSubtle,
                   width: item.value == selected ? 1 : 0.5,
                 ),
               ),
               child: Text(
                 item.label,
                 style: TextStyle(
-                  color: item.value == selected ? accent : Colors.white70,
+                  color: item.value == selected
+                      ? accent
+                      : visual.foregroundSecondary,
                   fontSize: 12,
                   fontWeight: item.value == selected
                       ? FontWeight.w600
@@ -814,17 +799,18 @@ class _WbPresetRow extends StatelessWidget {
   const _WbPresetRow({
     required this.presets,
     required this.selected,
-    required this.accent,
+    required this.visual,
     required this.onSelected,
   });
 
   final Map<WhiteBalanceMode, String> presets;
   final WhiteBalanceMode selected;
-  final Color accent;
+  final CaptureOverlayVisual visual;
   final ValueChanged<WhiteBalanceMode> onSelected;
 
   @override
   Widget build(BuildContext context) {
+    final accent = visual.accent;
     return Wrap(
       spacing: 6,
       runSpacing: 6,
@@ -836,21 +822,17 @@ class _WbPresetRow extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
-              color: active
-                  ? accent.withOpacity(0.18)
-                  : Colors.white.withOpacity(0.05),
+              color: active ? accent.withOpacity(0.18) : visual.fillSubtle,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: active
-                    ? accent.withOpacity(0.6)
-                    : Colors.white.withOpacity(0.08),
+                color: active ? accent.withOpacity(0.6) : visual.fillSubtle,
                 width: active ? 1 : 0.5,
               ),
             ),
             child: Text(
               e.value,
               style: TextStyle(
-                color: active ? accent : Colors.white70,
+                color: active ? accent : visual.foregroundSecondary,
                 fontSize: 12,
                 fontWeight: active ? FontWeight.w600 : FontWeight.w500,
               ),
