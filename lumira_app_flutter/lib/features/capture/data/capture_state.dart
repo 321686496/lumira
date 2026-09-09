@@ -959,11 +959,11 @@ class CaptureState {
         Offset.zero;
     // 预览桥接源清空（若进入预览页时残留）
     container.read(previewTemplateSourceProvider.notifier).state = null;
-    // 白平衡会话态（模板/手动调节写入）：跨会话不应残留——否则下次进入自由模式时
-    // 拍摄页会话仍持有上一会话的模板白平衡（相机就绪时被重放）+ 陈旧残差矩阵
-    //（wbResidual 会注入 effectivePostProcess 的调色矩阵，污染自由模式成片）。
-    container.read(whiteBalanceSessionProvider.notifier).state =
-        const WhiteBalanceSettings();
+    // 白平衡会话态保留（用户期望重进拍摄页后设置仍在）：相机就绪时
+    // _onCameraReady 按会话状态重放白平衡（见 camera_preview.dart，其注释中
+    // 「返回拍摄页」本就是重放设计场景之一）。仅清残差：它是 iOS 硬件派生值，
+    // 跨相机实例不成立，重放时 refreshWbResidual 会重新拉取；清掉它避免陈旧
+    // 残差注入 effectivePostProcess 的调色矩阵污染成片。
     container.read(wbResidualSessionProvider.notifier).state = null;
   }
 }
