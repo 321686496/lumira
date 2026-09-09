@@ -95,8 +95,10 @@ class RecommendationService {
   ///
   /// [operationInputs] 为运营位条件所需的用户状态快照（远端拉取，失败/离线
   /// 传空 → 不出运营位，slot 0 由个性化补位）。
+  /// [operationBanners] 为运营条目目录（默认静态；远端拉取成功后注入后台下发列表）。
   Future<List<HomeBannerItem>> buildBanners({
     OperationUserInputs operationInputs = const OperationUserInputs(),
+      List<OperationBanner> operationBanners = kOperationBanners,
   }) async {
     // 并行启动所有数据源查询（Future 创建即开始执行，await 顺序不影响并行性）
     final categoryCountsFuture = _galleryDao.countByCategory();
@@ -131,6 +133,7 @@ class RecommendationService {
     // === slot 0：运营位（条件满足则占，否则让位给个性化补位） ===
     final operation = matchOperationBanner(
       isNewUser: isNewUser,
+      banners: operationBanners,
       inputs: operationInputs,
     );
     if (operation != null) {

@@ -7,6 +7,7 @@ import '../../points/data/points_repository.dart';
 import '../../templates/data/owned_templates_repository.dart';
 import '../data/home_mock_data.dart';
 import '../data/operation_banners.dart';
+import '../data/operation_banners_repository.dart';
 import '../services/recommendation_service.dart';
 
 /// 首页 Banner 推荐 Provider
@@ -62,6 +63,27 @@ Future<OperationUserInputs> _loadOperationInputs(Ref ref) async {
     pointsBalance: await pointsBalance,
     hasLockedTemplate: await hasLockedTemplate,
   );
+}
+
+/// 运营条目三级兜底：远端（成功则写离线缓存）→ 本地缓存 → 静态 kOperationBanners。
+/// 空列表 [] 视为合法下发状态（后台全部停用），不触发兜底。
+Future<List<OperationBanner>> _loadOperationBanners(Ref ref) async {
+  try {
+    final repo = await ref.watch(operationBannersRepositoryProvider.future);
+    final banners = await repo.list();
+    try {
+      final dao = await ref.watch(settingsDaoProvider.future);
+      await dao.setOperationBannersCache(banners);
+    } catch (_) {/* 缓存写入失败不影响本次渲染 */}
+    return banners;
+  } catch (_) {
+    try {
+      final dao = await ref.watch(settingsDaoProvider.future);
+      final cached = await dao.getOperationBannersCache();
+      if (cached != null) return cached;
+    } catch (_) {/* 缓存读取失败走静态目录 */}
+    return kOperationBanners;
+  }
 }
 
 /// 容错加载：失败（离线/接口异常）返回 null，不阻塞 Banner 主流程。
