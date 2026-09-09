@@ -12,6 +12,7 @@ import 'package:photo_view/photo_view_gallery.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/capture_appearance.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/image_cache.dart';
@@ -43,7 +44,7 @@ const _photoSaverChannel = MethodChannel('lumira/photo_saver');
 /// 照片预览页（Task 2.9A）
 ///
 /// 视觉规格来源：lumira-app/src/pages/capture/preview.vue (399 行)
-/// - 深色背景 + LumiraNav transparent
+/// - 背景随拍摄外观设置：沉浸式纯黑 / 跟随主题画布色 + LumiraNav transparent
 /// - 照片预览（全屏，可双击缩放）
 /// - 底部编辑 dock：心情/场景 pill 行 + 工具条（色彩/细节/滤镜/裁剪/重置）+ 滑出面板
 ///
@@ -1257,6 +1258,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
+    final appearance = ref.watch(CaptureState.captureAppearanceProvider);
+    final isThemed = appearance == CaptureAppearance.theme;
 
     // 预选当前场景（修复 Issue 8：拍摄后自动选择该场景）
     // 仅在首次构建且用户未手动改过时设置；通过 postFrameCallback 避免在 build 中调用 setState
@@ -1270,8 +1273,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     }
 
     return Scaffold(
-      // 照片全屏显示，背景纯黑
-      backgroundColor: Colors.black,
+      // 照片全屏显示：沉浸式纯黑 / 跟随主题画布色
+      backgroundColor: isThemed ? tokens.canvas : Colors.black,
       body: Column(
         children: [
           // 1. 照片区：占满剩余空间（面板展开时由 Column 自动收缩）
@@ -1280,7 +1283,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
               fit: StackFit.expand,
               children: [
                 // 照片本体（裁剪模式 → PhotoCropLayer；否则 PhotoView/历史滑动）
-                _buildPhotoStage(tokens),
+                _buildPhotoStage(tokens, isThemed),
                 // 顶部导航 + 只读横幅 + 右上角对比按钮/徽标（仅 _uiVisible 时显示）。
                 // 对比按钮与顶栏共用同一 SafeArea 布局流、位于顶栏下方：
                 // 真机状态栏 inset 下不与顶栏右侧动作图标重叠（不再引入
@@ -1297,6 +1300,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                         children: [
                           _PreviewNav(
                             tokens: tokens,
+                            isThemed: isThemed,
                             onBack: _back,
                             onShare: _onShare,
                             onSave: _onSave,
@@ -1377,7 +1381,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
             ),
           ),
           // 2. 底部编辑 dock：心情/场景 pill 行 + 工具条 + 滑出面板
-          if (_uiVisible) _buildEditDock(tokens),
+          if (_uiVisible) _buildEditDock(tokens, isThemed),
         ],
       ),
     );
@@ -1385,7 +1389,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
 
   /// 照片区：裁剪模式 → PhotoCropLayer；否则单张 PhotoView / 历史滑动 Gallery。
   /// （内容与旧版一致，仅去掉底部 sheet inset 包装）
-  Widget _buildPhotoStage(ThemeTokens tokens) {
+  Widget _buildPhotoStage(ThemeTokens tokens, bool isThemed) {
     return _isCropMode
         // 裁剪模式：把裁剪框直接叠加在照片本体上（iPhone 风格）
         ? PhotoCropLayer(
@@ -1429,7 +1433,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                   scaleStateCycle: _previewScaleCycle,
                   onTapUp: _onPhotoTap,
                   backgroundDecoration:
-                      const BoxDecoration(color: Colors.black),
+                      BoxDecoration(color: isThemed ? tokens.canvas : Colors.black),
                   child: _buildPhotoContent(
                     _photoUrl,
                     _isComparing,
@@ -1446,7 +1450,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                 onPageChanged: _onPageChanged,
                 scrollPhysics: const BouncingScrollPhysics(),
                 backgroundDecoration:
-                    const BoxDecoration(color: Colors.black),
+                    BoxDecoration(color: isThemed ? tokens.canvas : Colors.black),
                 builder: (context, index) {
                   final record = _historyPhotos[index];
                   final url = record.filePath ?? record.dataUrl ?? '';
@@ -1478,7 +1482,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   }
 
   /// 底部编辑 dock：单卡片承载 pill 行 + 工具条 + 滑出面板
-  Widget _buildEditDock(ThemeTokens tokens) {
+  Widget _buildEditDock(ThemeTokens tokens, bool isThemed) {
     // 滤镜缩略图：仅本地文件路径可用（网络图/空路径 → null 降级文字 Chip）
     final bool isNetwork = _photoUrl.startsWith('http');
     final String? previewImagePath =
@@ -1492,7 +1496,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
         radius: 20,
         clip: true,
-        darkContext: true,
+        // 沉浸式（黑画布）：暗色浮雕；跟随主题：正常画布卡片分支
+        darkContext: !isThemed,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1531,6 +1536,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
 class _PreviewNav extends StatelessWidget {
   const _PreviewNav({
     required this.tokens,
+    required this.isThemed,
     required this.onBack,
     required this.onShare,
     this.onSave,
@@ -1540,6 +1546,11 @@ class _PreviewNav extends StatelessWidget {
   });
 
   final ThemeTokens tokens;
+
+  /// 跟随主题模式：图标用 textPrimary（画布底可读）；
+  /// 沉浸式保持 textInverse（深底白字）。
+  final bool isThemed;
+
   final VoidCallback onBack;
   final VoidCallback onShare;
 
@@ -1563,7 +1574,7 @@ class _PreviewNav extends StatelessWidget {
         transparent: true,
         leading: _NavBackButton(
           onTap: onBack,
-          color: tokens.textInverse,
+          color: isThemed ? tokens.textPrimary : tokens.textInverse,
         ),
         actions: [
           if (showSave && onSave != null)
@@ -1602,10 +1613,16 @@ class _PreviewNav extends StatelessWidget {
             ),
           if (onDelete != null)
             _NavIcon(
-                icon: Icons.delete_outline, onTap: onDelete!, tokens: tokens),
+                icon: Icons.delete_outline,
+                onTap: onDelete!,
+                tokens: tokens,
+                isThemed: isThemed),
           if (onSaveToAlbum != null)
             _NavIcon(
-                icon: Icons.save_alt, onTap: onSaveToAlbum!, tokens: tokens),
+                icon: Icons.save_alt,
+                onTap: onSaveToAlbum!,
+                tokens: tokens,
+                isThemed: isThemed),
           GestureDetector(
             onTap: onShare,
             behavior: HitTestBehavior.opaque,
@@ -1614,7 +1631,7 @@ class _PreviewNav extends StatelessWidget {
               child: Icon(
                 Icons.ios_share_outlined,
                 size: 22,
-                color: tokens.textInverse,
+                color: isThemed ? tokens.textPrimary : tokens.textInverse,
               ),
             ),
           ),
@@ -1652,11 +1669,15 @@ class _NavIcon extends StatelessWidget {
     required this.icon,
     required this.onTap,
     required this.tokens,
+    required this.isThemed,
   });
 
   final IconData icon;
   final VoidCallback onTap;
   final ThemeTokens tokens;
+
+  /// 跟随主题模式：textPrimary（画布底可读）；沉浸式：textInverse（深底白字）
+  final bool isThemed;
 
   @override
   Widget build(BuildContext context) {
@@ -1665,7 +1686,11 @@ class _NavIcon extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.all(8),
-        child: Icon(icon, size: 22, color: tokens.textInverse),
+        child: Icon(
+          icon,
+          size: 22,
+          color: isThemed ? tokens.textPrimary : tokens.textInverse,
+        ),
       ),
     );
   }
