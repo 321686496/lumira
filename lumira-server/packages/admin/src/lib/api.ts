@@ -26,6 +26,8 @@ import type {
   FeedbackListResponse,
   NotificationAdminItem,
   NotificationPayload,
+  BannerAdminItem,
+  BannerPayload,
 } from '@/types/admin';
 
 // 重新导出纯函数，供 server-only 调用方使用（客户端组件请直接从 @/lib/category-tree 导入）
@@ -458,6 +460,32 @@ export const api = {
   toggleNotification: (id: string) =>
     adminFetch<{ id: string; isActive: boolean }>(
       `/notifications/${encodeURIComponent(id)}/toggle`,
+      { method: 'POST' },
+    ),
+
+  // ===== 运营 Banner 管理 =====
+  listBanners: () => adminFetch<BannerAdminItem[]>('/banners'),
+
+  createBanner: (payload: BannerPayload) =>
+    adminFetch<BannerAdminItem>('/banners', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateBanner: (id: string, payload: BannerPayload) =>
+    adminFetch<BannerAdminItem>(`/banners/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteBanner: (id: string) =>
+    adminFetch<{ success: boolean }>(`/banners/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+
+  toggleBanner: (id: string) =>
+    adminFetch<{ id: string; isActive: boolean }>(
+      `/banners/${encodeURIComponent(id)}/toggle`,
       { method: 'POST' },
     ),
 };
