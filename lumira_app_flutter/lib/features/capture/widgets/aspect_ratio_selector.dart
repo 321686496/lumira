@@ -3,11 +3,12 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/capture_appearance.dart';
 import '../../../core/theme/theme_controller.dart';
-import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/lumira/_internal/lumira_theme_resolver.dart';
 import '../data/capture_state.dart';
 
-/// 照片比例切换器（毛玻璃胶囊设计）
+/// 照片比例切换器（双模式浮层胶囊）
 ///
 /// 在取景器顶部显示，用户可切换：
 /// - 全屏（与取景器显示一致，9:16 或 16:9）
@@ -28,25 +29,22 @@ class AspectRatioSelector extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final current = ref.watch(CaptureState.aspectRatioProvider);
-    // 新拟态双轨：叠在相机/动态画面上禁止 blur(毛玻璃)，退回半透明暗底浮层
-    final isNeu = ref.watch(appThemeProvider).style == UIStyle.neumorphic;
+    // 双模式视觉：immersive=暗色胶囊 / theme=当前风格的叠照片浮层取向
+    final visual = LumiraThemeResolver.captureOverlayVisual(
+      tokens: ref.watch(themeTokensProvider),
+      style: ref.watch(appThemeProvider).style,
+      appearance: ref.watch(CaptureState.captureAppearanceProvider),
+      role: CaptureOverlayRole.pill,
+      radiusDp: 20,
+    );
 
     final Widget capsule = Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       decoration: BoxDecoration(
-        color: const Color(0xFF141416).withOpacity(0.72),
+        color: visual.background,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.1),
-          width: 0.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 12,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: visual.border,
+        boxShadow: visual.shadows,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -62,14 +60,12 @@ class AspectRatioSelector extends ConsumerWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               decoration: BoxDecoration(
-                color: active
-                    ? const Color(0xFFC9A96E)
-                    : Colors.transparent,
+                color: active ? visual.accent : Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: active
                     ? [
                         BoxShadow(
-                          color: const Color(0xFFC9A96E).withOpacity(0.25),
+                          color: visual.accent.withOpacity(0.25),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -82,7 +78,8 @@ class AspectRatioSelector extends ConsumerWidget {
                   Icon(
                     opt.icon,
                     size: 12,
-                    color: active ? Colors.black : Colors.white.withOpacity(0.5),
+                    color:
+                        active ? visual.onAccent : visual.foregroundSecondary,
                   ),
                   const SizedBox(width: 3),
                   Text(
@@ -90,7 +87,8 @@ class AspectRatioSelector extends ConsumerWidget {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                      color: active ? Colors.black : Colors.white.withOpacity(0.5),
+                      color:
+                          active ? visual.onAccent : visual.foregroundSecondary,
                     ),
                   ),
                 ],
@@ -101,16 +99,19 @@ class AspectRatioSelector extends ConsumerWidget {
       ),
     );
 
-    // 新拟态不引入毛玻璃；其余风格保留玻璃胶囊
-    return isNeu
-        ? capsule
-        : ClipRRect(
+    // backdropBlurSigma>0 才包毛玻璃；新拟态双轨下 sigma=0 直接呈现胶囊本体
+    return visual.backdropBlurSigma > 0
+        ? ClipRRect(
             borderRadius: BorderRadius.circular(20),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+              filter: ImageFilter.blur(
+                sigmaX: visual.backdropBlurSigma,
+                sigmaY: visual.backdropBlurSigma,
+              ),
               child: capsule,
             ),
-          );
+          )
+        : capsule;
   }
 }
 
