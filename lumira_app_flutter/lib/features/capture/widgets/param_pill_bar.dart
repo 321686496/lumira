@@ -2,14 +2,15 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/theme/capture_appearance.dart';
 import '../../../core/theme/theme_controller.dart';
-import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/lumira/_internal/lumira_theme_resolver.dart';
 import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
 import 'apply_button.dart';
 import 'raw_mode_toggle.dart';
 
-/// 顶部参数 Pill 栏（毛玻璃胶囊设计）：横向滚动的 EV / WB / ISO 标签 + ApplyButton + RawModeToggle + 滤镜入口。
+/// 顶部参数 Pill 栏（双模式浮层胶囊）：横向滚动的 EV / WB / ISO 标签 + ApplyButton + RawModeToggle + 滤镜入口。
 ///
 /// 修复 Bug 2：自由拍摄模式（无模板）下也显示此栏，通过 effectiveCameraProvider
 /// 读取统一的相机参数，使自由模式也能打开参数面板和滤镜选择器
@@ -29,32 +30,37 @@ class ParamPillBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // 修复 Bug 2：使用 effectiveCameraProvider，自由模式下也能获取参数
     final cam = ref.watch(CaptureState.effectiveCameraProvider);
-    // 新拟态双轨：叠在相机/动态画面上禁止 blur(毛玻璃)，退回半透明暗底浮层
-    final isNeu = ref.watch(appThemeProvider).style == UIStyle.neumorphic;
+    // 双模式视觉：immersive=暗色胶囊 / theme=当前风格的叠照片浮层取向
+    final visual = LumiraThemeResolver.captureOverlayVisual(
+      tokens: ref.watch(themeTokensProvider),
+      style: ref.watch(appThemeProvider).style,
+      appearance: ref.watch(CaptureState.captureAppearanceProvider),
+      role: CaptureOverlayRole.pill,
+      radiusDp: 20,
+    );
 
     final Widget capsule = Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF141416).withOpacity(0.72),
+        color: visual.background,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.1),
-          width: 0.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 12,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: visual.border,
+        boxShadow: visual.shadows,
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
         child: Row(
           children: [
-            _Pill(text: _evDisplay(cam), onTap: () => _openPanel(ref)),
-            _Pill(text: _isoDisplay(cam), onTap: () => _openPanel(ref)),
+            _Pill(
+              text: _evDisplay(cam),
+              onTap: () => _openPanel(ref),
+              visual: visual,
+            ),
+            _Pill(
+              text: _isoDisplay(cam),
+              onTap: () => _openPanel(ref),
+              visual: visual,
+            ),
             const ApplyButton(),
             const RawModeToggle(),
           ].map((w) => Padding(padding: const EdgeInsets.only(right: 4), child: w)).toList(),
@@ -62,16 +68,19 @@ class ParamPillBar extends ConsumerWidget {
       ),
     );
 
-    // 新拟态不引入毛玻璃；其余风格保留玻璃胶囊
-    return isNeu
-        ? capsule
-        : ClipRRect(
+    // backdropBlurSigma>0 才包毛玻璃；新拟态双轨下 sigma=0 直接呈现胶囊本体
+    return visual.backdropBlurSigma > 0
+        ? ClipRRect(
             borderRadius: BorderRadius.circular(20),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+              filter: ImageFilter.blur(
+                sigmaX: visual.backdropBlurSigma,
+                sigmaY: visual.backdropBlurSigma,
+              ),
               child: capsule,
             ),
-          );
+          )
+        : capsule;
   }
 
   /// 打开参数面板
@@ -84,7 +93,13 @@ class _Pill extends StatelessWidget {
   final IconData? icon;
   final String? text;
   final VoidCallback onTap;
-  const _Pill({this.icon, this.text, required this.onTap});
+  final CaptureOverlayVisual visual;
+  const _Pill({
+    this.icon,
+    this.text,
+    required this.onTap,
+    required this.visual,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -96,12 +111,12 @@ class _Pill extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (icon != null) Icon(icon, size: 12, color: Colors.white),
+            if (icon != null) Icon(icon, size: 12, color: visual.foreground),
             if (icon != null && text != null) const SizedBox(width: 4),
             if (text != null)
               Text(
                 text!,
-                style: const TextStyle(color: Colors.white, fontSize: 11),
+                style: TextStyle(color: visual.foreground, fontSize: 11),
               ),
           ],
         ),

@@ -5,8 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/capture_appearance.dart';
 import '../../../core/theme/theme_controller.dart';
-import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/lumira/_internal/lumira_theme_resolver.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/capture_state.dart';
 
@@ -34,8 +35,14 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
     final showSilhouette = ref.watch(CaptureState.showSilhouetteProvider);
     final flashMode = ref.watch(CaptureState.flashModeProvider);
     final facing = ref.watch(CaptureState.cameraFacingProvider);
-    // 新拟态双轨：叠在相机/动态画面上禁止 blur(毛玻璃)，退回半透明暗底浮层
-    final isNeu = ref.watch(appThemeProvider).style == UIStyle.neumorphic;
+    // 双模式视觉解析：immersive=暗色胶囊 / theme=当前风格的叠照片浮层取向
+    final visual = LumiraThemeResolver.captureOverlayVisual(
+      tokens: ref.watch(themeTokensProvider),
+      style: ref.watch(appThemeProvider).style,
+      appearance: ref.watch(CaptureState.captureAppearanceProvider),
+      role: CaptureOverlayRole.pill,
+      radiusDp: 28,
+    );
 
     final hasTemplate = currentTemplateId != null;
     // 前置摄像头无闪光灯硬件，隐藏闪光灯按钮（试用模式也不显示）
@@ -59,19 +66,10 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
     final Widget capsule = Container(
       height: 48,
       decoration: BoxDecoration(
-        color: const Color(0xFF141416).withOpacity(0.75),
+        color: visual.background,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.1),
-          width: 0.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 24,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: visual.border,
+        boxShadow: visual.shadows,
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -80,6 +78,7 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
             // 返回按钮
             _NavIcon(
               icon: Icons.arrow_back_ios_new,
+              iconColor: visual.foreground,
               onPressed: onBack,
             ),
             // 平衡间距：让标题在无模板时相对屏幕居中
@@ -109,10 +108,10 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
                       isTrialMode
                           ? '试用模板'
                           : (hasTemplate ? '模板拍摄' : '自由调参'),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: Colors.white,
+                        color: visual.foreground,
                         height: 1.2,
                         letterSpacing: 0.2,
                       ),
@@ -120,13 +119,13 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     if (hasTemplate && !isTrialMode)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 2),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
                         child: Text(
                           '点击调整参数',
                           style: TextStyle(
                             fontSize: 11,
-                            color: Colors.white70,
+                            color: visual.foregroundSecondary,
                             height: 1.2,
                           ),
                         ),
@@ -140,6 +139,7 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
               _NavIcon(
                 icon: Icons.lock_open_outlined,
                 tooltip: '购买解锁',
+                iconColor: visual.accent,
                 onPressed: () {
                   final tid = currentTemplateId;
                   if (tid == null || tid.isEmpty) return;
@@ -155,6 +155,7 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
                 icon: isFullscreen
                     ? Icons.fullscreen_exit
                     : Icons.fullscreen,
+                iconColor: visual.foreground,
                 onPressed: () => ref
                     .read(CaptureState.isFullscreenProvider.notifier)
                     .state = !isFullscreen,
@@ -162,7 +163,8 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
               if (hasTemplate)
                 _NavIcon(
                   icon: Icons.crop_free,
-                  iconColor: showTemplate ? const Color(0xFFC9A96E) : Colors.white,
+                  iconColor:
+                      showTemplate ? visual.accent : visual.foreground,
                   onPressed: () => ref
                       .read(CaptureState.showTemplateProvider.notifier)
                       .state = !showTemplate,
@@ -170,7 +172,8 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
               if (hasTemplate)
                 _NavIcon(
                   icon: Icons.accessibility_new,
-                  iconColor: showSilhouette ? const Color(0xFFC9A96E) : Colors.white,
+                  iconColor:
+                      showSilhouette ? visual.accent : visual.foreground,
                   onPressed: () => ref
                       .read(CaptureState.showSilhouetteProvider.notifier)
                       .state = !showSilhouette,
@@ -178,6 +181,7 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
               _NavIcon(
                 icon: Icons.explore,
                 tooltip: '使用指南',
+                iconColor: visual.foreground,
                 onPressed: () =>
                     GoRouter.of(context).push(RouteNames.captureTutorial),
               ),
@@ -189,8 +193,8 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
                           ? Icons.flashlight_on
                           : Icons.flash_on,
                   iconColor: flashMode != CaptureFlashMode.off
-                      ? const Color(0xFFC9A96E)
-                      : Colors.white,
+                      ? visual.accent
+                      : visual.foreground,
                   onPressed: () {
                     final next = flashMode == CaptureFlashMode.off
                         ? CaptureFlashMode.torch
@@ -208,16 +212,20 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
       bottom: false,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        // 新拟态下不引入毛玻璃：直接呈现半透明暗底浮层（无 blur）
-        child: isNeu
-            ? capsule
-            : ClipRRect(
+        // backdropBlurSigma>0 才包毛玻璃（immersive 非 neu / theme glass）；
+        // 新拟态双轨下 sigma=0 直接呈现胶囊本体
+        child: visual.backdropBlurSigma > 0
+            ? ClipRRect(
                 borderRadius: BorderRadius.circular(28),
                 child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                  filter: ImageFilter.blur(
+                    sigmaX: visual.backdropBlurSigma,
+                    sigmaY: visual.backdropBlurSigma,
+                  ),
                   child: capsule,
                 ),
-              ),
+              )
+            : capsule,
       ),
     );
   }
