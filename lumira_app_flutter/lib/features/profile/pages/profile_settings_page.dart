@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/preferences/home_wordmark_style.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/capture_appearance.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/db/database_provider.dart';
@@ -58,6 +59,9 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     // 从 DB 异步加载默认分辨率到 provider（与拍摄页共享同一状态）。
     Future.microtask(() =>
         CaptureState.loadDefaultResolution(ProviderScope.containerOf(context, listen: false)));
+    // 从 DB 异步加载拍摄外观到 provider（与拍摄页/预览页共享同一状态）。
+    Future.microtask(() =>
+        CaptureState.loadCaptureAppearance(ProviderScope.containerOf(context, listen: false)));
     // 异步计算缓存总占用，展示在"缓存"入口。
     Future.microtask(() async {
       try {
@@ -179,6 +183,8 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     final defaultResolution =
         ref.watch(CaptureState.defaultResolutionProvider);
     final resolutionLabel = CaptureResolutions.labelOf(defaultResolution);
+    // 拍摄外观（沉浸式 vs 跟随主题，与拍摄页/预览页共享）
+    final captureAppearance = ref.watch(CaptureState.captureAppearanceProvider);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -278,6 +284,26 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: Column(
                     children: [
+                      _SettingItem(
+                        icon: Icons.dark_mode_outlined,
+                        label: '沉浸式取景',
+                        trailing: LumiraSwitch(
+                          value: captureAppearance == CaptureAppearance.immersive,
+                          onChanged: (v) {
+                            // 更新共享 provider + 持久化（拍摄页/预览页即时联动）
+                            final next = v
+                                ? CaptureAppearance.immersive
+                                : CaptureAppearance.theme;
+                            final container =
+                                ProviderScope.containerOf(context, listen: false);
+                            ref
+                                .read(CaptureState.captureAppearanceProvider.notifier)
+                                .state = next;
+                            CaptureState.persistCaptureAppearance(container, next);
+                          },
+                        ),
+                        tokens: tokens,
+                      ),
                       _SettingItem(
                         icon: Icons.aspect_ratio_outlined,
                         label: '默认分辨率',
