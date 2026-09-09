@@ -1,7 +1,7 @@
 // lumira-server/packages/backend/src/common/storage/storage-adapter.interface.ts
 // 存储抽象接口：后续可切换 S3/OSS 等实现，业务只依赖此接口
 
-export type StorageCategory = 'templates' | 'categories';
+export type StorageCategory = 'templates' | 'categories' | 'banners';
 
 export const STORAGE_KEY_PREFIX = '/uploads';
 

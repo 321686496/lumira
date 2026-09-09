@@ -28,6 +28,12 @@ export class UpdateBannerDto {
   @IsIn(OPERATION_BANNER_ROUTES)
   route?: string;
 
+  /** 配图 URL：null/空串清除配图；其余为相对 storageKey 或完整 http(s) URL */
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  imageUrl?: string | null;
+
   @IsOptional()
   @IsIn(OPERATION_BANNER_CONDITIONS)
   condition?: string;
