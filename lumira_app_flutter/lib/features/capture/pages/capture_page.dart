@@ -25,6 +25,7 @@ import '../../../core/services/ohos_image_processor.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/capture_appearance.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../challenge/widgets/challenge_overlay_bar.dart';
@@ -2023,11 +2024,17 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // 白平衡功能已下线（SDK 不支持手动设置），ISO/快门为推荐参考值，
     // 三者（WB/快门/ISO）的真实实现见 docs/superpowers/plans/ 下的相机手动参数计划。
 
+    // 拍摄页画布：immersive=纯黑 / theme=主题画布色（比例模式 letterbox 区域可见）
+    final appearance = ref.watch(CaptureState.captureAppearanceProvider);
+    final captureCanvas = appearance == CaptureAppearance.theme
+        ? ref.watch(themeTokensProvider).canvas
+        : Colors.black;
+
     // 权限未授予时显示权限引导 UI
     if (_permissionStatus == CameraPermissionStatus.unknown ||
         _permissionStatus == CameraPermissionStatus.denied) {
       return Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: captureCanvas,
         body: CameraPermissionGuide(
           status: _permissionStatus,
           onRetry: _requestCameraPermission,
@@ -2038,7 +2045,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
     if (_permissionStatus == CameraPermissionStatus.permanentlyDenied) {
       return Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: captureCanvas,
         body: CameraPermissionGuide(
           status: _permissionStatus,
           onRetry: _requestCameraPermission,
@@ -2049,7 +2056,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
     }
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: captureCanvas,
       body: Stack(
         fit: StackFit.expand,
         children: [
