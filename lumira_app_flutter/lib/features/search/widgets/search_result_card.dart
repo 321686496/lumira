@@ -19,18 +19,22 @@ import '../data/search_result.dart';
 /// - 封面：模板 真实比例自适应（宽度 100%，9:16 温和削减）；场景 3:4；美学院 4:3
 /// - 左上角：类型角标（模板/场景/美学院）+ 模板价格/免费徽标
 /// - [已拍 N 张] 叠在封面右下角（不占信息行空间）
-/// - 信息区：名称 + 短描述 + 两级分类/自定义 + 季节/天气/时段氛围胶囊（Wrap 自动换行，不挤压）
+/// - 信息区：名称 + 短描述 + 两级分类/自定义 + 季节/天气/时段氛围胶囊 + 可点击 #标签（Wrap 自动换行，不挤压）
 class SearchResultCard extends ConsumerWidget {
   const SearchResultCard({
     super.key,
     required this.result,
     required this.showTypeBadge,
     required this.onTap,
+    this.onTagTap,
   });
 
   final SearchResult result;
   final bool showTypeBadge;
   final VoidCallback onTap;
+
+  /// 点击模板 `#标签` 回调（携带 `#标签` 原文），由搜索页接入「按标签搜索」。
+  final ValueChanged<String>? onTagTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -184,6 +188,9 @@ class SearchResultCard extends ConsumerWidget {
                   tokens: tokens,
                   maxItems: 2,
                 ),
+                if (onTagTap != null)
+                  for (final tag in r.template!.tags.take(3))
+                    _tagChip(tokens, tag),
               ],
             ),
           ),
@@ -296,6 +303,25 @@ class SearchResultCard extends ConsumerWidget {
       child: Text(label, style: TextStyle(fontSize: 10, color: fg)),
     );
   }
+
+  /// 可点击 `#标签` chip：命中后跳转按该标签搜索，不触发整卡 onTap。
+  Widget _tagChip(ThemeTokens tokens, String tag) {
+    return GestureDetector(
+      onTap: () => onTagTap?.call('#$tag'),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+        decoration: BoxDecoration(
+          color: tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(9999),
+        ),
+        child: Text(
+          '#$tag',
+          style: TextStyle(fontSize: 10, color: tokens.textSecondary),
+        ),
+      ),
+    );
+  }
 }
 
 /// 搜索结果列表瓦片（单列列表布局，横向卡：左侧图 右侧文字）。
@@ -305,11 +331,15 @@ class SearchResultListTile extends ConsumerWidget {
     required this.result,
     required this.showTypeBadge,
     required this.onTap,
+    this.onTagTap,
   });
 
   final SearchResult result;
   final bool showTypeBadge;
   final VoidCallback onTap;
+
+  /// 点击模板 `#标签` 回调（携带 `#标签` 原文），由搜索页接入「按标签搜索」。
+  final ValueChanged<String>? onTagTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -387,6 +417,17 @@ class SearchResultListTile extends ConsumerWidget {
                         ],
                       ],
                     ),
+                    if (onTagTap != null && r.template!.tags.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          for (final tag in r.template!.tags.take(3))
+                            _tileTagChip(tokens, tag),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -432,6 +473,25 @@ class SearchResultListTile extends ConsumerWidget {
         border: Border.all(color: Colors.white.withOpacity(0.35), width: 0.6),
       ),
       child: Text(label, style: TextStyle(fontSize: 9, color: tokens.textPrimary)),
+    );
+  }
+
+  /// 可点击 `#标签` chip（列表瓦片）：命中后跳转按该标签搜索，不触发整卡 onTap。
+  Widget _tileTagChip(ThemeTokens tokens, String tag) {
+    return GestureDetector(
+      onTap: () => onTagTap?.call('#$tag'),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+        decoration: BoxDecoration(
+          color: tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(9999),
+        ),
+        child: Text(
+          '#$tag',
+          style: TextStyle(fontSize: 10, color: tokens.textSecondary),
+        ),
+      ),
     );
   }
 }

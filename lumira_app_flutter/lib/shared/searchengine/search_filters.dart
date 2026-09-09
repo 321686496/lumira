@@ -10,6 +10,9 @@ enum SearchSort {
 /// 价格筛选（template 专用）。
 enum SearchPriceFilter { all, free, paid }
 
+/// 模板照片比例筛选候选（对应 composition['aspectRatio']）。
+const List<String> kTemplateAspectRatios = ['1:1', '3:4', '4:3', '9:16', '16:9'];
+
 /// 搜索筛选状态。
 /// 字段刻意用 String（category/sceneStyle/academyTopic/academyLevel 都是 key/枚举名），
 /// 使本文件不依赖任何业务模型，保持 shared 层解耦。
@@ -22,6 +25,7 @@ class SearchFilters {
   String? academyLevel; // academy: 等级枚举名（beginner/intermediate/advanced）
   SearchPriceFilter price; // template 专用
   bool ownedOnly; // template 专用：仅我拥有的
+  String? ratio; // template 专用：照片比例（kTemplateAspectRatios 之一，null=全部）
   Set<int> userTagIds; // 通用：用户标签 AND
 
   SearchFilters({
@@ -33,6 +37,7 @@ class SearchFilters {
     this.academyLevel,
     this.price = SearchPriceFilter.all,
     this.ownedOnly = false,
+    this.ratio,
     Set<int>? userTagIds,
   }) : userTagIds = userTagIds ?? <int>{};
 
@@ -45,6 +50,7 @@ class SearchFilters {
     String? Function()? academyLevel,
     SearchPriceFilter? price,
     bool? ownedOnly,
+    String? Function()? ratio,
     Set<int>? userTagIds,
   }) {
     return SearchFilters(
@@ -57,6 +63,7 @@ class SearchFilters {
       academyLevel: academyLevel != null ? academyLevel() : this.academyLevel,
       price: price ?? this.price,
       ownedOnly: ownedOnly ?? this.ownedOnly,
+      ratio: ratio != null ? ratio() : this.ratio,
       userTagIds: userTagIds ?? this.userTagIds,
     );
   }
@@ -73,5 +80,6 @@ class SearchFilters {
       academyLevel != null ||
       price != SearchPriceFilter.all ||
       ownedOnly ||
+      ratio != null ||
       userTagIds.isNotEmpty;
 }
