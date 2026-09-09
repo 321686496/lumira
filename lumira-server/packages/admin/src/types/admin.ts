@@ -378,3 +378,44 @@ export interface BannerPayload {
   isActive?: boolean;
   sortOrder?: number;
 }
+
+// ===== AI 一键模板录入 =====
+
+/** GET/PUT /admin/ai-config 返回（apiKey 脱敏；未配置时 configured=false） */
+export interface AiProviderConfigView {
+  configured: boolean;
+  provider: string;
+  baseUrl: string;
+  apiKeyMasked: string;
+  visionModel: string;
+  imageModel: string;
+  enabled: boolean;
+}
+
+/** PUT /admin/ai-config 请求体（apiKey 空串/缺省 = 不修改原值，首次保存必填） */
+export interface UpdateAiConfigPayload {
+  provider: string;
+  baseUrl: string;
+  apiKey?: string;
+  visionModel: string;
+  imageModel: string;
+  enabled: boolean;
+}
+
+/** POST /admin/ai-config/test 结果（最小 vision 请求连通性） */
+export interface AiConfigTestResult {
+  vision: { ok: boolean; latencyMs?: number; error?: string };
+  note: string;
+}
+
+/** POST /admin/templates/ai-analyze 结果（草稿 + 归一化警告） */
+export interface AiAnalyzeResult {
+  draft: Record<string, unknown>;
+  warnings: string[];
+}
+
+/** POST /admin/templates/ai-generate-image / ai-generate-silhouette 结果（image = base64） */
+export interface AiImageResult {
+  image: string;
+  mimeType: string;
+}
