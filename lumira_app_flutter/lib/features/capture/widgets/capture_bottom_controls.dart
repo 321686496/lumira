@@ -1830,8 +1830,9 @@ class LockedCaptureButton extends StatelessWidget {
 
 /// 相机权限引导页
 /// 在权限未授予时显示，提供重新请求/跳转系统设置的入口
-class CameraPermissionGuide extends StatelessWidget {
+class CameraPermissionGuide extends ConsumerWidget {
   const CameraPermissionGuide({
+    super.key,
     required this.status,
     required this.onRetry,
     required this.onBack,
@@ -1844,13 +1845,22 @@ class CameraPermissionGuide extends StatelessWidget {
   final VoidCallback? onOpenSettings;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final bool isPermanentlyDenied =
         status == CameraPermissionStatus.permanentlyDenied;
     final String message = isPermanentlyDenied
         ? '相机权限已被永久拒绝，请在系统设置中手动开启相机权限后返回应用。'
         : '需要相机权限才能进行拍摄，请授予相机权限。';
     final String actionText = isPermanentlyDenied ? '前往设置' : '重新授权';
+
+    // 前景跟随拍摄外观：immersive=白系（黑底）；theme=tokens（画布底）
+    final tokens = ref.watch(themeTokensProvider);
+    final isThemed =
+        ref.watch(CaptureState.captureAppearanceProvider) ==
+            CaptureAppearance.theme;
+    final fg = isThemed ? tokens.textPrimary : Colors.white;
+    final fgSecondary = isThemed ? tokens.textSecondary : Colors.white70;
+    final fgMuted = isThemed ? tokens.textTertiary : Colors.white54;
 
     return SafeArea(
       child: Stack(
@@ -1861,7 +1871,7 @@ class CameraPermissionGuide extends StatelessWidget {
             left: 0,
             child: LumiraIconButton(
               icon: Icons.arrow_back_ios_new,
-              color: Colors.white,
+              color: fg,
               onPressed: onBack,
             ),
           ),
@@ -1872,16 +1882,16 @@ class CameraPermissionGuide extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.camera_alt_outlined,
                     size: 64,
-                    color: Colors.white54,
+                    color: fgMuted,
                   ),
                   const SizedBox(height: 24),
-                  const Text(
+                  Text(
                     '相机权限未开启',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: fg,
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1890,8 +1900,8 @@ class CameraPermissionGuide extends StatelessWidget {
                   Text(
                     message,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white70,
+                    style: TextStyle(
+                      color: fgSecondary,
                       fontSize: 14,
                       height: 1.5,
                     ),
