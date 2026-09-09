@@ -7,11 +7,15 @@ import type { FastifyRequest } from 'fastify';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
 import { UploadFile } from '../templates/admin-templates.service';
 import { AiAnalyzeService } from './ai-analyze.service';
+import { AiGenerateImageService } from './ai-generate-image.service';
 
 @Controller('admin/templates')
 @UseGuards(AdminAuthGuard)
 export class AiTemplatesController {
-  constructor(private readonly aiAnalyzeService: AiAnalyzeService) {}
+  constructor(
+    private readonly aiAnalyzeService: AiAnalyzeService,
+    private readonly aiGenerateImageService: AiGenerateImageService,
+  ) {}
 
   /** AI 识别示例图 → 模板草稿（multipart：image 文件必填） */
   @Post('ai-analyze')
@@ -21,6 +25,15 @@ export class AiTemplatesController {
       throw new BadRequestException('Missing "image" file');
     }
     return this.aiAnalyzeService.analyze(image);
+  }
+
+  /** AI 生成模板效果图（multipart：meta 草稿 JSON 文本必填语义 + reference 参考图可选） */
+  @Post('ai-generate-image')
+  async generateImage(@Req() req: FastifyRequest) {
+    const { meta, reference } = await parseAiMultipart(req);
+    const result = await this.aiGenerateImageService.generate(reference, meta);
+    // HTTP 契约：{ image: base64, mimeType }（service 内部为 GenerateImageResult 字段名）
+    return { image: result.base64, mimeType: result.mimeType };
   }
 }
 
