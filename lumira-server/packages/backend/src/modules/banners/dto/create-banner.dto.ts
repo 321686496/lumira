@@ -26,6 +26,12 @@ export class CreateBannerDto {
   @IsIn(OPERATION_BANNER_ROUTES)
   route!: string;
 
+  /** 配图 URL（可空）：相对 storageKey（/uploads/...）或完整 http(s) URL */
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  imageUrl?: string | null;
+
   @IsIn(OPERATION_BANNER_CONDITIONS)
   condition!: string;
 

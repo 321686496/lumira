@@ -321,6 +321,8 @@ export const operationBanners = mysqlTable('operation_banners', {
   subtitle: varchar('subtitle', { length: 255 }).notNull(),
   tag: varchar('tag', { length: 32 }).notNull(),
   route: varchar('route', { length: 128 }).notNull(),
+  // 运营位配图（可空）：DB 存相对 storageKey，返回 App 时经 buildAssetUrl 拼公网 URL
+  imageUrl: varchar('image_url', { length: 512 }),
   condition: varchar('condition', { length: 64 }).notNull(),
   isActive: int('is_active').notNull().default(1),
   sortOrder: int('sort_order').notNull().default(0),
