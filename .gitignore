@@ -18,6 +18,9 @@ outputs/
 # ML model files (large binary, not tracked in git, root dir only)
 /models/
 
+# RMBG-1.4 剪影抠图模型（~44MB，scripts/fetch-rmbg-model.mjs 下载，不入库）
+lumira-server/packages/backend/assets/models/*.onnx
+
 # Debug / CI build logs
 debuglog.txt
 
