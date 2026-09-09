@@ -402,15 +402,26 @@ static AVCaptureWhiteBalanceGains ClampExtremeWbGains(AVCaptureWhiteBalanceGains
   return gains;
 }
 
-// 设置全局/局部色调映射。返回最终生效状态：1=global / 0=local / -1=format 不支持。
+// 设置全局/局部色调映射。返回最终生效状态：1=global / 0=local / -1=format 不支持；
+// outFlipped 输出本次调用是否真实翻转了属性值（供调用方决定是否重启会话，见
+// RestartSessionForToneMappingFlip）。
 // 设置后回读实际值——论坛 130735 有「true→false→true 后全局映射不再生效」的报告，
 // 回读让日志能暴露此类失效。需在 lockForConfiguration 内、且先于 whiteBalanceMode
 // setter 调用（属性作为模式 setter 的修饰先生效，Apple 顺序建议）。iOS 13+。
-static int SetWbGlobalToneMapping(AVCaptureDevice *device, BOOL global) {
+//
+// 2026-09-09 冷启动复现路径确认：该属性在会话运行中翻转时不会传导到 ISP——
+// 回读值为真、画面仍按局部映射渲染；只有会话以「属性已为目标值」的状态
+// startRunning 时全局映射才真正生效。表现为：退出 App 冷启动后首次把白平衡拉到
+// 极端档，取景器/成片中下部仍被局部色调映射的区域曲线中和掉冷调；而重进拍摄页
+// 或切前后摄后（设备属性跨会话保留、无需翻转）一切正常。修复：翻转发生且会话
+// 正在运行时 stopRunning+startRunning 重启会话，强制 ISP 重建渲染管线。
+static int SetWbGlobalToneMapping(AVCaptureDevice *device, BOOL global, BOOL *outFlipped) {
+  if (outFlipped != NULL) *outFlipped = NO;
   if (@available(iOS 13.0, *)) {
     if (![device.activeFormat isGlobalToneMappingSupported]) return -1;
     if (device.isGlobalToneMappingEnabled != global) {
       device.globalToneMappingEnabled = global;
+      if (outFlipped != NULL) *outFlipped = YES;
     }
     return device.isGlobalToneMappingEnabled ? 1 : 0;
   }
@@ -418,17 +429,21 @@ static int SetWbGlobalToneMapping(AVCaptureDevice *device, BOOL global) {
 }
 
 // 手动色温（k != nil）与预设模式分支共用：目标 K → gains → 极端判定与限幅，
-// 并输出「目标/实际」残差供软件补足。一条日志含全部取证信息（真机定位用）。
+// 并输出「目标/实际」残差供软件补足；outToneFlipped 透传色调映射是否翻转。
+// 一条日志含全部取证信息（真机定位用）。
 static AVCaptureWhiteBalanceGains GainsForTemperatureWithResidual(CGFloat k,
                                                                   AVCaptureDevice *device,
-                                                                  WbResidual *residual) {
+                                                                  WbResidual *residual,
+                                                                  BOOL *outToneFlipped) {
   AVCaptureWhiteBalanceTemperatureAndTintValues tt = { .temperature = k, .tint = 0.0f };
   AVCaptureWhiteBalanceGains target =
       [device deviceWhiteBalanceGainsForTemperatureAndTintValues:tt];
   // 极端色温 → 全局色调映射（先于锁定，顺序要求见 SetWbGlobalToneMapping 注释）
   // + LSC 安全区限幅；非极端 → 恢复默认局部映射 + 常规软封顶。
   BOOL extreme = IsExtremeWbTemperature(k);
-  int toneMapping = SetWbGlobalToneMapping(device, extreme);
+  BOOL toneFlipped = NO;
+  int toneMapping = SetWbGlobalToneMapping(device, extreme, &toneFlipped);
+  if (outToneFlipped != NULL) *outToneFlipped = toneFlipped;
   AVCaptureWhiteBalanceGains applied = extreme
       ? ClampExtremeWbGains(target, device.maxWhiteBalanceGain)
       : SoftClampWhiteBalanceGains(target, device.maxWhiteBalanceGain);
@@ -437,14 +452,15 @@ static AVCaptureWhiteBalanceGains GainsForTemperatureWithResidual(CGFloat k,
     residual->g = applied.greenGain > 0.001f ? target.greenGain / applied.greenGain : 1.0f;
     residual->b = applied.blueGain  > 0.001f ? target.blueGain  / applied.blueGain  : 1.0f;
   }
-  NSLog(@"[WB] k=%.0f extreme=%d maxGain=%.2f target=(%.3f,%.3f,%.3f) applied=(%.3f,%.3f,%.3f) residual=(%.3f,%.3f,%.3f) toneMapping=%@",
+  NSLog(@"[WB] k=%.0f extreme=%d maxGain=%.2f target=(%.3f,%.3f,%.3f) applied=(%.3f,%.3f,%.3f) residual=(%.3f,%.3f,%.3f) toneMapping=%@ flipped=%d",
         k, extreme, device.maxWhiteBalanceGain,
         target.redGain, target.greenGain, target.blueGain,
         applied.redGain, applied.greenGain, applied.blueGain,
         residual != NULL ? residual->r : 1.0f,
         residual != NULL ? residual->g : 1.0f,
         residual != NULL ? residual->b : 1.0f,
-        toneMapping < 0 ? @"unsupported" : (toneMapping > 0 ? @"global" : @"local"));
+        toneMapping < 0 ? @"unsupported" : (toneMapping > 0 ? @"global" : @"local"),
+        toneFlipped);
   return applied;
 }
 
@@ -456,11 +472,14 @@ static AVCaptureWhiteBalanceGains GainsForTemperatureWithResidual(CGFloat k,
     return;
   }
 
+  // 色调映射属性是否在本轮调用中真实翻转（冷启动首次进入极端档即为 true）。
+  BOOL toneFlipped = NO;
+
   if (k != nil) {
     // 手动色温：用目标 K 得到 gains，锁定（温和钳制避免越界崩溃 + 规避中心色斑）；
     // 被封顶削减的部分记入残差，由 Dart 侧软件矩阵补足（见 wbResidual）。
     WbResidual residual = WbResidualIdentity;
-    AVCaptureWhiteBalanceGains gains = GainsForTemperatureWithResidual([k floatValue], _captureDevice, &residual);
+    AVCaptureWhiteBalanceGains gains = GainsForTemperatureWithResidual([k floatValue], _captureDevice, &residual, &toneFlipped);
     if ([_captureDevice isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeLocked]) {
       [_captureDevice setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains:gains completionHandler:nil];
       _wbResidual = residual;
@@ -474,7 +493,7 @@ static AVCaptureWhiteBalanceGains GainsForTemperatureWithResidual(CGFloat k,
     if ([_captureDevice isWhiteBalanceModeSupported:wbMode]) {
       // 恢复默认局部色调映射（先于模式 setter）：自动白平衡下画质最优，
       // 且 photoOutput 的 Deep Fusion/Smart HDR 可用（见 SetWbGlobalToneMapping 注释）。
-      SetWbGlobalToneMapping(_captureDevice, NO);
+      SetWbGlobalToneMapping(_captureDevice, NO, &toneFlipped);
       _captureDevice.whiteBalanceMode = wbMode;
       _wbResidual = WbResidualIdentity;
       _wbManuallyLocked = NO;
@@ -489,7 +508,7 @@ static AVCaptureWhiteBalanceGains GainsForTemperatureWithResidual(CGFloat k,
     else if ([mode isEqualToString:@"fluorescent"])  presetK = 4200.0f;
     else if ([mode isEqualToString:@"incandescent"]) presetK = 3000.0f;
     WbResidual residual = WbResidualIdentity;
-    AVCaptureWhiteBalanceGains gains = GainsForTemperatureWithResidual(presetK, _captureDevice, &residual);
+    AVCaptureWhiteBalanceGains gains = GainsForTemperatureWithResidual(presetK, _captureDevice, &residual, &toneFlipped);
     if ([_captureDevice isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeLocked]) {
       [_captureDevice setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains:gains completionHandler:nil];
       _wbResidual = residual;
@@ -500,6 +519,24 @@ static AVCaptureWhiteBalanceGains GainsForTemperatureWithResidual(CGFloat k,
   }
 
   [_captureDevice unlockForConfiguration];
+
+  // 色调映射在会话运行中翻转后不会即时传导到 ISP（见 SetWbGlobalToneMapping
+  // 注释），重启会话强制其以新属性值重建渲染管线。
+  [self restartSessionForToneMappingFlip:toneFlipped];
+}
+
+/// globalToneMappingEnabled 在会话运行中翻转后不会传导到 ISP（回读值失真，
+/// 画面仍按旧模式渲染）。重启会话让 ISP 以翻转后的属性值重建管线——等价于
+/// 「以目标值启动会话」这一已被验证可行的路径（重进拍摄页/切换前后摄后全局
+/// 映射正常生效，正是因为那些路径下属性无需在运行中翻转）。仅在会话运行中
+/// 翻转时执行；未运行的会话会在 startRunning 时读取当前属性值，无需重启。
+/// 代价：滑杆跨过极端档阈值（3400K/7600K）时预览短暂停顿约 0.1~0.3 秒。
+- (void)restartSessionForToneMappingFlip:(BOOL)flipped {
+  if (!flipped) return;
+  if (!_captureSession.isRunning) return;
+  NSLog(@"[WB] tone mapping flipped mid-session; restarting capture session to engage ISP");
+  [_captureSession stopRunning];
+  [_captureSession startRunning];
 }
 
 /// 更新取景器逐帧效果参数（线程安全，可任意线程调用）。

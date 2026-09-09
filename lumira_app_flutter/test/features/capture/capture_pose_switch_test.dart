@@ -70,11 +70,13 @@ void main() {
     });
   });
 
-  // ── 白平衡会话态的跨会话重置（修复：套用模板参数在相机重建后不生效）──
-  // resetAll 不清白平衡会话时，模板白平衡会跨会话残留到自由模式，且陈旧的
-  // wbResidual 会持续注入 effectivePostProcess 调色矩阵污染成片。
+  // ── 白平衡会话态的跨会话保留与残差清理 ──
+  // resetAll 保留白平衡会话（用户期望重进拍摄页后设置仍在，_onCameraReady 会按
+  // 会话状态重放，见 camera_preview.dart）；仅清残差——它是 iOS 硬件派生值，
+  // 跨相机实例不成立，重放时 refreshWbResidual 会重新拉取，避免陈旧残差注入
+  // effectivePostProcess 调色矩阵污染成片。
   group('resetAll 白平衡会话态', () {
-    test('resetAll 复位白平衡会话与残差', () {
+    test('resetAll 保留白平衡会话、清空残差', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       container.read(whiteBalanceSessionProvider.notifier).state =
@@ -85,7 +87,8 @@ void main() {
       container.read(wbResidualSessionProvider.notifier).state =
           const WbResidual(r: 1.2, g: 1.0, b: 0.9);
       CaptureState.resetAll(container);
-      expect(container.read(whiteBalanceSessionProvider).isAuto, isTrue);
+      expect(container.read(whiteBalanceSessionProvider).isAuto, isFalse);
+      expect(container.read(whiteBalanceSessionProvider).temperatureK, 5500);
       expect(container.read(wbResidualSessionProvider), isNull);
     });
   });
