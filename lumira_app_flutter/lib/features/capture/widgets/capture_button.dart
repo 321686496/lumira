@@ -1,21 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/theme/capture_appearance.dart';
+import '../../../core/theme/theme_controller.dart';
+import '../data/capture_state.dart';
 
 /// 拍摄按钮（底部中央圆形）
 ///
 /// 视觉规格来源：lumira-app/src/pages/capture/index.vue line 130-145
-/// - 外环: 80dp 直径，白色边框 4dp
-/// - 内圆: 60dp 直径，白色实心
+/// - 外环: 80dp 直径，边框 4dp
+/// - 内圆: 60dp 直径，实心
 /// - 按下: 内圆缩小到 50dp
-class CaptureButton extends StatefulWidget {
+/// - 颜色：immersive=白色；theme=当前主题文字主色（浅画布上深色快门，高对比）
+class CaptureButton extends ConsumerStatefulWidget {
   const CaptureButton({super.key, required this.onTap});
 
   final VoidCallback onTap;
 
   @override
-  State<CaptureButton> createState() => _CaptureButtonState();
+  ConsumerState<CaptureButton> createState() => _CaptureButtonState();
 }
 
-class _CaptureButtonState extends State<CaptureButton>
+class _CaptureButtonState extends ConsumerState<CaptureButton>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
@@ -41,6 +47,11 @@ class _CaptureButtonState extends State<CaptureButton>
 
   @override
   Widget build(BuildContext context) {
+    final tokens = ref.watch(themeTokensProvider);
+    final isThemed =
+        ref.watch(CaptureState.captureAppearanceProvider) ==
+            CaptureAppearance.theme;
+    final shutterColor = isThemed ? tokens.textPrimary : Colors.white;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown: (_) {
@@ -63,7 +74,7 @@ class _CaptureButtonState extends State<CaptureButton>
         height: 80,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 4),
+          border: Border.all(color: shutterColor, width: 4),
         ),
         alignment: Alignment.center,
         child: ScaleTransition(
@@ -71,9 +82,9 @@ class _CaptureButtonState extends State<CaptureButton>
           child: Container(
             width: 60,
             height: 60,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white,
+              color: shutterColor,
             ),
           ),
         ),
