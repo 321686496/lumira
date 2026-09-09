@@ -13,9 +13,9 @@ export class BatchEventDto {
 
 export class EventInputDto {
   @IsString() @IsNotEmpty() clientEventId!: string;
-  @IsIn(['template', 'scene']) itemType!: UsageItemType;
+  @IsIn(['template', 'scene', 'banner']) itemType!: UsageItemType;
   @IsString() @IsNotEmpty() itemId!: string;
   @IsString() @IsNotEmpty() itemSource!: string;
-  @IsIn(['open_detail', 'use_shoot', 'scene_select']) eventType!: UsageEventType;
+  @IsIn(['open_detail', 'use_shoot', 'scene_select', 'expose', 'click']) eventType!: UsageEventType;
   @IsInt() @Min(0) occurredAt!: number;
 }
