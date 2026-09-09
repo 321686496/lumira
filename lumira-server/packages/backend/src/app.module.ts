@@ -21,12 +21,13 @@ import { FeedbackModule } from './modules/feedback/feedback.module';
 import { AccountModule } from './modules/account/account.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { BannersModule } from './modules/banners/banners.module';
+import { AiModule } from './modules/ai/ai.module';
 import { HealthController } from './health.controller';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { GlobalValidationPipe } from './common/pipes/global-validation.pipe';
 
 @Module({
-  imports: [RedisModule, StorageModule, DatabaseModule, DeviceModule, ProfileModule, InviteModule, RedeemModule, RewardsModule, AdminModule, WeatherModule, QuestionnaireModule, TemplatesModule, UsageModule, ScenesModule, SignInModule, FeedbackModule, AccountModule, NotificationsModule, BannersModule],
+  imports: [RedisModule, StorageModule, DatabaseModule, DeviceModule, ProfileModule, InviteModule, RedeemModule, RewardsModule, AdminModule, WeatherModule, QuestionnaireModule, TemplatesModule, UsageModule, ScenesModule, SignInModule, FeedbackModule, AccountModule, NotificationsModule, BannersModule, AiModule],
   controllers: [HealthController],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
