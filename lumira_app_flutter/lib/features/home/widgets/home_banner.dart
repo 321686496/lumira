@@ -5,9 +5,11 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../templates/widgets/template_cover_image.dart';
+import '../../usage/usage_providers.dart';
 import '../data/home_mock_data.dart';
 import '../providers/banner_recommendation_provider.dart';
 
@@ -36,6 +38,9 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
   int _current = 0;
   Timer? _timer;
   int _bannerCount = 0;
+
+  /// 会话内已上报曝光的 bannerId（去重：自动轮播/来回滑动不重复计曝光）
+  final Set<String> _exposedBannerIds = {};
 
   @override
   void dispose() {
@@ -129,6 +134,24 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
     return false;
   }
 
+  /// Banner 埋点：曝光/点击写入本地 usage_events 队列
+  /// （失败静默降级，不影响 Banner 渲染与跳转；启动时由 usageSyncService 统一上报）
+  void _recordBannerEvent(String bannerId, UsageEventType event) {
+    ref
+        .read(usageEventRecorderProvider.future)
+        .then((recorder) =>
+            recorder.recordBanner(bannerId: bannerId, event: event))
+        .catchError((_) {});
+  }
+
+  /// 曝光埋点：banner 成为当前页时上报一次（按 trackingId 会话内去重）
+  void _reportExpose(List<HomeBannerItem> banners, int realIndex) {
+    if (realIndex < 0 || realIndex >= banners.length) return;
+    final banner = banners[realIndex];
+    if (!_exposedBannerIds.add(banner.trackingId)) return;
+    _recordBannerEvent(banner.trackingId, UsageEventType.bannerExpose);
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
@@ -154,6 +177,11 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
   Widget _buildCarousel(List<HomeBannerItem> banners, ThemeTokens tokens) {
     if (banners.isEmpty) return const SizedBox.shrink();
     final count = banners.length;
+    // 首屏曝光：首帧渲染后上报当前页（仅当轮播处于外层可视区）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_isInViewport()) _reportExpose(banners, _current % count);
+    });
     return Column(
       children: [
         SizedBox(
@@ -162,7 +190,10 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
             onNotification: _onManualScroll,
             child: PageView.builder(
               controller: _controller,
-              onPageChanged: (i) => setState(() => _current = i),
+              onPageChanged: (i) {
+                setState(() => _current = i);
+                _reportExpose(banners, i % count);
+              },
               // 无限模式：足够大的虚拟 itemCount，index%count 映射到真实 banner
               itemCount: count * _kRepeat,
               itemBuilder: (_, index) {
@@ -170,7 +201,12 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
                 return _BannerCard(
                   banner: banner,
                   tokens: tokens,
-                  onTap: () => GoRouter.of(context).push(banner.route),
+                  onTap: () {
+                    // 点击埋点：失败静默，不阻断跳转
+                    _recordBannerEvent(
+                        banner.trackingId, UsageEventType.bannerClick);
+                    GoRouter.of(context).push(banner.route);
+                  },
                 );
               },
             ),
