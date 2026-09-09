@@ -5,6 +5,7 @@ import 'package:camerawesome_ohos/camerawesome_plugin.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import '../../../core/db/database_provider.dart';
+import '../../../core/theme/capture_appearance.dart';
 import '../domain/photo_template.dart';
 import '../domain/scene_preset.dart';
 import '../data/template_registry.dart';
@@ -794,6 +795,40 @@ class CaptureState {
     } catch (e) {
       // 持久化失败静默，不影响本次设置
       debugPrint('[capture] persist shutter sound failed: $e');
+    }
+  }
+
+  // ── 拍摄页/预览页外观（沉浸式 vs 跟随主题）──
+
+  /// 拍摄页与拍摄预览页外观模式（持久化到 user_settings.capture_appearance）。
+  /// immersive=纯黑取景 + 暗色浮层（默认）；theme=画布与浮层跟随当前主题/风格。
+  /// 由设置页 initState 从 DB 加载、开关切换后持久化；拍摄/预览页 watch 渲染。
+  static final captureAppearanceProvider =
+      StateProvider<CaptureAppearance>((ref) => CaptureAppearance.immersive);
+
+  /// 从 DAO 加载拍摄外观到 provider（设置页 initState 调用）。
+  static Future<void> loadCaptureAppearance(ProviderContainer container) async {
+    try {
+      final dao = await container.read(settingsDaoProvider.future);
+      final appearance = await dao.getCaptureAppearance();
+      container.read(captureAppearanceProvider.notifier).state = appearance;
+    } catch (e) {
+      // 加载失败静默降级，保持默认沉浸式
+      debugPrint('[capture] loadCaptureAppearance failed: $e');
+    }
+  }
+
+  /// 持久化拍摄外观（设置页 toggle 切换时调用）。
+  static Future<void> persistCaptureAppearance(
+    ProviderContainer container,
+    CaptureAppearance value,
+  ) async {
+    try {
+      final dao = await container.read(settingsDaoProvider.future);
+      await dao.setCaptureAppearance(value);
+    } catch (e) {
+      // 持久化失败静默，不影响本次设置
+      debugPrint('[capture] persist capture appearance failed: $e');
     }
   }
 

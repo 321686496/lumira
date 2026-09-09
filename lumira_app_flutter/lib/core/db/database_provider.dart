@@ -33,7 +33,7 @@ import 'dao/templates_drafts_dao.dart';
 import '../../features/templates/recommend/user_interests.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 54;
+const int _kDbVersion = 55;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -1590,6 +1590,21 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       );
     } catch (e) {
       debugPrint('v54 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 55) {
+    try {
+      // v55: user_settings 新增 capture_appearance 列
+      // （拍摄页/预览页外观：'immersive'=沉浸式（默认） / 'theme'=跟随主题）
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colCaptureAppearance,
+        "TEXT NOT NULL DEFAULT 'immersive'",
+      );
+    } catch (e) {
+      debugPrint('v55 migration failed (silent fallback): $e');
     }
   }
 }
