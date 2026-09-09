@@ -1,8 +1,13 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/capture_appearance.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../features/capture/data/capture_state.dart';
+import '../../../shared/widgets/lumira/_internal/lumira_theme_resolver.dart';
 import '../data/challenge_models.dart';
 import '../data/challenge_pool.dart';
 
@@ -68,12 +73,20 @@ class _ChallengeOverlayBarState extends ConsumerState<ChallengeOverlayBar>
   Widget build(BuildContext context) {
     if (_item == null) return const SizedBox.shrink();
     final tokens = ref.watch(themeTokensProvider);
+    // 双模式视觉：immersive=暗色胶囊 / theme=当前风格的叠照片浮层取向
+    final visual = LumiraThemeResolver.captureOverlayVisual(
+      tokens: tokens,
+      style: ref.watch(appThemeProvider).style,
+      appearance: ref.watch(CaptureState.captureAppearanceProvider),
+      role: CaptureOverlayRole.pill,
+      radiusDp: 24,
+    );
 
     // 竖屏：整卡顶部居中，占满屏宽。
     if (!widget.isLandscape) {
       return Align(
         alignment: Alignment.topCenter,
-        child: _buildCard(tokens),
+        child: _buildCard(tokens, visual),
       );
     }
 
@@ -100,16 +113,17 @@ class _ChallengeOverlayBarState extends ConsumerState<ChallengeOverlayBar>
               maxWidth: size.height * 0.5, // 旋转后为画布纵向跨度，限制避免过长
               maxHeight: size.width * 0.86, // 旋转后为画布横向跨度，避免越出画布短边
             ),
-            child: _buildCard(tokens),
+            child: _buildCard(tokens, visual),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildCard(ThemeTokens tokens) {
+  Widget _buildCard(ThemeTokens tokens, CaptureOverlayVisual visual) {
     final item = _item!;
-    return Material(
+    final radius = BorderRadius.circular(_expanded ? 14 : 24);
+    final Widget card = Material(
       color: Colors.transparent,
       child: AnimatedSize(
         duration: const Duration(milliseconds: 240),
@@ -125,19 +139,13 @@ class _ChallengeOverlayBarState extends ConsumerState<ChallengeOverlayBar>
                 vertical: _expanded ? 12 : 10,
               ),
               decoration: BoxDecoration(
-                color: const Color(0xF0171512).withOpacity(0.92),
-                borderRadius: BorderRadius.circular(_expanded ? 14 : 24),
+                color: visual.background,
+                borderRadius: radius,
                 border: Border.all(
                   color: tokens.brand.withOpacity(0.35),
                   width: 1,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.30),
-                    offset: const Offset(0, 4),
-                    blurRadius: 12,
-                  ),
-                ],
+                boxShadow: visual.shadows,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -154,10 +162,10 @@ class _ChallengeOverlayBarState extends ConsumerState<ChallengeOverlayBar>
                           item.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                            color: visual.foreground,
                             height: 1.2,
                           ),
                         ),
@@ -196,7 +204,7 @@ class _ChallengeOverlayBarState extends ConsumerState<ChallengeOverlayBar>
                         child: Icon(
                           Icons.keyboard_arrow_down,
                           size: 18,
-                          color: Colors.white.withOpacity(0.7),
+                          color: visual.foregroundSecondary,
                         ),
                       ),
                     ],
@@ -206,14 +214,14 @@ class _ChallengeOverlayBarState extends ConsumerState<ChallengeOverlayBar>
                     const SizedBox(height: 10),
                     Container(
                       height: 1,
-                      color: Colors.white.withOpacity(0.12),
+                      color: visual.fillSubtle,
                     ),
                     const SizedBox(height: 10),
                     Text(
                       item.description,
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.white.withOpacity(0.78),
+                        color: visual.foregroundSecondary,
                         height: 1.5,
                       ),
                       maxLines: 3,
@@ -237,7 +245,7 @@ class _ChallengeOverlayBarState extends ConsumerState<ChallengeOverlayBar>
                               item.tip,
                               style: TextStyle(
                                 fontSize: 11,
-                                color: Colors.white.withOpacity(0.85),
+                                color: visual.foreground,
                                 height: 1.5,
                               ),
                             ),
@@ -252,5 +260,18 @@ class _ChallengeOverlayBarState extends ConsumerState<ChallengeOverlayBar>
           ),
         ),
       );
+    // backdropBlurSigma>0 才包毛玻璃；新拟态 sigma=0 直接呈现卡体
+    return visual.backdropBlurSigma > 0
+        ? ClipRRect(
+            borderRadius: radius,
+            child: BackdropFilter(
+              filter: ImageFilter.blur(
+                sigmaX: visual.backdropBlurSigma,
+                sigmaY: visual.backdropBlurSigma,
+              ),
+              child: card,
+            ),
+          )
+        : card;
   }
 }

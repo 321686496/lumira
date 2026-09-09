@@ -1,9 +1,13 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/capture_appearance.dart';
 import '../../../core/theme/theme_controller.dart';
-import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/lumira/_internal/lumira_theme_resolver.dart';
+import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
 
 /// 拍摄页套用模板后的可折叠模板信息卡。
@@ -11,7 +15,8 @@ import '../domain/photo_template.dart';
 /// - 折叠态：图标 + 模板名 + 展开箭头
 /// - 展开态：简介（meta.description）+ 拍摄注意点列表（sceneGuide.tips）
 /// - 套用模板默认展开；切换模板（id 变化）时重置为展开
-/// - 视觉与 ChallengeOverlayBar 保持一致（深色半透明浮层 + 品牌色描边）
+/// - 视觉与 ChallengeOverlayBar 保持一致（双模式浮层 + 品牌色描边）：
+///   immersive=暗色半透明 / theme=当前风格的叠照片浮层取向
 class TemplateInfoCard extends ConsumerStatefulWidget {
   const TemplateInfoCard({
     super.key,
@@ -56,6 +61,15 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
   @override
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
+    // 双模式视觉：immersive=暗色胶囊 / theme=当前风格的叠照片浮层取向
+    // （与 ChallengeOverlayBar 同构：底色/阴影/毛玻璃走 resolver，品牌描边保留）
+    final visual = LumiraThemeResolver.captureOverlayVisual(
+      tokens: appTheme.tokens,
+      style: appTheme.style,
+      appearance: ref.watch(CaptureState.captureAppearanceProvider),
+      role: CaptureOverlayRole.pill,
+      radiusDp: 24,
+    );
 
     // 竖屏：整卡顶部居中，占满屏宽。
     if (!widget.isLandscape) {
@@ -65,7 +79,7 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
           constraints: const BoxConstraints(maxWidth: double.infinity),
           child: Material(
             color: Colors.transparent,
-            child: _buildBody(appTheme),
+            child: _buildBody(appTheme, visual),
           ),
         ),
       );
@@ -98,7 +112,7 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
             ),
             child: Material(
               color: Colors.transparent,
-              child: _buildBody(appTheme),
+              child: _buildBody(appTheme, visual),
             ),
           ),
         ),
@@ -106,15 +120,16 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
     );
   }
 
-  Widget _buildBody(AppThemeData appTheme) {
+  Widget _buildBody(AppThemeData appTheme, CaptureOverlayVisual visual) {
     final tokens = appTheme.tokens;
     final template = widget.template;
     final tips = template.sceneGuide.tips;
     // 无简介且无注意点时仅渲染标题条
     final hasContent =
         template.meta.description.isNotEmpty || tips.isNotEmpty;
+    final radius = BorderRadius.circular(_expanded ? 14 : 24);
 
-    return AnimatedSize(
+    final Widget card = AnimatedSize(
             duration: const Duration(milliseconds: 240),
             curve: Curves.easeOutCubic,
             alignment: Alignment.topCenter,
@@ -127,40 +142,17 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
                 horizontal: 14,
                 vertical: _expanded ? 12 : 10,
               ),
-              decoration: appTheme.style == UIStyle.glass
-                  ? BoxDecoration(
-                      // 玻璃风格：半透明底色 + 细白描边 + 柔和投影
-                      color: ThemeTokens.glassFill(tokens),
-                      borderRadius:
-                          BorderRadius.circular(_expanded ? 14 : 24),
-                      border: Border.all(
-                        color: ThemeTokens.glassBorder(tokens),
-                        width: 1,
-                      ),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x1F000000),
-                          offset: Offset(0, 6),
-                          blurRadius: 20,
-                        ),
-                      ],
-                    )
-                  : BoxDecoration(
-                      color: const Color(0xF0171512).withOpacity(0.92),
-                      borderRadius:
-                          BorderRadius.circular(_expanded ? 14 : 24),
-                      border: Border.all(
-                        color: tokens.brand.withOpacity(0.35),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.30),
-                          offset: const Offset(0, 4),
-                          blurRadius: 12,
-                        ),
-                      ],
-                    ),
+              // 统一走 resolver：immersive=暗色 / theme=当前风格浮层；
+              // 品牌描边两模式均保留（tokens.brand 已随主题变化）
+              decoration: BoxDecoration(
+                color: visual.background,
+                borderRadius: radius,
+                border: Border.all(
+                  color: tokens.brand.withOpacity(0.35),
+                  width: 1,
+                ),
+                boxShadow: visual.shadows,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -175,10 +167,10 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
                           template.meta.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                            color: visual.foreground,
                             height: 1.2,
                           ),
                         ),
@@ -190,7 +182,7 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
                         child: Icon(
                           Icons.keyboard_arrow_down,
                           size: 18,
-                          color: Colors.white.withOpacity(0.7),
+                          color: visual.foregroundSecondary,
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -204,7 +196,7 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
                             child: Icon(
                               Icons.close,
                               size: 15,
-                              color: Colors.white.withOpacity(0.7),
+                              color: visual.foregroundSecondary,
                             ),
                           ),
                         ),
@@ -215,7 +207,7 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
                     const SizedBox(height: 10),
                     Container(
                       height: 1,
-                      color: Colors.white.withOpacity(0.12),
+                      color: visual.fillSubtle,
                     ),
                     if (template.meta.description.isNotEmpty) ...[
                       const SizedBox(height: 10),
@@ -223,7 +215,7 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
                         template.meta.description,
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.white.withOpacity(0.78),
+                          color: visual.foregroundSecondary,
                           height: 1.5,
                         ),
                         maxLines: 3,
@@ -252,7 +244,7 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
                                   tip,
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: Colors.white.withOpacity(0.85),
+                                    color: visual.foreground,
                                     height: 1.5,
                                   ),
                                 ),
@@ -268,5 +260,18 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
             ),
           ),
     );
+    // backdropBlurSigma>0 才包毛玻璃；新拟态 sigma=0 直接呈现卡体
+    return visual.backdropBlurSigma > 0
+        ? ClipRRect(
+            borderRadius: radius,
+            child: BackdropFilter(
+              filter: ImageFilter.blur(
+                sigmaX: visual.backdropBlurSigma,
+                sigmaY: visual.backdropBlurSigma,
+              ),
+              child: card,
+            ),
+          )
+        : card;
   }
 }
