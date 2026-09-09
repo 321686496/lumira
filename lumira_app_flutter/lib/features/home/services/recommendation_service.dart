@@ -156,6 +156,7 @@ class RecommendationService {
           final label = _categoryLabelMap[topCat] ?? '推荐';
           questionnaireBanner = HomeBannerItem(
             id: 'banner_questionnaire_pick',
+            bannerId: 'banner_questionnaire_pick:${tpl.id}',
             title: '从$label开始',
             subtitle: tpl.description.isNotEmpty
                 ? _truncate(tpl.description, 30)
