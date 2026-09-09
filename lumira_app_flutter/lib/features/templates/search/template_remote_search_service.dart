@@ -33,10 +33,12 @@ class TemplateRemoteSearchService {
   /// 后端搜索接口是否可承载当前筛选。
   ///
   /// 后端仅支持 q / sort / category / 分页，**不支持**价格筛选、仅我拥有、
-  /// 用户标签 AND 交集。命中这些高级筛选时返回 false，页面应退用本地全量检索。
+  /// 用户标签 AND 交集、照片比例筛选。命中这些高级筛选时返回 false，
+  /// 页面应退用本地全量检索。
   static bool isBackendCapable(SearchFilters filters) {
     return filters.price == SearchPriceFilter.all &&
         !filters.ownedOnly &&
+        filters.ratio == null &&
         filters.userTagIds.isEmpty;
   }
 

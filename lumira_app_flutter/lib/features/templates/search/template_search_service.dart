@@ -9,6 +9,9 @@ class TemplateSearchService {
 
   /// 多字段命中：name / category 中文标签 / classification 三级 key 及其中文标签 /
   /// tags / description / referenceSource / composition.description / postProcess.lut 中文标签。
+  ///
+  /// 抖音式 `#` 标签模式：关键词 trim 后以 `#` 开头时，仅对 tags 逐项模糊匹配，
+  /// 不再命中 name / 分类 / 描述等其它字段；`#` 后为空（纯 `#`）= 全部带标签模板。
   static bool matchesKeyword(
     TemplateRecord t,
     String keyword, {
@@ -16,6 +19,11 @@ class TemplateSearchService {
   }) {
     final q = keyword.trim();
     if (q.isEmpty) return true;
+    if (q.startsWith('#')) {
+      final tag = q.substring(1).trim();
+      if (tag.isEmpty) return t.tags.isNotEmpty;
+      return t.tags.any((x) => containsIgnoreCase(x, tag));
+    }
     final candidates = <String>[
       t.name,
       TemplatesBrowseMockData.categoryLabel(t.category),
@@ -71,6 +79,13 @@ class TemplateSearchService {
       list = list.where((t) => t.price > 0).toList();
     }
 
+    // 照片比例：composition['aspectRatio'] 优先，缺失回退 postProcess['cropRatio']，
+    // 与筛选值全等匹配（无比例数据的模板不进入结果）。
+    final ratio = filters.ratio;
+    if (ratio != null && ratio.isNotEmpty) {
+      list = list.where((t) => _templateRatio(t) == ratio).toList();
+    }
+
     if (filters.ownedOnly) {
       list = list.where((t) => t.source == 'custom').toList();
     }
@@ -91,6 +106,15 @@ class TemplateSearchService {
       if (v == key) return true;
     }
     return false;
+  }
+
+  /// 模板照片比例：composition['aspectRatio'] 优先，缺失回退 postProcess['cropRatio']。
+  static String _templateRatio(TemplateRecord t) {
+    final ar = t.composition['aspectRatio'] as String?;
+    if (ar != null && ar.isNotEmpty) return ar;
+    final cr = t.postProcess['cropRatio'] as String?;
+    if (cr != null && cr.isNotEmpty) return cr;
+    return '';
   }
 
   static void _sort(

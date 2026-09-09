@@ -24,6 +24,7 @@ import '../../academy/data/academy_models.dart';
 import '../../academy/search/academy_search_service.dart';
 import '../../capture/data/scene_presets_data.dart';
 import '../../scenes/search/scene_search_service.dart';
+import '../../tags/tag_filter_logic.dart' show containsIgnoreCase;
 import '../../templates/data/remote_template_dto.dart';
 import '../../templates/data/remote_templates_providers.dart';
 import '../../templates/search/template_remote_search_service.dart';
@@ -62,6 +63,12 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
   Map<String, String> _categoryLabelByKey = const {};
   List<TemplateCategoryRecord> _level1Categories = const [];
   Map<String, int> _templateUsageCounts = const {};
+
+  /// 标签库：全部模板 tags 去重聚合（标签 → 模板数量），按数量降序。
+  List<_TagSuggestion> _tagLibrary = const [];
+
+  /// `#` 模式下的联想标签候选（仅 # 模式且非空时渲染下拉）。
+  List<_TagSuggestion> _tagSuggestions = const [];
 
   List<SearchResult> _results = const [];
   SearchStore? _store;
@@ -135,21 +142,59 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       _categoryLabelByKey = {for (final c in categories) c.key: c.name};
       _level1Categories =
           categories.where((c) => c.level == 1).toList();
+      _tagLibrary = _buildTagLibrary(_allTemplates);
       _store = store;
       _loaded = true;
     });
   }
 
+  /// 标签库：聚合全部模板 tags（去重计数），按模板数量降序、同数量按名称。
+  static List<_TagSuggestion> _buildTagLibrary(List<TemplateRecord> all) {
+    final counts = <String, int>{};
+    for (final t in all) {
+      for (final raw in t.tags) {
+        final tag = raw.trim();
+        if (tag.isEmpty) continue;
+        counts[tag] = (counts[tag] ?? 0) + 1;
+      }
+    }
+    final list = [
+      for (final e in counts.entries) _TagSuggestion(e.key, e.value),
+    ];
+    list.sort((a, b) {
+      if (a.count != b.count) return b.count.compareTo(a.count);
+      return a.name.compareTo(b.name);
+    });
+    return list;
+  }
+
   // === 关键词与搜索 ===
 
   void _onKeywordChanged(String v) {
-    setState(() => _keyword = v);
+    final suggestions = _tagSuggestionsFor(v);
+    setState(() {
+      _keyword = v;
+      _tagSuggestions = suggestions;
+    });
     if (v.trim().isEmpty) {
       _pager.reset();
       setState(() => _results = const []);
     } else {
       _recompute();
     }
+  }
+
+  /// `#` 标签模式判定与联想候选计算：
+  /// 输入 trim 后以 `#` 开头即为标签模式，取 `#` 后文本对标签库模糊匹配；
+  /// 空标签词（纯 `#`）展示全部候选，便于浏览；非标签模式候选为空。
+  List<_TagSuggestion> _tagSuggestionsFor(String input) {
+    final q = input.trim();
+    if (!q.startsWith('#')) return const [];
+    final word = q.substring(1).trim();
+    return [
+      for (final e in _tagLibrary)
+        if (word.isEmpty || containsIgnoreCase(e.name, word)) e,
+    ];
   }
 
   /// 提交搜索。可选 [scope]：点击推荐卡片时切换到对应栏目后再搜索。
@@ -165,6 +210,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       setState(() {
         _keyword = keyword;
         _controller.text = keyword;
+        _tagSuggestions = _tagSuggestionsFor(keyword);
       });
       await _recompute();
     }
@@ -214,13 +260,15 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
   }
 
   /// 模板检索：
-  /// - 无高级筛选（价格/仅我拥有/用户标签）时，优先实时走后端搜索接口拿最新
+  /// - 无高级筛选（价格/仅我拥有/用户标签/比例）时，优先实时走后端搜索接口拿最新
   ///   后台运营模板（全站热度 2:1 由后端排序），再与本地内置/自定义合并；
-  /// - 命中后端不支持的筛选，或后端请求失败/离线时，回退本地 sqflite 全量检索。
+  /// - 命中后端不支持的筛选、`#` 标签模式（后端 q 不理解 # 前缀语义），
+  ///   或后端请求失败/离线时，回退本地 sqflite 全量检索。
   Future<List<SearchResult>> _buildTemplateResults() async {
     final allowed = await _allowedTemplateIds();
-    if (!TemplateRemoteSearchService.isBackendCapable(_filters)) {
-      // 后端不支持价格/仅我拥有/用户标签 → 纯本地全量检索
+    final tagMode = _keyword.trim().startsWith('#');
+    if (tagMode || !TemplateRemoteSearchService.isBackendCapable(_filters)) {
+      // 后端不支持价格/仅我拥有/用户标签/比例、# 标签模式 → 纯本地全量检索
       return _templateResultsFrom(_allTemplates, allowed: allowed);
     }
 
@@ -432,6 +480,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
         child: Column(
           children: [
             _buildSearchBar(tokens),
+            if (_tagSuggestions.isNotEmpty) _buildTagSuggestionPanel(tokens),
             _buildScopeBar(tokens),
             const Divider(height: 1, thickness: 0.5),
             Expanded(
@@ -499,6 +548,55 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// `#` 标签联想下拉：搜索栏下方候选列表（#标签 + 模板数量），
+  /// 点击候选 → 以 `#标签` 替换输入框并搜索。
+  Widget _buildTagSuggestionPanel(ThemeTokens tokens) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+      constraints: const BoxConstraints(maxHeight: 236),
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: tokens.divider),
+      ),
+      child: ListView.builder(
+        shrinkWrap: true,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        itemCount: _tagSuggestions.length,
+        itemBuilder: (_, i) {
+          final e = _tagSuggestions[i];
+          return InkWell(
+            onTap: () => _submitSearch('#${e.name}'),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              child: Row(
+                children: [
+                  Icon(Icons.tag, size: 14, color: tokens.brand),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '#${e.name}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: tokens.textPrimary,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${e.count} 个模板',
+                    style: TextStyle(fontSize: 11, color: tokens.textTertiary),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -925,6 +1023,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
                   result: r,
                   showTypeBadge: _scope == SearchScope.all,
                   onTap: () => _openResult(r),
+                  onTagTap: (tag) => _submitSearch(tag),
                 ),
               );
             },
@@ -949,6 +1048,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
             result: r,
             showTypeBadge: _scope == SearchScope.all,
             onTap: () => _openResult(r),
+            onTagTap: (tag) => _submitSearch(tag),
           ),
         );
       },
@@ -1049,6 +1149,13 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
           {RouteNames.paramAcademyId: r.knowledgeCard!.id}));
     }
   }
+}
+
+/// 标签联想候选（标签名 + 拥有该标签的模板数量）。
+class _TagSuggestion {
+  final String name;
+  final int count;
+  const _TagSuggestion(this.name, this.count);
 }
 
 /// 初始页数据快照。
