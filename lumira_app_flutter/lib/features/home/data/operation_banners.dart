@@ -34,8 +34,7 @@ class OperationUserInputs {
 }
 
 /// 首页运营 Banner 条目：指向真实功能，条件满足才参与 slot 0。
-/// 未来接入后台下发时，仅需把配置源从本地静态 swap 成远端拉取，
-/// 渲染层与埋点层无需改动。
+/// 远端下发（`operationBannerFromJson`）或本地静态目录皆可构造。
 class OperationBanner {
   const OperationBanner({
     required this.id,
@@ -44,6 +43,7 @@ class OperationBanner {
     required this.tag,
     required this.route,
     required this.condition,
+    this.imageUrl,
   });
 
   final String id;
@@ -58,6 +58,10 @@ class OperationBanner {
 
   /// 展示条件
   final OperationCondition condition;
+
+  /// 运营配图 URL（可空）：非空时 App 卡片右侧 40% 区域 contain 完整显示，
+  /// 为空回退品牌渐变背景（与旧行为兼容）
+  final String? imageUrl;
 }
 
 /// 运营条目目录（顺序即优先级，满足者最多取 1 条置于 slot 0）
@@ -113,6 +117,7 @@ const List<String> kOperationBannerRoutes = [
 ];
 
 /// 后端下发条目 → 运营位模型；字段缺失/route 越白名单/condition 无法识别 → null（丢弃）。
+/// imageUrl 可选：非 String 或空串视为无配图（回退品牌渐变背景）。
 OperationBanner? operationBannerFromJson(Map<String, dynamic> json) {
   final id = json['id'];
   final title = json['title'];
@@ -128,9 +133,11 @@ OperationBanner? operationBannerFromJson(Map<String, dynamic> json) {
     if (c.name == json['condition']) condition = c;
   }
   if (condition == null) return null;
+  final rawImage = json['imageUrl'];
+  final imageUrl = rawImage is String && rawImage.isNotEmpty ? rawImage : null;
   return OperationBanner(
     id: id, title: title, subtitle: subtitle, tag: tag,
-    route: route, condition: condition,
+    route: route, condition: condition, imageUrl: imageUrl,
   );
 }
 
@@ -151,7 +158,8 @@ OperationBanner? matchOperationBanner({
   return null;
 }
 
-/// 运营条目转首页 Banner 项（type=operation，无封面 → 品牌渐变背景）
+/// 运营条目转首页 Banner 项（type=operation）。配图经 [HomeBannerItem.cover]
+/// 传递：非空时卡片右侧 40% 区域 contain 完整显示，空时品牌渐变背景。
 HomeBannerItem operationBannerToItem(OperationBanner banner) {
   return HomeBannerItem(
     id: banner.id,
@@ -160,6 +168,7 @@ HomeBannerItem operationBannerToItem(OperationBanner banner) {
     imageSeed: 'banner-op-${banner.id}',
     tag: banner.tag,
     route: banner.route,
+    cover: banner.imageUrl,
     type: BannerType.operation,
     bannerId: banner.id,
   );
