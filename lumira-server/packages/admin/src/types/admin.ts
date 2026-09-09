@@ -347,3 +347,30 @@ export interface NotificationPayload {
   isActive?: boolean;
   sortOrder?: number;
 }
+
+// ===== 运营 Banner 管理 =====
+/** 后端 /admin/banners 返回的原始行（isActive 为 0/1、时间为秒级 INT） */
+export interface BannerAdminItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  tag: string;
+  route: string;
+  condition: string;
+  isActive: number;
+  sortOrder: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** 运营 Banner 新建/编辑 payload（id 仅新建时可传） */
+export interface BannerPayload {
+  id?: string;
+  title?: string;
+  subtitle?: string;
+  tag?: string;
+  route?: string;
+  condition?: string;
+  isActive?: boolean;
+  sortOrder?: number;
+}

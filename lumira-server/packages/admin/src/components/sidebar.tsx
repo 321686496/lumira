@@ -11,6 +11,7 @@ import { DeviceMobile } from '@phosphor-icons/react/dist/csr/DeviceMobile';
 import { ChatCircleText } from '@phosphor-icons/react/dist/csr/ChatCircleText';
 import { Camera } from '@phosphor-icons/react/dist/csr/Camera';
 import { Megaphone } from '@phosphor-icons/react/dist/csr/Megaphone';
+import { Images } from '@phosphor-icons/react/dist/csr/Images';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -22,6 +23,7 @@ const navItems = [
   { href: '/dashboard/questionnaire', label: '问卷数据', icon: ClipboardText },
   { href: '/dashboard/feedbacks', label: '反馈管理', icon: ChatCircleText },
   { href: '/dashboard/notifications', label: '通知公告', icon: Megaphone },
+  { href: '/dashboard/banners', label: 'Banner 运营', icon: Images },
   { href: '/dashboard/templates', label: '模板管理', icon: SquaresFour },
   { href: '/dashboard/categories', label: '分类管理', icon: GridFour },
   { href: '/dashboard/scenes', label: '场景管理', icon: Camera },
