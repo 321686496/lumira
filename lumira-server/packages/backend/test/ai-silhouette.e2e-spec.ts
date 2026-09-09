@@ -12,6 +12,7 @@ import multipart from '@fastify/multipart';
 import { resetTestDatabase } from './test-db';
 import { resolveModelPath } from '../src/modules/ai/silhouette.pipeline';
 import * as fs from 'fs';
+import sharp from 'sharp';
 
 describe('AiTemplatesController ai-generate-silhouette (e2e)', () => {
   let app: NestFastifyApplication;
@@ -76,12 +77,19 @@ describe('AiTemplatesController ai-generate-silhouette (e2e)', () => {
 
   if (modelExists) {
     it('POST /api/v1/admin/templates/ai-generate-silhouette — 合法请求返回 200 + base64 PNG', async () => {
+      // 本机已装模型时管线会真正执行（sharp 解码 + RMBG 推理），
+      // 必须附可解码的真实图片；fake bytes 仅适用于无模型的 503 分支。
+      const testImage = await sharp({
+        create: { width: 64, height: 64, channels: 3, background: { r: 120, g: 100, b: 90 } },
+      })
+        .jpeg()
+        .toBuffer();
       const res = await request(app.getHttpServer())
         .post('/api/v1/admin/templates/ai-generate-silhouette')
         .set('Authorization', `Bearer ${adminToken}`)
         .field('meta', '{"mode":"sketch","crop":true}')
-        .attach('image', Buffer.from('fake-jpeg-bytes'), 'a.jpg')
-        .expect(200);
+        .attach('image', testImage, 'a.jpg')
+        .expect(201);
 
       expect(res.body.mimeType).toBe('image/png');
       expect(typeof res.body.image).toBe('string');
