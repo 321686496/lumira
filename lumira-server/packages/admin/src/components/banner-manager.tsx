@@ -1,7 +1,7 @@
 // src/components/banner-manager.tsx
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,8 +22,12 @@ import { Plus } from '@phosphor-icons/react/dist/csr/Plus';
 import { PencilSimple } from '@phosphor-icons/react/dist/csr/PencilSimple';
 import { Trash } from '@phosphor-icons/react/dist/csr/Trash';
 import { ImageSquare } from '@phosphor-icons/react/dist/csr/ImageSquare';
+import { Upload } from '@phosphor-icons/react/dist/csr/Upload';
+import { X } from '@phosphor-icons/react/dist/csr/X';
+import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
 import { useToast } from '@/hooks/use-toast';
-import { saveBanner, removeBanner, setBannerActive } from '@/actions/banners';
+import { saveBanner, removeBanner, setBannerActive, uploadBannerImage } from '@/actions/banners';
+import { toAssetUrl } from '@/lib/asset-url';
 import type { BannerAdminItem, BannerPayload } from '@/types/admin';
 
 const ROUTE_OPTIONS = [
@@ -42,6 +46,10 @@ const CONDITION_OPTIONS = [
 
 const CONDITION_LABEL = Object.fromEntries(CONDITION_OPTIONS.map((c) => [c.value, c.label])) as Record<string, string>;
 
+/** Banner 配图上传限制（与后端 BANNER_IMAGE_MIME_EXT / MAX_BYTES 一致） */
+const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp';
+const IMAGE_MAX_BYTES = 2 * 1024 * 1024;
+
 interface FormState {
   id: string;
   title: string;
@@ -49,6 +57,7 @@ interface FormState {
   tag: string;
   route: string;
   condition: string;
+  imageUrl: string;
   sortOrder: number;
   isActive: boolean;
 }
@@ -60,6 +69,7 @@ const EMPTY_FORM: FormState = {
   tag: '',
   route: '/invite',
   condition: 'nonNewUserNotInvited',
+  imageUrl: '',
   sortOrder: 0,
   isActive: true,
 };
@@ -83,9 +93,27 @@ export function BannerManager({ banners }: { banners: BannerAdminItem[] }) {
   const [deleteTarget, setDeleteTarget] = useState<BannerAdminItem | null>(null);
   const [deletePending, startDeleteTransition] = useTransition();
 
+  // ===== 配图上传（选中即传，保存时 URL 随 payload 落库）=====
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [localObjectUrl, setLocalObjectUrl] = useState<string | null>(null);
+  const [uploadPending, startUploadTransition] = useTransition();
+
+  // 新选文件 → 生成本地预览 URL（上传/保存都成功前先看效果）
+  useEffect(() => {
+    if (imageFile) {
+      const url = URL.createObjectURL(imageFile);
+      setLocalObjectUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setLocalObjectUrl(null);
+    return undefined;
+  }, [imageFile]);
+
   const openCreate = () => {
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setImageFile(null);
     setError(null);
     setDialogOpen(true);
   };
@@ -99,11 +127,46 @@ export function BannerManager({ banners }: { banners: BannerAdminItem[] }) {
       tag: b.tag,
       route: b.route,
       condition: b.condition,
+      imageUrl: b.imageUrl || '',
       sortOrder: b.sortOrder,
       isActive: b.isActive === 1,
     });
+    setImageFile(null);
     setError(null);
     setDialogOpen(true);
+  };
+
+  /** 选择配图：本地校验 → 立即上传 → 成功后记录 URL（预览用本地 objectURL，无网络延迟） */
+  const handleImageSelect = (file: File | null) => {
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast({ variant: 'destructive', title: '格式不支持', description: '仅支持 jpg / png / webp 格式图片' });
+      return;
+    }
+    if (file.size > IMAGE_MAX_BYTES) {
+      toast({ variant: 'destructive', title: '文件过大', description: '图片不能超过 2MB' });
+      return;
+    }
+    const fd = new FormData();
+    fd.set('image', file);
+    startUploadTransition(async () => {
+      const result = await uploadBannerImage(fd);
+      if ('error' in result) {
+        toast({ variant: 'destructive', title: '上传失败', description: result.error });
+        setImageFile(null);
+        return;
+      }
+      setImageFile(file);
+      setForm((f) => ({ ...f, imageUrl: result.url }));
+      toast({ title: '配图已上传', description: '保存 Banner 后生效' });
+    });
+  };
+
+  /** 移除配图：清空已选/已传，保存时下发空串清除 */
+  const clearImage = () => {
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    setImageFile(null);
+    setForm((f) => ({ ...f, imageUrl: '' }));
   };
 
   const handleSubmit = () => {
@@ -135,6 +198,8 @@ export function BannerManager({ banners }: { banners: BannerAdminItem[] }) {
       tag: form.tag.trim(),
       route: form.route,
       condition: form.condition,
+      // 空串 = 清除配图；未改动时为后端原值，原样传回
+      imageUrl: form.imageUrl,
       sortOrder: Number(form.sortOrder) || 0,
       isActive: form.isActive,
     };
@@ -239,7 +304,17 @@ export function BannerManager({ banners }: { banners: BannerAdminItem[] }) {
                 <TableRow key={b.id}>
                   <TableCell>
                     <div className="flex items-center gap-2 min-w-0">
-                      <ImageSquare size={16} className="shrink-0 text-muted-foreground" />
+                      {b.imageUrl ? (
+                        <img
+                          src={toAssetUrl(b.imageUrl, '') ?? ''}
+                          alt=""
+                          className="h-9 w-14 shrink-0 rounded-md object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-9 w-14 shrink-0 items-center justify-center rounded-md bg-muted">
+                          <ImageSquare size={16} className="text-muted-foreground" />
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-foreground">{b.title}</p>
                         <code className="block max-w-[180px] truncate font-mono text-xs text-muted-foreground/70">
@@ -317,6 +392,14 @@ export function BannerManager({ banners }: { banners: BannerAdminItem[] }) {
             </DialogDescription>
           </DialogHeader>
 
+          {/* App 效果实时预览：7:3 卡片版式 + 配图 contain 完整显示 */}
+          <BannerCardPreview
+            imageUrl={localObjectUrl || toAssetUrl(form.imageUrl, '')}
+            tag={form.tag}
+            title={form.title}
+            subtitle={form.subtitle}
+          />
+
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
@@ -363,6 +446,47 @@ export function BannerManager({ banners }: { banners: BannerAdminItem[] }) {
                 rows={2}
                 maxLength={255}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label>配图（可选）</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={IMAGE_ACCEPT}
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    if (file) handleImageSelect(file);
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={uploadPending}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload size={14} className="mr-1" />
+                  {uploadPending ? '上传中…' : form.imageUrl ? '更换图片' : '上传图片'}
+                </Button>
+                {form.imageUrl && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={uploadPending}
+                    onClick={clearImage}
+                  >
+                    <X size={14} className="mr-1" /> 移除
+                  </Button>
+                )}
+                <span className="text-xs text-muted-foreground">jpg / png / webp，≤ 2MB</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                配图在 App 卡片右侧 40% 区域以 contain 方式完整显示（不裁切），两侧留白用同图模糊填充；不上传则展示品牌渐变背景。
+              </p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -461,6 +585,100 @@ export function BannerManager({ banners }: { banners: BannerAdminItem[] }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/**
+ * App 首页 Banner 卡片效果预览（1:1 复刻 App 版式）。
+ *
+ * - 卡片比例 7:3（App 端 350×150 逻辑像素），圆角 16
+ * - 无配图：品牌渐变背景 + 装饰圆（App 实际颜色随用户主题变化，此处用代表色）
+ * - 有配图：右侧 40% 区域 contain 完整显示（不裁切），底层同图 cover + 模糊填充留白
+ * - 文案：角标胶囊 + 主标题（单行截断）+ 副标题（两行截断），右侧箭头圆钮
+ */
+function BannerCardPreview({
+  imageUrl,
+  tag,
+  title,
+  subtitle,
+}: {
+  imageUrl: string | null;
+  tag: string;
+  title: string;
+  subtitle: string;
+}) {
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
+  const hasImage = Boolean(imageUrl);
+
+  return (
+    <div className="space-y-1.5">
+      <div
+        className="relative w-full select-none overflow-hidden rounded-2xl shadow-md"
+        style={{ aspectRatio: '7 / 3' }}
+      >
+        {/* 背景渐变（App 端为用户主题色板，此处为代表色） */}
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-700 via-indigo-500 to-violet-400" />
+
+        {/* 无配图时的装饰圆 */}
+        {!hasImage && (
+          <>
+            <div className="absolute -right-5 -top-5 h-[100px] w-[100px] rounded-full bg-white/8" />
+            <div className="absolute -bottom-7 -left-3 h-20 w-20 rounded-full bg-white/6" />
+          </>
+        )}
+
+        {/* 文案区（左侧 60%） */}
+        <div className="absolute inset-y-0 left-0 flex w-[60%] flex-col justify-center gap-1.5 px-5">
+          {tag && (
+            <span className="w-fit rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold leading-4 text-white">
+              {tag}
+            </span>
+          )}
+          <p className="truncate text-[17px] font-bold leading-tight text-white" title={title}>
+            {title || '主标题预览'}
+          </p>
+          <p className="line-clamp-2 text-[11px] leading-snug text-white/85" title={subtitle}>
+            {subtitle || '副标题说明文案预览'}
+          </p>
+        </div>
+
+        {/* 配图区（右侧 40%）：同图模糊填充 + contain 完整显示 */}
+        {hasImage && (
+          <div className="absolute inset-y-0 right-0 w-[40%] overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imageUrl ?? ''}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 h-full w-full scale-125 object-cover opacity-60 blur-xl"
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imageUrl ?? ''}
+              alt="Banner 配图预览"
+              className="absolute inset-0 h-full w-full object-contain"
+              onLoad={(e) => {
+                const img = e.currentTarget;
+                setNatural({ w: img.naturalWidth, h: img.naturalHeight });
+              }}
+            />
+          </div>
+        )}
+
+        {/* 右下角箭头圆钮 */}
+        <div className="absolute bottom-4 right-4 flex h-7 w-7 items-center justify-center rounded-full bg-white/20">
+          <ArrowRight size={14} className="text-white" weight="bold" />
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        {hasImage
+          ? natural
+            ? `原图 ${natural.w} × ${natural.h}（${(natural.w / natural.h).toFixed(2)}:1）· App 卡片 7:3 · 右侧 contain 完整显示不裁切`
+            : 'App 卡片 7:3 · 右侧 contain 完整显示不裁切'
+          : '未上传配图：App 端展示品牌渐变背景（实际颜色随用户主题变化）'}
+      </p>
     </div>
   );
 }
