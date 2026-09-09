@@ -15,6 +15,7 @@ import { MagnifyingGlass } from '@phosphor-icons/react/dist/csr/MagnifyingGlass'
 import { PencilSimple } from '@phosphor-icons/react/dist/csr/PencilSimple';
 import { Trash } from '@phosphor-icons/react/dist/csr/Trash';
 import { Plus } from '@phosphor-icons/react/dist/csr/Plus';
+import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
 import { formatUnixTime } from '@/lib/utils';
 import { toAssetUrl } from '@/lib/asset-url';
 import { useToast } from '@/hooks/use-toast';
@@ -167,6 +168,11 @@ export function TemplateCardGrid({
           <Button asChild>
             <Link href="/dashboard/templates/new">
               <Plus size={16} className="mr-1" /> 新建模板
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/dashboard/templates/ai-create">
+              <MagicWand size={16} className="mr-1" /> AI 创建
             </Link>
           </Button>
         </div>

@@ -13,6 +13,7 @@ import { Camera } from '@phosphor-icons/react/dist/csr/Camera';
 import { Megaphone } from '@phosphor-icons/react/dist/csr/Megaphone';
 import { Images } from '@phosphor-icons/react/dist/csr/Images';
 import { Brain } from '@phosphor-icons/react/dist/csr/Brain';
+import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -26,12 +27,23 @@ const navItems = [
   { href: '/dashboard/notifications', label: '通知公告', icon: Megaphone },
   { href: '/dashboard/banners', label: 'Banner 运营', icon: Images },
   { href: '/dashboard/templates', label: '模板管理', icon: SquaresFour },
+  { href: '/dashboard/templates/ai-create', label: 'AI 创建模板', icon: MagicWand },
   { href: '/dashboard/ai-config', label: 'AI 设置', icon: Brain },
   { href: '/dashboard/categories', label: '分类管理', icon: GridFour },
   { href: '/dashboard/scenes', label: '场景管理', icon: Camera },
 ];
 
 export function Sidebar({ activePath }: { activePath: string }) {
+  // 只高亮「最长前缀命中」的导航项，避免 /dashboard/templates/ai-create
+  // 同时点亮「模板管理」与「AI 创建模板」
+  const activeHref = navItems
+    .filter((item) =>
+      item.href === '/dashboard'
+        ? activePath === '/dashboard'
+        : activePath === item.href || activePath.startsWith(item.href + '/'),
+    )
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+
   return (
     <aside className="hidden md:flex flex-col w-56 bg-card border-r border-border">
       <div className="p-6">
@@ -40,9 +52,7 @@ export function Sidebar({ activePath }: { activePath: string }) {
       <nav className="flex-1 px-3 space-y-1">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const active = item.href === '/dashboard'
-            ? activePath === '/dashboard'
-            : activePath === item.href || activePath.startsWith(item.href + '/');
+          const active = item.href === activeHref;
           return (
             <Link
               key={item.href}
