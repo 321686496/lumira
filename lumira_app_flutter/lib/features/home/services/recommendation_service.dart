@@ -11,6 +11,7 @@ import '../../../features/profile/data/composition_kit_models.dart';
 import '../../templates/recommend/template_ranking.dart';
 import '../../onboarding/data/questionnaire_dao.dart';
 import '../data/home_mock_data.dart';
+import '../data/operation_banners.dart';
 
 /// Banner 推荐源类型
 enum BannerSource {
@@ -57,12 +58,11 @@ const int _kNewUserThreshold = 3;
 
 /// 首页 Banner 推荐服务
 ///
-/// 5 个固定槽位：
-/// 1. 新老用户分层（新用户引导 / 老用户由槽位 5 补位）
-/// 2. 基于最近拍摄分类的模板
-/// 3. 基于收藏场景/常用套件
-/// 4. 系统推荐模板
-/// 5. 探索新鲜感（用户少拍的类型）
+/// 4 个固定槽位：
+/// 0. 运营位（[OperationUserInputs] 条件满足则占，否则让位个性化补位）
+/// 1. 新用户引导/问卷（新用户前置判断）或最近常拍分类（老用户）
+/// 2. 基于收藏场景/常用套件
+/// 3. 探索新鲜感（用户少拍的类型）；老用户且 slot 0 无运营位时补一条
 class RecommendationService {
   RecommendationService({
     required GalleryDao galleryDao,
@@ -91,8 +91,13 @@ class RecommendationService {
   final UsageDao? _usageDao;
   final InterestDao? _interestDao;
 
-  /// 构建 5 条首页 Banner
-  Future<List<HomeBannerItem>> buildBanners() async {
+  /// 构建首页 Banner（4 槽位：运营位 + 个性化位）
+  ///
+  /// [operationInputs] 为运营位条件所需的用户状态快照（远端拉取，失败/离线
+  /// 传空 → 不出运营位，slot 0 由个性化补位）。
+  Future<List<HomeBannerItem>> buildBanners({
+    OperationUserInputs operationInputs = const OperationUserInputs(),
+  }) async {
     // 并行启动所有数据源查询（Future 创建即开始执行，await 顺序不影响并行性）
     final categoryCountsFuture = _galleryDao.countByCategory();
     final favoriteScenesFuture = _scenesDao.getFavorites();
@@ -121,9 +126,18 @@ class RecommendationService {
     final List<HomeBannerItem> banners = [];
     final Set<String> usedTemplateIds = {};
     final Set<String> usedSceneIds = {};
-    final Set<String> usedCategories = {}; // 用于 slot 5 去重
+    final Set<String> usedCategories = {};
 
-    // === 槽位 1：新老用户分层 ===
+    // === slot 0：运营位（条件满足则占，否则让位给个性化补位） ===
+    final operation = matchOperationBanner(
+      isNewUser: isNewUser,
+      inputs: operationInputs,
+    );
+    if (operation != null) {
+      banners.add(operationBannerToItem(operation));
+    }
+
+    // === slot 1：新用户引导/问卷（前置判断）或最近常拍分类 ===
     if (isNewUser) {
       // 优先读问卷偏好，推用户首选分类的推荐模板
       final questionnaire = await _questionnaireDao.getAnswers();
@@ -166,56 +180,63 @@ class RecommendationService {
       if (questionnaireBanner == null) {
         usedSceneIds.add('preset_cafe');
       }
-    }
-    // 老用户跳过槽位 1，由末尾的槽位 5 补位（多一条探索新鲜感）
-
-    // === 槽位 2：基于最近拍摄分类 ===
-    final topCategory = _pickTopCategory(categoryCounts);
-    TemplateRecord? slot2Tpl;
-    var slot2Tag = '为你精选'; // 冷启动 fallback 标签
-    if (topCategory != null) {
-      // 去重：排除已占用模板 + 最近用过模板，避免与槽位 1 撞同一模板
-      final tpls = await _templatesDao.getBuiltin(
-        category: topCategory,
-        isRecommended: true,
-      );
-      final candidates = _rankCandidates(
-        tpls,
+    } else {
+      // 老用户：基于最近拍摄分类
+      final topCategory = _pickTopCategory(categoryCounts);
+      TemplateRecord? slot1Tpl;
+      var slot1Tag = '为你精选'; // 冷启动 fallback 标签
+      if (topCategory != null) {
+        // 去重：排除已占用模板 + 最近用过模板
+        final tpls = await _templatesDao.getBuiltin(
+          category: topCategory,
+          isRecommended: true,
+        );
+        final candidates = _rankCandidates(
+          tpls,
+          usedTemplateIds,
+          recentlyUsed: recentlyUsed,
+        );
+        if (candidates.isNotEmpty) {
+          slot1Tpl = _pickBest(candidates, popularity, interestById);
+          slot1Tag = '常拍分类';
+          usedCategories.add(topCategory);
+        }
+      }
+      slot1Tpl ??= _pickUnusedSystemPick(
+        systemPicks,
         usedTemplateIds,
-        recentlyUsed: recentlyUsed,
+        popularity,
+        interestById,
+        recentlyUsed,
       );
-      if (candidates.isNotEmpty) {
-        slot2Tpl = _pickBest(candidates, popularity, interestById);
-        slot2Tag = '常拍分类';
-        usedCategories.add(topCategory);
+      if (slot1Tpl != null) {
+        usedTemplateIds.add(slot1Tpl.id);
+        final label = _categoryLabelMap[topCategory] ?? '推荐';
+        final hasCategory = topCategory != null;
+        // 文案钩子：有常拍分类时优先用模板 shortDesc 做情境化情绪标题
+        // （如「雷阵雨后的街头光影」），无 shortDesc 回退「继续拍X」
+        final title = hasCategory
+            ? (slot1Tpl.shortDesc.isNotEmpty
+                ? slot1Tpl.shortDesc
+                : '继续拍$label')
+            : slot1Tpl.name;
+        final subtitle =
+            hasCategory ? '你最近常拍$label，试试这套模板' : _bannerSubtitle(slot1Tpl);
+        banners.add(HomeBannerItem(
+          id: 'banner_recent_category',
+          bannerId: 'banner_recent_category:${slot1Tpl.id}',
+          title: title,
+          subtitle: subtitle,
+          imageSeed: 'banner-recent-${topCategory ?? slot1Tpl.id}',
+          tag: slot1Tag,
+          route: '/templates/detail?templateId=${slot1Tpl.id}',
+          cover: slot1Tpl.cover.isNotEmpty ? slot1Tpl.cover : null,
+          coverData: slot1Tpl.coverData,
+        ));
       }
     }
-    slot2Tpl ??= _pickUnusedSystemPick(
-      systemPicks,
-      usedTemplateIds,
-      popularity,
-      interestById,
-      recentlyUsed,
-    );
-    if (slot2Tpl != null) {
-      usedTemplateIds.add(slot2Tpl.id);
-      final label = _categoryLabelMap[topCategory] ?? '推荐';
-      final subtitle = topCategory != null
-          ? '你最近常拍$label，试试这套模板'
-          : _bannerSubtitle(slot2Tpl);
-      banners.add(HomeBannerItem(
-        id: 'banner_recent_category',
-        title: topCategory != null ? '继续拍$label' : slot2Tpl.name,
-        subtitle: subtitle,
-        imageSeed: 'banner-recent-${topCategory ?? slot2Tpl.id}',
-        tag: slot2Tag,
-        route: '/templates/detail?templateId=${slot2Tpl.id}',
-        cover: slot2Tpl.cover.isNotEmpty ? slot2Tpl.cover : null,
-        coverData: slot2Tpl.coverData,
-      ));
-    }
 
-    // === 槽位 3：基于收藏场景/常用套件 ===
+    // === slot 2：基于收藏场景/常用套件 ===
     final favScene = favoriteScenes.isNotEmpty ? favoriteScenes.first : null;
     // 内置场景的收藏行 name 可能为空（仅标记位），需 fallback
     final hasValidFav = favScene != null && favScene.name.isNotEmpty;
@@ -254,6 +275,7 @@ class RecommendationService {
         usedTemplateIds.add(tpl.id);
         banners.add(HomeBannerItem(
           id: 'banner_favorite_scene_fallback',
+          bannerId: 'banner_favorite_scene_fallback:${tpl.id}',
           title: tpl.name,
           subtitle: _bannerSubtitle(tpl),
           imageSeed: 'banner-pick-${tpl.id}',
@@ -265,23 +287,7 @@ class RecommendationService {
       }
     }
 
-    // === 槽位 4：系统推荐模板 ===
-    final slot4Tpl = _pickUnusedSystemPick(systemPicks, usedTemplateIds, popularity, interestById);
-    if (slot4Tpl != null) {
-      usedTemplateIds.add(slot4Tpl.id);
-      banners.add(HomeBannerItem(
-        id: 'banner_system_pick',
-        title: slot4Tpl.name,
-        subtitle: _bannerSubtitle(slot4Tpl),
-        imageSeed: 'banner-pick-${slot4Tpl.id}',
-        tag: '为你精选',
-        route: '/templates/detail?templateId=${slot4Tpl.id}',
-        cover: slot4Tpl.cover.isNotEmpty ? slot4Tpl.cover : null,
-        coverData: slot4Tpl.coverData,
-      ));
-    }
-
-    // === 槽位 5：探索新鲜感（用户少拍的类型） ===
+    // === slot 3：探索新鲜感（用户少拍的类型） ===
     await _buildExplorationBanner(
       banners: banners,
       categoryCounts: categoryCounts,
@@ -294,8 +300,8 @@ class RecommendationService {
       recentlyUsed: recentlyUsed,
     );
 
-    // === 老用户补位：再来一条探索 ===
-    if (!isNewUser) {
+    // === 老用户补位：slot 0 无运营条目时再补一条探索，维持总量 4 条 ===
+    if (operation == null && !isNewUser) {
       await _buildExplorationBanner(
         banners: banners,
         categoryCounts: categoryCounts,
@@ -309,8 +315,8 @@ class RecommendationService {
       );
     }
 
-    // 防御性截断：固定 5 条
-    return banners.take(5).toList();
+    // 防御性截断：固定 4 条
+    return banners.take(4).toList();
   }
 
   /// 模板类 Banner 副标题：优先用模板短描述，否则截断 description。
@@ -351,7 +357,9 @@ class RecommendationService {
         final label = _categoryLabelMap[explorationCat] ?? explorationCat;
         banners.add(HomeBannerItem(
           id: 'banner_exploration$idSuffix',
-          title: '试试$label',
+          bannerId: 'banner_exploration$idSuffix:${tpl.id}',
+          // 文案钩子：社会证明（基于分类热度/「最近都在拍」）
+          title: '大家都在拍$label',
           subtitle: _bannerSubtitle(tpl),
           imageSeed: 'banner-explore-$explorationCat$idSuffix',
           tag: '探索新鲜',
@@ -368,6 +376,7 @@ class RecommendationService {
         usedTemplateIds.add(tpl.id);
         banners.add(HomeBannerItem(
           id: 'banner_exploration$idSuffix',
+          bannerId: 'banner_exploration$idSuffix:${tpl.id}',
           title: tpl.name,
           subtitle: _bannerSubtitle(tpl),
           imageSeed: 'banner-pick-${tpl.id}$idSuffix',

@@ -10,16 +10,19 @@ import 'package:lumira_app_flutter/core/db/dao/growth_dao.dart';
 import 'package:lumira_app_flutter/core/db/dao/scenes_dao.dart';
 import 'package:lumira_app_flutter/core/db/dao/templates_dao.dart';
 import 'package:lumira_app_flutter/core/db/tables.dart';
+import 'package:lumira_app_flutter/features/home/data/home_mock_data.dart';
+import 'package:lumira_app_flutter/features/home/data/operation_banners.dart';
 import 'package:lumira_app_flutter/features/home/services/recommendation_service.dart';
 import 'package:lumira_app_flutter/features/onboarding/data/questionnaire_dao.dart';
 
 /// RecommendationService 单元测试
 ///
-/// 覆盖场景：
-/// 1. 新用户槽位 1（totalPhotos < 3 → 第一条为新用户引导）
-/// 2. 老用户槽位 5 重复（totalPhotos >= 3 → 2 条探索 banner）
-/// 3. 冷启动全 fallback（无 gallery / 无 favorites / 无 kits → 5 条均来自系统推荐）
-/// 4. 5 条 banner 去重（templateId 不重复）
+/// 覆盖场景（4 槽位语义）：
+/// 1. 新用户无运营位：引导 + 收藏位 fallback + 探索（3 条）
+/// 2. 老用户无运营位：常拍 + 收藏位 fallback + 2 条探索（4 条）
+/// 3. 运营位 slot 0：各条件命中/优先级/新用户不满足
+/// 4. 冷启动全 fallback / 去重 / 收藏场景 / 老用户判定自愈 / 字段完整性
+/// 5. 文案钩子：探索位社会证明、常拍位情绪化标题
 void main() {
   late Database db;
   late GalleryDao galleryDao;
@@ -58,8 +61,7 @@ void main() {
   tearDown(() async => db.close());
 
   group('RecommendationService.buildBanners', () {
-    test('新用户槽位 1：totalPhotos < 3 → 第一条为新用户引导', () async {
-      // Seed: 5 个不同分类的 recommended 模板（保证 fallback 充足）
+    test('新用户：引导占 slot 1，探索文案为社会证明（3 条）', () async {
       await _seedTemplate(db, id: 'tpl_p1', name: '人像基础', category: 'portrait', isRecommended: true, description: '适合新手的自然光人像模板');
       await _seedTemplate(db, id: 'tpl_p2', name: '人像进阶', category: 'portrait', isRecommended: true, description: '进阶质感人像模板');
       await _seedTemplate(db, id: 'tpl_l1', name: '风光基础', category: 'landscape', isRecommended: true, description: '风光摄影模板');
@@ -67,112 +69,103 @@ void main() {
       await _seedTemplate(db, id: 'tpl_s1', name: '街拍模板', category: 'street', isRecommended: true, description: '街拍模板');
       await _seedTemplate(db, id: 'tpl_n1', name: '夜景模板', category: 'night', isRecommended: true, description: '夜景模板');
 
-      // Seed: 2 gallery items (totalPhotos=2 < 3 → 新用户)
-      // 关联 scene 有 related_category='portrait'，使 countByCategory 返回 {'portrait': 2}
       await _seedScene(db, id: 'scene_p1', name: '咖啡馆', category: 'cafe', relatedCategory: 'portrait', isFavorite: false);
       await _seedGalleryItem(db, id: 'g1', sceneId: 'scene_p1', templateId: 'tpl_p1');
       await _seedGalleryItem(db, id: 'g2', sceneId: 'scene_p1', templateId: 'tpl_p1');
 
-      // 设置 user_progress.total_photos = 2
       await db.update(Tables.userProgress, {Tables.colTotalPhotos: 2},
           where: '${Tables.colId} = ?', whereArgs: [1]);
 
       final banners = await service.buildBanners();
 
-      // 应有 5 条 banner
-      expect(banners.length, 5);
+      // 4 槽位语义：新用户无运营位 → 引导 + 收藏位 fallback + 探索 = 3 条
+      expect(banners.length, 3);
 
-      // 槽位 1：新用户引导
-      expect(banners.first.id, 'banner_new_user_guide');
-      expect(banners.first.tag, '新手友好');
-      expect(banners.first.title, '新手友好场景');
-      expect(banners.first.subtitle, '从咖啡馆开始你的拍摄之旅');
-      expect(banners.first.route, '/capture/scene-detail?sceneId=preset_cafe');
+      // slot 1（新用户前置判断）：新用户引导
+      expect(banners[0].id, 'banner_new_user_guide');
+      expect(banners[0].tag, '新手友好');
+      expect(banners[0].title, '新手友好场景');
+      expect(banners[0].subtitle, '从咖啡馆开始你的拍摄之旅');
+      expect(banners[0].route, '/capture/scene-detail?sceneId=preset_cafe');
+      expect(banners[0].type, BannerType.recommend);
 
-      // 槽位 2：基于最近拍摄分类（portrait），但应排除"最近用过的模板" tpl_p1，
-      // 改推同分类里未用过的新模板 tpl_p2
-      expect(banners[1].id, 'banner_recent_category');
-      expect(banners[1].tag, '常拍分类');
-      expect(banners[1].title, '继续拍人像');
-      expect(banners[1].route, '/templates/detail?templateId=tpl_p2');
+      // slot 2：无收藏/套件 → 系统推荐 fallback；bannerId 带来源模板 id，
+      // 且排除最近用过的 tpl_p1（相册存在该模板照片）
+      expect(banners[1].id, 'banner_favorite_scene_fallback');
+      expect(banners[1].bannerId, startsWith('banner_favorite_scene_fallback:'));
+      expect(banners[1].bannerId, isNot(contains('tpl_p1')));
+
+      // slot 3：探索新鲜感，社会证明文案
+      expect(banners[2].id, 'banner_exploration');
+      expect(banners[2].title, '大家都在拍人像');
+      expect(banners[2].bannerId, startsWith('banner_exploration:'));
+
+      // 全部为个性化位
+      expect(banners.every((b) => b.type == BannerType.recommend), isTrue);
     });
 
-    test('老用户槽位 5 重复：totalPhotos >= 3 → 2 条探索 banner', () async {
-      // Seed: 5 个不同分类的 recommended 模板
+    test('老用户：无运营位 → 4 条，2 条探索补位', () async {
       await _seedTemplate(db, id: 'tpl_p1', name: '人像基础', category: 'portrait', isRecommended: true, description: '人像模板');
+      await _seedTemplate(db, id: 'tpl_p2', name: '人像进阶', category: 'portrait', isRecommended: true, description: '进阶质感人像模板');
       await _seedTemplate(db, id: 'tpl_l1', name: '风光基础', category: 'landscape', isRecommended: true, description: '风光模板');
       await _seedTemplate(db, id: 'tpl_f1', name: '美食模板', category: 'food', isRecommended: true, description: '美食模板');
       await _seedTemplate(db, id: 'tpl_s1', name: '街拍模板', category: 'street', isRecommended: true, description: '街拍模板');
       await _seedTemplate(db, id: 'tpl_n1', name: '夜景模板', category: 'night', isRecommended: true, description: '夜景模板');
 
-      // Seed: 5 gallery items 都在 portrait 类别（totalPhotos=5 → 老用户）
       await _seedScene(db, id: 'scene_p1', name: '咖啡馆', category: 'cafe', relatedCategory: 'portrait', isFavorite: false);
       for (var i = 0; i < 5; i++) {
         await _seedGalleryItem(db, id: 'g$i', sceneId: 'scene_p1', templateId: 'tpl_p1');
       }
-
-      // 设置 user_progress.total_photos = 5
       await db.update(Tables.userProgress, {Tables.colTotalPhotos: 5},
           where: '${Tables.colId} = ?', whereArgs: [1]);
 
       final banners = await service.buildBanners();
 
-      // 应有 5 条 banner
-      expect(banners.length, 5);
-
-      // 槽位 1 不应出现（老用户）
+      // 4 条；首槽不再是新手引导
+      expect(banners.length, 4);
       expect(banners.first.id, isNot('banner_new_user_guide'));
 
-      // 应有 2 条探索 banner（banner_exploration + banner_exploration_extra）
+      // slot 1：常拍分类（无 shortDesc → 功能型标题回退），排除最近用过的 tpl_p1
+      expect(banners[0].id, 'banner_recent_category');
+      expect(banners[0].tag, '常拍分类');
+      expect(banners[0].title, '继续拍人像');
+      expect(banners[0].bannerId, 'banner_recent_category:tpl_p2');
+      expect(banners[0].subtitle, '你最近常拍人像，试试这套模板');
+
+      // 老用户无运营位 → 补一条探索，共 2 条
       final explorationBanners =
           banners.where((b) => b.id.startsWith('banner_exploration')).toList();
-      expect(explorationBanners.length, 2,
-          reason: '老用户应通过槽位 5 补位得到 2 条探索 banner');
-
-      // 两条探索 banner 的 id 应不同
+      expect(explorationBanners.length, 2);
       expect(explorationBanners.first.id != explorationBanners.last.id, isTrue);
-      // 两条探索 banner 应使用不同的分类
-      expect(explorationBanners.first.title != explorationBanners.last.title,
-          isTrue,
-          reason: '两条探索 banner 应针对不同分类');
+      expect(explorationBanners.first.title != explorationBanners.last.title, isTrue);
     });
 
-    test('冷启动全 fallback：无 gallery / 无 favorites / 无 kits → 5 条均来自系统推荐', () async {
-      // Seed: 5 个 recommended 模板，不 seed 任何 gallery/favorites/kits
-      // total_photos = 0 → 新用户 → 槽位 1 为新用户引导
+    test('冷启动全 fallback：新用户无任何数据 → 引导 + 2 条系统推荐', () async {
       await _seedTemplate(db, id: 'tpl_p1', name: '人像基础', category: 'portrait', isRecommended: true, description: '适合新手的自然光人像模板');
       await _seedTemplate(db, id: 'tpl_l1', name: '风光基础', category: 'landscape', isRecommended: true, description: '风光摄影模板');
       await _seedTemplate(db, id: 'tpl_f1', name: '美食模板', category: 'food', isRecommended: true, description: '美食摄影模板');
       await _seedTemplate(db, id: 'tpl_s1', name: '街拍模板', category: 'street', isRecommended: true, description: '街拍模板');
       await _seedTemplate(db, id: 'tpl_n1', name: '夜景模板', category: 'night', isRecommended: true, description: '夜景模板');
 
-      // 不 seed gallery_items / scenes / composition_kits
-      // user_progress.total_photos 保持默认 0 → 新用户
-
       final banners = await service.buildBanners();
 
-      // 应有 5 条 banner
-      expect(banners.length, 5);
-
-      // 槽位 1：新用户引导（无 template）
+      // 新用户：引导 + 收藏位 fallback + 探索 = 3 条
+      expect(banners.length, 3);
       expect(banners.first.id, 'banner_new_user_guide');
       expect(banners.first.route, '/capture/scene-detail?sceneId=preset_cafe');
 
-      // 槽位 2-5：均应跳转到 /templates/detail?templateId=xxx
+      // 收藏位 fallback 与探索位均来自系统推荐模板
       final templateRoutes = banners
           .where((b) => b.route.startsWith('/templates/detail?templateId='))
           .toList();
-      expect(templateRoutes.length, 4,
-          reason: '槽位 2/3/4/5 均应 fallback 到系统推荐模板');
+      expect(templateRoutes.length, 2,
+          reason: '收藏位 fallback + 探索位均为系统推荐模板');
 
-      // 槽位 2 的 tag 应为 "为你精选"（无 topCategory fallback）
       expect(banners[1].tag, '为你精选');
-      expect(banners[2].tag, '为你精选');
-      expect(banners[3].tag, '为你精选');
+      expect(banners[2].tag, '探索新鲜');
     });
 
-    test('5 条 banner 去重：templateId 不重复', () async {
-      // Seed: 6 个不同分类的 recommended 模板（保证充足）
+    test('4 条 banner 去重：templateId 不重复', () async {
       await _seedTemplate(db, id: 'tpl_p1', name: '人像基础', category: 'portrait', isRecommended: true, description: '人像模板');
       await _seedTemplate(db, id: 'tpl_l1', name: '风光基础', category: 'landscape', isRecommended: true, description: '风光模板');
       await _seedTemplate(db, id: 'tpl_f1', name: '美食模板', category: 'food', isRecommended: true, description: '美食模板');
@@ -180,7 +173,6 @@ void main() {
       await _seedTemplate(db, id: 'tpl_n1', name: '夜景模板', category: 'night', isRecommended: true, description: '夜景模板');
       await _seedTemplate(db, id: 'tpl_m1', name: '微距模板', category: 'macro', isRecommended: true, description: '微距模板');
 
-      // Seed: 3 gallery items（totalPhotos=3 → 老用户，触发槽位 5 补位）
       await _seedScene(db, id: 'scene_p1', name: '咖啡馆', category: 'cafe', relatedCategory: 'portrait', isFavorite: false);
       for (var i = 0; i < 3; i++) {
         await _seedGalleryItem(db, id: 'g$i', sceneId: 'scene_p1', templateId: 'tpl_p1');
@@ -190,21 +182,15 @@ void main() {
 
       final banners = await service.buildBanners();
 
-      // 应有 5 条 banner
-      expect(banners.length, 5);
-
-      // 收集所有 banner 中的 templateId（从 route 提取）
+      // 老用户无运营位：4 条全部为模板类
+      expect(banners.length, 4);
       final templateIds = banners
           .where((b) => b.route.contains('templateId='))
           .map((b) => b.route.split('templateId=').last)
           .toList();
-
-      // 所有 templateId 应唯一
+      expect(templateIds.length, 4);
       expect(templateIds.toSet().length, templateIds.length,
-          reason: 'templateId 在 5 条 banner 中应全部唯一');
-
-      // 应至少有 4 个 template-based banner（老用户：槽位 2/3/4/5/5-extra）
-      expect(templateIds.length, greaterThanOrEqualTo(4));
+          reason: 'templateId 在 4 条 banner 中应全部唯一');
     });
 
     test('收藏场景：slot 3 使用 favorite scene 的名称与路由', () async {
@@ -228,7 +214,7 @@ void main() {
 
       final banners = await service.buildBanners();
 
-      expect(banners.length, 5);
+      expect(banners.length, 4);
 
       // 应存在 id='banner_favorite_scene' 的 banner
       final favBanner = banners.firstWhere((b) => b.id == 'banner_favorite_scene');
@@ -256,15 +242,14 @@ void main() {
 
       // 应被判定为老用户：首槽不再是新手友好场景
       expect(banners.first.id, isNot('banner_new_user_guide'));
-      // 5 条，且老用户有 2 条探索
-      expect(banners.length, 5);
+      // 4 条，且老用户无运营位时有 2 条探索
+      expect(banners.length, 4);
       final exploration =
           banners.where((b) => b.id.startsWith('banner_exploration')).toList();
       expect(exploration.length, 2);
     });
 
     test('HomeBannerItem 字段完整性：每条 banner 字段非空', () async {
-      // 最小数据集验证：所有 banner 必填字段都有值
       await _seedTemplate(db, id: 'tpl_p1', name: '人像基础', category: 'portrait', isRecommended: true, description: '人像模板');
       await _seedTemplate(db, id: 'tpl_l1', name: '风光基础', category: 'landscape', isRecommended: true, description: '风光模板');
       await _seedTemplate(db, id: 'tpl_f1', name: '美食模板', category: 'food', isRecommended: true, description: '美食模板');
@@ -273,7 +258,7 @@ void main() {
 
       final banners = await service.buildBanners();
 
-      expect(banners.length, 5);
+      expect(banners.length, 3);
       for (final b in banners) {
         expect(b.id, isNotEmpty, reason: 'id 不能为空');
         expect(b.title, isNotEmpty, reason: 'title 不能为空');
@@ -281,10 +266,141 @@ void main() {
         expect(b.imageSeed, isNotEmpty, reason: 'imageSeed 不能为空');
         expect(b.tag, isNotEmpty, reason: 'tag 不能为空');
         expect(b.route, isNotEmpty, reason: 'route 不能为空');
-        // route 应是合法的内部路由
         expect(b.route.startsWith('/'), isTrue,
             reason: 'route 应以 / 开头：${b.route}');
+        expect(b.trackingId, isNotEmpty, reason: 'trackingId 不能为空');
+        expect(b.type, BannerType.recommend);
       }
+    });
+
+    test('运营位 slot 0：老用户未绑定邀请 → 邀请运营位占位且不补探索', () async {
+      await _seedTemplate(db, id: 'tpl_p1', name: '人像基础', category: 'portrait', isRecommended: true, description: '人像模板');
+      await _seedTemplate(db, id: 'tpl_l1', name: '风光基础', category: 'landscape', isRecommended: true, description: '风光模板');
+      await _seedTemplate(db, id: 'tpl_f1', name: '美食模板', category: 'food', isRecommended: true, description: '美食模板');
+      await _seedTemplate(db, id: 'tpl_s1', name: '街拍模板', category: 'street', isRecommended: true, description: '街拍模板');
+      await _seedTemplate(db, id: 'tpl_n1', name: '夜景模板', category: 'night', isRecommended: true, description: '夜景模板');
+      await _seedScene(db, id: 'scene_p1', name: '咖啡馆', category: 'cafe', relatedCategory: 'portrait', isFavorite: false);
+      for (var i = 0; i < 5; i++) {
+        await _seedGalleryItem(db, id: 'g$i', sceneId: 'scene_p1', templateId: 'tpl_p1');
+      }
+      await db.update(Tables.userProgress, {Tables.colTotalPhotos: 5},
+          where: '${Tables.colId} = ?', whereArgs: [1]);
+
+      final banners = await service.buildBanners(
+        operationInputs: const OperationUserInputs(hasBoundInviter: false),
+      );
+
+      expect(banners.length, 4);
+      // slot 0：运营位
+      expect(banners.first.id, 'op_invite');
+      expect(banners.first.type, BannerType.operation);
+      expect(banners.first.bannerId, 'op_invite');
+      expect(banners.first.tag, '邀请有礼');
+      expect(banners.first.route, '/invite');
+      // slot 0 有运营位 → 老用户不补探索，仅 1 条
+      final exploration =
+          banners.where((b) => b.id.startsWith('banner_exploration')).toList();
+      expect(exploration.length, 1);
+      // 其余槽位仍是个性化
+      expect(banners[1].id, 'banner_recent_category');
+      expect(banners[2].id, 'banner_favorite_scene_fallback');
+    });
+
+    test('运营位 slot 0：已绑定邀请但有积分 → 积分运营位', () async {
+      await _seedTemplate(db, id: 'tpl_p1', name: '人像基础', category: 'portrait', isRecommended: true, description: '人像模板');
+      await _seedTemplate(db, id: 'tpl_l1', name: '风光基础', category: 'landscape', isRecommended: true, description: '风光模板');
+      await _seedScene(db, id: 'scene_p1', name: '咖啡馆', category: 'cafe', relatedCategory: 'portrait', isFavorite: false);
+      for (var i = 0; i < 5; i++) {
+        await _seedGalleryItem(db, id: 'g$i', sceneId: 'scene_p1', templateId: 'tpl_p1');
+      }
+      await db.update(Tables.userProgress, {Tables.colTotalPhotos: 5},
+          where: '${Tables.colId} = ?', whereArgs: [1]);
+
+      final banners = await service.buildBanners(
+        operationInputs: const OperationUserInputs(
+          hasBoundInviter: true,
+          pointsBalance: 30,
+        ),
+      );
+
+      expect(banners.first.id, 'op_points');
+      expect(banners.first.type, BannerType.operation);
+      expect(banners.first.route, '/points/wallet');
+    });
+
+    test('运营位 slot 0：存在未解锁付费模板 → 上新运营位', () async {
+      await _seedTemplate(db, id: 'tpl_p1', name: '人像基础', category: 'portrait', isRecommended: true, description: '人像模板');
+      await _seedTemplate(db, id: 'tpl_l1', name: '风光基础', category: 'landscape', isRecommended: true, description: '风光模板');
+      await _seedScene(db, id: 'scene_p1', name: '咖啡馆', category: 'cafe', relatedCategory: 'portrait', isFavorite: false);
+      for (var i = 0; i < 5; i++) {
+        await _seedGalleryItem(db, id: 'g$i', sceneId: 'scene_p1', templateId: 'tpl_p1');
+      }
+      await db.update(Tables.userProgress, {Tables.colTotalPhotos: 5},
+          where: '${Tables.colId} = ?', whereArgs: [1]);
+
+      final banners = await service.buildBanners(
+        operationInputs: const OperationUserInputs(hasLockedTemplate: true),
+      );
+
+      expect(banners.first.id, 'op_unlock');
+      expect(banners.first.route, '/templates/unlock');
+    });
+
+    test('运营位 slot 0：多条件满足 → 目录顺序优先（邀请）', () async {
+      await _seedTemplate(db, id: 'tpl_p1', name: '人像基础', category: 'portrait', isRecommended: true, description: '人像模板');
+      await _seedTemplate(db, id: 'tpl_l1', name: '风光基础', category: 'landscape', isRecommended: true, description: '风光模板');
+      await _seedScene(db, id: 'scene_p1', name: '咖啡馆', category: 'cafe', relatedCategory: 'portrait', isFavorite: false);
+      for (var i = 0; i < 5; i++) {
+        await _seedGalleryItem(db, id: 'g$i', sceneId: 'scene_p1', templateId: 'tpl_p1');
+      }
+      await db.update(Tables.userProgress, {Tables.colTotalPhotos: 5},
+          where: '${Tables.colId} = ?', whereArgs: [1]);
+
+      final banners = await service.buildBanners(
+        operationInputs: const OperationUserInputs(
+          hasBoundInviter: false,
+          pointsBalance: 30,
+          hasLockedTemplate: true,
+        ),
+      );
+
+      expect(banners.first.id, 'op_invite');
+    });
+
+    test('新用户不满足邀请条件（即使未绑定）→ slot 0 让位引导', () async {
+      await _seedTemplate(db, id: 'tpl_p1', name: '人像基础', category: 'portrait', isRecommended: true, description: '人像模板');
+      await _seedTemplate(db, id: 'tpl_l1', name: '风光基础', category: 'landscape', isRecommended: true, description: '风光模板');
+      await _seedScene(db, id: 'scene_p1', name: '咖啡馆', category: 'cafe', relatedCategory: 'portrait', isFavorite: false);
+      await _seedGalleryItem(db, id: 'g1', sceneId: 'scene_p1', templateId: 'tpl_p1');
+      await _seedGalleryItem(db, id: 'g2', sceneId: 'scene_p1', templateId: 'tpl_p1');
+      await db.update(Tables.userProgress, {Tables.colTotalPhotos: 2},
+          where: '${Tables.colId} = ?', whereArgs: [1]);
+
+      final banners = await service.buildBanners(
+        operationInputs: const OperationUserInputs(hasBoundInviter: false),
+      );
+
+      expect(banners.first.id, 'banner_new_user_guide');
+      expect(banners.first.type, BannerType.recommend);
+    });
+
+    test('文案钩子：常拍模板有 shortDesc 时标题用它', () async {
+      await _seedTemplate(db, id: 'tpl_p1', name: '人像基础', category: 'portrait', isRecommended: true, description: '人像模板');
+      await _seedTemplate(db, id: 'tpl_p2', name: '人像进阶', category: 'portrait', isRecommended: true, description: '进阶质感人像模板', shortDesc: '雷阵雨后的街头光影');
+      await _seedTemplate(db, id: 'tpl_l1', name: '风光基础', category: 'landscape', isRecommended: true, description: '风光模板');
+      await _seedScene(db, id: 'scene_p1', name: '咖啡馆', category: 'cafe', relatedCategory: 'portrait', isFavorite: false);
+      for (var i = 0; i < 5; i++) {
+        await _seedGalleryItem(db, id: 'g$i', sceneId: 'scene_p1', templateId: 'tpl_p1');
+      }
+      await db.update(Tables.userProgress, {Tables.colTotalPhotos: 5},
+          where: '${Tables.colId} = ?', whereArgs: [1]);
+
+      final banners = await service.buildBanners();
+
+      // slot 1：排除最近用过的 tpl_p1 → tpl_p2，标题用其 shortDesc（情绪价值）
+      expect(banners[0].id, 'banner_recent_category');
+      expect(banners[0].title, '雷阵雨后的街头光影');
+      expect(banners[0].subtitle, '你最近常拍人像，试试这套模板');
     });
   });
 }
@@ -409,6 +525,7 @@ Future<void> _seedTemplate(
   required String category,
   required bool isRecommended,
   required String description,
+  String shortDesc = '',
 }) async {
   final now = DateTime.now().millisecondsSinceEpoch;
   await db.insert(Tables.customTemplates, {
@@ -416,6 +533,7 @@ Future<void> _seedTemplate(
     Tables.colName: name,
     Tables.colCategory: category,
     Tables.colDescription: description,
+    Tables.colShortDesc: shortDesc,
     Tables.colIsBuiltin: 1,
     Tables.colIsRecommended: isRecommended ? 1 : 0,
     Tables.colCreatedAt: now,
