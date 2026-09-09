@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -291,11 +291,33 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+/** AI 向导注入（stamp 变化触发应用；各字段独立可选） */
+export interface TemplateFormAiInjection {
+  /** 每次注入递增；变化触发应用 */
+  stamp: number;
+  /** 草稿，走 applyTemplateJson 回填 */
+  json?: Record<string, unknown>;
+  /** 效果图列表 */
+  images?: File[];
+  /** true=替换 imageFiles；false=追加 */
+  replaceImages?: boolean;
+  /** 应用到当前姿势的剪影（AI 生成的透明底 PNG） */
+  silhouette?: File | null;
+  /** Step5 决策回填 */
+  isActive?: boolean;
+  /** true=应用后立即提交（全自动模式，isActive 需同时给 true） */
+  autoSubmit?: boolean;
+}
+
 interface TemplateFormProps {
   categories: TemplateCategory[];
   initial?: AdminTemplateDetail;
   templateId?: string;
   backendUrl?: string;
+  /** AI 向导注入（详见 TemplateFormAiInjection） */
+  aiInjection?: TemplateFormAiInjection | null;
+  /** 向导模式：底部提交区渲染「上架 / 保存为未上架」双按钮 */
+  wizardMode?: boolean;
 }
 
 export default function TemplateForm({
@@ -303,6 +325,8 @@ export default function TemplateForm({
   initial,
   templateId,
   backendUrl = 'http://localhost:3000',
+  aiInjection,
+  wizardMode = false,
 }: TemplateFormProps) {
   const { toast } = useToast();
   const [step, setStep] = useState(0);
@@ -539,6 +563,136 @@ export default function TemplateForm({
     defaultValues: buildDefaults(),
   });
 
+  /** 将 .pptpl / AI 草稿 JSON 回填到表单（从 handlePptplUpload 提取，供 AI 向导注入复用） */
+  const applyTemplateJson = (json: Record<string, unknown>) => {
+    const composition = (json.composition ?? {}) as Record<string, unknown>;
+    const camera = (json.camera ?? {}) as Record<string, unknown>;
+    const sceneGuide = (json.sceneGuide ?? {}) as Record<string, unknown>;
+    const postProcess = (json.postProcess ?? {}) as Record<string, unknown>;
+    const color = (postProcess.color ?? {}) as Record<string, unknown>;
+
+    // ===== 基本信息：兼容 Flutter 导出 `meta` 与模板包 `_meta` 两种键 =====
+    const meta = ((json.meta ?? json._meta) ?? {}) as Record<string, unknown>;
+    if (typeof meta.name === 'string' && meta.name) setValue('name', meta.name);
+    if (typeof meta.category === 'string' && meta.category) setValue('category', meta.category);
+    if (typeof meta.description === 'string') setValue('description', meta.description);
+    if (typeof meta.shortDesc === 'string') setValue('shortDesc', meta.shortDesc);
+    if (typeof meta.author === 'string' && meta.author) setValue('author', meta.author);
+    if (typeof meta.price === 'number') setValue('price', meta.price);
+    if (Array.isArray(meta.tags)) {
+      setValue('tags', (meta.tags as unknown[]).filter((t): t is string => typeof t === 'string').join(', '));
+    }
+    const ambience = (meta.ambience ?? {}) as Record<string, unknown>;
+    if (Array.isArray(ambience.seasons)) setValue('ambienceSeasons', ambience.seasons as string[]);
+    if (Array.isArray(ambience.weathers)) setValue('ambienceWeathers', ambience.weathers as string[]);
+    if (Array.isArray(ambience.timeTones)) setValue('ambienceTimeTones', ambience.timeTones as string[]);
+    const cls = (meta.classification ?? {}) as Record<string, unknown>;
+    if (typeof cls.majorStyle === 'string' && cls.majorStyle) setValue('classificationMajorStyle', cls.majorStyle as FormValues['classificationMajorStyle']);
+    if (typeof cls.style === 'string' && cls.style) setValue('classificationSubStyle', cls.style as FormValues['classificationSubStyle']);
+    if (typeof cls.method === 'string' && cls.method) setValue('classificationMethod', cls.method as FormValues['classificationMethod']);
+
+    if (composition.overlayType) setValue('overlayType', composition.overlayType as FormValues['overlayType']);
+    if (typeof composition.aspectRatio === 'string') setValue('aspectRatio', composition.aspectRatio);
+    if (typeof composition.opacity === 'number') setValue('opacity', composition.opacity);
+    if (typeof composition.gridType === 'string') setValue('gridType', composition.gridType);
+    if (typeof composition.description === 'string') setValue('compositionDescription', composition.description);
+    const sf = (composition.subjectFrame ?? {}) as Record<string, unknown>;
+    if (typeof sf.x === 'number') setValue('subjectFrameX', sf.x);
+    if (typeof sf.y === 'number') setValue('subjectFrameY', sf.y);
+    if (typeof sf.w === 'number') setValue('subjectFrameW', sf.w);
+    if (typeof sf.h === 'number') setValue('subjectFrameH', sf.h);
+
+    // ===== 姿势：主流 .pptpl 的 pose 为数组（多姿势），填充姿势编辑器；单对象兼容旧文件 =====
+    const rawPose = json.pose;
+    if (Array.isArray(rawPose)) {
+      const importedPoses: PoseFormData[] = (rawPose as Record<string, unknown>[])
+        .filter((p) => p && typeof p === 'object')
+        .map((p) => {
+          const silhouette = (p.silhouette ?? {}) as Record<string, unknown>;
+          const position = (p.position ?? {}) as Record<string, unknown>;
+          // 'none' 等非表单类型统一落到 builtin（空 key = 无剪影）
+          const sType = silhouette.type === 'image' || silhouette.type === 'svg' ? (silhouette.type as 'image' | 'svg') : 'builtin';
+          return {
+            name: typeof p.name === 'string' ? p.name : '',
+            description: typeof p.description === 'string' ? p.description : '',
+            cameraDirection: typeof p.cameraDirection === 'string' ? p.cameraDirection : '',
+            silhouetteType: sType,
+            silhouetteBuiltinKey: sType === 'builtin' ? ((silhouette.data as string) ?? '') : '',
+            silhouetteFile: null,
+            silhouetteUrl: sType === 'image' ? ((silhouette.url as string) ?? (silhouette.data as string) ?? '') || null : null,
+            positionX: num(position.x, 0.5),
+            positionY: num(position.y, 0.5),
+            scale: num(p.scale, 1.0),
+            rotation: num(p.rotation, 0),
+          };
+        });
+      if (importedPoses.length > 0) {
+        setPoses(importedPoses);
+        setPoseIndex(0);
+      }
+    } else if (rawPose && typeof rawPose === 'object') {
+      const pose = rawPose as Record<string, unknown>;
+      const silhouette = (pose.silhouette ?? {}) as Record<string, unknown>;
+      const position = (pose.position ?? {}) as Record<string, unknown>;
+      if (silhouette.type && (SILHOUETTE_TYPES as readonly string[]).includes(silhouette.type as string)) {
+        setValue('silhouetteType', silhouette.type as FormValues['silhouetteType']);
+      }
+      if (typeof silhouette.data === 'string') setValue('silhouetteBuiltinKey', silhouette.data);
+      if (typeof pose.description === 'string') setValue('poseDescription', pose.description);
+      if (typeof position.x === 'number') setValue('posePositionX', position.x);
+      if (typeof position.y === 'number') setValue('posePositionY', position.y);
+      if (typeof pose.scale === 'number') setValue('poseScale', pose.scale);
+      if (typeof pose.rotation === 'number') setValue('poseRotation', pose.rotation);
+    }
+
+    if (typeof camera.exposureCompensation === 'number') setValue('exposureCompensation', camera.exposureCompensation);
+    if (camera.isoMode && (ISO_MODES as readonly string[]).includes(camera.isoMode as string)) setValue('isoMode', camera.isoMode as FormValues['isoMode']);
+    if (typeof camera.iso === 'number') setValue('iso', camera.iso);
+    if (typeof camera.shutterSpeed === 'string') setValue('shutterSpeed', camera.shutterSpeed);
+    if (camera.whiteBalance && (WHITE_BALANCES as readonly string[]).includes(camera.whiteBalance as string)) setValue('whiteBalance', camera.whiteBalance as FormValues['whiteBalance']);
+    if (typeof camera.whiteBalanceK === 'number') setValue('whiteBalanceK', camera.whiteBalanceK);
+    if (camera.flashMode && (FLASH_MODES as readonly string[]).includes(camera.flashMode as string)) setValue('flashMode', camera.flashMode as FormValues['flashMode']);
+    if (camera.focusMode && (FOCUS_MODES as readonly string[]).includes(camera.focusMode as string)) setValue('focusMode', camera.focusMode as FormValues['focusMode']);
+    if (typeof camera.lensType === 'string') setValue('lensType', camera.lensType);
+    if (camera.lensSuggestion && (LENS_SUGGESTIONS as readonly string[]).includes(camera.lensSuggestion as string)) setValue('lensSuggestion', camera.lensSuggestion as FormValues['lensSuggestion']);
+
+    if (typeof sceneGuide.lightDirection === 'string') setValue('lightDirection', sceneGuide.lightDirection);
+    if (typeof sceneGuide.shootingDistance === 'string') setValue('shootingDistance', sceneGuide.shootingDistance);
+    if (typeof sceneGuide.background === 'string') setValue('background', sceneGuide.background);
+    if (Array.isArray(sceneGuide.props)) setValue('props', (sceneGuide.props as string[]).join(', '));
+    if (typeof sceneGuide.bestTime === 'string') setValue('bestTime', sceneGuide.bestTime);
+    if (Array.isArray(sceneGuide.tips)) setValue('tips', (sceneGuide.tips as string[]).join(', '));
+
+    if (typeof postProcess.cropRatio === 'string') {
+      setValue('cropRatio', postProcess.cropRatio);
+      // 导入模板的裁剪比例与构图比例不同 → 视为单独设置过，解锁联动
+      const importedAr =
+        typeof composition.aspectRatio === 'string' ? composition.aspectRatio : '3:4';
+      if (postProcess.cropRatio !== importedAr) setCropRatioLinked(false);
+    }
+    if (typeof color.brightness === 'number') setValue('colorBrightness', color.brightness);
+    if (typeof color.contrast === 'number') setValue('colorContrast', color.contrast);
+    if (typeof color.saturation === 'number') setValue('colorSaturation', color.saturation);
+    if (typeof color.temperature === 'number') setValue('colorTemperature', color.temperature);
+    if (typeof color.tint === 'number') setValue('colorTint', color.tint);
+    if (typeof color.highlights === 'number') setValue('colorHighlights', color.highlights);
+    if (typeof color.shadows === 'number') setValue('colorShadows', color.shadows);
+    if (typeof color.blackPoint === 'number') setValue('colorBlackPoint', color.blackPoint);
+    if (typeof color.clarity === 'number') setValue('colorClarity', color.clarity);
+    if (typeof color.vibrance === 'number') setValue('colorVibrance', color.vibrance);
+    if (typeof color.brilliance === 'number') setValue('colorBrilliance', color.brilliance);
+    if (typeof postProcess.smoothStrength === 'number') setValue('smoothStrength', postProcess.smoothStrength);
+    if (typeof postProcess.sharpen === 'number') setValue('sharpen', postProcess.sharpen);
+    if (typeof postProcess.vignette === 'number') setValue('vignette', postProcess.vignette);
+    if (typeof postProcess.grain === 'number') setValue('grain', postProcess.grain);
+    if (postProcess.lut && (LUTS as readonly string[]).includes(postProcess.lut as string)) setValue('lut', postProcess.lut as FormValues['lut']);
+    if (postProcess.systemFilter && (LUTS as readonly string[]).includes(postProcess.systemFilter as string)) setValue('systemFilter', postProcess.systemFilter as FormValues['systemFilter']);
+    const fl = (postProcess.fillLight ?? {}) as Record<string, unknown>;
+    if (typeof fl.enabled === 'boolean') setValue('fillLightEnabled', fl.enabled);
+    if (typeof fl.color === 'number') setValue('fillLightColor', `#${(fl.color & 0xFFFFFF).toString(16).padStart(6, '0').toUpperCase()}`);
+    if (typeof fl.intensity === 'number') setValue('fillLightIntensity', fl.intensity);
+  };
+
   const handlePptplUpload = async (file: File | null) => {
     if (!file) return;
     const MAX_PPTPL_BYTES = 25 * 1024 * 1024;
@@ -556,132 +710,7 @@ export default function TemplateForm({
       if (!json || typeof json !== 'object') {
         throw new Error('JSON 解析失败');
       }
-      const composition = (json.composition ?? {}) as Record<string, unknown>;
-      const camera = (json.camera ?? {}) as Record<string, unknown>;
-      const sceneGuide = (json.sceneGuide ?? {}) as Record<string, unknown>;
-      const postProcess = (json.postProcess ?? {}) as Record<string, unknown>;
-      const color = (postProcess.color ?? {}) as Record<string, unknown>;
-
-      // ===== 基本信息：兼容 Flutter 导出 `meta` 与模板包 `_meta` 两种键 =====
-      const meta = ((json.meta ?? json._meta) ?? {}) as Record<string, unknown>;
-      if (typeof meta.name === 'string' && meta.name) setValue('name', meta.name);
-      if (typeof meta.category === 'string' && meta.category) setValue('category', meta.category);
-      if (typeof meta.description === 'string') setValue('description', meta.description);
-      if (typeof meta.shortDesc === 'string') setValue('shortDesc', meta.shortDesc);
-      if (typeof meta.author === 'string' && meta.author) setValue('author', meta.author);
-      if (typeof meta.price === 'number') setValue('price', meta.price);
-      if (Array.isArray(meta.tags)) {
-        setValue('tags', (meta.tags as unknown[]).filter((t): t is string => typeof t === 'string').join(', '));
-      }
-      const ambience = (meta.ambience ?? {}) as Record<string, unknown>;
-      if (Array.isArray(ambience.seasons)) setValue('ambienceSeasons', ambience.seasons as string[]);
-      if (Array.isArray(ambience.weathers)) setValue('ambienceWeathers', ambience.weathers as string[]);
-      if (Array.isArray(ambience.timeTones)) setValue('ambienceTimeTones', ambience.timeTones as string[]);
-      const cls = (meta.classification ?? {}) as Record<string, unknown>;
-      if (typeof cls.majorStyle === 'string' && cls.majorStyle) setValue('classificationMajorStyle', cls.majorStyle as FormValues['classificationMajorStyle']);
-      if (typeof cls.style === 'string' && cls.style) setValue('classificationSubStyle', cls.style as FormValues['classificationSubStyle']);
-      if (typeof cls.method === 'string' && cls.method) setValue('classificationMethod', cls.method as FormValues['classificationMethod']);
-
-      if (composition.overlayType) setValue('overlayType', composition.overlayType as FormValues['overlayType']);
-      if (typeof composition.aspectRatio === 'string') setValue('aspectRatio', composition.aspectRatio);
-      if (typeof composition.opacity === 'number') setValue('opacity', composition.opacity);
-      if (typeof composition.gridType === 'string') setValue('gridType', composition.gridType);
-      if (typeof composition.description === 'string') setValue('compositionDescription', composition.description);
-      const sf = (composition.subjectFrame ?? {}) as Record<string, unknown>;
-      if (typeof sf.x === 'number') setValue('subjectFrameX', sf.x);
-      if (typeof sf.y === 'number') setValue('subjectFrameY', sf.y);
-      if (typeof sf.w === 'number') setValue('subjectFrameW', sf.w);
-      if (typeof sf.h === 'number') setValue('subjectFrameH', sf.h);
-
-      // ===== 姿势：主流 .pptpl 的 pose 为数组（多姿势），填充姿势编辑器；单对象兼容旧文件 =====
-      const rawPose = json.pose;
-      if (Array.isArray(rawPose)) {
-        const importedPoses: PoseFormData[] = (rawPose as Record<string, unknown>[])
-          .filter((p) => p && typeof p === 'object')
-          .map((p) => {
-            const silhouette = (p.silhouette ?? {}) as Record<string, unknown>;
-            const position = (p.position ?? {}) as Record<string, unknown>;
-            // 'none' 等非表单类型统一落到 builtin（空 key = 无剪影）
-            const sType = silhouette.type === 'image' || silhouette.type === 'svg' ? (silhouette.type as 'image' | 'svg') : 'builtin';
-            return {
-              name: typeof p.name === 'string' ? p.name : '',
-              description: typeof p.description === 'string' ? p.description : '',
-              cameraDirection: typeof p.cameraDirection === 'string' ? p.cameraDirection : '',
-              silhouetteType: sType,
-              silhouetteBuiltinKey: sType === 'builtin' ? ((silhouette.data as string) ?? '') : '',
-              silhouetteFile: null,
-              silhouetteUrl: sType === 'image' ? ((silhouette.url as string) ?? (silhouette.data as string) ?? '') || null : null,
-              positionX: num(position.x, 0.5),
-              positionY: num(position.y, 0.5),
-              scale: num(p.scale, 1.0),
-              rotation: num(p.rotation, 0),
-            };
-          });
-        if (importedPoses.length > 0) {
-          setPoses(importedPoses);
-          setPoseIndex(0);
-        }
-      } else if (rawPose && typeof rawPose === 'object') {
-        const pose = rawPose as Record<string, unknown>;
-        const silhouette = (pose.silhouette ?? {}) as Record<string, unknown>;
-        const position = (pose.position ?? {}) as Record<string, unknown>;
-        if (silhouette.type && (SILHOUETTE_TYPES as readonly string[]).includes(silhouette.type as string)) {
-          setValue('silhouetteType', silhouette.type as FormValues['silhouetteType']);
-        }
-        if (typeof silhouette.data === 'string') setValue('silhouetteBuiltinKey', silhouette.data);
-        if (typeof pose.description === 'string') setValue('poseDescription', pose.description);
-        if (typeof position.x === 'number') setValue('posePositionX', position.x);
-        if (typeof position.y === 'number') setValue('posePositionY', position.y);
-        if (typeof pose.scale === 'number') setValue('poseScale', pose.scale);
-        if (typeof pose.rotation === 'number') setValue('poseRotation', pose.rotation);
-      }
-
-      if (typeof camera.exposureCompensation === 'number') setValue('exposureCompensation', camera.exposureCompensation);
-      if (camera.isoMode && (ISO_MODES as readonly string[]).includes(camera.isoMode as string)) setValue('isoMode', camera.isoMode as FormValues['isoMode']);
-      if (typeof camera.iso === 'number') setValue('iso', camera.iso);
-      if (typeof camera.shutterSpeed === 'string') setValue('shutterSpeed', camera.shutterSpeed);
-      if (camera.whiteBalance && (WHITE_BALANCES as readonly string[]).includes(camera.whiteBalance as string)) setValue('whiteBalance', camera.whiteBalance as FormValues['whiteBalance']);
-      if (typeof camera.whiteBalanceK === 'number') setValue('whiteBalanceK', camera.whiteBalanceK);
-      if (camera.flashMode && (FLASH_MODES as readonly string[]).includes(camera.flashMode as string)) setValue('flashMode', camera.flashMode as FormValues['flashMode']);
-      if (camera.focusMode && (FOCUS_MODES as readonly string[]).includes(camera.focusMode as string)) setValue('focusMode', camera.focusMode as FormValues['focusMode']);
-      if (typeof camera.lensType === 'string') setValue('lensType', camera.lensType);
-      if (camera.lensSuggestion && (LENS_SUGGESTIONS as readonly string[]).includes(camera.lensSuggestion as string)) setValue('lensSuggestion', camera.lensSuggestion as FormValues['lensSuggestion']);
-
-      if (typeof sceneGuide.lightDirection === 'string') setValue('lightDirection', sceneGuide.lightDirection);
-      if (typeof sceneGuide.shootingDistance === 'string') setValue('shootingDistance', sceneGuide.shootingDistance);
-      if (typeof sceneGuide.background === 'string') setValue('background', sceneGuide.background);
-      if (Array.isArray(sceneGuide.props)) setValue('props', (sceneGuide.props as string[]).join(', '));
-      if (typeof sceneGuide.bestTime === 'string') setValue('bestTime', sceneGuide.bestTime);
-      if (Array.isArray(sceneGuide.tips)) setValue('tips', (sceneGuide.tips as string[]).join(', '));
-
-      if (typeof postProcess.cropRatio === 'string') {
-        setValue('cropRatio', postProcess.cropRatio);
-        // 导入模板的裁剪比例与构图比例不同 → 视为单独设置过，解锁联动
-        const importedAr =
-          typeof composition.aspectRatio === 'string' ? composition.aspectRatio : '3:4';
-        if (postProcess.cropRatio !== importedAr) setCropRatioLinked(false);
-      }
-      if (typeof color.brightness === 'number') setValue('colorBrightness', color.brightness);
-      if (typeof color.contrast === 'number') setValue('colorContrast', color.contrast);
-      if (typeof color.saturation === 'number') setValue('colorSaturation', color.saturation);
-      if (typeof color.temperature === 'number') setValue('colorTemperature', color.temperature);
-      if (typeof color.tint === 'number') setValue('colorTint', color.tint);
-      if (typeof color.highlights === 'number') setValue('colorHighlights', color.highlights);
-      if (typeof color.shadows === 'number') setValue('colorShadows', color.shadows);
-      if (typeof color.blackPoint === 'number') setValue('colorBlackPoint', color.blackPoint);
-      if (typeof color.clarity === 'number') setValue('colorClarity', color.clarity);
-      if (typeof color.vibrance === 'number') setValue('colorVibrance', color.vibrance);
-      if (typeof color.brilliance === 'number') setValue('colorBrilliance', color.brilliance);
-      if (typeof postProcess.smoothStrength === 'number') setValue('smoothStrength', postProcess.smoothStrength);
-      if (typeof postProcess.sharpen === 'number') setValue('sharpen', postProcess.sharpen);
-      if (typeof postProcess.vignette === 'number') setValue('vignette', postProcess.vignette);
-      if (typeof postProcess.grain === 'number') setValue('grain', postProcess.grain);
-      if (postProcess.lut && (LUTS as readonly string[]).includes(postProcess.lut as string)) setValue('lut', postProcess.lut as FormValues['lut']);
-      if (postProcess.systemFilter && (LUTS as readonly string[]).includes(postProcess.systemFilter as string)) setValue('systemFilter', postProcess.systemFilter as FormValues['systemFilter']);
-      const fl = (postProcess.fillLight ?? {}) as Record<string, unknown>;
-      if (typeof fl.enabled === 'boolean') setValue('fillLightEnabled', fl.enabled);
-      if (typeof fl.color === 'number') setValue('fillLightColor', `#${(fl.color & 0xFFFFFF).toString(16).padStart(6, '0').toUpperCase()}`);
-      if (typeof fl.intensity === 'number') setValue('fillLightIntensity', fl.intensity);
+      applyTemplateJson(json);
 
       setPptplFile(file);
       toast({
@@ -932,6 +961,40 @@ export default function TemplateForm({
       }
     });
   };
+
+  /** 向导/全自动提交入口：设定 isActive 后走现有校验提交流程 */
+  const doSubmit = (active: boolean) => {
+    setValue('isActive', active);
+    handleSubmit(onSubmit)();
+  };
+  const submitRef = React.useRef<() => void>(() => {});
+  submitRef.current = () => doSubmit(true);
+
+  /** AI 向导注入：stamp 变化时应用草稿/效果图/剪影/isActive，可选自动提交 */
+  useEffect(() => {
+    if (!aiInjection || !aiInjection.stamp) return;
+    if (aiInjection.json) applyTemplateJson(aiInjection.json);
+    if (aiInjection.images && aiInjection.images.length > 0) {
+      if (aiInjection.replaceImages) {
+        setImageFiles(aiInjection.images);
+        setImagePreviews(aiInjection.images.map((f) => URL.createObjectURL(f)));
+      } else {
+        setImageFiles((prev) => [...prev, ...aiInjection.images!]);
+        setImagePreviews((prev) => [...prev, ...aiInjection.images!.map((f) => URL.createObjectURL(f))]);
+      }
+    }
+    if (aiInjection.silhouette) {
+      const file = aiInjection.silhouette;
+      // 同次注入含草稿时姿势数组已重置（poseIndex=0）；否则应用到当前选中姿势
+      const targetIndex = aiInjection.json ? 0 : poseIndex;
+      setPoses((prev) => prev.map((p, i) => i === targetIndex
+        ? { ...p, silhouetteType: 'image' as const, silhouetteFile: file, silhouetteUrl: URL.createObjectURL(file) }
+        : p));
+    }
+    if (typeof aiInjection.isActive === 'boolean') setValue('isActive', aiInjection.isActive);
+    if (aiInjection.autoSubmit) submitRef.current?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiInjection?.stamp]);
 
   const next = async () => {
     const stepFields: (keyof FormValues)[][] = [
@@ -1978,6 +2041,15 @@ export default function TemplateForm({
               <Button type="button" onClick={next} disabled={isPending}>
                 下一步 <ArrowRight size={14} className="ml-1" />
               </Button>
+            ) : wizardMode ? (
+              <>
+                <Button type="button" disabled={isPending} onClick={() => doSubmit(true)}>
+                  {isPending ? '提交中…' : '上架'}
+                </Button>
+                <Button type="button" variant="outline" disabled={isPending} onClick={() => doSubmit(false)}>
+                  保存为未上架
+                </Button>
+              </>
             ) : (
               <Button type="submit" disabled={isPending}>
                 {isPending ? '提交中…' : isEdit ? '保存修改' : '创建模板'}
