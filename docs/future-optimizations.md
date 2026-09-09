@@ -436,13 +436,14 @@
 - **优化点**：运营位当前为 App 端静态配置（`lumira_app_flutter/lib/features/home/data/operation_banners.dart`），条目/文案/条件改版需发版。后续建后端运营位下发系统与后台管理页。
 - **背景/动机**：设计文档《首页 Banner 运营化重构》将此列为非目标、留待单独立项；当前静态配置已与 `BannerType` / 运营条目模型（`OperationBanner`/`OperationCondition`）对齐，未来接入远端下发仅需把配置源从本地静态 swap 成远端拉取，渲染层与埋点层无需改动。
 - **目标状态**：后端提供运营位配置 CRUD + 下发接口；App 启动/进首页拉取运营条目（离线缓存兜底静态配置）；后台管理页可视化编辑条目/条件/文案。
-- **状态**：⏳ 待优化
+- **状态**：✅ 已实现（2026-09-09）
+- **实现说明**：后端 `operation_banners` 表 + `GET /api/v1/banners`（App 下发，60s Redis 缓存）+ `/api/v1/admin/banners` CRUD（route/condition 白名单校验）；后台「Banner 运营」管理页（`/dashboard/banners`）可视化编辑条目/条件/文案/启停/排序；App 端三级兜底（远端拉取成功写 `user_settings.operation_banners_cache` 离线缓存 → 断网读缓存 → 首装断网回退静态 `kOperationBanners`），空列表为合法下发状态（后台全部停用），非法 route/condition 整条丢弃（fail-safe）。
 
 ### P2 · 运营位 A/B 实验 / 时段定向 / 人群定向投放引擎
 
 - **模块**：首页 Banner（后端）
 - **优化点**：当前运营位仅按单一用户状态条件取目录中第一条满足的条目，无实验分流与定向投放能力。
-- **背景/动机**：设计文档非目标项；依赖运营位下发系统先落地。曝光/点击埋点（`item_type='banner'`，`event_type='expose'/'click'`）已可按 `item_id` 聚合出单槽位点击率，为后续实验提供数据基础。
+- **背景/动机**：设计文档非目标项；依赖运营位下发系统先落地（P1 已实现）。曝光/点击埋点（`item_type='banner'`，`event_type='expose'/'click'`）已可按 `item_id` 聚合出单槽位点击率，为后续实验提供数据基础。
 - **目标状态**：支持按设备分桶做 A/B 文案实验、按时段/人群定向投放，基于埋点闭环迭代。
 - **状态**：⏳ 待优化
 
