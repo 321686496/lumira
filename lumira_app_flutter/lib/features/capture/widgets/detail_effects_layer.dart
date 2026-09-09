@@ -103,12 +103,14 @@ Future<ui.FragmentProgram?>? _programFuture;
 
 Future<ui.FragmentProgram?> _loadDetailProgram() =>
     _programFuture ??= loadFragmentProgramFromCandidates(
-      Platform.operatingSystem == 'ohos'
-          ? const [
-              'assets/shaders/edit_detail_effects.frag',
-              'shaders/edit_detail_effects.frag',
-            ]
-          : const ['shaders/edit_detail_effects.frag'],
+      // 首选带 assets/ 前缀的 asset key：pubspec.yaml shaders 段声明的路径
+      // 原样保留为编译产物的 asset key（AssetManifest 中为
+      // assets/shaders/edit_detail_effects.frag，iOS/Android/OHOS 一致）。
+      // 无前缀路径仅作工具链行为变化时的兜底。
+      const [
+        'assets/shaders/edit_detail_effects.frag',
+        'shaders/edit_detail_effects.frag',
+      ],
     );
 
 /// 编辑页细节效果实时预览层：单 pass fragment shader 完成
