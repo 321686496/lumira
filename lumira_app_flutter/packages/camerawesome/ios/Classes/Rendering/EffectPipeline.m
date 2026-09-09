@@ -32,10 +32,10 @@
     CIFilter *_addMode;          // CIAddBlendMode
     CIFilter *_subtractMode;     // CISubtractBlendMode
     // 锐化
-    CIFilter *_sharpen;          // CISharpenLuminance
+    CIFilter *_sharpenFilter;    // CISharpenLuminance
     // 颗粒
     CIFilter *_randomGen;        // CIRandomGenerator
-    CIFilter *_vignette;         // CIVignette
+    CIFilter *_vignetteFilter;   // CIVignette
     BOOL _initialized;
     NSLock *_lock;
 }
@@ -150,9 +150,9 @@
     _maskBlend = [CIFilter filterWithName:@"CIBlendWithMask"];
     _addMode = [CIFilter filterWithName:@"CIAddBlendMode"];
     _subtractMode = [CIFilter filterWithName:@"CISubtractBlendMode"];
-    _sharpen = [CIFilter filterWithName:@"CISharpenLuminance"];
+    _sharpenFilter = [CIFilter filterWithName:@"CISharpenLuminance"];
     _randomGen = [CIFilter filterWithName:@"CIRandomGenerator"];
-    _vignette = [CIFilter filterWithName:@"CIVignette"];
+    _vignetteFilter = [CIFilter filterWithName:@"CIVignette"];
     _initialized = YES;
     [_lock unlock];
     return YES;
@@ -239,9 +239,9 @@
         // 4. 锐化
         if (sharpen > 0) {
             double intensity = 0.2 + sharpen / 100.0 * 1.3;
-            [_sharpen setValue:image forKey:kCIInputImageKey];
-            [_sharpen setValue:@(intensity) forKey:kCIInputSharpnessKey];
-            image = _sharpen.outputImage;
+            [_sharpenFilter setValue:image forKey:kCIInputImageKey];
+            [_sharpenFilter setValue:@(intensity) forKey:kCIInputSharpnessKey];
+            image = _sharpenFilter.outputImage;
         }
 
         // 5. 颗粒（胶片噪点）
@@ -264,12 +264,12 @@
         if (vignette > 0) {
             double strength = vignette / 100.0 * 0.6;
             CIImage *bounded = [image imageByClampingToExtent];
-            [_vignette setValue:bounded forKey:kCIInputImageKey];
-            [_vignette setValue:[CIVector vectorWithX:w / 2.0 Y:h / 2.0]
+            [_vignetteFilter setValue:bounded forKey:kCIInputImageKey];
+            [_vignetteFilter setValue:[CIVector vectorWithX:w / 2.0 Y:h / 2.0]
                          forKey:@"inputCenter"];
-            [_vignette setValue:@(strength) forKey:@"inputIntensity"];
-            [_vignette setValue:@(w * 0.7) forKey:@"inputRadius"];
-            image = [_vignette.outputImage
+            [_vignetteFilter setValue:@(strength) forKey:@"inputIntensity"];
+            [_vignetteFilter setValue:@(w * 0.7) forKey:@"inputRadius"];
+            image = [_vignetteFilter.outputImage
                 imageByCroppingToRect:CGRectMake(0, 0, w, h)];
         }
 
