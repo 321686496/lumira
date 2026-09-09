@@ -1,11 +1,18 @@
 # =============================================================================
 # Base — install all dependencies (pnpm workspace, hoisted node-linker)
 # =============================================================================
-FROM node:20-alpine AS base
+# 基础镜像用 Debian slim（不能用 alpine）：onnxruntime-node / sharp 的官方
+# 预编译原生模块面向 glibc，Alpine/musl 下无法加载（AI 剪影管线依赖）。
+FROM node:20-slim AS base
 
-# 切换为阿里云 Alpine 镜像源（解决国内服务器无法访问 dl-cdn.alpinelinux.org 的问题）
-RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories \
-    && apk add --no-cache libc6-compat
+# 切换为阿里云 Debian 镜像源（解决国内服务器无法访问 deb.debian.org 的问题）
+# node:20-slim (bookworm) 使用 deb822 格式的 debian.sources；|| true 兼容旧格式。
+# libstdc++6：onnxruntime-node / sharp 原生模块运行时依赖。
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources || true \
+    && sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list || true \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
 
 # 配置 pnpm 使用淘宝 npm 镜像加速（国内服务器拉取 npm 包更快）
 RUN npm install -g pnpm@9 \
@@ -34,6 +41,11 @@ FROM base AS builder
 COPY packages/shared/ packages/shared/
 COPY packages/backend/ packages/backend/
 
+# RMBG-1.4 剪影模型（~44MB，AI 剪影管线用）：脚本内部优先 hf-mirror、
+# 失败回退 huggingface.co；本地已有完整模型时幂等跳过（.onnx 已 gitignore，
+# CI/服务器 checkout 后由本步骤下载）。
+RUN node packages/backend/scripts/fetch-rmbg-model.mjs
+
 RUN pnpm --filter @lumira/shared build
 RUN pnpm --filter @lumira/backend build
 
@@ -47,7 +59,7 @@ RUN pnpm install --prod --frozen-lockfile
 # =============================================================================
 # Runner — minimal production image
 # =============================================================================
-FROM node:20-alpine AS runner
+FROM node:20-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
@@ -61,6 +73,10 @@ COPY --from=builder /app/packages/shared/package.json packages/shared/
 COPY --from=builder /app/packages/backend/dist/ packages/backend/dist/
 COPY --from=builder /app/packages/backend/public/ packages/backend/public/
 COPY --from=builder /app/packages/shared/dist/ packages/shared/dist/
+
+# 剪影模型资产（silhouette.pipeline.ts 的 resolveModelPath：
+# dist/modules/ai → 上溯 3 级 = packages/backend/assets/models）
+COPY --from=builder /app/packages/backend/assets/models/ packages/backend/assets/models/
 
 EXPOSE 3000
 CMD ["node", "packages/backend/dist/main.js"]
