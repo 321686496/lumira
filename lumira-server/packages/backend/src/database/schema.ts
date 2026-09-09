@@ -1,4 +1,4 @@
-﻿// lumira-server/packages/backend/src/database/schema.ts
+// lumira-server/packages/backend/src/database/schema.ts
 
 import { sql } from 'drizzle-orm';
 import { mysqlTable, text, int, bigint, longtext, uniqueIndex, varchar, index } from 'drizzle-orm/mysql-core';
@@ -307,6 +307,21 @@ export const notifications = mysqlTable('notifications', {
   targetCriteriaJson: text('target_criteria_json').notNull().default('{}'),
   startAt: int('start_at'),
   endAt: int('end_at'),
+  isActive: int('is_active').notNull().default(1),
+  sortOrder: int('sort_order').notNull().default(0),
+  createdAt: int('created_at').notNull(),
+  updatedAt: int('updated_at').notNull(),
+});
+
+// ===== 首页运营 Banner（后台下发，2026-09-09 运营位管理）=====
+// condition 为 MySQL 保留字：原生 SQL 需反引号，服务层只用 Drizzle builder（自动转义）
+export const operationBanners = mysqlTable('operation_banners', {
+  id: varchar('id', { length: 64 }).primaryKey(),
+  title: varchar('title', { length: 128 }).notNull(),
+  subtitle: varchar('subtitle', { length: 255 }).notNull(),
+  tag: varchar('tag', { length: 32 }).notNull(),
+  route: varchar('route', { length: 128 }).notNull(),
+  condition: varchar('condition', { length: 64 }).notNull(),
   isActive: int('is_active').notNull().default(1),
   sortOrder: int('sort_order').notNull().default(0),
   createdAt: int('created_at').notNull(),
