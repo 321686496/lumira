@@ -10,10 +10,11 @@ import { AiConfigService } from './ai-config.service';
 import { AiTemplatesController } from './ai-templates.controller';
 import { AiAnalyzeService } from './ai-analyze.service';
 import { AiGenerateImageService } from './ai-generate-image.service';
+import { AiSilhouetteService } from './ai-generate-silhouette.service';
 
 @Module({
   imports: [DatabaseModule],
   controllers: [AiConfigController, AiTemplatesController],
-  providers: [AiConfigService, AiAnalyzeService, AiGenerateImageService],
+  providers: [AiConfigService, AiAnalyzeService, AiGenerateImageService, AiSilhouetteService],
 })
 export class AiModule {}
