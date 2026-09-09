@@ -151,6 +151,17 @@ class _PosterSheetState extends State<_PosterSheet> {
   bool _sharing = false;
 
   late final GlobalKey _posterKey;
+
+  /// 样式选择模式：各页海报本体（设计尺寸 300~380 逻辑宽）的捕获键。
+  ///
+  /// 按页独立持有（而非单键）：PageView 翻页动画期间相邻两页同时挂在树上，
+  /// 共用 GlobalKey 会触发 Duplicate GlobalKey 截断子树。key 挂在 FittedBox
+  /// 内部海报 widget 上，boundary 尺寸恒为设计尺寸，与显示缩放无关。
+  final Map<int, GlobalKey> _styleContentKeys = {};
+
+  /// 普通海报（调用方未传 [_PosterSheet.plainContentKey]）的内容级捕获键。
+  final GlobalKey _plainFallbackKey = GlobalKey();
+
   late String _selectedStyleId;
 
   /// 主效果卡片翻页控制器（左右滑动切换版式）。
@@ -209,14 +220,21 @@ class _PosterSheetState extends State<_PosterSheet> {
   static const double kPosterExportWidth = 1080;
 
   Future<ui.Image?> _captureImage() async {
-    // 普通海报 + 显式提供 plainContentKey 时，捕获严格卡片级边界
-    // （保持内容自身设计尺寸、无外层容器背景填充）；否则沿用整页预览边界。
-    final GlobalKey targetKey;
-    if (widget.stylePicker == null && widget.plainContentKey != null) {
-      targetKey = widget.plainContentKey!;
+    // 一律「内容级」捕获：直接捕获海报本体（样式选择模式取设计尺寸的
+    // 海报 widget；普通模式取 content 自身），而非外层预览容器。这样：
+    // 1. FittedBox/预览区的显示缩放不影响导出分辨率；
+    // 2. 导出图不含预览容器背景与边距。
+    final GlobalKey? targetKey;
+    if (widget.stylePicker != null) {
+      // 当前选中样式对应页的 key（onPageChanged 已同步选中态）。
+      final idx = _styles.indexWhere((s) => s.id == _selectedStyleId);
+      targetKey = idx >= 0 ? _styleContentKeys[idx] : null;
+    } else if (widget.plainContentKey != null) {
+      targetKey = widget.plainContentKey;
     } else {
-      targetKey = _posterKey;
+      targetKey = _plainFallbackKey;
     }
+    if (targetKey == null) return null;
     final boundary = targetKey.currentContext?.findRenderObject()
         as RenderRepaintBoundary?;
     if (boundary == null) return null;
@@ -381,8 +399,9 @@ class _PosterSheetState extends State<_PosterSheet> {
             ),
           ),
           // 主效果卡片：整页满视图展示当前版式，可左右滑动切换。
-          // RepaintBoundary 捕获的是海报设计尺寸（300~380 逻辑宽），
-          // PageView/FittedBox 的缩放只作用于显示层，不影响导出清晰度。
+          // 导出捕获走内容级键（_styleContentKeys / plainContentKey /
+          // _plainFallbackKey，见 _captureImage），此处 _posterKey 仅作预览
+          // 容器边界，不参与导出。
           Expanded(
             child: Container(
               width: double.infinity,
@@ -411,26 +430,31 @@ class _PosterSheetState extends State<_PosterSheet> {
                     final style = _styles.isEmpty ? null : _styles[i];
                     // 普通海报（无样式）：按预览区宽度渲染调用方 content 并允许纵向滚动，
                     // 保持旧版「有界宽度 + 可滚动」语义（部分 content 用 width: Infinity）。
-                    // 样式选择模式：用 FittedBox 适配 5 种设计画布，显示层缩放不影响导出清晰度。
+                    // content 始终包一层内容级 RepaintBoundary 供导出捕获。
+                    // 样式选择模式：用 FittedBox 适配 5 种设计画布，每页海报本体挂
+                    // 独立捕获键，显示层缩放不影响导出清晰度。
                     return RepaintBoundary(
                       child: Center(
                         child: Padding(
                           padding: const EdgeInsets.all(14),
                           child: style == null
                               ? SingleChildScrollView(
-                                  child: widget.plainContentKey != null
-                                      ? RepaintBoundary(
-                                          key: widget.plainContentKey,
-                                          child: widget.content ??
-                                              const SizedBox.shrink(),
-                                        )
-                                      : widget.content ??
-                                          const SizedBox.shrink(),
+                                  child: RepaintBoundary(
+                                    key: widget.plainContentKey ??
+                                        _plainFallbackKey,
+                                    child: widget.content ??
+                                        const SizedBox.shrink(),
+                                  ),
                                 )
                               : FittedBox(
                                   fit: BoxFit.contain,
                                   child: UnconstrainedBox(
-                                    child: style.builder(widget.stylePicker!.data),
+                                    child: RepaintBoundary(
+                                      key: _styleContentKeys.putIfAbsent(
+                                          i, () => GlobalKey()),
+                                      child: style
+                                          .builder(widget.stylePicker!.data),
+                                    ),
                                   ),
                                 ),
                         ),
