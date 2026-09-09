@@ -3,15 +3,17 @@ import 'package:sqflite/sqflite.dart';
 
 import '../tables.dart';
 
-/// 统计对象类型：模板 / 场景
-enum UsageItemType { template, scene }
+/// 统计对象类型：模板 / 场景 / Banner
+enum UsageItemType { template, scene, banner }
 
 /// 统计事件类型
-enum UsageEventType { openDetail, useShoot, sceneSelect }
+enum UsageEventType { openDetail, useShoot, sceneSelect, bannerExpose, bannerClick }
 
 String eventTypeName(UsageEventType t) {
   if (t == UsageEventType.openDetail) return 'open_detail';
   if (t == UsageEventType.useShoot) return 'use_shoot';
+  if (t == UsageEventType.bannerExpose) return 'expose';
+  if (t == UsageEventType.bannerClick) return 'click';
   return 'scene_select';
 }
 

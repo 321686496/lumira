@@ -97,4 +97,27 @@ void main() {
     expect(events.first[Tables.colItemSource], 'system');
     expect(events.first[Tables.colEventType], 'scene_select');
   });
+
+  test('recordBanner 曝光事件写库：itemType=banner / eventType=expose', () async {
+    await recorder.recordBanner(
+      bannerId: 'op_invite',
+      event: UsageEventType.bannerExpose,
+    );
+    final events = await dao.getUnsyncedEvents();
+    expect(events, hasLength(1));
+    expect(events.first[Tables.colItemType], 'banner');
+    expect(events.first[Tables.colItemId], 'op_invite');
+    expect(events.first[Tables.colItemSource], 'app');
+    expect(events.first[Tables.colEventType], 'expose');
+  });
+
+  test('recordBanner 点击事件写库：eventType=click', () async {
+    await recorder.recordBanner(
+      bannerId: 'banner_recent_category:tpl_p2',
+      event: UsageEventType.bannerClick,
+    );
+    final events = await dao.getUnsyncedEvents();
+    expect(events, hasLength(1));
+    expect(events.first[Tables.colEventType], 'click');
+  });
 }

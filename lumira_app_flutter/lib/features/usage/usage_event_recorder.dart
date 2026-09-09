@@ -43,6 +43,21 @@ class UsageEventRecorder {
     );
   }
 
+  /// Banner 曝光/点击事件。item_type='banner'、itemSource 固定 'app'。
+  Future<void> recordBanner({
+    required String bannerId,
+    required UsageEventType event,
+  }) async {
+    await _dao.enqueueEvent(
+      clientEventId: _uuid(),
+      itemType: UsageItemType.banner,
+      itemId: bannerId,
+      itemSource: 'app',
+      eventType: event,
+      occurredAt: DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
   static String _uuid() {
     final r = Random();
     final bytes = List<int>.generate(16, (_) => r.nextInt(256));
