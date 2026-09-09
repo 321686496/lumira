@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/theme/capture_appearance.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/theme_tokens.dart';
 
@@ -255,6 +256,123 @@ class LumiraThemeResolver {
 
   /// rpx → dp 工具：app_theme 的 radius 字段存储 rpx 原值，widget 内部 /2 转 dp
   static double rpxToDp(double rpx) => rpx / 2;
+
+  /// 解析拍摄页/预览页浮层视觉规格（沉浸式 vs 跟随主题）。
+  ///
+  /// - immersive：跨风格统一的暗色浮层（「黑白半透明遮罩」合法例外），
+  ///   与历史写死视觉一致（胶囊 0xFF141416@0.72 / 面板 @0.80 / 白细边 /
+  ///   金色 0xFFC9A96E 激活态）；neumorphic 不毛玻璃，其余风格 blur 20。
+  /// - theme：按当前风格的「叠照片浮层」取向（UI 规范 §4）：
+  ///   浮层都落在取景器/照片之上，neumorphic 不得使用双向浮雕外阴影
+  ///   （规范 §3），改实心/半透明 surface + 细边表达表面。
+  ///
+  /// [role]：pill=叠取景器胶囊/浮条；panel=底部承载内容的面板/抽屉。
+  static CaptureOverlayVisual captureOverlayVisual({
+    required ThemeTokens tokens,
+    required UIStyle style,
+    required CaptureAppearance appearance,
+    required CaptureOverlayRole role,
+    required double radiusDp,
+  }) {
+    // ── 沉浸式：跨风格统一暗色 ──
+    if (appearance == CaptureAppearance.immersive) {
+      final isPill = role == CaptureOverlayRole.pill;
+      return CaptureOverlayVisual(
+        background:
+            const Color(0xFF141416).withOpacity(isPill ? 0.72 : 0.80),
+        border: Border.all(
+          color: Colors.white.withOpacity(isPill ? 0.10 : 0.08),
+          width: 0.5,
+        ),
+        shadows: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isPill ? 0.15 : 0.2),
+            blurRadius: isPill ? 12 : 24,
+            offset: Offset(0, isPill ? 2 : 4),
+          ),
+        ],
+        backdropBlurSigma: style == UIStyle.neumorphic ? 0 : 20,
+        foreground: Colors.white,
+        foregroundSecondary: Colors.white70,
+        foregroundMuted: Colors.white38,
+        fillSubtle: Colors.white12,
+        accent: const Color(0xFFC9A96E),
+        onAccent: Colors.black,
+      );
+    }
+
+    // ── 跟随主题：按风格「叠照片浮层」取向 ──
+    switch (style) {
+      case UIStyle.neumorphic:
+        return CaptureOverlayVisual(
+          background: role == CaptureOverlayRole.pill
+              ? tokens.surface.withOpacity(0.92)
+              : tokens.surface,
+          border: Border.all(color: tokens.divider, width: 0.8),
+          shadows: const [],
+          backdropBlurSigma: 0,
+          foreground: tokens.textPrimary,
+          foregroundSecondary: tokens.textSecondary,
+          foregroundMuted: tokens.textTertiary,
+          fillSubtle: tokens.divider,
+          accent: tokens.brand,
+          onAccent: tokens.textInverse,
+        );
+      case UIStyle.flat:
+        return CaptureOverlayVisual(
+          background: role == CaptureOverlayRole.pill
+              ? tokens.surfaceAlt.withOpacity(0.88)
+              : tokens.surface,
+          border: Border.all(color: tokens.divider, width: 1),
+          shadows: const [],
+          backdropBlurSigma: 0,
+          foreground: tokens.textPrimary,
+          foregroundSecondary: tokens.textSecondary,
+          foregroundMuted: tokens.textTertiary,
+          fillSubtle: tokens.divider,
+          accent: tokens.brand,
+          onAccent: tokens.textInverse,
+        );
+      case UIStyle.glass:
+        return CaptureOverlayVisual(
+          background: ThemeTokens.glassFill(tokens),
+          border: Border.all(color: ThemeTokens.glassBorder(tokens), width: 1),
+          shadows: const [
+            BoxShadow(
+                color: Color(0x14000000),
+                offset: Offset(0, 6),
+                blurRadius: 20),
+          ],
+          backdropBlurSigma: 20,
+          foreground: tokens.textPrimary,
+          foregroundSecondary: tokens.textSecondary,
+          foregroundMuted: tokens.textTertiary,
+          fillSubtle: tokens.divider,
+          accent: tokens.brand,
+          onAccent: tokens.textInverse,
+        );
+      case UIStyle.female:
+        return CaptureOverlayVisual(
+          background: tokens.surface.withOpacity(0.92),
+          border:
+              Border.all(color: Colors.white.withOpacity(0.7), width: 0.8),
+          shadows: [
+            BoxShadow(
+              color: tokens.brand.withOpacity(0.15),
+              offset: const Offset(0, 6),
+              blurRadius: 20,
+            ),
+          ],
+          backdropBlurSigma: 0,
+          foreground: tokens.textPrimary,
+          foregroundSecondary: tokens.textSecondary,
+          foregroundMuted: tokens.textTertiary,
+          fillSubtle: tokens.divider,
+          accent: tokens.brand,
+          onAccent: tokens.textInverse,
+        );
+    }
+  }
 }
 
 /// 容器视觉规格（Dialog/BottomSheet/Menu 共用）
@@ -288,6 +406,53 @@ class DarkNeuPalette {
     required this.surface,
     required this.shadow,
     required this.highlight,
+  });
+}
+
+/// 拍摄浮层视觉规格（容器 + 前景），由
+/// [LumiraThemeResolver.captureOverlayVisual] 解析。
+class CaptureOverlayVisual {
+  /// 容器底色
+  final Color background;
+
+  /// 容器边框（null 无边框）
+  final Border? border;
+
+  /// 容器阴影
+  final List<BoxShadow> shadows;
+
+  /// >0 时组件需包裹 BackdropFilter 毛玻璃（新拟态恒 0）
+  final double backdropBlurSigma;
+
+  /// 主文字/图标色
+  final Color foreground;
+
+  /// 次级文字/未激活图标（对应历史 white70）
+  final Color foregroundSecondary;
+
+  /// 三级弱文字（对应历史 white38/white54/white24）
+  final Color foregroundMuted;
+
+  /// 弱底色（对应历史 white12/white10 占位底）
+  final Color fillSubtle;
+
+  /// 激活态强调色（immersive=金 0xFFC9A96E；theme=brand）
+  final Color accent;
+
+  /// 激活态底色上的前景（immersive=黑；theme=textInverse）
+  final Color onAccent;
+
+  const CaptureOverlayVisual({
+    required this.background,
+    required this.border,
+    required this.shadows,
+    required this.backdropBlurSigma,
+    required this.foreground,
+    required this.foregroundSecondary,
+    required this.foregroundMuted,
+    required this.fillSubtle,
+    required this.accent,
+    required this.onAccent,
   });
 }
 
