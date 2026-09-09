@@ -1,6 +1,6 @@
 // lumira-server/packages/shared/src/types/usage.ts
-export type UsageItemType = 'template' | 'scene';
-export type UsageEventType = 'open_detail' | 'use_shoot' | 'scene_select';
+export type UsageItemType = 'template' | 'scene' | 'banner';
+export type UsageEventType = 'open_detail' | 'use_shoot' | 'scene_select' | 'expose' | 'click';
 export type TemplateSource = 'builtin' | 'remote';
 
 export interface UsageEventInput {

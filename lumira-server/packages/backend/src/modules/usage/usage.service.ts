@@ -47,6 +47,7 @@ export class UsageService {
       SELECT item_id AS itemId, item_type AS itemType, event_type AS eventType, COUNT(*) AS cnt
       FROM ${usageEvents}
       WHERE ${itemType ? sql`item_type = ${itemType}` : sql`1=1`}
+        AND event_type IN ('open_detail', 'use_shoot', 'scene_select')
       GROUP BY item_id, item_type, event_type
     `);
     const summary = new Map<string, UsageStatsItem>();
