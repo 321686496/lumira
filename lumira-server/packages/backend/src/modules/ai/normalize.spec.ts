@@ -8,9 +8,8 @@ import {
   mapEnumValue,
   clampNumber,
   normalizeDraft,
-  LUTS,
-  LUT_LABELS,
 } from './normalize';
+import { LUTS, LUT_LABELS } from './enums';
 
 /** 四级分类树测试夹具：portrait 全链 + landscape 浅树（非人像：L2 style + L3 method） */
 const CATEGORIES: CategoryNode[] = [
