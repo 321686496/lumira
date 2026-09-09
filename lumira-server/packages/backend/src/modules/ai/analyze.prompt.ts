@@ -1,0 +1,133 @@
+// lumira-server/packages/backend/src/modules/ai/analyze.prompt.ts
+// 识别提示词构造（Task 5）：DB 分类树文本 + 全部枚举 key/中文标签 + 输出 JSON 契约 + 硬约束
+// 设计文档：docs/specs/2026-09-09-ai-template-one-click-creation-design.md 第四节/第五节
+
+import {
+  LUTS,
+  LUT_LABELS,
+  OVERLAY_TYPES,
+  OVERLAY_TYPE_LABELS,
+  ASPECT_RATIOS,
+  ASPECT_RATIO_LABELS,
+  ISO_MODES,
+  ISO_MODE_LABELS,
+  WHITE_BALANCES,
+  WHITE_BALANCE_LABELS,
+  FLASH_MODES,
+  FLASH_MODE_LABELS,
+  FOCUS_MODES,
+  FOCUS_MODE_LABELS,
+  LENS_SUGGESTIONS,
+  LENS_SUGGESTION_LABELS,
+  SEASONS,
+  SEASON_LABELS,
+  WEATHERS,
+  WEATHER_LABELS,
+  TIME_TONES,
+  TIME_TONE_LABELS,
+} from './enums';
+import type { CategoryNode } from './normalize';
+
+/** 枚举行文本：`key（中文标签）、key（中文标签）…`；无标签的 key 原样输出 */
+function enumLine(keys: readonly string[], labels: Record<string, string>): string {
+  return keys.map((k) => (labels[k] ? `${k}（${labels[k]}）` : k)).join('、');
+}
+
+/**
+ * 分类树按层级缩进文本化。
+ * 兄弟节点按 key 排序保证提示词确定性；父链断裂的孤儿节点（父分类被停用）整枝丢弃，
+ * 与 normalizeDraft 的逐级父子校验口径一致。
+ */
+function renderCategoryTree(categories: CategoryNode[]): string {
+  const byParent = new Map<string | null, CategoryNode[]>();
+  for (const c of categories) {
+    const list = byParent.get(c.parentKey);
+    if (list) {
+      list.push(c);
+    } else {
+      byParent.set(c.parentKey, [c]);
+    }
+  }
+
+  const lines: string[] = [];
+  const walk = (parentKey: string | null, depth: number): void => {
+    const children = (byParent.get(parentKey) || [])
+      .slice()
+      .sort((a, b) => a.key.localeCompare(b.key));
+    for (const child of children) {
+      lines.push(`${'  '.repeat(depth)}- ${child.key} ${child.name}`);
+      walk(child.key, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return lines.join('\n');
+}
+
+/** 输出 JSON 契约示例（设计文档第四节草稿 JSON，jsonc 注释保留作字段说明） */
+const DRAFT_JSON_EXAMPLE = `{
+  "meta": {
+    "name": "晴空田园少女人像侧拍",          // 场景+主体+风格+角度，12~30字（硬约束）
+    "category": "portrait",                 // 必须命中分类树一级 key
+    "shortDesc": "把夏天拍进眼睛里",          // 情绪化文案，≤20字
+    "description": "…结构化长描述（光线/氛围/主体/背景）…",
+    "tags": ["日系", "田园", "清新"],
+    "ambience": { "seasons": ["summer"], "weathers": ["sunny"], "timeTones": ["day"] },
+    "classification": { "type": "portrait", "majorStyle": "…", "style": "…", "method": "" }
+  },
+  "composition": { "overlayType": "rule_of_thirds", "aspectRatio": "3:4", "opacity": 0.5,
+    "description": "…", "subjectFrame": { "x": 0.3, "y": 0.2, "w": 0.4, "h": 0.6 } },
+  "pose": [{ "name": "侧身回眸", "description": "身体微侧45度，下巴略抬…",
+    "position": { "x": 0.5, "y": 0.45 }, "scale": 1.0, "rotation": 0 }],
+  "camera": { "exposureCompensation": 0.3, "isoMode": "manual", "iso": 200,
+    "shutterSpeed": "1/400", "whiteBalance": "daylight", "whiteBalanceK": 5500,
+    "flashMode": "off", "focusMode": "auto", "lensType": "85mm f/1.8",
+    "lensSuggestion": "telephoto" },
+  "sceneGuide": { "lightDirection": "侧逆光", "shootingDistance": "2-3米",
+    "background": "田野与天空", "props": ["草帽"], "bestTime": "午后4-6点",
+    "tips": ["对焦眼睛", "避免正午顶光"] },
+  "postProcess": { "cropRatio": "3:4",
+    "color": { "brightness": 5, "contrast": 8, "saturation": -10, "temperature": 10,
+      "tint": 3, "highlights": -5, "shadows": 8 },
+    "smoothStrength": 15, "sharpen": 10, "vignette": 12, "grain": 18,
+    "lut": "japanese_fresh" }
+}`;
+
+/** 系统提示词：角色 + 分类树 + 枚举表 + 输出 JSON 契约 + 硬约束 */
+export function buildAnalyzeSystemPrompt(categories: CategoryNode[]): string {
+  return `你是资深人像摄影模板编辑，分析用户上传的示例图，产出可直接上线的摄影模板表单数据。
+
+## 分类树（meta.category 取一级 key；meta.classification.majorStyle/style/method 按层级逐级选择，只能从下列 key 中选择，禁止编造 key）
+${renderCategoryTree(categories)}
+
+## 枚举值（只能使用下列 key，括号内中文标签仅供理解；不确定的字段直接省略，不要编造）
+- composition.overlayType（构图叠加层）：${enumLine(OVERLAY_TYPES, OVERLAY_TYPE_LABELS)}
+- composition.aspectRatio / postProcess.cropRatio（画幅/裁剪比例）：${enumLine(ASPECT_RATIOS, ASPECT_RATIO_LABELS)}
+- camera.isoMode（ISO 模式）：${enumLine(ISO_MODES, ISO_MODE_LABELS)}
+- camera.whiteBalance（白平衡）：${enumLine(WHITE_BALANCES, WHITE_BALANCE_LABELS)}
+- camera.flashMode（闪光灯）：${enumLine(FLASH_MODES, FLASH_MODE_LABELS)}
+- camera.focusMode（对焦模式）：${enumLine(FOCUS_MODES, FOCUS_MODE_LABELS)}
+- camera.lensSuggestion（镜头建议）：${enumLine(LENS_SUGGESTIONS, LENS_SUGGESTION_LABELS)}
+- postProcess.lut（滤镜 LUT）：${enumLine(LUTS, LUT_LABELS)}
+- meta.ambience.seasons（季节）：${enumLine(SEASONS, SEASON_LABELS)}
+- meta.ambience.weathers（天气）：${enumLine(WEATHERS, WEATHER_LABELS)}
+- meta.ambience.timeTones（时段）：${enumLine(TIME_TONES, TIME_TONE_LABELS)}
+
+## 输出 JSON 契约（完整字段结构示例）
+\`\`\`jsonc
+${DRAFT_JSON_EXAMPLE}
+\`\`\`
+
+## 硬约束
+- 只输出 JSON，不要任何解释，markdown 代码块标记也尽量省略；
+- meta.name 具体化（场景+主体+风格+角度，12~30 字），禁止只写风格名；
+- meta.shortDesc 是情绪化文案，≤20 字，不是长描述的缩写；
+- 未知枚举字段直接省略，不要编造；
+- meta.classification 从分类树逐级选择，非人像题材允许 style/method 留空；
+- 相机参数是「复现该风格的建议参数」，给出合理估算值；
+- 不输出 price / silhouette / author / sortOrder / isActive 字段。`;
+}
+
+/** 用户提示词（图片随 message 一并发送，文本只做指令引导） */
+export function buildAnalyzeUserPrompt(): string {
+  return '请分析这张示例图，按系统提示给出的输出 JSON 契约返回模板草稿。';
+}
