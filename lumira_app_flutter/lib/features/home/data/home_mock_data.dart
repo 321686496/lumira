@@ -92,6 +92,9 @@ class ShootingTip {
   final String sub;
 }
 
+/// Banner 类型：运营位（App 端静态运营配置）/ 个性化推荐
+enum BannerType { operation, recommend }
+
 /// 首页 Banner 项
 class HomeBannerItem {
   const HomeBannerItem({
@@ -103,6 +106,8 @@ class HomeBannerItem {
     required this.route,
     this.cover,
     this.coverData,
+    this.type = BannerType.recommend,
+    this.bannerId = '',
   });
   final String id;
   final String title;
@@ -116,6 +121,16 @@ class HomeBannerItem {
   final String? cover;
   /// 模板封面 base64 data URL（自定义模板场景）。
   final String? coverData;
+
+  /// Banner 类型：运营位不打个性化标签，渲染与后续差异展示用
+  final BannerType type;
+
+  /// 埋点标识（usage_events.item_id）；模板类 banner 附加来源模板 id
+  /// （如 `banner_recent_category:tpl_xxx`）。为空时回退 [id]。
+  final String bannerId;
+
+  /// 埋点用最终 id：bannerId 优先，空则回退 id
+  String get trackingId => bannerId.isNotEmpty ? bannerId : id;
 
   /// 是否有模板封面可用
   bool get hasCover =>
