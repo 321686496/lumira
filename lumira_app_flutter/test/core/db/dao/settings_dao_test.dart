@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:lumira_app_flutter/core/db/dao/settings_dao.dart';
+import 'package:lumira_app_flutter/core/theme/capture_appearance.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/capture/domain/photo_template.dart';
 
@@ -31,6 +32,7 @@ void main() {
             grid_enabled INTEGER NOT NULL DEFAULT 0,
             level_enabled INTEGER NOT NULL DEFAULT 1,
             shutter_sound INTEGER NOT NULL DEFAULT 1,
+            capture_appearance TEXT NOT NULL DEFAULT 'immersive',
             watermark INTEGER NOT NULL DEFAULT 0,
             seed_v3_done INTEGER NOT NULL DEFAULT 0,
             auto_deblur INTEGER NOT NULL DEFAULT 1,
@@ -234,6 +236,36 @@ void main() {
       expect(await dao.getLightThemeKey(), ThemeKey.fresh);
       final rows = await db.query('user_settings', where: 'id = 1');
       expect(rows.first['theme_key_light'], equals('fresh'));
+    });
+  });
+
+  group('capture appearance persistence', () {
+    test('getCaptureAppearance default is immersive', () async {
+      expect(await dao.getCaptureAppearance(), CaptureAppearance.immersive);
+    });
+
+    test('setCaptureAppearance(theme) persists to DB', () async {
+      await dao.setCaptureAppearance(CaptureAppearance.theme);
+      expect(await dao.getCaptureAppearance(), CaptureAppearance.theme);
+      final rows = await db.query('user_settings', where: 'id = 1');
+      expect(rows.first['capture_appearance'], equals('theme'));
+    });
+
+    test('setCaptureAppearance(immersive) after theme works', () async {
+      await dao.setCaptureAppearance(CaptureAppearance.theme);
+      await dao.setCaptureAppearance(CaptureAppearance.immersive);
+      expect(await dao.getCaptureAppearance(), CaptureAppearance.immersive);
+    });
+
+    test('invalid value falls back to immersive', () async {
+      await db.update('user_settings',
+          {'capture_appearance': 'bogus'}, where: 'id = 1');
+      expect(await dao.getCaptureAppearance(), CaptureAppearance.immersive);
+    });
+
+    test('无行时回退 immersive', () async {
+      await db.delete('user_settings', where: 'id = 1');
+      expect(await dao.getCaptureAppearance(), CaptureAppearance.immersive);
     });
   });
 }

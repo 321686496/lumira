@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 
 import '../tables.dart';
+import '../../theme/capture_appearance.dart';
 import '../../theme/theme_tokens.dart';
 import '../../../features/capture/domain/photo_template.dart';
 import '../../../features/watermark/models/watermark_settings.dart';
@@ -462,6 +463,34 @@ class SettingsDao {
       Tables.userSettings,
       {
         Tables.colTemplateInfoCardHidden: hidden ? 1 : 0,
+        Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+  }
+
+  /// 读取拍摄页/预览页外观（user_settings.capture_appearance，默认 immersive）
+  Future<CaptureAppearance> getCaptureAppearance() async {
+    final rows = await _db.query(
+      Tables.userSettings,
+      columns: [Tables.colCaptureAppearance],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return CaptureAppearance.immersive;
+    final raw = rows.first[Tables.colCaptureAppearance] as String?;
+    return raw == CaptureAppearance.theme.name
+        ? CaptureAppearance.theme
+        : CaptureAppearance.immersive;
+  }
+
+  /// 保存拍摄页/预览页外观
+  Future<void> setCaptureAppearance(CaptureAppearance value) async {
+    await _db.update(
+      Tables.userSettings,
+      {
+        Tables.colCaptureAppearance: value.name,
         Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
       },
       where: 'id = ?',
