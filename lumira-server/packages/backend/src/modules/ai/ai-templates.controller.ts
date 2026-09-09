@@ -8,6 +8,7 @@ import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
 import { UploadFile } from '../templates/admin-templates.service';
 import { AiAnalyzeService } from './ai-analyze.service';
 import { AiGenerateImageService } from './ai-generate-image.service';
+import { AiSilhouetteService } from './ai-generate-silhouette.service';
 
 @Controller('admin/templates')
 @UseGuards(AdminAuthGuard)
@@ -15,6 +16,7 @@ export class AiTemplatesController {
   constructor(
     private readonly aiAnalyzeService: AiAnalyzeService,
     private readonly aiGenerateImageService: AiGenerateImageService,
+    private readonly aiSilhouetteService: AiSilhouetteService,
   ) {}
 
   /** AI 识别示例图 → 模板草稿（multipart：image 文件必填） */
@@ -34,6 +36,16 @@ export class AiTemplatesController {
     const result = await this.aiGenerateImageService.generate(reference, meta);
     // HTTP 契约：{ image: base64, mimeType }（service 内部为 GenerateImageResult 字段名）
     return { image: result.base64, mimeType: result.mimeType };
+  }
+
+  /** AI 生成剪影（multipart：image 文件 + meta JSON 可选，纯本地计算不依赖 ai-config） */
+  @Post('ai-generate-silhouette')
+  async generateSilhouette(@Req() req: FastifyRequest) {
+    const { image, meta } = await parseAiMultipart(req);
+    if (!image) {
+      throw new BadRequestException('Missing "image" file');
+    }
+    return this.aiSilhouetteService.generate(image, meta);
   }
 }
 
