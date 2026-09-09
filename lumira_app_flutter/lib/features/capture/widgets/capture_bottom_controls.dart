@@ -15,6 +15,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../core/theme/capture_appearance.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/lumira/_internal/lumira_theme_resolver.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/capture_state.dart';
 import '../data/custom_fill_light_colors.dart';
@@ -33,7 +34,7 @@ enum CameraPermissionStatus { unknown, granted, denied, permanentlyDenied }
 /// 修复 Bug 10：全屏模式下隐藏工具栏与抽屉，保留拍摄按钮、缩略图、切换摄像头
 /// 改造：原"紧凑模板条+折叠按钮+展开面板"已替换为一排图标工具栏 + 底部抽屉
 /// 修复：操作栏背景完全覆盖到底部（不使用 SafeArea，手动处理 bottom padding）
-class CaptureBottomBar extends StatelessWidget {
+class CaptureBottomBar extends ConsumerWidget {
   const CaptureBottomBar({
     required this.isFullscreen,
     required this.isTrialMode,
@@ -55,8 +56,13 @@ class CaptureBottomBar extends StatelessWidget {
   final GlobalKey? thumbnailKey;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
+    // scrim：immersive=黑渐变（现状）；theme=画布色渐变（照片向画布过渡）
+    final appearance = ref.watch(CaptureState.captureAppearanceProvider);
+    final tokens = ref.watch(themeTokensProvider);
+    final scrimBase =
+        appearance == CaptureAppearance.theme ? tokens.canvas : Colors.black;
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -64,9 +70,9 @@ class CaptureBottomBar extends StatelessWidget {
           end: Alignment.bottomCenter,
           colors: [
             Colors.transparent,
-            Colors.black.withOpacity(0.3),
-            Colors.black.withOpacity(0.7),
-            Colors.black.withOpacity(0.95),
+            scrimBase.withOpacity(0.3),
+            scrimBase.withOpacity(0.7),
+            scrimBase.withOpacity(0.95),
           ],
           stops: const [0.0, 0.4, 0.7, 1.0],
         ),
@@ -127,6 +133,15 @@ class CaptureToolbar extends ConsumerWidget {
     final facing = ref.watch(CaptureState.cameraFacingProvider);
     if (isFullscreen) return const SizedBox.shrink();
 
+    // 双模式视觉：immersive=暗色工具栏 / theme=当前风格的叠照片浮层取向
+    final visual = LumiraThemeResolver.captureOverlayVisual(
+      tokens: ref.watch(themeTokensProvider),
+      style: ref.watch(appThemeProvider).style,
+      appearance: ref.watch(CaptureState.captureAppearanceProvider),
+      role: CaptureOverlayRole.pill,
+      radiusDp: 24,
+    );
+
     // 补光工具仅在前置摄像头时显示（屏幕补光仅对前摄自拍摄影有效）
     final tools = facing == 'front'
         ? _tools
@@ -136,12 +151,10 @@ class CaptureToolbar extends ConsumerWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.4),
+        color: visual.background,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.08),
-          width: 0.5,
-        ),
+        border: visual.border,
+        boxShadow: visual.shadows,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -150,6 +163,7 @@ class CaptureToolbar extends ConsumerWidget {
           return ToolButton(
             tool: tool,
             active: active,
+            visual: visual,
             onTap: () => _onTap(ref, tool.id, active),
           );
         }).toList(),
@@ -191,14 +205,20 @@ class ToolDef {
 }
 
 class ToolButton extends StatelessWidget {
-  const ToolButton({required this.tool, required this.active, required this.onTap});
+  const ToolButton({
+    required this.tool,
+    required this.active,
+    required this.visual,
+    required this.onTap,
+  });
   final ToolDef tool;
   final bool active;
+  final CaptureOverlayVisual visual;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? const Color(0xFFC9A96E) : Colors.white70;
+    final color = active ? visual.accent : visual.foregroundSecondary;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -207,13 +227,13 @@ class ToolButton extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 选中指示器（2dp 金色短横线）
+            // 选中指示器（2dp 强调色短横线）
             Container(
               width: 16,
               height: 2,
               margin: const EdgeInsets.only(bottom: 4),
               decoration: BoxDecoration(
-                color: active ? const Color(0xFFC9A96E) : Colors.transparent,
+                color: active ? visual.accent : Colors.transparent,
                 borderRadius: BorderRadius.circular(1),
               ),
             ),
@@ -243,6 +263,15 @@ class AnimatedToolDrawer extends ConsumerWidget {
     final isFullscreen = ref.watch(CaptureState.isFullscreenProvider);
     if (isFullscreen) return const SizedBox.shrink();
 
+    // 抽屉容器视觉：immersive=半透明暗底 / theme=当前风格面板底
+    final visual = LumiraThemeResolver.captureOverlayVisual(
+      tokens: ref.watch(themeTokensProvider),
+      style: ref.watch(appThemeProvider).style,
+      appearance: ref.watch(CaptureState.captureAppearanceProvider),
+      role: CaptureOverlayRole.panel,
+      radiusDp: 0,
+    );
+
     final hasContent = activeTool != null;
     return AnimatedSize(
       duration: const Duration(milliseconds: 250),
@@ -251,9 +280,7 @@ class AnimatedToolDrawer extends ConsumerWidget {
       child: hasContent
           ? Container(
               width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.4),
-              ),
+              decoration: BoxDecoration(color: visual.background),
               child: _buildContent(activeTool, ref),
             )
           : const SizedBox(height: 0, width: double.infinity),
@@ -307,6 +334,14 @@ class CaptureFillLightPanel extends ConsumerWidget {
     final intensity = ref.watch(CaptureState.fillLightIntensityProvider);
     final viewfinderScale = ref.watch(CaptureState.fillLightViewfinderScaleProvider);
     final ringExpanded = ref.watch(_ringExpandedProvider);
+    // 补光面板视觉：immersive=暗色面板 / theme=当前风格面板底
+    final visual = LumiraThemeResolver.captureOverlayVisual(
+      tokens: ref.watch(themeTokensProvider),
+      style: ref.watch(appThemeProvider).style,
+      appearance: ref.watch(CaptureState.captureAppearanceProvider),
+      role: CaptureOverlayRole.panel,
+      radiusDp: 0,
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -316,15 +351,15 @@ class CaptureFillLightPanel extends ConsumerWidget {
           // 提示行
           Row(
             children: [
-              const Text(
+              Text(
                 '补光',
-                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                style: TextStyle(color: visual.foreground, fontSize: 13, fontWeight: FontWeight.w600),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   enabled ? '已启用 · 再次点击选中色关闭' : '点击颜色开启',
-                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                  style: TextStyle(color: visual.foregroundMuted, fontSize: 11),
                 ),
               ),
             ],
@@ -341,6 +376,7 @@ class CaptureFillLightPanel extends ConsumerWidget {
                   return PresetColorDot(
                     preset: p,
                     selected: isSelected,
+                    visual: visual,
                     onTap: () {
                       if (isSelected) {
                         // 已选中 → 关闭补光，恢复取景器原状
@@ -359,6 +395,7 @@ class CaptureFillLightPanel extends ConsumerWidget {
                   icon: Icons.color_lens,
                   label: '自定义',
                   selected: ringExpanded,
+                  visual: visual,
                   onTap: () {
                     ref.read(CaptureState.fillLightEnabledProvider.notifier).state = true;
                     ref.read(_ringExpandedProvider.notifier).state = !ringExpanded;
@@ -371,7 +408,7 @@ class CaptureFillLightPanel extends ConsumerWidget {
           // 亮度滑块（0.1 ~ 1.5，可超过 100% 让补光更亮）
           Row(
             children: [
-              const Icon(Icons.brightness_6, color: Colors.white54, size: 16),
+              Icon(Icons.brightness_6, color: visual.foregroundMuted, size: 16),
               Expanded(
                 child: LumiraSlider(
                   value: intensity.clamp(0.1, 1.5),
@@ -402,7 +439,7 @@ class CaptureFillLightPanel extends ConsumerWidget {
                 width: 42,
                 child: Text(
                   '${(intensity * 100).round()}%',
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  style: TextStyle(color: visual.foregroundSecondary, fontSize: 11),
                   textAlign: TextAlign.right,
                 ),
               ),
@@ -411,7 +448,7 @@ class CaptureFillLightPanel extends ConsumerWidget {
           // 取景器窗口大小滑块（仅补光开启时可用）
           Row(
             children: [
-              const Icon(Icons.crop_free, color: Colors.white54, size: 16),
+              Icon(Icons.crop_free, color: visual.foregroundMuted, size: 16),
               Expanded(
                 child: LumiraSlider(
                   value: viewfinderScale.clamp(0.3, 1.0),
@@ -427,7 +464,7 @@ class CaptureFillLightPanel extends ConsumerWidget {
                 width: 36,
                 child: Text(
                   '${(viewfinderScale * 100).round()}%',
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  style: TextStyle(color: visual.foregroundSecondary, fontSize: 11),
                   textAlign: TextAlign.right,
                 ),
               ),
@@ -492,9 +529,15 @@ class FillLightPreset {
 }
 
 class PresetColorDot extends StatelessWidget {
-  const PresetColorDot({required this.preset, required this.selected, required this.onTap});
+  const PresetColorDot({
+    required this.preset,
+    required this.selected,
+    required this.visual,
+    required this.onTap,
+  });
   final FillLightPreset preset;
   final bool selected;
+  final CaptureOverlayVisual visual;
   final VoidCallback onTap;
 
   @override
@@ -514,7 +557,7 @@ class PresetColorDot extends StatelessWidget {
                 color: preset.color,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: selected ? const Color(0xFFC9A96E) : Colors.white24,
+                  color: selected ? visual.accent : visual.foregroundMuted,
                   width: selected ? 2 : 1,
                 ),
               ),
@@ -523,7 +566,7 @@ class PresetColorDot extends StatelessWidget {
             Text(
               preset.label,
               style: TextStyle(
-                color: selected ? const Color(0xFFC9A96E) : Colors.white54,
+                color: selected ? visual.accent : visual.foregroundMuted,
                 fontSize: 10,
               ),
             ),
@@ -535,10 +578,17 @@ class PresetColorDot extends StatelessWidget {
 }
 
 class ActionDot extends StatelessWidget {
-  const ActionDot({required this.icon, required this.label, required this.selected, required this.onTap});
+  const ActionDot({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.visual,
+    required this.onTap,
+  });
   final IconData icon;
   final String label;
   final bool selected;
+  final CaptureOverlayVisual visual;
   final VoidCallback onTap;
 
   @override
@@ -555,20 +605,20 @@ class ActionDot extends StatelessWidget {
               width: 28,
               height: 28,
               decoration: BoxDecoration(
-                color: Colors.white12,
+                color: visual.fillSubtle,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: selected ? const Color(0xFFC9A96E) : Colors.white24,
+                  color: selected ? visual.accent : visual.foregroundMuted,
                   width: selected ? 2 : 1,
                 ),
               ),
-              child: Icon(icon, color: Colors.white70, size: 16),
+              child: Icon(icon, color: visual.foregroundSecondary, size: 16),
             ),
             const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
-                color: selected ? const Color(0xFFC9A96E) : Colors.white54,
+                color: selected ? visual.accent : visual.foregroundMuted,
                 fontSize: 10,
               ),
             ),
@@ -833,8 +883,19 @@ class SaveColorsRowState extends ConsumerState<SaveColorsRow> {
     FillLightPreset('紫', Color(0xFFD8BFD8), 0.5),
   ];
 
+  /// 解析当前浮层视觉（编辑 Sheet 弹出时读取一次即可）
+  CaptureOverlayVisual _visualOf(WidgetRef ref) =>
+      LumiraThemeResolver.captureOverlayVisual(
+        tokens: ref.read(themeTokensProvider),
+        style: ref.read(appThemeProvider).style,
+        appearance: ref.read(CaptureState.captureAppearanceProvider),
+        role: CaptureOverlayRole.panel,
+        radiusDp: 0,
+      );
+
   void _showEditSheet(String name, Color color) {
     _markHintShown();
+    final visual = _visualOf(ref);
     showLumiraBottomSheet(
       context: context,
       builder: (ctx) => Column(
@@ -850,28 +911,28 @@ class SaveColorsRowState extends ConsumerState<SaveColorsRow> {
                   decoration: BoxDecoration(
                     color: color,
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white24),
+                    border: Border.all(color: visual.fillSubtle),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Text(
                   name,
-                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                  style: TextStyle(color: visual.foreground, fontSize: 14, fontWeight: FontWeight.w600),
                 ),
               ],
             ),
           ),
           LumiraListTile(
-            leading: const Icon(Icons.edit, color: Color(0xFFC9A96E), size: 20),
-            title: const Text('修改名称', style: TextStyle(color: Colors.white70, fontSize: 14)),
+            leading: Icon(Icons.edit, color: visual.accent, size: 20),
+            title: Text('修改名称', style: TextStyle(color: visual.foregroundSecondary, fontSize: 14)),
             onTap: () {
               Navigator.pop(ctx);
               _showRenameDialog(name);
             },
           ),
           LumiraListTile(
-            leading: const Icon(Icons.color_lens, color: Color(0xFFC9A96E), size: 20),
-            title: const Text('修改颜色', style: TextStyle(color: Colors.white70, fontSize: 14)),
+            leading: Icon(Icons.color_lens, color: visual.accent, size: 20),
+            title: Text('修改颜色', style: TextStyle(color: visual.foregroundSecondary, fontSize: 14)),
             onTap: () {
               Navigator.pop(ctx);
               // 用当前颜色打开色环
@@ -928,6 +989,14 @@ class SaveColorsRowState extends ConsumerState<SaveColorsRow> {
   Widget build(BuildContext context) {
     final customColors = ref.watch(customFillLightColorsProvider);
     final currentColor = ref.watch(CaptureState.fillLightColorProvider);
+    // 保存颜色行视觉：随拍摄外观双模式解析
+    final visual = LumiraThemeResolver.captureOverlayVisual(
+      tokens: ref.watch(themeTokensProvider),
+      style: ref.watch(appThemeProvider).style,
+      appearance: ref.watch(CaptureState.captureAppearanceProvider),
+      role: CaptureOverlayRole.panel,
+      radiusDp: 0,
+    );
 
     return Padding(
       padding: const EdgeInsets.only(top: 8),
@@ -938,9 +1007,9 @@ class SaveColorsRowState extends ConsumerState<SaveColorsRow> {
           // 标题行 + 保存按钮
           Row(
             children: [
-              const Text(
+              Text(
                 '保存颜色',
-                style: TextStyle(color: Colors.white54, fontSize: 11),
+                style: TextStyle(color: visual.foregroundMuted, fontSize: 11),
               ),
               const Spacer(),
               GestureDetector(
@@ -948,17 +1017,17 @@ class SaveColorsRowState extends ConsumerState<SaveColorsRow> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: Colors.white12,
+                    color: visual.fillSubtle,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.bookmark_add_outlined, size: 12, color: const Color(0xFFC9A96E)),
+                      Icon(Icons.bookmark_add_outlined, size: 12, color: visual.accent),
                       const SizedBox(width: 3),
                       Text(
                         '保存当前',
-                        style: TextStyle(color: const Color(0xFFC9A96E), fontSize: 10),
+                        style: TextStyle(color: visual.accent, fontSize: 10),
                       ),
                     ],
                   ),
@@ -977,7 +1046,7 @@ class SaveColorsRowState extends ConsumerState<SaveColorsRow> {
                   decoration: BoxDecoration(
                     color: currentColor,
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white24, width: 1),
+                    border: Border.all(color: visual.fillSubtle, width: 1),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1000,12 +1069,12 @@ class SaveColorsRowState extends ConsumerState<SaveColorsRow> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFC9A96E),
+                      color: visual.accent,
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: const Text(
+                    child: Text(
                       '保存',
-                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: visual.onAccent, fontSize: 11, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
@@ -1025,6 +1094,7 @@ class SaveColorsRowState extends ConsumerState<SaveColorsRow> {
                   return PresetColorDot(
                     preset: p,
                     selected: isSelected,
+                    visual: visual,
                     onTap: () => widget.onPick(p.color),
                   );
                 }),
@@ -1033,7 +1103,7 @@ class SaveColorsRowState extends ConsumerState<SaveColorsRow> {
                   Container(
                     width: 1,
                     margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                    color: Colors.white12,
+                    color: visual.fillSubtle,
                   ),
                 // 用户保存颜色（可长按删改）
                 ...customColors.map((c) {
@@ -1042,6 +1112,7 @@ class SaveColorsRowState extends ConsumerState<SaveColorsRow> {
                     name: c.name,
                     color: c.color,
                     selected: isSelected,
+                    visual: visual,
                     onTap: () => widget.onPick(c.color),
                     onLongPress: () => _showEditSheet(c.name, c.color),
                   );
@@ -1055,12 +1126,12 @@ class SaveColorsRowState extends ConsumerState<SaveColorsRow> {
               padding: const EdgeInsets.only(top: 6),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, color: Colors.white30, size: 12),
+                  Icon(Icons.info_outline, color: visual.foregroundMuted, size: 12),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
                       '长按保存的颜色可修改或删除',
-                      style: TextStyle(color: Colors.white30, fontSize: 10),
+                      style: TextStyle(color: visual.foregroundMuted, fontSize: 10),
                     ),
                   ),
                 ],
@@ -1080,12 +1151,14 @@ class SavedColorDot extends StatelessWidget {
     required this.name,
     required this.color,
     required this.selected,
+    required this.visual,
     required this.onTap,
     required this.onLongPress,
   });
   final String name;
   final Color color;
   final bool selected;
+  final CaptureOverlayVisual visual;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
@@ -1107,7 +1180,7 @@ class SavedColorDot extends StatelessWidget {
                 color: color,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: selected ? const Color(0xFFC9A96E) : Colors.white24,
+                  color: selected ? visual.accent : visual.foregroundMuted,
                   width: selected ? 2 : 1,
                 ),
               ),
@@ -1118,7 +1191,7 @@ class SavedColorDot extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: selected ? const Color(0xFFC9A96E) : Colors.white54,
+                color: selected ? visual.accent : visual.foregroundMuted,
                 fontSize: 9,
               ),
             ),
@@ -1300,6 +1373,14 @@ class ZoomBarState extends ConsumerState<ZoomBar> {
     final presets = _getZoomPresets(facing, maxZoom, supportsUltraWide);
     final activeIndex = _nearestPresetIndex(multiplier, presets);
     final canDrag = facing == 'back';
+    // 缩放栏视觉：immersive=暗色 / theme=当前风格面板底
+    final visual = LumiraThemeResolver.captureOverlayVisual(
+      tokens: ref.watch(themeTokensProvider),
+      style: ref.watch(appThemeProvider).style,
+      appearance: ref.watch(CaptureState.captureAppearanceProvider),
+      role: CaptureOverlayRole.panel,
+      radiusDp: 18,
+    );
 
     return Listener(
       onPointerDown: _onPointerDown,
@@ -1323,7 +1404,7 @@ class ZoomBarState extends ConsumerState<ZoomBar> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.35),
+                  color: visual.background,
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: Row(
@@ -1337,6 +1418,7 @@ class ZoomBarState extends ConsumerState<ZoomBar> {
                             ? '${presets[i].toInt()}'
                             : presets[i].toStringAsFixed(1),
                         active: i == activeIndex && !_showDial,
+                        visual: visual,
                         onTap: () {
                           widget.onChanged(presets[i]);
                         },
@@ -1361,6 +1443,7 @@ class ZoomBarState extends ConsumerState<ZoomBar> {
                     activeIndex: activeIndex,
                     minZoom: minZoom,
                     maxZoom: maxZoom,
+                    visual: visual,
                   ),
                 ),
               ),
@@ -1373,9 +1456,15 @@ class ZoomBarState extends ConsumerState<ZoomBar> {
 
 /// 单个缩放 Tab 按钮 — iPhone 原生风格
 class ZoomTab extends StatelessWidget {
-  const ZoomTab({required this.label, required this.active, required this.onTap});
+  const ZoomTab({
+    required this.label,
+    required this.active,
+    required this.visual,
+    required this.onTap,
+  });
   final String label;
   final bool active;
+  final CaptureOverlayVisual visual;
   final VoidCallback onTap;
 
   @override
@@ -1386,13 +1475,13 @@ class ZoomTab extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: active ? const Color(0xFFF0C040) : Colors.transparent,
+          color: active ? visual.accent : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: active ? Colors.black : Colors.white.withOpacity(0.85),
+            color: active ? visual.onAccent : visual.foregroundSecondary,
             fontSize: 13,
             fontWeight: active ? FontWeight.w600 : FontWeight.w500,
             letterSpacing: 0.2,
@@ -1414,6 +1503,7 @@ class HalfCircleDial extends StatelessWidget {
     required this.activeIndex,
     required this.minZoom,
     required this.maxZoom,
+    required this.visual,
   });
 
   final double multiplier;
@@ -1421,6 +1511,7 @@ class HalfCircleDial extends StatelessWidget {
   final int activeIndex;
   final double minZoom;
   final double maxZoom;
+  final CaptureOverlayVisual visual;
 
   @override
   Widget build(BuildContext context) {
@@ -1449,12 +1540,12 @@ class HalfCircleDial extends StatelessWidget {
             height: screenWidth,
             child: Stack(
               children: [
-                // 半透明黑色圆形背景
+                // 半透明轮盘背景（immersive=暗底 / theme=风格面板底）
                 Container(
                   width: screenWidth,
                   height: screenWidth,
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.55),
+                    color: visual.background,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -1470,6 +1561,7 @@ class HalfCircleDial extends StatelessWidget {
                         startAngle: tickStartAngle,
                         sweepAngle: tickSweepAngle,
                         totalRange: totalRange,
+                        tickColor: visual.foregroundMuted,
                       ),
                     ),
                   ),
@@ -1482,7 +1574,9 @@ class HalfCircleDial extends StatelessWidget {
                   left: 0,
                   right: 0,
                   child: Center(
-                    child: CustomPaint(painter: PointerPainter()),
+                    child: CustomPaint(
+                      painter: PointerPainter(color: visual.accent),
+                    ),
                   ),
                 ),
                 // 当前倍数显示（居中于半圆中心，避免与顶部刻度数字重叠）
@@ -1494,13 +1588,13 @@ class HalfCircleDial extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF0C040),
+                        color: visual.accent,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         '${multiplier.toStringAsFixed(1)}x',
-                        style: const TextStyle(
-                          color: Colors.black,
+                        style: TextStyle(
+                          color: visual.onAccent,
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                         ),
@@ -1551,7 +1645,7 @@ class HalfCircleDial extends StatelessWidget {
               child: Text(
                 label,
                 style: TextStyle(
-                  color: isMajor ? const Color(0xFFF0C040) : Colors.white.withOpacity(0.8),
+                  color: isMajor ? visual.accent : visual.foregroundSecondary,
                   fontSize: isMajor ? 15 : 12,
                   fontWeight: isMajor ? FontWeight.w700 : FontWeight.w500,
                 ),
@@ -1572,12 +1666,16 @@ class HalfCircleTickPainter extends CustomPainter {
     required this.startAngle,
     required this.sweepAngle,
     required this.totalRange,
+    required this.tickColor,
   });
 
   final double radius;
   final double startAngle;
   final double sweepAngle;
   final double totalRange;
+
+  /// 刻度基色（弧线/刻度线按原透明度 0.25/0.35/0.75 施加）
+  final Color tickColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1587,7 +1685,7 @@ class HalfCircleTickPainter extends CustomPainter {
 
     // 1. 绘制弧线
     final arcPaint = Paint()
-      ..color = Colors.white.withOpacity(0.25)
+      ..color = tickColor.withOpacity(0.25)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
 
@@ -1623,22 +1721,28 @@ class HalfCircleTickPainter extends CustomPainter {
       canvas.drawLine(
         p1, p2,
         Paint()
-          ..color = Colors.white.withOpacity(isMajorTick ? 0.75 : 0.35)
+          ..color = tickColor.withOpacity(isMajorTick ? 0.75 : 0.35)
           ..strokeWidth = tickWidth,
       );
     }
   }
 
   @override
-  bool shouldRepaint(HalfCircleTickPainter oldDelegate) => false;
+  bool shouldRepaint(HalfCircleTickPainter oldDelegate) =>
+      oldDelegate.tickColor != tickColor ||
+      oldDelegate.totalRange != totalRange;
 }
 
-/// 顶部固定指针绘制器（金黄色向下小三角）
+/// 顶部固定指针绘制器（强调色向下小三角）
 class PointerPainter extends CustomPainter {
+  PointerPainter({required this.color});
+
+  final Color color;
+
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = const Color(0xFFF0C040);
-    final s = 6.0;
+    final paint = Paint()..color = color;
+    const s = 6.0;
     final path = Path()
       ..moveTo(0, s)
       ..lineTo(-s * 0.8, -s * 0.5)
@@ -1648,7 +1752,8 @@ class PointerPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant PointerPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 /// 拍摄按钮行：角标缩略图 + 拍摄按钮 + 翻转摄像头
@@ -1751,6 +1856,14 @@ class CaptureButtonRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 快门行浮层视觉：切摄圆钮/锁定快门共用（role=pill）
+    final visual = LumiraThemeResolver.captureOverlayVisual(
+      tokens: ref.watch(themeTokensProvider),
+      style: ref.watch(appThemeProvider).style,
+      appearance: ref.watch(CaptureState.captureAppearanceProvider),
+      role: CaptureOverlayRole.pill,
+      radiusDp: 24,
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       child: Row(
@@ -1762,7 +1875,9 @@ class CaptureButtonRow extends ConsumerWidget {
           if (!locked)
             CaptureThumbnail(key: thumbnailKey, onTap: onThumbnailTap),
           // 拍摄按钮（中）：试用模式替换为锁定快门
-          locked ? const LockedCaptureButton() : CaptureButton(onTap: onCapture),
+          locked
+              ? LockedCaptureButton(visual: visual)
+              : CaptureButton(onTap: onCapture),
           // 翻转摄像头（右）
           GestureDetector(
             onTap: onSwitchCamera,
@@ -1770,16 +1885,13 @@ class CaptureButtonRow extends ConsumerWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
+                color: visual.background,
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 1.5,
-                ),
+                border: visual.border,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.cameraswitch_outlined,
-                color: Colors.white,
+                color: visual.foreground,
                 size: 24,
               ),
             ),
@@ -1792,10 +1904,15 @@ class CaptureButtonRow extends ConsumerWidget {
 
 /// 试用模式锁定快门：不可拍照，点击提示解锁
 class LockedCaptureButton extends StatelessWidget {
-  const LockedCaptureButton();
+  const LockedCaptureButton({required this.visual});
+
+  /// 快门行浮层视觉（由 CaptureButtonRow 传入）
+  final CaptureOverlayVisual visual;
 
   @override
   Widget build(BuildContext context) {
+    // 锁图标用 visual.background 作内圆对比色：
+    // immersive=暗底配白内圆；theme=浅 surface 配深内圆（明暗主题均成立）
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => LumiraToast.show(
@@ -1808,7 +1925,8 @@ class LockedCaptureButton extends StatelessWidget {
         height: 80,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withOpacity(0.6), width: 4),
+          border:
+              Border.all(color: visual.foreground.withOpacity(0.6), width: 4),
         ),
         alignment: Alignment.center,
         child: Container(
@@ -1816,12 +1934,12 @@ class LockedCaptureButton extends StatelessWidget {
           height: 60,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white.withOpacity(0.85),
+            color: visual.foreground.withOpacity(0.85),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.lock_outline,
             size: 28,
-            color: Colors.black54,
+            color: visual.background,
           ),
         ),
       ),
