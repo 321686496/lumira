@@ -488,4 +488,11 @@ export const api = {
       `/banners/${encodeURIComponent(id)}/toggle`,
       { method: 'POST' },
     ),
+
+  /** 上传 Banner 配图（multipart，file 字段名 image）→ { url } */
+  uploadBannerImage: (formData: FormData) =>
+    adminFetch<{ url: string }>('/banners/upload', {
+      method: 'POST',
+      body: formData,
+    }),
 };

@@ -41,3 +41,13 @@ export async function setBannerActive(id: string) {
     return { error: (e as Error).message };
   }
 }
+
+/** 上传 Banner 配图（选中即传，与保存解耦；返回后端可访问的完整 URL） */
+export async function uploadBannerImage(formData: FormData) {
+  try {
+    return await api.uploadBannerImage(formData);
+  } catch (e) {
+    if (e instanceof UnauthenticatedError) redirect('/login');
+    return { error: (e as Error).message };
+  }
+}

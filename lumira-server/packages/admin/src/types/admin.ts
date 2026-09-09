@@ -356,6 +356,8 @@ export interface BannerAdminItem {
   subtitle: string;
   tag: string;
   route: string;
+  /** 配图完整 URL（空串 = 无配图） */
+  imageUrl: string;
   condition: string;
   isActive: number;
   sortOrder: number;
@@ -370,6 +372,8 @@ export interface BannerPayload {
   subtitle?: string;
   tag?: string;
   route?: string;
+  /** 配图 URL：空串清除配图 */
+  imageUrl?: string;
   condition?: string;
   isActive?: boolean;
   sortOrder?: number;
