@@ -327,3 +327,16 @@ export const operationBanners = mysqlTable('operation_banners', {
   createdAt: int('created_at').notNull(),
   updatedAt: int('updated_at').notNull(),
 });
+
+// ===== AI 一键模板录入（spec 2026-09-09）：厂商配置，单行 upsert（id 恒为 1）=====
+export const aiProviderConfig = mysqlTable('ai_provider_config', {
+  id: int('id').primaryKey(),
+  provider: varchar('provider', { length: 32 }).notNull(),
+  baseUrl: varchar('base_url', { length: 255 }).notNull(),
+  apiKey: varchar('api_key', { length: 255 }).notNull(),
+  visionModel: varchar('vision_model', { length: 64 }).notNull(),
+  imageModel: varchar('image_model', { length: 64 }).notNull(),
+  enabled: int('enabled').notNull().default(0),
+  createdAt: int('created_at').notNull(),
+  updatedAt: int('updated_at').notNull(),
+});
