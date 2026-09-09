@@ -537,6 +537,7 @@ class SettingsDao {
               'tag': b.tag,
               'route': b.route,
               'condition': b.condition.name,
+              if (b.imageUrl != null) 'imageUrl': b.imageUrl,
             },
         ]),
         Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,

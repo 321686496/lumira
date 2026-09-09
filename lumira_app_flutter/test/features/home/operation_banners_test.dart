@@ -75,8 +75,20 @@ void main() {
       expect(item.tag, '邀请有礼');
       expect(item.title, isNotEmpty);
       expect(item.subtitle, isNotEmpty);
-      // 运营位统一品牌渐变背景：不带模板封面
+      // 静态目录无配图：不带封面（品牌渐变背景）
       expect(item.hasCover, isFalse);
+    });
+
+    test('带配图的运营条目 → cover 传递 imageUrl（卡片右侧 contain 显示）', () {
+      const banner = OperationBanner(
+        id: 'op_img', title: 't', subtitle: 's', tag: 'tag',
+        route: '/invite', condition: OperationCondition.nonNewUserNotInvited,
+        imageUrl: 'https://lumira.iwtle.top/uploads/banners/b1/image.png',
+      );
+      final item = operationBannerToItem(banner);
+      expect(item.cover, banner.imageUrl);
+      expect(item.hasCover, isTrue);
+      expect(item.type, BannerType.operation);
     });
   });
 
@@ -89,6 +101,25 @@ void main() {
       expect(b, isNotNull);
       expect(b!.id, 'op_invite');
       expect(b.condition, OperationCondition.nonNewUserNotInvited);
+    });
+
+    test('携带 imageUrl → 解析配图', () {
+      final b = operationBannerFromJson({
+        'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
+        'route': '/invite', 'condition': 'pointsReady',
+        'imageUrl': 'https://lumira.iwtle.top/uploads/banners/b1/image.png',
+      });
+      expect(b!.imageUrl, 'https://lumira.iwtle.top/uploads/banners/b1/image.png');
+    });
+
+    test('imageUrl 空串/缺失/非字符串 → 视为无配图', () {
+      final base = {
+        'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
+        'route': '/invite', 'condition': 'pointsReady',
+      };
+      expect(operationBannerFromJson({...base, 'imageUrl': ''})!.imageUrl, isNull);
+      expect(operationBannerFromJson(base)!.imageUrl, isNull);
+      expect(operationBannerFromJson({...base, 'imageUrl': 42})!.imageUrl, isNull);
     });
 
     test('route 不在白名单 → 丢弃', () {

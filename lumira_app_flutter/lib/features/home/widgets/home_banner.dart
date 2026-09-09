@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -29,10 +30,18 @@ class HomeBanner extends ConsumerStatefulWidget {
   ConsumerState<HomeBanner> createState() => _HomeBannerState();
 }
 
-class _HomeBannerState extends ConsumerState<HomeBanner> {
+class _HomeBannerState extends ConsumerState<HomeBanner>
+    with WidgetsBindingObserver {
   /// 无限轮播使用的虚拟倍数（PageView itemCount = count*_kRepeat，
   /// 初始页取中间值，保证前后都能无限滑动而不越界）。
   static const int _kRepeat = 10000;
+
+  /// Banner 配置刷新间隔（运营后台改配置后，App 最迟 60s 内跟进；
+  /// 后端 Redis 缓存写后即时失效，客户端 TTL 仅作防抖）
+  static const Duration _kRefreshTtl = Duration(seconds: 60);
+
+  /// 上次拉取 Banner 配置的时间（会话级；null = 尚未拉取）
+  static DateTime? _lastFetchedAt;
 
   PageController? _controller;
   int _current = 0;
@@ -43,10 +52,24 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
   final Set<String> _exposedBannerIds = {};
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     _controller?.dispose();
     super.dispose();
+  }
+
+  /// App 回前台 → 按 TTL 静默刷新 Banner 配置（后台运营改动同步进 App）
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) _maybeRefreshBanners();
   }
 
   /// Tab 非激活时（MainTabsPage 用 TickerMode 静音整页）自动暂停轮播定时器，
@@ -59,10 +82,23 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
       if (_controller != null && _timer == null) {
         _restartTimer(_bannerCount);
       }
+      // 切回首页 Tab 时也按 TTL 刷新（覆盖不经过前后台切换的场景）
+      _maybeRefreshBanners();
     } else {
       _timer?.cancel();
       _timer = null;
     }
+  }
+
+  /// 距上次拉取超过 TTL 才 invalidate；重载期间保留旧数据不闪 loading
+  /// （provider 为非 autoDispose FutureProvider，invalidate 后 ref.watch 的
+  ///  .when(skipLoadingOnReload) 会继续展示旧列表直到新数据到达）。
+  void _maybeRefreshBanners() {
+    final last = _lastFetchedAt;
+    final now = DateTime.now();
+    if (last != null && now.difference(last) < _kRefreshTtl) return;
+    _lastFetchedAt = now;
+    ref.invalidate(bannerRecommendationProvider);
   }
 
   /// banner 数量变化时重建控制器（居中初始化以实现无限滑动），并（重）启自动轮播。
@@ -158,6 +194,8 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
     final asyncBanners = ref.watch(bannerRecommendationProvider);
 
     return asyncBanners.when(
+      // 刷新（invalidate）期间保留旧数据继续展示，不闪 loading 占位
+      skipLoadingOnReload: true,
       loading: () => _LoadingPlaceholder(tokens: tokens),
       error: (_, __) {
         // fallback 到 mock 数据第 1 条，保证不空白
@@ -285,6 +323,9 @@ class _BannerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasCover = banner.hasCover;
+    // 运营位配图：右侧 40% 区域 contain 完整显示（不裁切），底层同图模糊填充；
+    // 模板类封面仍走全幅 cover + 暗色遮罩
+    final opImage = banner.type == BannerType.operation && hasCover;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -304,15 +345,30 @@ class _BannerCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // 背景：模板类 banner 用封面图，其他用品牌渐变
-            if (hasCover) ...[
+            if (opImage) ...[
+              // 运营位配图：渐变打底 + 左文右图（3:2 分栏）
+              _buildGradientBackground(),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: _buildTextColumn(),
+                    ),
+                  ),
+                  Expanded(flex: 2, child: _buildOperationImage()),
+                ],
+              ),
+            ] else if (hasCover) ...[
+              // 模板类封面：全幅 cover + 暗色遮罩保证文字可读
               TemplateCoverImage(
                 cover: banner.cover,
                 coverData: banner.coverData,
                 fit: BoxFit.cover,
                 fallback: _buildGradientBackground(),
               ),
-              // 暗色渐变遮罩，保证文字可读性
               Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -325,10 +381,12 @@ class _BannerCard extends StatelessWidget {
                   ),
                 ),
               ),
-            ] else
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: _buildTextColumn(),
+              ),
+            ] else ...[
               _buildGradientBackground(),
-            // 装饰圆（仅渐变背景显示）
-            if (!hasCover) ...[
               Positioned(
                 top: -20,
                 right: -20,
@@ -353,56 +411,11 @@ class _BannerCard extends StatelessWidget {
                   ),
                 ),
               ),
-            ],
-            // 内容
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(9999),
-                    ),
-                    child: Text(
-                      banner.tag,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    banner.title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      letterSpacing: -0.01 * 18,
-                      height: 1.2,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    banner.subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withOpacity(0.85),
-                      height: 1.4,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: _buildTextColumn(),
               ),
-            ),
+            ],
             // 右侧箭头
             Positioned(
               right: 16,
@@ -423,6 +436,85 @@ class _BannerCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 文案列（角标胶囊 + 主标题 + 副标题），垂直居中
+  Widget _buildTextColumn() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(9999),
+          ),
+          child: Text(
+            banner.tag,
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          banner.title,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+            letterSpacing: -0.01 * 18,
+            height: 1.2,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 6),
+        Text(
+          banner.subtitle,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.white.withOpacity(0.85),
+            height: 1.4,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+
+  /// 运营配图区（卡片右侧 40%）：
+  /// 底层同图 cover + 模糊铺底（填充 contain 两侧留白），上层 contain 完整显示不裁切
+  Widget _buildOperationImage() {
+    return ClipRect(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+            child: Transform.scale(
+              scale: 1.3,
+              child: TemplateCoverImage(
+                cover: banner.cover,
+                coverData: banner.coverData,
+                fit: BoxFit.cover,
+                fallback: const SizedBox.shrink(),
+              ),
+            ),
+          ),
+          TemplateCoverImage(
+            cover: banner.cover,
+            coverData: banner.coverData,
+            fit: BoxFit.contain,
+            fallback: const SizedBox.shrink(),
+          ),
+        ],
       ),
     );
   }
