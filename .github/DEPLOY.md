@@ -317,8 +317,10 @@ Dockerfile 位于 `lumira-server/packages/backend/Dockerfile`，构建上下文�
 **多阶段构建**（`Dockerfile`）：
 
 1. `base` — 安装全部依赖（含 devDependencies，用于编译 TypeScript）
-2. `builder` — 构建 shared + backend，然后 prune 到生产依赖
-3. `runner` — 最终镜像，仅含 production 依赖 + dist 产物
+2. `builder` — 构建 shared + backend，下载 RMBG-1.4 剪影模型，然后 prune 到生产依赖
+3. `runner` — 最终镜像，仅含 production 依赖 + dist 产物 + 剪影模型
+
+> **注意（2026-09，AI 模板录入功能）**：镜像基础已从 `node:20-alpine` 切换为 `node:20-slim`（Debian），因 `onnxruntime-node`/`sharp` 原生模块仅提供 glibc 预编译产物，Alpine/musl 无法加载。镜像体积增大约 150MB（含 RMBG-1.4 剪影模型 ~44MB，构建时自动从 hf-mirror 下载）；服务器 `.env` 无需任何改动。
 
 本地手动构建（在仓库根目录执行）：
 
