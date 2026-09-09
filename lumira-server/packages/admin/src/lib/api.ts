@@ -28,6 +28,11 @@ import type {
   NotificationPayload,
   BannerAdminItem,
   BannerPayload,
+  AiProviderConfigView,
+  UpdateAiConfigPayload,
+  AiConfigTestResult,
+  AiAnalyzeResult,
+  AiImageResult,
 } from '@/types/admin';
 
 // 重新导出纯函数，供 server-only 调用方使用（客户端组件请直接从 @/lib/category-tree 导入）
@@ -492,6 +497,40 @@ export const api = {
   /** 上传 Banner 配图（multipart，file 字段名 image）→ { url } */
   uploadBannerImage: (formData: FormData) =>
     adminFetch<{ url: string }>('/banners/upload', {
+      method: 'POST',
+      body: formData,
+    }),
+
+  // ===== AI 一键模板录入 =====
+  getAiConfig: () =>
+    adminFetch<AiProviderConfigView | { configured: false }>('/ai-config'),
+
+  saveAiConfig: (payload: UpdateAiConfigPayload) =>
+    adminFetch<AiProviderConfigView>('/ai-config', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  testAiConfig: () =>
+    adminFetch<AiConfigTestResult>('/ai-config/test', { method: 'POST' }),
+
+  /** multipart：image 文件（示例图） */
+  aiAnalyze: (formData: FormData) =>
+    adminFetch<AiAnalyzeResult>('/templates/ai-analyze', {
+      method: 'POST',
+      body: formData,
+    }),
+
+  /** multipart：meta 草稿 JSON 文本 + reference 参考图（可选） */
+  aiGenerateImage: (formData: FormData) =>
+    adminFetch<AiImageResult>('/templates/ai-generate-image', {
+      method: 'POST',
+      body: formData,
+    }),
+
+  /** multipart：image 文件 + meta JSON（{ mode, crop }，可选） */
+  aiGenerateSilhouette: (formData: FormData) =>
+    adminFetch<AiImageResult>('/templates/ai-generate-silhouette', {
       method: 'POST',
       body: formData,
     }),
