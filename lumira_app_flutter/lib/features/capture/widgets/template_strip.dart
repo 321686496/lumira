@@ -4,7 +4,10 @@ import 'package:go_router/go_router.dart';
 import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/capture_appearance.dart';
+import '../../../core/theme/theme_controller.dart';
 import '../../../core/utils/image_cache.dart';
+import '../../../shared/widgets/lumira/_internal/lumira_theme_resolver.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../templates/data/owned_templates_repository.dart';
 
@@ -31,6 +34,14 @@ class TemplateStrip extends ConsumerWidget {
     // 触发已拥有模板加载（付费模板门禁判断依赖 ownedTemplateIdsProvider）
     ref.watch(ownedTemplatesLoaderProvider);
     final ownedIds = ref.watch(ownedTemplateIdsProvider);
+    // 条内浮层视觉：immersive=暗色 / theme=当前风格面板取向
+    final visual = LumiraThemeResolver.captureOverlayVisual(
+      tokens: ref.watch(themeTokensProvider),
+      style: ref.watch(appThemeProvider).style,
+      appearance: ref.watch(CaptureState.captureAppearanceProvider),
+      role: CaptureOverlayRole.panel,
+      radiusDp: 8,
+    );
 
     final max = compact ? _compactMax : _drawerMax;
     // 「显示更多」入口仅在展开面板模式（compact=false）下显示，
@@ -39,7 +50,7 @@ class TemplateStrip extends ConsumerWidget {
     final visible = templates.take(max).toList();
 
     if (visible.isEmpty) {
-      return _buildEmptyState();
+      return _buildEmptyState(visual);
     }
     return _buildTemplateList(
       context,
@@ -47,28 +58,30 @@ class TemplateStrip extends ConsumerWidget {
       currentId,
       ownedIds,
       ref,
+      visual,
       showMore: hasMore,
     );
   }
 
   /// 空状态占位
-  Widget _buildEmptyState() {
-    return const Center(
+  Widget _buildEmptyState(CaptureOverlayVisual visual) {
+    return Center(
       child: Text(
         '暂无模板',
-        style: TextStyle(color: Colors.white54, fontSize: 12),
+        style: TextStyle(color: visual.foregroundMuted, fontSize: 12),
       ),
     );
   }
 
   /// 根据路径类型选择加载方式（本地资源 vs 网络 URL）
-  Widget _buildCoverImage(String cover, bool active) {
+  Widget _buildCoverImage(
+      String cover, bool active, CaptureOverlayVisual visual) {
     final isAsset = cover.startsWith('assets/');
     final placeholder = Container(
-      color: Colors.white12,
+      color: visual.fillSubtle,
       child: Icon(
         Icons.image,
-        color: active ? Colors.amber : Colors.white54,
+        color: active ? visual.accent : visual.foregroundMuted,
         size: 24,
       ),
     );
@@ -92,7 +105,8 @@ class TemplateStrip extends ConsumerWidget {
     List<PhotoTemplate> templates,
     String? currentId,
     Set<String> ownedIds,
-    WidgetRef ref, {
+    WidgetRef ref,
+    CaptureOverlayVisual visual, {
     bool showMore = false,
   }) {
     // 横向 ListView 必须给定有界高度，否则在 AnimatedSize 的未约束高度下
@@ -106,7 +120,7 @@ class TemplateStrip extends ConsumerWidget {
       itemBuilder: (ctx, i) {
         // 末尾「显示更多」入口
         if (showMore && i == templates.length) {
-          return _buildShowMoreItem();
+          return _buildShowMoreItem(visual);
         }
         final tpl = templates[i];
         final active = tpl.meta.id == currentId;
@@ -142,8 +156,8 @@ class TemplateStrip extends ConsumerWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8),
               border: active
-                  ? Border.all(color: Colors.amber, width: 2)
-                  : Border.all(color: Colors.white12, width: 0.5),
+                  ? Border.all(color: visual.accent, width: 2)
+                  : Border.all(color: visual.fillSubtle, width: 0.5),
             ),
             child: Stack(
               fit: StackFit.expand,
@@ -153,14 +167,15 @@ class TemplateStrip extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(6),
                   child: tpl.meta.cover.isEmpty
                       ? Container(
-                          color: Colors.white12,
+                          color: visual.fillSubtle,
                           child: Icon(
                             Icons.image,
-                            color: active ? Colors.amber : Colors.white54,
+                            color:
+                                active ? visual.accent : visual.foregroundMuted,
                             size: 24,
                           ),
                         )
-                      : _buildCoverImage(tpl.meta.cover, active),
+                      : _buildCoverImage(tpl.meta.cover, active, visual),
                 ),
                 // 渐变遮罩
                 Positioned(
@@ -212,11 +227,11 @@ class TemplateStrip extends ConsumerWidget {
                       child: isLocked
                           ? Row(
                               mainAxisSize: MainAxisSize.min,
-                              children: [
+                              children: const [
                                 Icon(Icons.lock,
                                     size: 8, color: Colors.white),
-                                const SizedBox(width: 2),
-                                const Text(
+                                SizedBox(width: 2),
+                                Text(
                                   '付费',
                                   style: TextStyle(
                                     color: Colors.white70,
@@ -242,13 +257,13 @@ class TemplateStrip extends ConsumerWidget {
                     child: Container(
                       width: 16,
                       height: 16,
-                      decoration: const BoxDecoration(
-                        color: Colors.amber,
+                      decoration: BoxDecoration(
+                        color: visual.accent,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.check,
-                        color: Colors.black,
+                        color: visual.onAccent,
                         size: 12,
                       ),
                     ),
@@ -263,7 +278,7 @@ class TemplateStrip extends ConsumerWidget {
   }
 
   /// 列表末尾「显示更多」按钮：展开带搜索的完整模板列表
-  Widget _buildShowMoreItem() {
+  Widget _buildShowMoreItem(CaptureOverlayVisual visual) {
     return GestureDetector(
       onTap: () => onShowMore?.call(),
       behavior: HitTestBehavior.opaque,
@@ -272,17 +287,19 @@ class TemplateStrip extends ConsumerWidget {
         margin: const EdgeInsets.only(right: 8),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.white24, width: 0.5),
-          color: Colors.white10,
+          border: visual.border,
+          color: visual.fillSubtle,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.expand_more, color: Colors.white70, size: 20),
+            Icon(Icons.expand_more,
+                color: visual.foregroundSecondary, size: 20),
             const SizedBox(height: 2),
-            const Text(
+            Text(
               '显示更多',
-              style: TextStyle(color: Colors.white70, fontSize: 9),
+              style: TextStyle(
+                  color: visual.foregroundSecondary, fontSize: 9),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),

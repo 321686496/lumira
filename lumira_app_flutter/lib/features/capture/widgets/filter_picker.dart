@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/capture_state.dart';
 import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
+import '../../../core/theme/capture_appearance.dart';
+import '../../../core/theme/theme_controller.dart';
 import '../../../core/utils/image_cache.dart';
+import '../../../shared/widgets/lumira/_internal/lumira_theme_resolver.dart';
 
 /// 统一滤镜库（单一滤镜库，去重合并系统滤镜与 LUT 预设）。
 /// 定义见 filter_recipe.dart `unifiedFilters`。
@@ -55,8 +58,16 @@ class FilterPicker extends ConsumerWidget {
     if (!isVisible) return const SizedBox.shrink();
 
     final raw = ref.watch(CaptureState.rawModeProvider);
+    // 浮层视觉：immersive=暗色 / theme=当前风格面板取向（底色由抽屉容器提供）
+    final visual = LumiraThemeResolver.captureOverlayVisual(
+      tokens: ref.watch(themeTokensProvider),
+      style: ref.watch(appThemeProvider).style,
+      appearance: ref.watch(CaptureState.captureAppearanceProvider),
+      role: CaptureOverlayRole.panel,
+      radiusDp: 0,
+    );
     if (raw) {
-      return const _RawModePlaceholder();
+      return _RawModePlaceholder(visual: visual);
     }
 
     final post = ref.watch(CaptureState.effectivePostProcessProvider);
@@ -66,15 +77,13 @@ class FilterPicker extends ConsumerWidget {
         ? _staticPortraitImage
         : _staticLandscapeImage;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.2),
-      ),
+    return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: _FilterSection(
         filters: _allFilters,
         activeFilter: _activeFilter(post),
         previewImageUrl: previewImageUrl,
+        visual: visual,
         onSelect: (filter) => _selectFilter(ref, filter),
       ),
     );
@@ -86,12 +95,14 @@ class _FilterSection extends StatelessWidget {
     required this.filters,
     required this.activeFilter,
     required this.previewImageUrl,
+    required this.visual,
     required this.onSelect,
   });
 
   final List<String> filters;
   final String activeFilter;
   final String previewImageUrl;
+  final CaptureOverlayVisual visual;
   final ValueChanged<String> onSelect;
 
   @override
@@ -106,8 +117,8 @@ class _FilterSection extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
           child: Text(
             '滤镜',
-            style: const TextStyle(
-              color: Colors.white70,
+            style: TextStyle(
+              color: visual.foregroundSecondary,
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
@@ -129,6 +140,7 @@ class _FilterSection extends StatelessWidget {
                 filterName: f,
                 active: active,
                 previewImageUrl: previewImageUrl,
+                visual: visual,
                 onTap: () => onSelect(f),
               );
             },
@@ -159,6 +171,7 @@ class _FilterThumbCard extends StatelessWidget {
     required this.filterName,
     required this.active,
     required this.previewImageUrl,
+    required this.visual,
     required this.onTap,
   });
 
@@ -166,6 +179,7 @@ class _FilterThumbCard extends StatelessWidget {
   final String filterName;
   final bool active;
   final String previewImageUrl;
+  final CaptureOverlayVisual visual;
   final VoidCallback onTap;
 
   ColorFilter _buildColorFilter() {
@@ -193,9 +207,7 @@ class _FilterThumbCard extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
-                color: active
-                    ? const Color(0xFFC9A96E)
-                    : Colors.white.withOpacity(0.15),
+                color: active ? visual.accent : visual.fillSubtle,
                 width: active ? 1.5 : 0.5,
               ),
             ),
@@ -209,19 +221,10 @@ class _FilterThumbCard extends StatelessWidget {
                     url: previewImageUrl,
                     fit: BoxFit.cover,
                     errorWidget: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Colors.white.withOpacity(0.08),
-                            Colors.white.withOpacity(0.02),
-                          ],
-                        ),
-                      ),
-                      child: const Center(
+                      color: visual.fillSubtle,
+                      child: Center(
                         child: Icon(Icons.image_outlined,
-                            color: Colors.white24, size: 16),
+                            color: visual.foregroundMuted, size: 16),
                       ),
                     ),
                   ),
@@ -233,13 +236,13 @@ class _FilterThumbCard extends StatelessWidget {
                     child: Container(
                       width: 12,
                       height: 12,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFC9A96E),
+                      decoration: BoxDecoration(
+                        color: visual.accent,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.check,
-                        color: Colors.black,
+                        color: visual.onAccent,
                         size: 8,
                       ),
                     ),
@@ -256,9 +259,8 @@ class _FilterThumbCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: active
-                    ? const Color(0xFFC9A96E)
-                    : Colors.white70,
+                color:
+                    active ? visual.accent : visual.foregroundSecondary,
                 fontSize: 9,
                 fontWeight: active ? FontWeight.w600 : FontWeight.normal,
               ),
@@ -272,7 +274,9 @@ class _FilterThumbCard extends StatelessWidget {
 
 /// RAW 模式占位
 class _RawModePlaceholder extends StatelessWidget {
-  const _RawModePlaceholder();
+  const _RawModePlaceholder({required this.visual});
+
+  final CaptureOverlayVisual visual;
 
   @override
   Widget build(BuildContext context) {
@@ -284,19 +288,19 @@ class _RawModePlaceholder extends StatelessWidget {
           children: [
             Icon(Icons.raw_on, color: Colors.orange.withOpacity(0.5), size: 40),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'RAW 模式已启用',
               style: TextStyle(
-                color: Colors.white,
+                color: visual.foreground,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 4),
-            const Text(
+            Text(
               '原相机直出，无任何滤镜处理\n关闭 RAW 模式后可使用滤镜',
               style: TextStyle(
-                color: Colors.white54,
+                color: visual.foregroundMuted,
                 fontSize: 11,
                 height: 1.5,
               ),

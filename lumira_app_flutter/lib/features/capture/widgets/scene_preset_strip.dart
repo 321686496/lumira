@@ -6,6 +6,9 @@ import '../data/scene_presets_data.dart';
 import '../domain/scene_preset.dart';
 import '../../usage/usage_providers.dart';
 import '../../../core/db/dao/usage_dao.dart';
+import '../../../core/theme/capture_appearance.dart';
+import '../../../core/theme/theme_controller.dart';
+import '../../../shared/widgets/lumira/_internal/lumira_theme_resolver.dart';
 
 /// 场景预设横向滚动条。
 /// `compact=true` 显示前 6 个场景（底部条），`compact=false` 显示全部 18 个（展开面板）。
@@ -25,6 +28,14 @@ class ScenePresetStrip extends ConsumerWidget {
         : ScenePresetsData.allScenePresets;
     // 选中的场景移到列表第一位
     final presets = _moveActiveToFront(basePresets, activeId);
+    // 条内浮层视觉：immersive=暗色 / theme=当前风格面板取向
+    final visual = LumiraThemeResolver.captureOverlayVisual(
+      tokens: ref.watch(themeTokensProvider),
+      style: ref.watch(appThemeProvider).style,
+      appearance: ref.watch(CaptureState.captureAppearanceProvider),
+      role: CaptureOverlayRole.panel,
+      radiusDp: 8,
+    );
 
     return SizedBox(
       height: compact ? 60 : 82,
@@ -64,8 +75,8 @@ class ScenePresetStrip extends ConsumerWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
                 border: active
-                    ? Border.all(color: Colors.amber, width: 2)
-                    : Border.all(color: Colors.white12, width: 0.5),
+                    ? Border.all(color: visual.accent, width: 2)
+                    : Border.all(color: visual.fillSubtle, width: 0.5),
               ),
               child: Stack(
                 fit: StackFit.expand,
@@ -75,10 +86,12 @@ class ScenePresetStrip extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(6),
                     child: cover.isEmpty
                         ? Container(
-                            color: Colors.white12,
+                            color: visual.fillSubtle,
                             child: Icon(
                               Icons.place,
-                              color: active ? Colors.amber : Colors.white54,
+                              color: active
+                                  ? visual.accent
+                                  : visual.foregroundMuted,
                               size: 24,
                             ),
                           )
@@ -86,10 +99,12 @@ class ScenePresetStrip extends ConsumerWidget {
                             url: cover,
                             fit: BoxFit.cover,
                             errorWidget: Container(
-                              color: Colors.white12,
+                              color: visual.fillSubtle,
                               child: Icon(
                                 Icons.place,
-                                color: active ? Colors.amber : Colors.white54,
+                                color: active
+                                    ? visual.accent
+                                    : visual.foregroundMuted,
                                 size: 24,
                               ),
                             ),
@@ -138,13 +153,13 @@ class ScenePresetStrip extends ConsumerWidget {
                       child: Container(
                         width: 16,
                         height: 16,
-                        decoration: const BoxDecoration(
-                          color: Colors.amber,
+                        decoration: BoxDecoration(
+                          color: visual.accent,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.check,
-                          color: Colors.black,
+                          color: visual.onAccent,
                           size: 12,
                         ),
                       ),

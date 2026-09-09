@@ -4,7 +4,10 @@ import 'package:go_router/go_router.dart';
 import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/capture_appearance.dart';
+import '../../../core/theme/theme_controller.dart';
 import '../../../core/utils/image_cache.dart';
+import '../../../shared/widgets/lumira/_internal/lumira_theme_resolver.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../templates/data/owned_templates_repository.dart';
 
@@ -23,6 +26,16 @@ class TemplateDrawerPanel extends ConsumerStatefulWidget {
 class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';
+
+  /// 面板视觉：immersive=半透明暗底 / theme=当前风格面板底
+  CaptureOverlayVisual get _visual =>
+      LumiraThemeResolver.captureOverlayVisual(
+        tokens: ref.watch(themeTokensProvider),
+        style: ref.watch(appThemeProvider).style,
+        appearance: ref.watch(CaptureState.captureAppearanceProvider),
+        role: CaptureOverlayRole.panel,
+        radiusDp: 0,
+      );
 
   @override
   void dispose() {
@@ -72,7 +85,7 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
     return SizedBox(
       height: panelHeight,
       child: Container(
-        color: Colors.black.withOpacity(0.55),
+        color: _visual.background,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -80,10 +93,11 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
             _buildSearchField(),
             Expanded(
               child: filtered.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Text(
                         '未找到匹配模板',
-                        style: TextStyle(color: Colors.white54, fontSize: 13),
+                        style: TextStyle(
+                            color: _visual.foregroundMuted, fontSize: 13),
                       ),
                     )
                   : _buildGrid(filtered, currentId, ownedIds),
@@ -99,10 +113,10 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
       padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
       child: Row(
         children: [
-          const Text(
+          Text(
             '全部模板',
             style: TextStyle(
-              color: Colors.white,
+              color: _visual.foreground,
               fontSize: 15,
               fontWeight: FontWeight.w600,
             ),
@@ -111,7 +125,8 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
           // 收起，回到横向模板条
           IconButton(
             onPressed: _collapse,
-            icon: const Icon(Icons.expand_more, color: Colors.white70),
+            icon: Icon(Icons.expand_more,
+                color: _visual.foregroundSecondary),
             tooltip: '收起',
           ),
         ],
@@ -124,25 +139,26 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white10,
+          color: _visual.fillSubtle,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white24, width: 0.5),
+          border: _visual.border,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 10),
         child: Row(
           children: [
-            const Icon(Icons.search, color: Colors.white54, size: 20),
+            Icon(Icons.search, color: _visual.foregroundMuted, size: 20),
             const SizedBox(width: 8),
             Expanded(
               child: TextField(
                 controller: _searchCtrl,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
-                cursorColor: Colors.white70,
-                decoration: const InputDecoration(
+                style: TextStyle(
+                    color: _visual.foreground, fontSize: 13),
+                cursorColor: _visual.foregroundSecondary,
+                decoration: InputDecoration(
                   isDense: true,
                   hintText: '搜索模板名称 / 分类 / 标签',
-                  hintStyle:
-                      TextStyle(color: Colors.white38, fontSize: 13),
+                  hintStyle: TextStyle(
+                      color: _visual.foregroundMuted, fontSize: 13),
                   border: InputBorder.none,
                 ),
                 onChanged: (v) => setState(() => _query = v),
@@ -154,8 +170,8 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
                   _searchCtrl.clear();
                   setState(() => _query = '');
                 },
-                child: const Icon(Icons.clear,
-                    color: Colors.white54, size: 18),
+                child: Icon(Icons.clear,
+                    color: _visual.foregroundMuted, size: 18),
               ),
           ],
         ),
@@ -190,7 +206,7 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: active ? Colors.amber : Colors.white12,
+                color: active ? _visual.accent : _visual.fillSubtle,
                 width: active ? 2 : 0.5,
               ),
             ),
@@ -252,10 +268,10 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: [
+                        children: const [
                           Icon(Icons.lock, size: 9, color: Colors.white),
-                          const SizedBox(width: 3),
-                          const Text(
+                          SizedBox(width: 3),
+                          Text(
                             '付费',
                             style: TextStyle(
                               color: Colors.white70,
@@ -274,13 +290,13 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
                     child: Container(
                       width: 18,
                       height: 18,
-                      decoration: const BoxDecoration(
-                        color: Colors.amber,
+                      decoration: BoxDecoration(
+                        color: _visual.accent,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.check,
-                        color: Colors.black,
+                        color: _visual.onAccent,
                         size: 13,
                       ),
                     ),
@@ -296,8 +312,9 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
   Widget _buildCover(String cover) {
     if (cover.isEmpty) {
       return Container(
-        color: Colors.white12,
-        child: const Icon(Icons.image, color: Colors.white54, size: 26),
+        color: _visual.fillSubtle,
+        child: Icon(Icons.image,
+            color: _visual.foregroundMuted, size: 26),
       );
     }
     if (cover.startsWith('assets/')) {
@@ -305,8 +322,9 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
         cover,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => Container(
-          color: Colors.white12,
-          child: const Icon(Icons.image, color: Colors.white54, size: 26),
+          color: _visual.fillSubtle,
+          child: Icon(Icons.image,
+              color: _visual.foregroundMuted, size: 26),
         ),
       );
     }
@@ -314,8 +332,9 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
       url: cover,
       fit: BoxFit.cover,
       errorWidget: Container(
-        color: Colors.white12,
-        child: const Icon(Icons.image, color: Colors.white54, size: 26),
+        color: _visual.fillSubtle,
+        child: Icon(Icons.image,
+            color: _visual.foregroundMuted, size: 26),
       ),
     );
   }
