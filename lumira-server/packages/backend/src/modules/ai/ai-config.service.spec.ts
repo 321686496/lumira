@@ -25,6 +25,12 @@ function row(overrides: Record<string, unknown> = {}) {
     visionModel: 'qwen-vl-max',
     imageModel: 'wanx2.1-t2i-turbo',
     textModel: null,
+    textProvider: null,
+    textBaseUrl: null,
+    textApiKey: null,
+    imageProvider: null,
+    imageBaseUrl: null,
+    imageApiKey: null,
     enabled: 1,
     createdAt: 1,
     updatedAt: 1,
@@ -37,6 +43,30 @@ function readonlyDb(r: Record<string, unknown> | undefined) {
   return {
     getDb: () => ({ query: { aiProviderConfig: { findFirst: async () => r } } }),
   } as unknown as DatabaseService;
+}
+
+/** 可写 db mock（save 用）：findFirst 状态化；insert/update 后同步内存行（save 末尾 get() 重新读取） */
+function writableDb(existing: Record<string, unknown> | undefined) {
+  let current = existing;
+  const insertValues = jest.fn(async (v: Record<string, unknown>) => {
+    current = { ...row(), ...v };
+  });
+  const updateWhere = jest.fn(async () => undefined);
+  const updateSet = jest.fn((patch: Record<string, unknown>) => {
+    current = { ...(current as Record<string, unknown>), ...patch };
+    return { where: updateWhere };
+  });
+  return {
+    service: new AiConfigService({
+      getDb: () => ({
+        query: { aiProviderConfig: { findFirst: async () => current } },
+        insert: () => ({ values: insertValues }),
+        update: () => ({ set: updateSet }),
+      }),
+    } as unknown as DatabaseService),
+    insertValues,
+    updateSet,
+  };
 }
 
 describe('AiConfigService — textModel', () => {
@@ -129,30 +159,6 @@ describe('AiConfigService — textModel', () => {
 });
 
 describe('AiConfigService — save() textModel 语义', () => {
-  /** 可写 db mock：findFirst 状态化；insert/update 后同步内存行（save 末尾 get() 重新读取） */
-  function writableDb(existing: Record<string, unknown> | undefined) {
-    let current = existing;
-    const insertValues = jest.fn(async (v: Record<string, unknown>) => {
-      current = { ...row(), ...v };
-    });
-    const updateWhere = jest.fn(async () => undefined);
-    const updateSet = jest.fn((patch: Record<string, unknown>) => {
-      current = { ...(current as Record<string, unknown>), ...patch };
-      return { where: updateWhere };
-    });
-    return {
-      service: new AiConfigService({
-        getDb: () => ({
-          query: { aiProviderConfig: { findFirst: async () => current } },
-          insert: () => ({ values: insertValues }),
-          update: () => ({ set: updateSet }),
-        }),
-      } as unknown as DatabaseService),
-      insertValues,
-      updateSet,
-    };
-  }
-
   const dto = (textModel?: string) => ({
     provider: 'qwen',
     baseUrl: 'https://x.example',
@@ -182,5 +188,122 @@ describe('AiConfigService — save() textModel 语义', () => {
     const { service, updateSet } = writableDb(row({ textModel: 'qwen-plus' }));
     await service.save(dto());
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ textModel: '' }));
+  });
+});
+
+describe('AiConfigService — 模态独立平台（text/image override）', () => {
+  const dto = (overrides: Record<string, unknown> = {}) => ({
+    provider: 'qwen',
+    baseUrl: 'https://x.example',
+    apiKey: 'sk-1234567890',
+    visionModel: 'qwen-vl-max',
+    imageModel: 'wanx2.1-t2i-turbo',
+    enabled: true,
+    ...overrides,
+  });
+
+  it('save() 更新带 textProvider 组 → update set 收到覆盖组三列', async () => {
+    const { service, updateSet } = writableDb(row());
+    await service.save(
+      dto({ textProvider: 'openai', textBaseUrl: 'https://o.example/v1', textApiKey: 'sk-text-key', textModel: 'gpt-x' }),
+    );
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        textProvider: 'openai',
+        textBaseUrl: 'https://o.example/v1',
+        textApiKey: 'sk-text-key',
+      }),
+    );
+  });
+
+  it('save() 首次保存带 textProvider 组 → insert values 收到覆盖组三列', async () => {
+    const { service, insertValues } = writableDb(undefined);
+    await service.save(
+      dto({ textProvider: 'openai', textBaseUrl: 'https://o.example/v1', textApiKey: 'sk-text-key', textModel: 'gpt-x' }),
+    );
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        textProvider: 'openai',
+        textBaseUrl: 'https://o.example/v1',
+        textApiKey: 'sk-text-key',
+      }),
+    );
+  });
+
+  it('save() textProvider 但 textBaseUrl 空 → 400 文本独立平台必须填写 baseUrl', async () => {
+    const { service } = writableDb(row());
+    await expect(
+      service.save(dto({ textProvider: 'openai', textBaseUrl: '', textApiKey: 'sk-text-key', textModel: 'gpt-x' })),
+    ).rejects.toThrow('文本独立平台必须填写 baseUrl');
+  });
+
+  it('save() textProvider 但 textModel 空 → 400（独立平台无法回退视觉模型）', async () => {
+    const { service } = writableDb(row());
+    await expect(
+      service.save(dto({ textProvider: 'openai', textBaseUrl: 'https://o.example/v1', textApiKey: 'sk-text-key' })),
+    ).rejects.toThrow('文本使用独立平台时必须填写文本模型（无法回退视觉模型）');
+  });
+
+  it('save() textProvider 无存量覆盖 key 且未传 textApiKey → 400 首次配置独立平台必须填写 API Key', async () => {
+    const { service } = writableDb(row()); // row() 默认 textApiKey: null
+    await expect(
+      service.save(dto({ textProvider: 'openai', textBaseUrl: 'https://o.example/v1', textModel: 'gpt-x' })),
+    ).rejects.toThrow('首次配置独立平台必须填写 API Key');
+  });
+
+  it('save() textProvider 传空 textApiKey 但存量有 → 保留存量值', async () => {
+    const { service, updateSet } = writableDb(row({ textApiKey: 'sk-stored' }));
+    await service.save(
+      dto({ textProvider: 'openai', textBaseUrl: 'https://o.example/v1', textApiKey: '', textModel: 'gpt-x' }),
+    );
+    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ textApiKey: 'sk-stored' }));
+  });
+
+  it('save() 不带 textProvider 但存量有覆盖 → update set 收到三列 null（显式清除）', async () => {
+    const { service, updateSet } = writableDb(
+      row({ textProvider: 'openai', textBaseUrl: 'https://o.example/v1', textApiKey: 'sk-stored' }),
+    );
+    await service.save(dto());
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ textProvider: null, textBaseUrl: null, textApiKey: null }),
+    );
+  });
+
+  it('get() 行含 textProvider+textBaseUrl → textPlatform 返回组（apiKey 脱敏）、imagePlatform 为 null', async () => {
+    const service = new AiConfigService(
+      readonlyDb(row({ textProvider: 'openai', textBaseUrl: 'https://o.example/v1', textApiKey: 'sk-text-key-123456' })),
+    );
+    const view = await service.get();
+    if (view.configured !== true) throw new Error('should be configured');
+    expect(view.textPlatform).toEqual({
+      provider: 'openai',
+      baseUrl: 'https://o.example/v1',
+      apiKeyMasked: 'sk-****56',
+    });
+    expect(view.imagePlatform).toBe(null);
+  });
+
+  it('get() 行无覆盖 → textPlatform / imagePlatform 均为 null', async () => {
+    const service = new AiConfigService(readonlyDb(row()));
+    const view = await service.get();
+    if (view.configured !== true) throw new Error('should be configured');
+    expect(view.textPlatform).toBe(null);
+    expect(view.imagePlatform).toBe(null);
+  });
+
+  it('image 组：保存带 imageProvider 组 → 收到三列；再保存不带 → 清除为 null', async () => {
+    const { service, updateSet } = writableDb(row());
+    await service.save(dto({ imageProvider: 'zhipu', imageBaseUrl: 'https://z.example/v1', imageApiKey: 'sk-img-key' }));
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        imageProvider: 'zhipu',
+        imageBaseUrl: 'https://z.example/v1',
+        imageApiKey: 'sk-img-key',
+      }),
+    );
+    await service.save(dto());
+    expect(updateSet).toHaveBeenLastCalledWith(
+      expect.objectContaining({ imageProvider: null, imageBaseUrl: null, imageApiKey: null }),
+    );
   });
 });

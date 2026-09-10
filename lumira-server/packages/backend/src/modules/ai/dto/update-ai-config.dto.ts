@@ -28,9 +28,40 @@ export class UpdateAiConfigDto {
   @MaxLength(64)
   textModel?: string;
 
+  /** 文本模态独立平台：非空 = 启用（需 textBaseUrl）；空/缺省 = 清除独立配置（跟随共享平台） */
+  @IsOptional()
+  @IsIn(PROVIDERS)
+  textProvider?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  textBaseUrl?: string;
+
+  /** 独立平台 apiKey：空/缺省 = 保留原值；首次启用独立平台必须提供 */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  textApiKey?: string;
+
   @IsString()
   @MaxLength(64)
   imageModel!: string;
+
+  /** 生图模态独立平台：语义同 textProvider */
+  @IsOptional()
+  @IsIn(PROVIDERS)
+  imageProvider?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  imageBaseUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  imageApiKey?: string;
 
   @IsBoolean()
   enabled!: boolean;
