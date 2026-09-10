@@ -62,8 +62,9 @@ const TEST_IMAGE_PNG_B64 =
 
 const TEST_NOTE = '生图模型按次计费，未做连通测试，可用性以首次生图为准';
 
-/** apiKey 脱敏：≤8 位全遮蔽；否则前 3 + **** + 后 2 */
+/** apiKey 脱敏：空值返回空串（避免与脱敏后的 '****' 混淆）；≤8 位全遮蔽；否则前 3 + **** + 后 2 */
 function maskKey(k: string): string {
+  if (!k) return '';
   return k.length <= 8 ? '****' : `${k.slice(0, 3)}****${k.slice(-2)}`;
 }
 
@@ -238,8 +239,9 @@ export class AiConfigService {
       throw new ServiceUnavailableException('AI 未配置或未启用，请先在后台「AI 设置」中完成配置并启用');
     }
     const hasCustomTextModel = (row.textModel ?? '').trim() !== '';
-    const hasTextPlatform = Boolean(row.textProvider?.trim() && row.textBaseUrl?.trim());
-    const hasImagePlatform = Boolean(row.imageProvider?.trim() && row.imageBaseUrl?.trim());
+    // 独立平台「存在」= provider + baseUrl + apiKey 三者齐全（任缺其一视为未配置，防止手工 SQL 缺 key 时把 null 直达上游客户端）
+    const hasTextPlatform = Boolean(row.textProvider?.trim() && row.textBaseUrl?.trim() && row.textApiKey?.trim());
+    const hasImagePlatform = Boolean(row.imageProvider?.trim() && row.imageBaseUrl?.trim() && row.imageApiKey?.trim());
     const shared = { provider: row.provider, baseUrl: row.baseUrl, apiKey: row.apiKey };
     return {
       vision: { ...shared, model: row.visionModel },

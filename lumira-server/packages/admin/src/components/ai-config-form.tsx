@@ -180,10 +180,9 @@ export function AiConfigForm({
     textModel: configured,
   });
   const [apiKeyMasked, setApiKeyMasked] = useState(configured ? initial.apiKeyMasked : '');
-  /** 已保存配置的有效文本模型（textModel 为空时的回退提示） */
-  const [effectiveTextModel, setEffectiveTextModel] = useState(
-    configured ? initial.effectiveTextModel : '',
-  );
+  /** 有效文本模型（输入即实时推导：textModel 为空时回退 visionModel） */
+  const effectiveTextModel =
+    form.textModel.trim() === '' ? form.visionModel.trim() : form.textModel.trim();
   const [textOverride, setTextOverride] = useState<OverrideState>(() =>
     overrideFromPlatform(initialTextPlatform),
   );
@@ -311,7 +310,6 @@ export function AiConfigForm({
       }
       const { config } = result;
       setApiKeyMasked(config.apiKeyMasked);
-      setEffectiveTextModel(config.effectiveTextModel);
       setTextPlatformMasked(config.textPlatform?.apiKeyMasked ?? '');
       setImagePlatformMasked(config.imagePlatform?.apiKeyMasked ?? '');
       // 后端为权威：独立开关与平台字段按保存结果回填（被清除时保留输入、仅置回跟随）
