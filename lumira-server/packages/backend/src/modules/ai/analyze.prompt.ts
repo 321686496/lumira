@@ -50,16 +50,21 @@ function renderCategoryTree(categories: CategoryNode[]): string {
   }
 
   const lines: string[] = [];
-  const walk = (parentKey: string | null, depth: number): void => {
+  // seen 记录当前分支路径上已展开的 key，用于切断 parentKey 回环
+  // （seed 005 中 food/style overhead 下存在 method 也叫 overhead，key===parentKey，会形成自环导致无限递归）
+  const walk = (parentKey: string | null, depth: number, seen: ReadonlySet<string>): void => {
     const children = (byParent.get(parentKey) || [])
       .slice()
       .sort((a, b) => a.key.localeCompare(b.key));
     for (const child of children) {
       lines.push(`${'  '.repeat(depth)}- ${child.key} ${child.name}`);
-      walk(child.key, depth + 1);
+      if (seen.has(child.key)) continue; // 环：仅渲染当前层，不再向下展开，避免堆栈溢出
+      const next = new Set(seen);
+      next.add(child.key);
+      walk(child.key, depth + 1, next);
     }
   };
-  walk(null, 0);
+  walk(null, 0, new Set());
   return lines.join('\n');
 }
 
