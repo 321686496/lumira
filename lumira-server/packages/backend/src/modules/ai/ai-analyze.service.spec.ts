@@ -96,7 +96,7 @@ describe('AiAnalyzeService', () => {
     expect(input.temperature).toBe(0.3);
     expect(input.jsonMode).toBe(true);
     // 返回为归一化结果（六段结构 + 默认姿势骨架）
-    expect(res.draft.meta.category).toBe('portrait');
+    expect((res.draft.meta as any).category).toBe('portrait');
     expect(Array.isArray(res.draft.pose)).toBe(true);
     expect(res.warnings).toEqual([]);
   });
