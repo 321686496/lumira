@@ -42,7 +42,19 @@ export { buildCategoryTree };
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000';
 
-async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
+/** AI 端点超时：生图内部 120s 请求 + 60s 轮询、剪影本地 ONNX CPU 推理均可能很慢，给足 5 分钟 */
+const AI_ENDPOINT_TIMEOUT_MS = 300_000;
+
+/**
+ * 后端请求统一封装。
+ * @param timeoutMs 可选超时（毫秒）：AI 生图 / 剪影等长耗时端点必须传，
+ *   避免后端慢（ONNX CPU 推理）或网络中断时 fetch 永久挂起 → 前端按钮卡在"生成中"。
+ */
+async function adminFetch<T>(
+  path: string,
+  init?: RequestInit,
+  timeoutMs?: number,
+): Promise<T> {
   const token = cookies().get(AUTH_COOKIE_NAME)?.value;
   if (!token) {
     throw new UnauthenticatedError('No admin token');
@@ -56,11 +68,24 @@ async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
     ...(init?.headers as Record<string, string> | undefined),
   };
 
-  const res = await fetch(`${BACKEND_URL}/api/v1/admin${path}`, {
-    ...init,
-    headers,
-    cache: 'no-store',
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BACKEND_URL}/api/v1/admin${path}`, {
+      ...init,
+      headers,
+      cache: 'no-store',
+      signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : init?.signal,
+    });
+  } catch (e) {
+    // 超时 / 网络中断 → 运营可读文案（否则 fetch 原生 message 不易理解）
+    const name = (e as { name?: string } | null | undefined)?.name;
+    if (name === 'TimeoutError' || name === 'AbortError') {
+      throw new Error(
+        `请求后端超时（${Math.round((timeoutMs ?? 0) / 1000)}s），可能后端处理较慢或网络不通，请稍后重试`,
+      );
+    }
+    throw new Error('无法连接后端服务，请检查网络与后端状态');
+  }
 
   if (res.status === 401) {
     throw new UnauthenticatedError('Token rejected by backend');
@@ -516,28 +541,28 @@ export const api = {
   testAiConfig: () =>
     adminFetch<AiConfigTestResult>('/ai-config/test', { method: 'POST' }),
 
-  /** multipart：image 文件（示例图，可选）+ text 文字描述（可选，至少其一） */
+  /** multipart：image 文件（示例图，可选）+ text/textDesc 文字描述（可选，至少其一）+ creationReq/poseCount。AI 识别耗时较长，超时 300s */
   aiAnalyze: (formData: FormData) =>
     adminFetch<AiAnalyzeResult>('/templates/ai-analyze', {
       method: 'POST',
       body: formData,
-    }),
+    }, AI_ENDPOINT_TIMEOUT_MS),
 
-  /** 提交生图任务（multipart meta + reference 可选）→ 立即返回 taskId */
+  /** 提交生图任务（multipart meta + reference 可选 + extraPrompt 附加提示词可选）→ 立即返回 taskId */
   aiGenerateImageStart: (formData: FormData) =>
     adminFetch<AiImageTaskId>('/templates/ai-generate-image', {
       method: 'POST',
       body: formData,
-    }),
+    }, AI_ENDPOINT_TIMEOUT_MS),
 
   /** 查询生图任务状态（done 带 image/mimeType；error 带 error） */
   aiGenerateImageStatus: (taskId: string) =>
     adminFetch<AiImageStatusResult>(`/templates/ai-generate-image/tasks/${taskId}`),
 
-  /** multipart：image 文件 + meta JSON（{ mode, crop }，可选） */
+  /** multipart：image 文件 + meta JSON（{ mode, crop, engine }，可选）。本地 ONNX 推理 / AI 生图均慢，超时 300s */
   aiGenerateSilhouette: (formData: FormData) =>
     adminFetch<AiImageResult>('/templates/ai-generate-silhouette', {
       method: 'POST',
       body: formData,
-    }),
+    }, AI_ENDPOINT_TIMEOUT_MS),
 };

@@ -1,6 +1,7 @@
 // src/components/ai-create/step-silhouette.tsx
-// Step4 剪影决策：选源图（封面/示例）→ 线稿/实心 → 可选自动裁剪 → 透明棋盘格预览 → 应用/跳过
-// 本地管线端点不依赖 AI 配置（纯服务端计算）
+// Step4 剪影决策：选源图（封面/示例）→ 生成方式（AI 生成 / 本地抠图）→ 线稿/实心 →
+// 可选自动裁剪 → 透明棋盘格预览 → 应用/跳过
+// AI 引擎走生图模型（silhouette_model 可在 AI 设置中单独指定）；本地引擎为 RMBG-1.4 纯服务端计算
 
 'use client';
 
@@ -29,16 +30,23 @@ export function StepSilhouette({
   exampleFile,
   busy,
   onApply,
+  aiAvailable,
+  silhouetteModelName,
 }: {
   coverFile: File | null;
   exampleFile: File | null;
   busy: boolean;
   onApply: (file: File | null) => void;
+  /** AI 已配置并启用（engine 默认值 + AI 选项可用性） */
+  aiAvailable: boolean;
+  /** 生效的剪影模型名（未单独指定 = 生图模型），engine=ai 时展示 */
+  silhouetteModelName: string | null;
 }) {
   const { toast } = useToast();
   const [source, setSource] = useState<'cover' | 'example'>('cover');
   const [mode, setMode] = useState<'sketch' | 'solid'>('sketch');
   const [crop, setCrop] = useState(true);
+  const [engine, setEngine] = useState<'ai' | 'local'>(aiAvailable ? 'ai' : 'local');
   const [generating, setGenerating] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
@@ -52,18 +60,28 @@ export function StepSilhouette({
       return;
     }
     setGenerating(true);
-    const fd = new FormData();
-    fd.set('image', sourceFile);
-    fd.set('meta', JSON.stringify({ mode, crop }));
-    const result = await aiGenerateSilhouetteAction(fd);
-    setGenerating(false);
-    if ('error' in result) {
-      toast({ variant: 'destructive', title: '剪影生成失败', description: result.error });
-      return;
+    try {
+      const fd = new FormData();
+      fd.set('image', sourceFile);
+      fd.set('meta', JSON.stringify({ mode, crop, engine }));
+      const result = await aiGenerateSilhouetteAction(fd);
+      if ('error' in result) {
+        toast({ variant: 'destructive', title: '剪影生成失败', description: result.error });
+        return;
+      }
+      const file = base64ToFile(result.image, result.mimeType, `ai-silhouette-${Date.now()}.png`);
+      setPreviewFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+    } catch (e) {
+      // server action 抛错（网络中断 / 框架层错误）也必须恢复按钮，避免永久"生成中"
+      toast({
+        variant: 'destructive',
+        title: '剪影生成失败',
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setGenerating(false);
     }
-    const file = base64ToFile(result.image, result.mimeType, `ai-silhouette-${Date.now()}.png`);
-    setPreviewFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
   };
 
   return (
@@ -71,7 +89,7 @@ export function StepSilhouette({
       <CardHeader>
         <CardTitle>生成姿势剪影</CardTitle>
         <CardDescription>
-          从源图自动抠出人物并转为线稿 / 实心剪影（透明底 PNG），替代手工抠图；可跳过后在表单中手动配置。
+          从源图提取人物并转为线稿 / 实心剪影（透明底 PNG），替代手工抠图；可选 AI 生成或本地抠图，可跳过后在表单中手动配置。
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -101,6 +119,40 @@ export function StepSilhouette({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* 生成方式 */}
+        <div className="space-y-2">
+          <Label>生成方式</Label>
+          <div className="inline-flex rounded-md border border-border p-0.5">
+            {([
+              { key: 'ai', label: 'AI 生成' },
+              { key: 'local', label: '本地抠图' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                disabled={disabled || (opt.key === 'ai' && !aiAvailable)}
+                onClick={() => setEngine(opt.key)}
+                className={cn(
+                  'rounded px-3 py-1 text-sm transition-colors',
+                  engine === opt.key
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                  opt.key === 'ai' && !aiAvailable && 'cursor-not-allowed opacity-40',
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {engine === 'ai'
+              ? silhouetteModelName
+                ? `将使用剪影模型：${silhouetteModelName}（AI 设置中可单独指定，未指定时与生图模型一致）`
+                : '将使用生图模型生成白底剪影后自动转透明底'
+              : '本地 RMBG-1.4 模型抠像，无需 AI 配置；服务器未安装模型时会返回错误'}
+          </p>
         </div>
 
         {/* 模式选择 */}

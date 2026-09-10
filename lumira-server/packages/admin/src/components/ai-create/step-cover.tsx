@@ -7,6 +7,8 @@ import type { Dispatch, SetStateAction } from 'react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { aiGenerateImageStartAction } from '@/actions/ai';
 import { pollAiImageTask } from '@/lib/ai-task';
@@ -43,6 +45,8 @@ export function StepCover({
 }) {
   const { toast } = useToast();
   const [generating, setGenerating] = useState(false);
+  /** 附加提示词：拼接到后端合成 prompt 末尾（用户对封面图的额外要求，权重最高） */
+  const [extraPrompt, setExtraPrompt] = useState('');
 
   const disabled = busy || generating;
 
@@ -69,6 +73,8 @@ export function StepCover({
       const fd = new FormData();
       fd.set('meta', JSON.stringify(draft));
       if (exampleFile) fd.set('reference', exampleFile);
+      const extra = extraPrompt.trim();
+      if (extra) fd.set('extraPrompt', extra);
       const start = await aiGenerateImageStartAction(fd);
       if ('error' in start) {
         toast({ variant: 'destructive', title: '生成失败', description: start.error });
@@ -87,6 +93,13 @@ export function StepCover({
         ...prev,
       ]);
       toast({ title: '已生成效果图', description: '已置顶为封面候选，可继续重 roll 或调整排序' });
+    } catch (e) {
+      // server action 抛错（网络中断 / 框架层错误）也必须恢复按钮，避免永久"生成中"
+      toast({
+        variant: 'destructive',
+        title: '生成失败',
+        description: e instanceof Error ? e.message : String(e),
+      });
     } finally {
       setGenerating(false);
     }
@@ -133,6 +146,22 @@ export function StepCover({
           <Button size="sm" disabled={!draft || disabled} onClick={generate}>
             <MagicWand size={14} className="mr-1" /> {generating ? '生成中…' : '生成效果图'}
           </Button>
+        </div>
+
+        {/* 附加提示词：拼接到后端合成 prompt 末尾，可多次生成时调整迭代 */}
+        <div className="space-y-2">
+          <Label htmlFor="ai-extra-prompt">附加提示词（可选）</Label>
+          <Textarea
+            id="ai-extra-prompt"
+            value={extraPrompt}
+            onChange={(e) => setExtraPrompt(e.target.value)}
+            placeholder="对封面效果图的额外要求，如「人物戴草帽」「天空占比更大」，将附加到 AI 提示词末尾"
+            rows={2}
+            disabled={busy}
+          />
+          <p className="text-xs text-muted-foreground">
+            留空则按草稿自动合成提示词；填写后每次生成（含重 roll）都会附加该要求
+          </p>
         </div>
 
         {candidates.length > 0 && (

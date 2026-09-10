@@ -59,11 +59,12 @@ function toStrArray(v: unknown): string[] {
  * 从草稿合成生图 prompt（中文，一段式描述）。前端不拼 prompt。
  *
  * 拼接顺序：classification 主体类型 + aspectRatio 画幅 → tags 风格 → 构图描述 →
- * 光线（方向 + 最佳时段）→ 背景 + 道具 → 后期（LUT 标签 + 颗粒感）→ 氛围（shortDesc / description）。
+ * 光线（方向 + 最佳时段）→ 背景 + 道具 → 后期（LUT 标签 + 颗粒感）→ 氛围（shortDesc / description）→
+ * 额外要求（extraPrompt，用户显式补充，置于末尾权重最高）。
  * 格式固定为「一张{画幅}{主体类型}摄影作品，风格{…}，{光线}，背景{…}，{氛围/后期}」，
  * 字段缺失跳过，空草稿走兜底模板。
  */
-export function buildImagePrompt(draft: Record<string, unknown>): string {
+export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: string | null): string {
   const meta = isPlainObject(draft.meta) ? draft.meta : {};
   const composition = isPlainObject(draft.composition) ? draft.composition : {};
   const sceneGuide = isPlainObject(draft.sceneGuide) ? draft.sceneGuide : {};
@@ -134,6 +135,10 @@ export function buildImagePrompt(draft: Record<string, unknown>): string {
   } else if (description !== undefined) {
     segments.push(description);
   }
+
+  // ⑧ 额外要求：用户显式补充的附加提示词（Step3 输入），置于末尾权重最高
+  const extra = typeof extraPrompt === 'string' ? extraPrompt.trim() : '';
+  if (extra) segments.push(`额外要求：${extra}`);
 
   if (segments.length === 0) return FALLBACK_PROMPT;
   return `${segments.join('，')}。`;

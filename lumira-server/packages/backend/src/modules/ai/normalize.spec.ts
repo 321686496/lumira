@@ -306,4 +306,45 @@ describe('normalizeDraft', () => {
     expect(mapEnumValue('日系清新', LUTS, LUT_LABELS)).toBe('japanese_fresh');
     expect(mapEnumValue('原图', LUTS, LUT_LABELS)).toBe('none');
   });
+
+  it('20. 表单校验范围对齐与防失控截断：exposure -3..3 / shortDesc 20 字 / name 100 字 / pose 6 个', () => {
+    const raw = baseDraft();
+    // 曝光补偿 AI 输出 4（旧范围 -5..5 会放行 → 表单 schema -3..3 静默提交失败）
+    raw.camera.exposureCompensation = 4;
+    // shortDesc 超长（表单 schema max 20）
+    raw.meta.shortDesc = '这是一条超过二十个字的情绪化文案会超过二十个字吗是的超过';
+    // name 超长（表单 schema max 100）
+    raw.meta.name = '超'.repeat(120);
+    // pose 失控输出 8 个
+    raw.pose = Array.from({ length: 8 }, (_, i) => ({
+      name: `姿势${i + 1}`,
+      description: 'desc',
+      position: { x: 0.5, y: 0.5 },
+      scale: 1,
+      rotation: 0,
+    }));
+
+    const { draft, warnings } = normalizeDraft(raw, CATEGORIES);
+    const joined = warnings.join('\n');
+
+    // exposureCompensation 夹取到 3 + warning
+    expect(draft.camera.exposureCompensation).toBe(3);
+    expect(joined).toContain('camera.exposureCompensation');
+    expect(joined).toContain('[-3, 3]');
+
+    // shortDesc 截断为前 20 字 + warning
+    const shortDesc = (draft.meta as any).shortDesc as string;
+    expect(shortDesc.length).toBe(20);
+    expect(joined).toContain('meta.shortDesc');
+
+    // name 截断为前 100 字 + warning
+    const name = (draft.meta as any).name as string;
+    expect(name.length).toBe(100);
+    expect(joined).toContain('meta.name');
+    expect(joined).toContain('100');
+
+    // pose 截断为 6 个 + warning
+    expect(draft.pose).toHaveLength(6);
+    expect(joined).toContain('pose 数量 8 超过上限 6');
+  });
 });

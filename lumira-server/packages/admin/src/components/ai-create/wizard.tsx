@@ -12,9 +12,22 @@ import TemplateForm, { type TemplateFormAiInjection } from '@/components/templat
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { compressImage } from '@/lib/image-compress';
-import { aiAnalyzeAction, aiGenerateImageStartAction, aiGenerateSilhouetteAction } from '@/actions/ai';
+import {
+  aiAnalyzeAction,
+  aiGenerateImageStartAction,
+  aiGenerateSilhouetteAction,
+  getAiConfigAction,
+} from '@/actions/ai';
 import { pollAiImageTask } from '@/lib/ai-task';
 import type { TemplateCategory, AiImageStatusResult } from '@/types/admin';
 import { StepCover, type CoverCandidate } from './step-cover';
@@ -77,6 +90,13 @@ export function AiCreateWizard({
   const [analyzing, setAnalyzing] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [autoState, setAutoState] = useState<{ running: boolean; stage: AutoStage; error?: string } | null>(null);
+  /** Step1 附加输入：创作要求 / 姿势个数（'auto' = AI 自动判断）；主文字描述复用 inputText（同时作为 textDesc 附加输入） */
+  const [creationReq, setCreationReq] = useState('');
+  const [poseCount, setPoseCount] = useState('auto');
+  /** AI 剪影可用性（配置且启用）：Step4 默认引擎 + 全自动流程剪影 engine */
+  const [aiSilhouetteAvailable, setAiSilhouetteAvailable] = useState(false);
+  /** 生效的剪影模型名（未单独指定 = 生图模型），Step4 展示 */
+  const [silhouetteModelName, setSilhouetteModelName] = useState<string | null>(null);
   const stampRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -94,6 +114,23 @@ export function AiCreateWizard({
 
   const busy = analyzing || Boolean(autoState?.running);
   const hasInput = Boolean(exampleFile) || inputText.trim() !== '';
+
+  /** 挂载时读 AI 配置：Step4 默认引擎、全自动剪影 engine、模型名展示 */
+  useEffect(() => {
+    let cancelled = false;
+    getAiConfigAction()
+      .then((cfg) => {
+        if (cancelled || cfg.configured !== true) return;
+        setAiSilhouetteAvailable(cfg.enabled);
+        setSilhouetteModelName(cfg.silhouetteModel ?? cfg.imageModel);
+      })
+      .catch(() => {
+        // best-effort：失败按未配置处理（Step4 默认本地抠图）
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const inject = (partial: Omit<TemplateFormAiInjection, 'stamp'>) =>
     setInjection({ stamp: ++stampRef.current, ...partial });
@@ -147,123 +184,154 @@ export function AiCreateWizard({
     if (formActivated || step > 1) resetFlow();
   };
 
+  /** 识别请求附加输入写入 FormData（trim 后非空才传；poseCount 'auto' = AI 自动判断不传） */
+  const setAnalyzeExtras = (fd: FormData) => {
+    const text = inputText.trim();
+    const req = creationReq.trim();
+    if (text) fd.set('textDesc', text);
+    if (req) fd.set('creationReq', req);
+    if (poseCount !== 'auto') fd.set('poseCount', poseCount);
+  };
+
   /** 手动识别：成功后草稿回填 + 示例图作默认封面候选（纯文模式候选为空）→ Step2 */
   const handleAnalyze = async () => {
     if (!hasInput) return;
     setAnalyzing(true);
     setErrorText(null);
-    const analyzeFd = new FormData();
-    if (exampleFile) analyzeFd.set('image', exampleFile);
-    if (inputText.trim()) analyzeFd.set('text', inputText.trim());
-    const result = await aiAnalyzeAction(analyzeFd);
-    setAnalyzing(false);
-    if ('error' in result) {
-      setErrorText(result.error);
-      return;
+    try {
+      const analyzeFd = new FormData();
+      if (exampleFile) analyzeFd.set('image', exampleFile);
+      if (inputText.trim()) analyzeFd.set('text', inputText.trim());
+      setAnalyzeExtras(analyzeFd);
+      const result = await aiAnalyzeAction(analyzeFd);
+      if ('error' in result) {
+        setErrorText(result.error);
+        return;
+      }
+      setDraft(result.draft);
+      setWarnings(result.warnings);
+      if (exampleFile) {
+        setCandidates([{
+          id: 'example',
+          file: exampleFile,
+          url: URL.createObjectURL(exampleFile),
+          source: 'example',
+        }]);
+        inject({ json: result.draft, images: [exampleFile], replaceImages: true });
+      } else {
+        setCandidates([]);
+        inject({ json: result.draft });
+      }
+      setFormActivated(true);
+      goto(2);
+    } catch (e) {
+      // server action 抛错也必须恢复按钮并给出提示，避免永久"识别中"
+      const msg = e instanceof Error ? e.message : String(e);
+      setErrorText(msg);
+      toast({ variant: 'destructive', title: '识别失败', description: msg });
+    } finally {
+      setAnalyzing(false);
     }
-    setDraft(result.draft);
-    setWarnings(result.warnings);
-    if (exampleFile) {
-      setCandidates([{
-        id: 'example',
-        file: exampleFile,
-        url: URL.createObjectURL(exampleFile),
-        source: 'example',
-      }]);
-      inject({ json: result.draft, images: [exampleFile], replaceImages: true });
-    } else {
-      setCandidates([]);
-      inject({ json: result.draft });
-    }
-    setFormActivated(true);
-    goto(2);
   };
 
   /** 全自动：识别 → 生图作封面 → 线稿剪影 → 创建并上架；失败停在对应步骤转人工，已成功资产保留 */
   const runAutoAll = async () => {
     if (!hasInput) return;
     setErrorText(null);
-    setAutoState({ running: true, stage: 'analyzing' });
-
-    // ① 识别
-    const analyzeFd = new FormData();
-    if (exampleFile) analyzeFd.set('image', exampleFile);
-    if (inputText.trim()) analyzeFd.set('text', inputText.trim());
-    const analyzeResult = await aiAnalyzeAction(analyzeFd);
-    if ('error' in analyzeResult) {
-      setAutoState(null);
-      setErrorText(analyzeResult.error);
-      return;
-    }
-    const draftLocal = analyzeResult.draft;
-    setDraft(draftLocal);
-    setWarnings(analyzeResult.warnings);
-    setFormActivated(true);
-    let exampleCandidate: CoverCandidate | null = null;
-    if (exampleFile) {
-      exampleCandidate = {
-        id: 'example',
-        file: exampleFile,
-        url: URL.createObjectURL(exampleFile),
-        source: 'example',
-      };
-    }
-
-    // ② 生图作封面（异步任务式：提交 taskId 后轮询；参考图 = 示例图，纯文模式无参考图）
-    setAutoState({ running: true, stage: 'generating-image' });
-    const genFd = new FormData();
-    genFd.set('meta', JSON.stringify(draftLocal));
-    if (exampleFile) genFd.set('reference', exampleFile);
-    // 生图失败统一停在 Step3 转人工：示例图保底作封面，草稿保留（纯文模式候选为空）
-    const failGenerate = (err: string) => {
-      setCandidates(exampleCandidate ? [exampleCandidate] : []);
-      if (exampleFile) {
-        inject({ json: draftLocal, images: [exampleFile], replaceImages: true });
-      } else {
-        inject({ json: draftLocal });
-      }
-      goto(3);
-      setAutoState({ running: false, stage: 'generating-image', error: err });
-      return;
-    };
-    const genStart = await aiGenerateImageStartAction(genFd);
-    if ('error' in genStart) {
-      failGenerate(genStart.error);
-      return;
-    }
-    let genStatus: AiImageStatusResult;
+    let stage: AutoStage = 'analyzing';
+    setAutoState({ running: true, stage });
     try {
-      genStatus = await pollAiImageTask(genStart.taskId);
-    } catch (err) {
-      failGenerate((err as Error).message);
-      return;
-    }
-    const aiCover = base64ToFile(genStatus.image!, genStatus.mimeType!, `ai-cover-${Date.now()}.png`);
-    setCandidates([
-      { id: `ai-${Date.now()}`, file: aiCover, url: URL.createObjectURL(aiCover), source: 'ai' },
-      ...(exampleCandidate ? [exampleCandidate] : []),
-    ]);
-    inject({ json: draftLocal, images: [aiCover], replaceImages: true });
+      // ① 识别（含 Step1 附加输入：创作要求 / 姿势个数；主文字描述同时作为 textDesc）
+      const analyzeFd = new FormData();
+      if (exampleFile) analyzeFd.set('image', exampleFile);
+      if (inputText.trim()) analyzeFd.set('text', inputText.trim());
+      setAnalyzeExtras(analyzeFd);
+      const analyzeResult = await aiAnalyzeAction(analyzeFd);
+      if ('error' in analyzeResult) {
+        setAutoState(null);
+        setErrorText(analyzeResult.error);
+        return;
+      }
+      const draftLocal = analyzeResult.draft;
+      setDraft(draftLocal);
+      setWarnings(analyzeResult.warnings);
+      setFormActivated(true);
+      const exampleCandidate: CoverCandidate | null = exampleFile
+        ? {
+            id: 'example',
+            file: exampleFile,
+            url: URL.createObjectURL(exampleFile),
+            source: 'example',
+          }
+        : null;
 
-    // ③ 剪影（源 = 生成的封面图，线稿模式 + 自动裁剪）
-    setAutoState({ running: true, stage: 'generating-silhouette' });
-    const silFd = new FormData();
-    silFd.set('image', aiCover);
-    silFd.set('meta', JSON.stringify({ mode: 'sketch', crop: true }));
-    const silResult = await aiGenerateSilhouetteAction(silFd);
-    if ('error' in silResult) {
-      // 停在 Step4 转人工：剪影留空
-      goto(4);
-      setAutoState({ running: false, stage: 'generating-silhouette', error: silResult.error });
-      return;
-    }
-    const sil = base64ToFile(silResult.image, silResult.mimeType, `ai-silhouette-${Date.now()}.png`);
-    setSilhouetteFile(sil);
-    goto(5);
+      // ② 生图作封面（异步任务式：提交 taskId 后轮询；参考图 = 示例图，纯文模式无参考图）
+      stage = 'generating-image';
+      setAutoState({ running: true, stage });
+      const genFd = new FormData();
+      genFd.set('meta', JSON.stringify(draftLocal));
+      if (exampleFile) genFd.set('reference', exampleFile);
+      // 生图失败统一停在 Step3 转人工：示例图保底作封面，草稿保留（纯文模式候选为空）
+      const failGenerate = (err: string) => {
+        setCandidates(exampleCandidate ? [exampleCandidate] : []);
+        if (exampleFile) {
+          inject({ json: draftLocal, images: [exampleFile], replaceImages: true });
+        } else {
+          inject({ json: draftLocal });
+        }
+        goto(3);
+        setAutoState({ running: false, stage, error: err });
+      };
+      const genStart = await aiGenerateImageStartAction(genFd);
+      if ('error' in genStart) {
+        failGenerate(genStart.error);
+        return;
+      }
+      let genStatus: AiImageStatusResult;
+      try {
+        genStatus = await pollAiImageTask(genStart.taskId);
+      } catch (err) {
+        failGenerate((err as Error).message);
+        return;
+      }
+      const aiCover = base64ToFile(genStatus.image!, genStatus.mimeType!, `ai-cover-${Date.now()}.png`);
+      setCandidates([
+        { id: `ai-${Date.now()}`, file: aiCover, url: URL.createObjectURL(aiCover), source: 'ai' },
+        ...(exampleCandidate ? [exampleCandidate] : []),
+      ]);
+      inject({ json: draftLocal, images: [aiCover], replaceImages: true });
 
-    // ④ 提交上架（由 TemplateForm 完成提交并 redirect 到模板列表）
-    setAutoState({ running: true, stage: 'submitting' });
-    inject({ silhouette: sil, isActive: true, autoSubmit: true });
+      // ③ 剪影（源 = 生成的封面图，线稿模式 + 自动裁剪；AI 已配置并启用时走 AI 引擎，否则本地抠图）
+      stage = 'generating-silhouette';
+      setAutoState({ running: true, stage });
+      const silFd = new FormData();
+      silFd.set('image', aiCover);
+      silFd.set('meta', JSON.stringify({ mode: 'sketch', crop: true, engine: aiSilhouetteAvailable ? 'ai' : 'local' }));
+      const silResult = await aiGenerateSilhouetteAction(silFd);
+      if ('error' in silResult) {
+        // 停在 Step4 转人工：剪影留空
+        goto(4);
+        setAutoState({ running: false, stage, error: silResult.error });
+        return;
+      }
+      const sil = base64ToFile(silResult.image, silResult.mimeType, `ai-silhouette-${Date.now()}.png`);
+      setSilhouetteFile(sil);
+      goto(5);
+
+      // ④ 提交上架（由 TemplateForm 完成提交并 redirect 到模板列表）
+      stage = 'submitting';
+      setAutoState({ running: true, stage });
+      inject({ silhouette: sil, isActive: true, autoSubmit: true });
+    } catch (e) {
+      // 意外异常（网络中断 / 框架层错误）：停在当前阶段，错误透出，不再永久卡"进行中"
+      const msg = e instanceof Error ? e.message : String(e);
+      setAutoState({ running: false, stage, error: msg });
+      toast({
+        variant: 'destructive',
+        title: `全自动在「${AUTO_STAGE_TEXT[stage]}」阶段异常`,
+        description: msg,
+      });
+    }
   };
 
   /** Step3 应用封面：替换 imageFiles（首图 = 封面）→ Step4 */
@@ -404,6 +472,39 @@ export function AiCreateWizard({
                 )}
               </div>
 
+              {/* 附加输入：影响 AI 识别草稿（识别与全自动均生效） */}
+              <div className="space-y-2">
+                <Label htmlFor="ai-creation-req">创作要求（可选）</Label>
+                <Textarea
+                  id="ai-creation-req"
+                  value={creationReq}
+                  onChange={(e) => setCreationReq(e.target.value)}
+                  placeholder="对 AI 的额外创作指令，如「偏胶片感」「避开正午顶光」"
+                  rows={3}
+                  disabled={busy}
+                />
+              </div>
+
+              <div className="space-y-2 md:max-w-xs">
+                <Label>姿势个数</Label>
+                <Select value={poseCount} onValueChange={setPoseCount} disabled={busy}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="AI 自动判断" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">AI 自动判断</SelectItem>
+                    {[1, 2, 3, 4, 5, 6].map((n) => (
+                      <SelectItem key={n} value={String(n)}>
+                        固定 {n} 个
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  选「AI 自动判断」时，将结合文字描述 / 创作要求（含示例图中可见的文字要求）在 1~6 个范围内决定姿势数量
+                </p>
+              </div>
+
               <div className="rounded-lg border border-border p-4">
                 <Label htmlFor="ai-input-text" className="text-sm font-medium text-foreground">
                   文字描述 / 创作要求（可选）
@@ -496,6 +597,8 @@ export function AiCreateWizard({
             exampleFile={exampleFile}
             busy={busy}
             onApply={applySilhouette}
+            aiAvailable={aiSilhouetteAvailable}
+            silhouetteModelName={silhouetteModelName}
           />
         )}
 

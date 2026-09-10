@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useEffect, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -269,6 +269,54 @@ const STEPS = [
   { title: '后期处理', desc: '裁剪、色彩、滤镜等' },
 ] as const;
 
+/**
+ * 表单字段 → 所在步骤：提交校验失败时跳到出错字段所在步骤并 toast 提示，
+ * 避免 react-hook-form 静默失败（用户停在别的步骤根本看不到字段错误）。
+ */
+const FIELD_STEP: Partial<Record<keyof FormValues, number>> = {
+  // step 0 基本信息
+  name: 0, category: 0, price: 0, description: 0, shortDesc: 0, author: 0, tags: 0,
+  referenceSource: 0, ambienceSeasons: 0, ambienceWeathers: 0, ambienceTimeTones: 0,
+  // step 1 封面与剪影
+  silhouetteType: 1, silhouetteBuiltinKey: 1,
+  // step 2 构图
+  overlayType: 2, gridType: 2, aspectRatio: 2, opacity: 2, compositionDescription: 2,
+  subjectFrameX: 2, subjectFrameY: 2, subjectFrameW: 2, subjectFrameH: 2,
+  // step 3 相机参数
+  exposureCompensation: 3, isoMode: 3, iso: 3, shutterSpeed: 3, whiteBalance: 3,
+  whiteBalanceK: 3, flashMode: 3, focusMode: 3, lensType: 3, lensSuggestion: 3,
+  // step 4 场景引导
+  lightDirection: 4, shootingDistance: 4, background: 4, props: 4, bestTime: 4, tips: 4,
+  // step 5 后期处理
+  cropRatio: 5, colorBrightness: 5, colorContrast: 5, colorSaturation: 5, colorTemperature: 5,
+  colorTint: 5, colorHighlights: 5, colorShadows: 5, colorBlackPoint: 5, colorClarity: 5,
+  colorVibrance: 5, colorBrilliance: 5, smoothStrength: 5, sharpen: 5, vignette: 5,
+  grain: 5, lut: 5, systemFilter: 5, fillLightEnabled: 5, fillLightColor: 5,
+  fillLightIntensity: 5,
+};
+
+/** 字段中文名（toast 展示「{字段中文名}：{错误信息}」；未收录字段回退字段名） */
+const FIELD_LABELS: Partial<Record<keyof FormValues, string>> = {
+  name: '模板名称', category: '分类', price: '价格', description: '长描述', shortDesc: '短简介',
+  author: '作者', tags: '标签', referenceSource: '参考来源',
+  ambienceSeasons: '季节氛围', ambienceWeathers: '天气氛围', ambienceTimeTones: '时段氛围',
+  silhouetteType: '剪影类型', silhouetteBuiltinKey: '内置剪影',
+  overlayType: '叠加层', gridType: '网格类型', aspectRatio: '画幅比例', opacity: '不透明度',
+  compositionDescription: '构图描述', subjectFrameX: '主体框 X', subjectFrameY: '主体框 Y',
+  subjectFrameW: '主体框宽', subjectFrameH: '主体框高',
+  exposureCompensation: '曝光补偿', isoMode: 'ISO 模式', iso: 'ISO', shutterSpeed: '快门速度',
+  whiteBalance: '白平衡', whiteBalanceK: '白平衡色温', flashMode: '闪光灯模式',
+  focusMode: '对焦模式', lensType: '镜头类型', lensSuggestion: '镜头建议',
+  lightDirection: '光线方向', shootingDistance: '拍摄距离', background: '背景', props: '道具',
+  bestTime: '最佳时间', tips: '拍摄提示',
+  cropRatio: '裁剪比例', colorBrightness: '亮度', colorContrast: '对比度', colorSaturation: '饱和度',
+  colorTemperature: '色温', colorTint: '色调', colorHighlights: '高光', colorShadows: '阴影',
+  colorBlackPoint: '黑点', colorClarity: '清晰度', colorVibrance: '自然饱和度',
+  colorBrilliance: '鲜明度', smoothStrength: '磨皮强度', sharpen: '锐化', vignette: '暗角',
+  grain: '颗粒', lut: '滤镜 LUT', systemFilter: '系统滤镜',
+  fillLightEnabled: '补光灯', fillLightColor: '补光灯颜色', fillLightIntensity: '补光灯强度',
+};
+
 function parseCommaList(raw: string | undefined): string[] {
   if (!raw) return [];
   return raw
@@ -334,6 +382,8 @@ export default function TemplateForm({
 }: TemplateFormProps) {
   const { toast } = useToast();
   const [step, setStep] = useState(0);
+  /** 表单容器 ref：校验失败时滚回表单（用户可能停留在向导说明区） */
+  const formContainerRef = React.useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -966,10 +1016,33 @@ export default function TemplateForm({
     });
   };
 
+  /**
+   * 校验失败可见化（原为静默失败：错误只在其他步骤的字段上，用户点提交毫无反应）。
+   * 跳到第一个出错字段所在步骤 + toast「{字段中文名}：{错误信息}」+ 滚动到表单顶部。
+   */
+  const onInvalid = (errs: FieldErrors<FormValues>) => {
+    const firstField = Object.keys(errs)[0] as keyof FormValues | undefined;
+    if (firstField) {
+      const stepIndex = FIELD_STEP[firstField] ?? 0;
+      setStep(stepIndex);
+      const label = FIELD_LABELS[firstField] ?? String(firstField);
+      const message = errs[firstField]?.message;
+      toast({
+        variant: 'destructive',
+        title: '表单校验未通过',
+        description:
+          typeof message === 'string'
+            ? `${label}：${message}（已跳到「${STEPS[stepIndex].title}」步骤）`
+            : `请检查「${STEPS[stepIndex].title}」步骤的字段`,
+      });
+    }
+    formContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   /** 向导/全自动提交入口：设定 isActive 后走现有校验提交流程 */
   const doSubmit = (active: boolean) => {
     setValue('isActive', active);
-    handleSubmit(onSubmit)();
+    handleSubmit(onSubmit, onInvalid)();
   };
   const submitRef = React.useRef<() => void>(() => {});
   submitRef.current = () => doSubmit(true);
@@ -1040,7 +1113,7 @@ export default function TemplateForm({
   const watchedValues = watch();
 
   return (
-    <div className="flex gap-6">
+    <div className="flex gap-6" ref={formContainerRef}>
       <div className="flex-1 min-w-0 space-y-6">
         <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 p-4">
           <div className="flex items-start gap-3">
@@ -1103,7 +1176,7 @@ export default function TemplateForm({
           ))}
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-6">
           {step === 0 && (
             <div className="space-y-4">
               <div className="space-y-2">

@@ -7,6 +7,12 @@ import { AiCreateWizard } from '@/components/ai-create/wizard';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000';
 
+/**
+ * Vercel serverless 函数时长上限（秒）：本页 server action 链路含 AI 生图（120s 请求
+ * + 60s 轮询）与剪影 ONNX CPU 推理，默认时长（10~15s）会被掐断 → 前端永久"生成中"。
+ */
+export const maxDuration = 60;
+
 export default async function AiCreatePage() {
   let categories;
   try {

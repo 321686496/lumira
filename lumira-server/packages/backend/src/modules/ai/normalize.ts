@@ -218,6 +218,9 @@ function clampOrDefault(
   return clamped;
 }
 
+/** pose 数量上限：与提示词约定 1~6 个一致，防 LLM 失控输出（表单姿势编辑器规模也按 6 设计） */
+const MAX_POSES = 6;
+
 // ===== 草稿归一化主入口 =====
 
 /**
@@ -243,8 +246,12 @@ export function normalizeDraft(raw: unknown, categories: CategoryNode[]): Normal
   const rawMeta = isPlainObject(src.meta) ? src.meta : {};
   const meta: Record<string, unknown> = {};
 
-  // name：string 化 + trim；长度 12~30 之外仅 warning 不丢弃
-  const name = toStr(rawMeta.name) ?? '';
+  // name：string 化 + trim；12~30 之外仅 warning 不丢弃；超 100 字截断（表单 schema max(100)）
+  let name = toStr(rawMeta.name) ?? '';
+  if (name.length > 100) {
+    warnings.push(`meta.name 长度 ${name.length} 超过 100 字，已截断为前 100 字`);
+    name = name.slice(0, 100);
+  }
   meta.name = name;
   if (name.length < 12 || name.length > 30) {
     warnings.push(`meta.name 长度 ${name.length} 不在 12~30 字范围内，已保留请复核`);
@@ -261,9 +268,16 @@ export function normalizeDraft(raw: unknown, categories: CategoryNode[]): Normal
   }
   meta.category = category;
 
-  // shortDesc / description：string 化
-  const shortDesc = toStr(rawMeta.shortDesc);
-  if (shortDesc !== undefined) meta.shortDesc = shortDesc;
+  // shortDesc：string 化 + 超 20 字截断（表单 schema max(20)，超字提交会静默校验失败）
+  const shortDescRaw = toStr(rawMeta.shortDesc);
+  if (shortDescRaw !== undefined) {
+    if (shortDescRaw.length > 20) {
+      warnings.push(`meta.shortDesc 长度 ${shortDescRaw.length} 超过 20 字，已截断为前 20 字`);
+      meta.shortDesc = shortDescRaw.slice(0, 20);
+    } else {
+      meta.shortDesc = shortDescRaw;
+    }
+  }
   const description = toStr(rawMeta.description);
   if (description !== undefined) meta.description = description;
 
@@ -353,6 +367,10 @@ export function normalizeDraft(raw: unknown, categories: CategoryNode[]): Normal
     pose.rotation = clampOrDefault(item.rotation, -180, 180, 0, `pose[${idx}].rotation`, warnings);
     poses.push(pose);
   });
+  if (poses.length > MAX_POSES) {
+    warnings.push(`pose 数量 ${poses.length} 超过上限 ${MAX_POSES}，已截断`);
+    poses.length = MAX_POSES;
+  }
   if (poses.length === 0) {
     poses.push({ name: '', description: '', position: { x: 0.5, y: 0.5 }, scale: 1, rotation: 0 });
   }
@@ -361,7 +379,7 @@ export function normalizeDraft(raw: unknown, categories: CategoryNode[]): Normal
   // ===== camera =====
   const rawCam = isPlainObject(src.camera) ? src.camera : {};
   const camera: Record<string, unknown> = {};
-  setClampField(camera, 'exposureCompensation', rawCam.exposureCompensation, -5, 5, 'camera.exposureCompensation', warnings);
+  setClampField(camera, 'exposureCompensation', rawCam.exposureCompensation, -3, 3, 'camera.exposureCompensation', warnings);
   setEnumField(camera, 'isoMode', rawCam.isoMode, ISO_MODES, ISO_MODE_LABELS, 'camera.isoMode', warnings);
   setClampField(camera, 'iso', rawCam.iso, 50, 25600, 'camera.iso', warnings);
   const shutterSpeed = toStr(rawCam.shutterSpeed);
