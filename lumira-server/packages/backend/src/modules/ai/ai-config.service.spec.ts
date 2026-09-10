@@ -102,18 +102,44 @@ describe('AiConfigService — textModel', () => {
     expect(view.effectiveTextModel).toBe('qwen-vl-max');
   });
 
-  it('getActiveConfig() 未配置独立 textModel → textModel=visionModel、hasCustomTextModel=false', async () => {
+  it('getActiveConfig() 无覆盖 → 三模态均用共享平台；text.model 回退 visionModel、hasCustomTextModel=false', async () => {
     const service = new AiConfigService(readonlyDb(row()));
     const cfg = await service.getActiveConfig();
-    expect(cfg.textModel).toBe('qwen-vl-max');
+    const shared = { provider: 'qwen', baseUrl: 'https://x.example', apiKey: 'sk-1234567890' };
+    expect(cfg.vision).toEqual({ ...shared, model: 'qwen-vl-max' });
+    expect(cfg.text).toEqual({ ...shared, model: 'qwen-vl-max' }); // 未配置 textModel → 回退 visionModel
+    expect(cfg.image).toEqual({ ...shared, model: 'wanx2.1-t2i-turbo' });
     expect(cfg.hasCustomTextModel).toBe(false);
   });
 
-  it('getActiveConfig() 配置独立 textModel → 有效值 + hasCustomTextModel=true', async () => {
+  it('getActiveConfig() 有独立 textModel（无独立平台）→ text.model=存值（仍走共享平台）、hasCustomTextModel=true', async () => {
     const service = new AiConfigService(readonlyDb(row({ textModel: 'qwen-plus' })));
     const cfg = await service.getActiveConfig();
-    expect(cfg.textModel).toBe('qwen-plus');
+    expect(cfg.text.model).toBe('qwen-plus');
+    expect(cfg.text.baseUrl).toBe('https://x.example'); // 平台仍为共享
     expect(cfg.hasCustomTextModel).toBe(true);
+  });
+
+  it('getActiveConfig() 文本独立平台启用 → text 端点用覆盖平台 + 覆盖模型，其余模态不受影响', async () => {
+    const service = new AiConfigService(
+      readonlyDb(
+        row({ textProvider: 'openai', textBaseUrl: 'https://o.example/v1', textApiKey: 'sk-text-key', textModel: 'gpt-x' }),
+      ),
+    );
+    const cfg = await service.getActiveConfig();
+    expect(cfg.text).toEqual({ provider: 'openai', baseUrl: 'https://o.example/v1', apiKey: 'sk-text-key', model: 'gpt-x' });
+    expect(cfg.vision.provider).toBe('qwen');
+    expect(cfg.image.provider).toBe('qwen');
+  });
+
+  it('getActiveConfig() 生图独立平台启用 → image 端点用覆盖平台 + imageModel，其余模态不受影响', async () => {
+    const service = new AiConfigService(
+      readonlyDb(row({ imageProvider: 'zhipu', imageBaseUrl: 'https://z.example/v1', imageApiKey: 'sk-img-key' })),
+    );
+    const cfg = await service.getActiveConfig();
+    expect(cfg.image).toEqual({ provider: 'zhipu', baseUrl: 'https://z.example/v1', apiKey: 'sk-img-key', model: 'wanx2.1-t2i-turbo' });
+    expect(cfg.vision.provider).toBe('qwen');
+    expect(cfg.text.model).toBe('qwen-vl-max'); // text 未配置 → 回退 visionModel
   });
 
   it('getActiveConfig() 未启用 → 503', async () => {
@@ -121,18 +147,30 @@ describe('AiConfigService — textModel', () => {
     await expect(service.getActiveConfig()).rejects.toThrow(ServiceUnavailableException);
   });
 
-  it('test() 无独立 textModel → 不调 textChat，结果无 text 字段', async () => {
+  it('test() 无独立 textModel → visionChat 收到 vision 端点，不调 textChat，结果无 text 字段', async () => {
     const service = new AiConfigService(readonlyDb(row()));
     const result = await service.test();
     expect(result.vision.ok).toBe(true);
+    expect(visionChatMock.mock.calls[0][0]).toEqual({
+      provider: 'qwen',
+      baseUrl: 'https://x.example',
+      apiKey: 'sk-1234567890',
+      model: 'qwen-vl-max',
+    });
     expect(textChatMock).not.toHaveBeenCalled();
     expect('text' in result && result.text).toBeFalsy();
   });
 
-  it('test() 有独立 textModel → 调 textChat，结果含 text', async () => {
+  it('test() 有独立 textModel → 调 textChat（收到 text 端点），结果含 text', async () => {
     const service = new AiConfigService(readonlyDb(row({ textModel: 'qwen-plus' })));
     const result = await service.test();
     expect(textChatMock).toHaveBeenCalledTimes(1);
+    expect(textChatMock.mock.calls[0][0]).toEqual({
+      provider: 'qwen',
+      baseUrl: 'https://x.example',
+      apiKey: 'sk-1234567890',
+      model: 'qwen-plus',
+    });
     expect(result.text?.ok).toBe(true);
   });
 

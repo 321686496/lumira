@@ -4,12 +4,11 @@
 // qwen wanx 异步任务轮询（注入小 pollIntervalMs/pollTimeoutMs，不依赖真实 2s 计时）。
 // mapSize 覆盖四厂商 + 未知 ratio/provider 兜底。
 
-import { GenerateImageInput, GenerateImageOptions, generateImage, mapSize } from './image-client';
-import { ActiveAiConfig } from './ai-config.service';
+import { GenerateImageInput, GenerateImageOptions, ImageClientConfig, generateImage, mapSize } from './image-client';
 
 /** 各用例覆盖 provider；baseUrl 故意带尾斜杠：验证拼接前先规范化去掉 */
-function cfg(provider: string, baseUrl: string): ActiveAiConfig {
-  return { provider, baseUrl, apiKey: 'sk-test-key', visionModel: 'vision-model', imageModel: 'image-model', textModel: 'vision-model', hasCustomTextModel: false };
+function cfg(provider: string, baseUrl: string): ImageClientConfig {
+  return { provider, baseUrl, apiKey: 'sk-test-key', model: 'image-model' };
 }
 
 function input(overrides: Partial<GenerateImageInput> = {}): GenerateImageInput {

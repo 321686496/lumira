@@ -39,12 +39,24 @@ const CATEGORY_ROWS = [
 ];
 
 const ACTIVE_CFG = {
-  provider: 'qwen',
-  baseUrl: 'https://dashscope.example.com/compatible-mode/v1',
-  apiKey: 'sk-test',
-  visionModel: 'qwen-vl-max',
-  imageModel: 'qwen-max',
-  textModel: 'qwen-plus',
+  vision: {
+    provider: 'qwen',
+    baseUrl: 'https://dashscope.example.com/compatible-mode/v1',
+    apiKey: 'sk-test',
+    model: 'qwen-vl-max',
+  },
+  text: {
+    provider: 'qwen',
+    baseUrl: 'https://dashscope.example.com/compatible-mode/v1',
+    apiKey: 'sk-test',
+    model: 'qwen-plus',
+  },
+  image: {
+    provider: 'qwen',
+    baseUrl: 'https://dashscope.example.com/compatible-mode/v1',
+    apiKey: 'sk-test',
+    model: 'qwen-max',
+  },
   hasCustomTextModel: true,
 };
 
@@ -92,7 +104,7 @@ describe('AiAnalyzeService', () => {
 
     expect(visionChatMock).toHaveBeenCalledTimes(1);
     const [cfg, input] = visionChatMock.mock.calls[0];
-    expect(cfg).toEqual(ACTIVE_CFG);
+    expect(cfg).toEqual(ACTIVE_CFG.vision);
     // 系统提示词注入：分类树（按层级缩进）+ 枚举中文标签 + JSON 契约示例
     expect(input.systemPrompt).toContain('- portrait 人像');
     expect(input.systemPrompt).toContain('  - fresh_healing 清新治愈');
@@ -220,9 +232,9 @@ describe('AiAnalyzeService — 多输入', () => {
     expect(textChatMock).toHaveBeenCalledTimes(1);
     expect(visionChatMock).not.toHaveBeenCalled();
     expect((res.draft.meta as any).category).toBe('portrait');
-    // textChat 入参：模型用有效 textModel、userPrompt 含用户文字
+    // textChat 入参：收到文本模态端点（model = 有效文本模型）、userPrompt 含用户文字
     const cfg = textChatMock.mock.calls[0][0];
-    expect(cfg.textModel).toBe('qwen-plus');
+    expect(cfg).toEqual(ACTIVE_CFG.text);
     expect(textChatMock.mock.calls[0][1].userText).toContain('日系田园风');
   });
 

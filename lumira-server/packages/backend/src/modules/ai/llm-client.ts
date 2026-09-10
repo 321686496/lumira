@@ -4,16 +4,14 @@
 // 两者共享 chatRequest（fetch + 错误映射 + jsonMode 降级）
 // 设计文档：docs/specs/2026-09-09-ai-template-one-click-creation-design.md 第五节
 //
-// 纯函数层：Task 4（ai-config 模块）提供 LlmConfig，Task 5（ai-analyze 端点）调用 visionChat / textChat。
+// 纯函数层：ai-config 模块提供 LlmEndpoint（单模态端点），ai-analyze 等端点调用 visionChat / textChat。
 // 使用 Node 20 原生 fetch + AbortSignal.timeout，不引入 axios。
 
-export interface LlmConfig {
-  provider: string;   // qwen | doubao | zhipu | openai
+export interface LlmEndpoint {
+  provider: string;   // 预留（chat 请求只用 baseUrl + apiKey）
   baseUrl: string;    // 形如 https://dashscope.aliyuncs.com/compatible-mode/v1（无尾斜杠）
   apiKey: string;
-  visionModel: string;
-  /** 纯文本任务模型；缺省回退 visionModel */
-  textModel?: string;
+  model: string;
 }
 
 export interface VisionChatInput {
@@ -62,7 +60,7 @@ async function upstreamError(res: Response): Promise<string> {
 
 /** 公共请求层：messages + model → fetch → 错误映射 → jsonMode 降级 → 取 content；失败抛 Error，message 面向运营可读 */
 async function chatRequest(
-  cfg: LlmConfig,
+  cfg: LlmEndpoint,
   input: { model: string; messages: unknown[]; temperature: number; jsonMode: boolean; timeoutMs: number },
 ): Promise<string> {
   const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
@@ -100,7 +98,7 @@ async function chatRequest(
 }
 
 /** 带图 chat（对外签名与行为不变） */
-export async function visionChat(cfg: LlmConfig, input: VisionChatInput): Promise<string> {
+export async function visionChat(cfg: LlmEndpoint, input: VisionChatInput): Promise<string> {
   const messages = [
     { role: 'system', content: input.systemPrompt },
     { role: 'user', content: [
@@ -109,7 +107,7 @@ export async function visionChat(cfg: LlmConfig, input: VisionChatInput): Promis
     ] },
   ];
   return chatRequest(cfg, {
-    model: cfg.visionModel,
+    model: cfg.model,
     messages,
     temperature: input.temperature ?? DEFAULT_TEMPERATURE,
     jsonMode: input.jsonMode ?? false,
@@ -117,14 +115,14 @@ export async function visionChat(cfg: LlmConfig, input: VisionChatInput): Promis
   });
 }
 
-/** 纯文本 chat：model 取 textModel ?? visionModel */
-export async function textChat(cfg: LlmConfig, input: TextChatInput): Promise<string> {
+/** 纯文本 chat：model 取 cfg.model（textModel → visionModel 回退由 getActiveConfig 负责） */
+export async function textChat(cfg: LlmEndpoint, input: TextChatInput): Promise<string> {
   const messages = [
     { role: 'system', content: input.systemPrompt },
     { role: 'user', content: input.userText },
   ];
   return chatRequest(cfg, {
-    model: cfg.textModel ?? cfg.visionModel,
+    model: cfg.model,
     messages,
     temperature: input.temperature ?? DEFAULT_TEMPERATURE,
     jsonMode: input.jsonMode ?? false,

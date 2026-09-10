@@ -3,7 +3,7 @@
 
 import { polishPrompt } from './prompt-polisher';
 import { textChat } from './llm-client';
-import type { ActiveAiConfig } from './ai-config.service';
+import type { LlmEndpoint } from './llm-client';
 
 jest.mock('./llm-client', () => ({
   textChat: jest.fn(),
@@ -11,14 +11,12 @@ jest.mock('./llm-client', () => ({
 
 const textChatMock = textChat as jest.MockedFunction<typeof textChat>;
 
-const CFG: ActiveAiConfig = {
+/** 文本模态端点夹具（getActiveConfig().text 形状） */
+const CFG: LlmEndpoint = {
   provider: 'qwen',
   baseUrl: 'https://x.example',
   apiKey: 'sk-test',
-  visionModel: 'qwen-vl-max',
-  imageModel: 'wanx2.1-t2i-turbo',
-  textModel: 'qwen-plus',
-  hasCustomTextModel: true,
+  model: 'qwen-plus',
 };
 
 describe('polishPrompt', () => {
@@ -42,11 +40,11 @@ describe('polishPrompt', () => {
     expect(res).toEqual({ prompt: '原始拼接 prompt', polished: false });
   });
 
-  it('入参：temperature 0.4、timeoutMs 30s、userText = rawPrompt、模型取有效 textModel', async () => {
+  it('入参：temperature 0.4、timeoutMs 30s、userText = rawPrompt、端点原样透传（model = 有效文本模型）', async () => {
     textChatMock.mockResolvedValue('润色');
     await polishPrompt(CFG, '原始拼接 prompt');
     const [cfgArg, inputArg] = textChatMock.mock.calls[0];
-    expect(cfgArg.textModel).toBe('qwen-plus');
+    expect(cfgArg).toEqual(CFG);
     expect(inputArg.userText).toBe('原始拼接 prompt');
     expect(inputArg.temperature).toBe(0.4);
     expect(inputArg.timeoutMs).toBe(30_000);

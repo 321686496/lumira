@@ -7,7 +7,13 @@
 // 使用 Node 20 原生 fetch + AbortSignal.timeout + FormData/Blob，不引入 axios。
 // 错误处理同 llm-client 风格（文案一致），wanx 轮询超时 →「生图任务超时」。
 
-import type { ActiveAiConfig } from './ai-config.service';
+/** 生图客户端配置（单模态端点：共享平台或生图独立平台） */
+export interface ImageClientConfig {
+  provider: string;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}
 
 export interface GenerateImageInput {
   prompt: string;
@@ -110,7 +116,7 @@ async function parseSyncImageResponse(res: Response, opts: GenerateImageOptions)
 
 /** 同步厂商（doubao/zhipu/openai 文生图）共用：POST {baseUrl}/images/generations */
 async function syncGenerate(
-  cfg: ActiveAiConfig,
+  cfg: ImageClientConfig,
   body: Record<string, unknown>,
   opts: GenerateImageOptions,
 ): Promise<GenerateImageResult> {
@@ -127,9 +133,9 @@ async function syncGenerate(
 // ===== 厂商分支 =====
 
 /** doubao（Seedream，OpenAI 兼容）：文生图 body 加 image 字段（data URL）即图生图 */
-async function doubaoGenerate(cfg: ActiveAiConfig, input: GenerateImageInput, opts: GenerateImageOptions) {
+async function doubaoGenerate(cfg: ImageClientConfig, input: GenerateImageInput, opts: GenerateImageOptions) {
   const body: Record<string, unknown> = {
-    model: cfg.imageModel,
+    model: cfg.model,
     prompt: input.prompt,
     size: input.size,
   };
@@ -140,20 +146,20 @@ async function doubaoGenerate(cfg: ActiveAiConfig, input: GenerateImageInput, op
 }
 
 /** zhipu（CogView）：纯文生图，忽略参考图 */
-async function zhipuGenerate(cfg: ActiveAiConfig, input: GenerateImageInput, opts: GenerateImageOptions) {
+async function zhipuGenerate(cfg: ImageClientConfig, input: GenerateImageInput, opts: GenerateImageOptions) {
   return syncGenerate(
     cfg,
-    { model: cfg.imageModel, prompt: input.prompt, size: input.size },
+    { model: cfg.model, prompt: input.prompt, size: input.size },
     opts,
   );
 }
 
 /** openai：无参考图 /images/generations（b64_json）；有参考图 /images/edits（FormData） */
-async function openaiGenerate(cfg: ActiveAiConfig, input: GenerateImageInput, opts: GenerateImageOptions) {
+async function openaiGenerate(cfg: ImageClientConfig, input: GenerateImageInput, opts: GenerateImageOptions) {
   if (!input.referenceBase64) {
     return syncGenerate(
       cfg,
-      { model: cfg.imageModel, prompt: input.prompt, size: input.size, response_format: 'b64_json' },
+      { model: cfg.model, prompt: input.prompt, size: input.size, response_format: 'b64_json' },
       opts,
     );
   }
@@ -163,7 +169,7 @@ async function openaiGenerate(cfg: ActiveAiConfig, input: GenerateImageInput, op
   const fd = new FormData();
   fd.append('image', new Blob([refBuf], { type: input.referenceMime ?? 'image/png' }), 'reference.png');
   fd.append('prompt', input.prompt);
-  fd.append('model', cfg.imageModel);
+  fd.append('model', cfg.model);
   fd.append('size', input.size);
 
   const res = await fetch(`${normBaseUrl(cfg.baseUrl)}/images/edits`, {
@@ -181,7 +187,7 @@ async function openaiGenerate(cfg: ActiveAiConfig, input: GenerateImageInput, op
 }
 
 /** qwen（wanx）：DashScope 异步任务——提交 → 轮询 task_status → SUCCEEDED 后下载 results[0].url */
-async function qwenGenerate(cfg: ActiveAiConfig, input: GenerateImageInput, opts: GenerateImageOptions) {
+async function qwenGenerate(cfg: ImageClientConfig, input: GenerateImageInput, opts: GenerateImageOptions) {
   const origin = extractOrigin(cfg.baseUrl);
   const res = await fetch(`${origin}/api/v1/services/aigc/text2image/image-synthesis`, {
     method: 'POST',
@@ -191,7 +197,7 @@ async function qwenGenerate(cfg: ActiveAiConfig, input: GenerateImageInput, opts
       'X-DashScope-Async': 'enable',
     },
     body: JSON.stringify({
-      model: cfg.imageModel,
+      model: cfg.model,
       input: { prompt: input.prompt },
       parameters: { size: input.size, n: 1 },
     }),
@@ -236,7 +242,7 @@ async function qwenGenerate(cfg: ActiveAiConfig, input: GenerateImageInput, opts
  * 成功返回 base64 + mimeType；失败抛 Error，message 面向运营可读。
  */
 export async function generateImage(
-  cfg: ActiveAiConfig,
+  cfg: ImageClientConfig,
   input: GenerateImageInput,
   opts: GenerateImageOptions = {},
 ): Promise<GenerateImageResult> {

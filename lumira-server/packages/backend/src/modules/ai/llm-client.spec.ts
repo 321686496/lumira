@@ -2,16 +2,17 @@
 // OpenAI 兼容 chat 客户端单测（Task 3，TDD）
 // 用例 1~8 与 task-3-brief.md 关键用例一一对应；9~13 为补充用例
 // （网络错误 / 空内容 / 404 降级 / 降级后仍失败 / 非 jsonMode 不重试）
-// 用例 14~16 为 Task 2（textChat）追加：纯文本请求形状 / textModel 回退 / jsonMode 降级
+// 用例 14~16 为 Task 2（textChat）追加：纯文本请求形状 / model 取值 / jsonMode 降级
+// （textModel → visionModel 回退已上移至 getActiveConfig，客户端只取 cfg.model）
 
-import { LlmConfig, VisionChatInput, textChat, visionChat } from './llm-client';
+import { LlmEndpoint, VisionChatInput, textChat, visionChat } from './llm-client';
 
 /** baseUrl 故意带尾斜杠：验证拼接前先规范化去掉 */
-const CFG: LlmConfig = {
+const CFG: LlmEndpoint = {
   provider: 'qwen',
   baseUrl: 'https://dashscope.example.com/compatible-mode/v1/',
   apiKey: 'sk-test-key',
-  visionModel: 'qwen-vl-max',
+  model: 'qwen-vl-max',
 };
 
 function baseInput(): VisionChatInput {
@@ -197,16 +198,15 @@ describe('visionChat', () => {
 
 // ===== textChat（Task 2 追加）=====
 describe('textChat', () => {
-  /** textChat 用：配置了独立 textModel */
-  const TEXT_CFG: LlmConfig = {
+  /** textChat 用：端点已含自己的 model（回退职责在 getActiveConfig） */
+  const TEXT_CFG: LlmEndpoint = {
     provider: 'qwen',
     baseUrl: 'https://x.example/v1',
     apiKey: 'sk-test',
-    visionModel: 'qwen-vl-max',
-    textModel: 'qwen-plus',
+    model: 'qwen-plus',
   };
 
-  it('14. 请求体为纯文本 messages（无 image_url），model 取 textModel', async () => {
+  it('14. 请求体为纯文本 messages（无 image_url），model 取 cfg.model', async () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValueOnce(okResponse('hello'));
 
     const out = await textChat(TEXT_CFG, { systemPrompt: 'sys', userText: 'hi' });
@@ -220,13 +220,18 @@ describe('textChat', () => {
     ]);
   });
 
-  it('15. 未配置 textModel → model 回退 visionModel', async () => {
-    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValueOnce(okResponse('hello'));
+  it('15. 端点 model 各取各的：visionChat 用 CFG.model、textChat 用 TEXT_CFG.model（无客户端回退）', async () => {
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(okResponse('hello'))
+      .mockResolvedValueOnce(okResponse('hello'));
 
-    await textChat({ ...TEXT_CFG, textModel: undefined }, { systemPrompt: 'sys', userText: 'hi' });
+    await visionChat(CFG, baseInput());
+    await textChat(TEXT_CFG, { systemPrompt: 'sys', userText: 'hi' });
 
-    const body = parseBody(fetchMock.mock.calls[0][1]);
-    expect(body.model).toBe('qwen-vl-max');
+    // 两模态 model 值不同（qwen-vl-max vs qwen-plus），各自取各自端点的 model
+    expect(parseBody(fetchMock.mock.calls[0][1]).model).toBe('qwen-vl-max');
+    expect(parseBody(fetchMock.mock.calls[1][1]).model).toBe('qwen-plus');
   });
 
   it('16. jsonMode 400 时自动降级重试（复用 visionChat 同款逻辑）', async () => {

@@ -26,12 +26,24 @@ jest.mock('./llm-client', () => ({
 const generateImageMock = generateImage as jest.MockedFunction<typeof generateImage>;
 
 const ACTIVE_CFG = {
-  provider: 'doubao',
-  baseUrl: 'https://ark.example.com/api/v3',
-  apiKey: 'sk-test',
-  visionModel: 'doubao-vision',
-  imageModel: 'doubao-seedream',
-  textModel: 'doubao-vision',
+  vision: {
+    provider: 'doubao',
+    baseUrl: 'https://ark.example.com/api/v3',
+    apiKey: 'sk-test',
+    model: 'doubao-vision',
+  },
+  text: {
+    provider: 'doubao',
+    baseUrl: 'https://ark.example.com/api/v3',
+    apiKey: 'sk-test',
+    model: 'doubao-vision',
+  },
+  image: {
+    provider: 'doubao',
+    baseUrl: 'https://ark.example.com/api/v3',
+    apiKey: 'sk-test',
+    model: 'doubao-seedream',
+  },
   hasCustomTextModel: false,
 };
 
@@ -57,18 +69,25 @@ function referenceFile(): UploadFile {
 
 beforeEach(() => {
   generateImageMock.mockReset();
+  const { textChat } = jest.requireMock('./llm-client') as { textChat: jest.Mock };
+  textChat.mockClear(); // 保留默认润色实现，仅清调用记录
 });
 
 describe('AiGenerateImageService', () => {
-  it('成功路径：prompt=buildImagePrompt(草稿)、size=mapSize(provider,ratio)、参考图 base64/mime 透传、结果透传', async () => {
+  it('成功路径：润色收到 cfg.text、生图收到 cfg.image（prompt/size/参考图透传）、结果透传', async () => {
     const { service } = buildService();
     generateImageMock.mockResolvedValueOnce({ base64: 'aGVsbG8=', mimeType: 'image/png' });
+    const { textChat } = jest.requireMock('./llm-client') as { textChat: jest.Mock };
 
     const res = await service.generate(referenceFile(), JSON.stringify(DRAFT));
 
+    // 润色走文本模态端点
+    expect(textChat).toHaveBeenCalledTimes(1);
+    expect(textChat.mock.calls[0][0]).toEqual(ACTIVE_CFG.text);
+    // 生图走生图模态端点；prompt=润色值、size=mapSize(cfg.image.provider, '3:4')
     expect(generateImageMock).toHaveBeenCalledTimes(1);
     const [cfg, input] = generateImageMock.mock.calls[0];
-    expect(cfg).toEqual(ACTIVE_CFG);
+    expect(cfg).toEqual(ACTIVE_CFG.image);
     expect(input.prompt).toBe('润色后的提示词'); // textChat mock 默认润色值
     expect(input.size).toBe('864x1152'); // mapSize('doubao', '3:4')
     expect(input.referenceBase64).toBe(Buffer.from('ref-bytes').toString('base64'));
