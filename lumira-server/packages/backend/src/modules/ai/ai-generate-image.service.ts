@@ -1,5 +1,5 @@
 // lumira-server/packages/backend/src/modules/ai/ai-generate-image.service.ts
-// 生图编排（Task 7）：草稿 JSON + 可选参考图 → buildImagePrompt → generateImage（per-provider）
+// 生图编排（Task 7）：草稿 JSON + 可选参考图 → buildImagePrompt → textModel 润色（失败回退）→ generateImage（per-provider）
 // 设计文档：docs/specs/2026-09-09-ai-template-one-click-creation-design.md 第三节/第五节
 //
 // prompt 由后端统一构建（前端不拼 prompt）；qwen/zhipu 内部忽略参考图走文生图（image-client 分支处理）。
@@ -9,6 +9,7 @@ import { UploadFile } from '../templates/admin-templates.service';
 import { AiConfigService } from './ai-config.service';
 import { GenerateImageResult, generateImage, mapSize } from './image-client';
 import { buildImagePrompt } from './image-prompt.builder';
+import { polishPrompt } from './prompt-polisher';
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -47,9 +48,11 @@ export class AiGenerateImageService {
       }
     }
 
-    // 3. 构建 prompt + 按厂商映射尺寸 → 生图
+    // 3. 构建 prompt（拼接 → textModel 润色，失败回退拼接值）+ 按厂商映射尺寸 → 生图
+    const rawPrompt = buildImagePrompt(draft);
+    const { prompt } = await polishPrompt(cfg, rawPrompt);
     return generateImage(cfg, {
-      prompt: buildImagePrompt(draft),
+      prompt,
       size: mapSize(cfg.provider, extractAspectRatio(draft)),
       referenceBase64: reference?.buffer.toString('base64'),
       referenceMime: reference?.mimetype,

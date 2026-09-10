@@ -1,8 +1,9 @@
 // lumira-server/packages/backend/src/modules/ai/ai-generate-image.service.spec.ts
 // 生图编排单测（Task 7）：jest.mock image-client（generateImage mock，mapSize 保留真实），
 // AiConfigService 手工 stub（同 ai-analyze.service.spec.ts 模式）。
+// Task 4 接入润色：jest.mock llm-client（textChat 默认返回润色值，回退用例单独 reject）。
 // 覆盖：成功路径 prompt/size/参考图透传 / 未配置 503 / meta 非法 JSON 400 /
-// meta 非对象 400 / meta 缺省空草稿兜底 / 无参考图字段缺省 / 结果透传。
+// meta 非对象 400 / meta 缺省空草稿兜底 / 无参考图字段缺省 / 结果透传 / 润色失败回退。
 
 import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { AiGenerateImageService } from './ai-generate-image.service';
@@ -17,6 +18,11 @@ jest.mock('./image-client', () => {
   return { ...actual, generateImage: jest.fn() };
 });
 
+// textChat mock（网络层）：默认返回润色值，润色失败回退用例单独 mockRejectedValueOnce
+jest.mock('./llm-client', () => ({
+  textChat: jest.fn(async () => '润色后的提示词'),
+}));
+
 const generateImageMock = generateImage as jest.MockedFunction<typeof generateImage>;
 
 const ACTIVE_CFG = {
@@ -25,6 +31,8 @@ const ACTIVE_CFG = {
   apiKey: 'sk-test',
   visionModel: 'doubao-vision',
   imageModel: 'doubao-seedream',
+  textModel: 'doubao-vision',
+  hasCustomTextModel: false,
 };
 
 /** 完整草稿（Task 5 归一化结构：顶层 meta/composition/sceneGuide） */
@@ -61,11 +69,24 @@ describe('AiGenerateImageService', () => {
     expect(generateImageMock).toHaveBeenCalledTimes(1);
     const [cfg, input] = generateImageMock.mock.calls[0];
     expect(cfg).toEqual(ACTIVE_CFG);
-    expect(input.prompt).toBe(buildImagePrompt(DRAFT)); // 真实函数生成的期望值
+    expect(input.prompt).toBe('润色后的提示词'); // textChat mock 默认润色值
     expect(input.size).toBe('864x1152'); // mapSize('doubao', '3:4')
     expect(input.referenceBase64).toBe(Buffer.from('ref-bytes').toString('base64'));
     expect(input.referenceMime).toBe('image/jpeg');
     expect(res).toEqual({ base64: 'aGVsbG8=', mimeType: 'image/png' });
+  });
+
+  it('润色失败 → generateImage 收到原始拼接 prompt', async () => {
+    const { textChat } = jest.requireMock('./llm-client') as { textChat: jest.Mock };
+    textChat.mockRejectedValueOnce(new Error('timeout'));
+    const { service } = buildService();
+    generateImageMock.mockResolvedValueOnce({ base64: 'aGVsbG8=', mimeType: 'image/png' });
+
+    await service.generate(referenceFile(), JSON.stringify(DRAFT));
+
+    expect(generateImageMock).toHaveBeenCalledTimes(1);
+    const input = generateImageMock.mock.calls[0][1];
+    expect(input.prompt).toBe(buildImagePrompt(DRAFT)); // 润色失败静默回退拼接值
   });
 
   it('无参考图 → referenceBase64/referenceMime 为 undefined', async () => {
@@ -86,7 +107,7 @@ describe('AiGenerateImageService', () => {
     await service.generate(undefined, null);
 
     const input = generateImageMock.mock.calls[0][1];
-    expect(input.prompt).toBe(buildImagePrompt({})); // 空草稿兜底 prompt
+    expect(input.prompt).toBe('润色后的提示词'); // 空草稿兜底 prompt 同样过润色
     expect(input.size).toBe('1024x1024'); // mapSize('doubao', undefined)
   });
 
