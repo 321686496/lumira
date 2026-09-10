@@ -389,6 +389,10 @@ export interface AiProviderConfigView {
   apiKeyMasked: string;
   visionModel: string;
   imageModel: string;
+  /** 存储值（'' = 未配置独立文本模型） */
+  textModel: string;
+  /** 有效文本模型 = textModel || visionModel */
+  effectiveTextModel: string;
   enabled: boolean;
 }
 
@@ -399,12 +403,16 @@ export interface UpdateAiConfigPayload {
   apiKey?: string;
   visionModel: string;
   imageModel: string;
+  /** 空串/缺省 = 清除（回退视觉模型） */
+  textModel?: string;
   enabled: boolean;
 }
 
 /** POST /admin/ai-config/test 结果（最小 vision 请求连通性） */
 export interface AiConfigTestResult {
   vision: { ok: boolean; latencyMs?: number; error?: string };
+  /** 配置了独立文本模型时返回 */
+  text?: { ok: boolean; latencyMs?: number; error?: string };
   note: string;
 }
 

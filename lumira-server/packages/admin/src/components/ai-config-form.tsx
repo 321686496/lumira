@@ -21,24 +21,28 @@ const PROVIDER_PRESETS = {
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     visionModel: 'qwen-vl-max',
     imageModel: 'wanx2.1-t2i-turbo',
+    textModel: 'qwen-plus',
   },
   doubao: {
     label: '字节豆包',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
     visionModel: 'doubao-1.5-vision-pro-32k',
     imageModel: 'doubao-Seedream-4-0-250828',
+    textModel: 'doubao-1.5-pro-32k',
   },
   zhipu: {
     label: '智谱 AI',
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     visionModel: 'glm-4v-plus',
     imageModel: 'cogview-4',
+    textModel: 'glm-4-flash',
   },
   openai: {
     label: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
     visionModel: 'gpt-4o',
     imageModel: 'gpt-image-1',
+    textModel: 'gpt-4o-mini',
   },
 } as const;
 
@@ -51,6 +55,7 @@ interface FormState {
   apiKey: string; // 留空 = 不修改原值
   visionModel: string;
   imageModel: string;
+  textModel: string; // 留空 = 使用视觉模型
   enabled: boolean;
 }
 
@@ -71,6 +76,7 @@ export function AiConfigForm({
           apiKey: '',
           visionModel: initial.visionModel,
           imageModel: initial.imageModel,
+          textModel: initial.textModel,
           enabled: initial.enabled,
         }
       : {
@@ -79,16 +85,24 @@ export function AiConfigForm({
           apiKey: '',
           visionModel: PROVIDER_PRESETS.qwen.visionModel,
           imageModel: PROVIDER_PRESETS.qwen.imageModel,
+          textModel: PROVIDER_PRESETS.qwen.textModel,
           enabled: false,
         },
   );
   /** 手动改过预设字段的标记：切换厂商时不覆盖 */
-  const [touched, setTouched] = useState<Record<'baseUrl' | 'visionModel' | 'imageModel', boolean>>({
+  const [touched, setTouched] = useState<
+    Record<'baseUrl' | 'visionModel' | 'imageModel' | 'textModel', boolean>
+  >({
     baseUrl: configured,
     visionModel: configured,
     imageModel: configured,
+    textModel: configured,
   });
   const [apiKeyMasked, setApiKeyMasked] = useState(configured ? initial.apiKeyMasked : '');
+  /** 已保存配置的有效文本模型（textModel 为空时的回退提示） */
+  const [effectiveTextModel, setEffectiveTextModel] = useState(
+    configured ? initial.effectiveTextModel : '',
+  );
   const [testResult, setTestResult] = useState<AiConfigTestResult | null>(null);
   const [savePending, startSave] = useTransition();
   const [testPending, startTest] = useTransition();
@@ -100,10 +114,11 @@ export function AiConfigForm({
       baseUrl: touched.baseUrl ? f.baseUrl : PROVIDER_PRESETS[key].baseUrl,
       visionModel: touched.visionModel ? f.visionModel : PROVIDER_PRESETS[key].visionModel,
       imageModel: touched.imageModel ? f.imageModel : PROVIDER_PRESETS[key].imageModel,
+      textModel: touched.textModel ? f.textModel : PROVIDER_PRESETS[key].textModel,
     }));
   };
 
-  const markTouched = (field: 'baseUrl' | 'visionModel' | 'imageModel') =>
+  const markTouched = (field: 'baseUrl' | 'visionModel' | 'imageModel' | 'textModel') =>
     setTouched((t) => ({ ...t, [field]: true }));
 
   const handleSave = () => {
@@ -122,6 +137,7 @@ export function AiConfigForm({
         apiKey: form.apiKey.trim() || undefined,
         visionModel: form.visionModel.trim(),
         imageModel: form.imageModel.trim(),
+        textModel: form.textModel.trim(),
         enabled: form.enabled,
       });
       if ('error' in result) {
@@ -129,8 +145,9 @@ export function AiConfigForm({
         return;
       }
       setApiKeyMasked(result.config.apiKeyMasked);
+      setEffectiveTextModel(result.config.effectiveTextModel);
       setForm((f) => ({ ...f, apiKey: '' }));
-      setTouched({ baseUrl: true, visionModel: true, imageModel: true });
+      setTouched({ baseUrl: true, visionModel: true, imageModel: true, textModel: true });
       toast({ title: '已保存', description: '新的 AI 请求将使用新配置' });
     });
   };
@@ -235,6 +252,21 @@ export function AiConfigForm({
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="ai-text-model">文本模型（可选）</Label>
+              <Input
+                id="ai-text-model"
+                value={form.textModel}
+                onChange={(e) => {
+                  markTouched('textModel');
+                  setForm((f) => ({ ...f, textModel: e.target.value }));
+                }}
+                placeholder="留空则使用视觉模型（用于文字识别与生图提示词润色）"
+              />
+              {form.textModel.trim() === '' && effectiveTextModel && (
+                <p className="text-xs text-muted-foreground">当前生效：{effectiveTextModel}</p>
+              )}
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="ai-image-model">生图模型（封面效果图）</Label>
               <Input
                 id="ai-image-model"
@@ -289,6 +321,23 @@ export function AiConfigForm({
               </div>
               {!testResult.vision.ok && testResult.vision.error && (
                 <div className="mt-1 break-all">{testResult.vision.error}</div>
+              )}
+              {testResult.text && (
+                <div
+                  className={cn(
+                    'mt-2 flex items-center justify-between gap-2 rounded-md border p-3',
+                    testResult.text.ok
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
+                      : 'border-destructive/50 bg-destructive/10 text-destructive',
+                  )}
+                >
+                  <span>文本模型</span>
+                  <span className="text-right">
+                    {testResult.text.ok
+                      ? `连通 ${testResult.text.latencyMs ?? '?'}ms`
+                      : (testResult.text.error ?? '连接失败')}
+                  </span>
+                </div>
               )}
               <div className="mt-1 text-xs opacity-70">{testResult.note}</div>
             </div>
