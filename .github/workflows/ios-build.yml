@@ -514,6 +514,67 @@ jobs:
           ls -la build/ios/ipa/
 
       # --------------------------------------------------------------------------
+      # 修复 ITMS-90034：确保所有内嵌 framework 都使用 Apple Distribution 签名
+      # --------------------------------------------------------------------------
+      # flutter build ipa / xcodebuild -exportArchive / ditto fallback 三种路径产出的
+      # IPA，其内嵌 Flutter.framework / App.framework / 各插件 framework 可能保留构建时
+      # 的 Development / ad-hoc 签名（主 Runner.app 已签 Distribution、仅内嵌 framework
+      # 出错 → App Store 以 ITMS-90034「非 Apple submission 证书」拒绝，正是本错误）。
+      # 上传前统一用 Distribution 身份重签所有内嵌代码并校验，保证提交证书签名。
+      - name: Re-sign embedded frameworks (fix ITMS 90034)
+        if: ${{ success() && (inputs.sign == true || github.event_name == 'push') }}
+        env:
+          KEYCHAIN_PATH: "$RUNNER_TEMP/build.keychain-db"
+        run: |
+          set -e
+          cd ${{ env.WORKSPACE }}
+          IPA=$(ls build/ios/ipa/*.ipa | head -n1)
+          [ -n "$IPA" ] || { echo "::error::未找到 IPA"; exit 1; }
+
+          WORK="$RUNNER_TEMP/re-sign"
+          rm -rf "$WORK" && mkdir -p "$WORK"
+          unzip -q "$IPA" -d "$WORK"
+          APP=$(find "$WORK/Payload" -maxdepth 1 -type d -name '*.app' | head -n1)
+          [ -n "$APP" ] || { echo "::error::未在 IPA 中找到 .app"; exit 1; }
+
+          # 确保导入 Distribution 证书的临时 keychain 已解锁，codesign 可引用
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          echo "=== 重签前签名诊断 ==="
+          codesign -dv --verbose=4 "$APP" 2>&1 | grep -E 'Identifier|Authority|TeamIdentifier' || echo '  (app 无签名)'
+          for fw in "$APP"/Frameworks/*.framework; do
+            [ -d "$fw" ] || continue
+            echo "--- $(basename "$fw") ---"
+            codesign -dv --verbose=4 "$fw" 2>&1 | grep -E 'Identifier|Authority' || echo '  (无签名)'
+          done
+
+          echo "=== 用 Apple Distribution 重签所有内嵌 framework ==="
+          for fw in "$APP"/Frameworks/*.framework; do
+            [ -d "$fw" ] || continue
+            codesign --force --sign "Apple Distribution" \
+              --preserve-metadata=entitlements,flags,team-identifier "$fw" \
+              || { echo "::error::重签 $(basename "$fw") 失败"; exit 1; }
+          done
+
+          echo "=== 重签主 App bundle ==="
+          codesign --force --sign "Apple Distribution" \
+            --preserve-metadata=entitlements,flags,team-identifier "$APP" \
+            || { echo "::error::重签主 App 失败"; exit 1; }
+
+          echo "=== 重签名校验（任一失败则中止上传）==="
+          for fw in "$APP"/Frameworks/*.framework; do
+            [ -d "$fw" ] || continue
+            codesign --verify --deep --strict --verbose=2 "$fw" || exit 1
+          done
+          codesign --verify --deep --strict --verbose=2 "$APP" || exit 1
+
+          echo "=== 重新打包 IPA（覆盖原产物）==="
+          (cd "$WORK" && rm -f Runner.ipa && zip -q -r -y Runner.ipa Payload -x "*.DS_Store")
+          cp -f "$WORK/Runner.ipa" "$IPA"
+          echo "重签完成，已覆盖 $IPA"
+          ls -la build/ios/ipa/
+
+      # --------------------------------------------------------------------------
       # 产物上传
       # --------------------------------------------------------------------------
       # GitHub artifact 后端（Azure 中间层）偶发在 FinalizeArtifact 返回 403：
