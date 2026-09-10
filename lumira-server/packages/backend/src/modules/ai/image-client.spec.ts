@@ -9,7 +9,7 @@ import { ActiveAiConfig } from './ai-config.service';
 
 /** 各用例覆盖 provider；baseUrl 故意带尾斜杠：验证拼接前先规范化去掉 */
 function cfg(provider: string, baseUrl: string): ActiveAiConfig {
-  return { provider, baseUrl, apiKey: 'sk-test-key', visionModel: 'vision-model', imageModel: 'image-model' };
+  return { provider, baseUrl, apiKey: 'sk-test-key', visionModel: 'vision-model', imageModel: 'image-model', textModel: 'vision-model', hasCustomTextModel: false };
 }
 
 function input(overrides: Partial<GenerateImageInput> = {}): GenerateImageInput {

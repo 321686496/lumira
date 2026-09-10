@@ -22,6 +22,12 @@ export class UpdateAiConfigDto {
   @MaxLength(64)
   visionModel!: string;
 
+  /** 空串 / 缺省 = 清除（回退视觉模型） */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  textModel?: string;
+
   @IsString()
   @MaxLength(64)
   imageModel!: string;

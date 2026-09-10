@@ -337,6 +337,7 @@ export const aiProviderConfig = mysqlTable('ai_provider_config', {
   baseUrl: varchar('base_url', { length: 255 }).notNull(),
   apiKey: varchar('api_key', { length: 255 }).notNull(),
   visionModel: varchar('vision_model', { length: 64 }).notNull(),
+  textModel: varchar('text_model', { length: 64 }),
   imageModel: varchar('image_model', { length: 64 }).notNull(),
   enabled: int('enabled').notNull().default(0),
   createdAt: int('created_at').notNull(),
