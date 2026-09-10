@@ -381,6 +381,13 @@ export interface BannerPayload {
 
 // ===== AI 一键模板录入 =====
 
+/** 模态独立平台（GET/PUT /admin/ai-config 视图；apiKey 脱敏） */
+export interface AiPlatformOverride {
+  provider: string;
+  baseUrl: string;
+  apiKeyMasked: string;
+}
+
 /** GET/PUT /admin/ai-config 返回（apiKey 脱敏；未配置时 configured=false） */
 export interface AiProviderConfigView {
   configured: boolean;
@@ -393,6 +400,10 @@ export interface AiProviderConfigView {
   textModel: string;
   /** 有效文本模型 = textModel || visionModel */
   effectiveTextModel: string;
+  /** 文本模态独立平台（null = 跟随共享平台） */
+  textPlatform: AiPlatformOverride | null;
+  /** 生图模态独立平台（null = 跟随共享平台） */
+  imagePlatform: AiPlatformOverride | null;
   enabled: boolean;
 }
 
@@ -406,6 +417,14 @@ export interface UpdateAiConfigPayload {
   /** 空串/缺省 = 清除（回退视觉模型） */
   textModel?: string;
   enabled: boolean;
+  /** 文本模态独立平台：提供 provider = 启用（需 textBaseUrl + textModel + 首次需 apiKey）；缺省 = 清除 */
+  textProvider?: string;
+  textBaseUrl?: string;
+  textApiKey?: string;
+  /** 生图模态独立平台：语义同上 */
+  imageProvider?: string;
+  imageBaseUrl?: string;
+  imageApiKey?: string;
 }
 
 /** POST /admin/ai-config/test 结果（最小 vision 请求连通性） */
