@@ -270,6 +270,12 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
             if (noise == null) {
               return widget.fallback();
             }
+            // 注意：CustomPaint 的 painter 绘制在 child **之下**（SDK
+            // RenderCustomPaint.paint：painter → child → foregroundPainter）。
+            // 此处绝不能挂 child（尤其不透明原图 fallback）——同比例画布下
+            // 原图会完全遮盖 shader 输出（细节参数调整不可见）；拉腿比例变化
+            // 时 child 上下留边，shader 以重影形式露出（2026-09-10 修复）。
+            // 尺寸由 AspectRatio 的 tight 约束给定，无需 child 提供布局。
             return CustomPaint(
               painter: DetailEffectsPainter(
                 image: img,
@@ -277,7 +283,6 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
                 effects: widget.effects,
                 program: prog,
               ),
-              child: widget.fallback(),
             );
           },
         ),
