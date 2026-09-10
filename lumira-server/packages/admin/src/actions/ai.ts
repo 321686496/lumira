@@ -50,7 +50,7 @@ export async function testAiConfigAction(): Promise<
   }
 }
 
-/** formData：image 文件（示例图） */
+/** formData：image 文件（示例图，可选）+ text 文字描述（可选，至少其一） */
 export async function aiAnalyzeAction(
   formData: FormData,
 ): Promise<AiAnalyzeResult | { error: string }> {

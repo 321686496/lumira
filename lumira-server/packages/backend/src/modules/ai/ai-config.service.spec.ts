@@ -64,6 +64,14 @@ describe('AiConfigService — textModel', () => {
     expect(view.effectiveTextModel).toBe('qwen-plus');
   });
 
+  it('get() textModel 仅空白 → effectiveTextModel 回退 visionModel（与 getActiveConfig 判定一致）', async () => {
+    const service = new AiConfigService(readonlyDb(row({ textModel: '   ' })));
+    const view = await service.get();
+    if (view.configured !== true) throw new Error('should be configured');
+    expect(view.textModel).toBe('   ');
+    expect(view.effectiveTextModel).toBe('qwen-vl-max');
+  });
+
   it('getActiveConfig() 未配置独立 textModel → textModel=visionModel、hasCustomTextModel=false', async () => {
     const service = new AiConfigService(readonlyDb(row()));
     const cfg = await service.getActiveConfig();

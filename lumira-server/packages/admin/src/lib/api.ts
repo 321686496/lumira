@@ -514,7 +514,7 @@ export const api = {
   testAiConfig: () =>
     adminFetch<AiConfigTestResult>('/ai-config/test', { method: 'POST' }),
 
-  /** multipart：image 文件（示例图） */
+  /** multipart：image 文件（示例图，可选）+ text 文字描述（可选，至少其一） */
   aiAnalyze: (formData: FormData) =>
     adminFetch<AiAnalyzeResult>('/templates/ai-analyze', {
       method: 'POST',
