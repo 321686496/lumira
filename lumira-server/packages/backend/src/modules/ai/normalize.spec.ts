@@ -207,8 +207,8 @@ describe('normalizeDraft', () => {
     raw.postProcess.color.saturation = 200;
     const { draft, warnings } = normalizeDraft(raw, CATEGORIES);
 
-    expect(draft.pose[0].position.x).toBe(1);
-    expect(draft.postProcess.color.saturation).toBe(100);
+    expect((draft.pose as any[])[0].position.x).toBe(1);
+    expect((draft.postProcess as any).color.saturation).toBe(100);
     expect(warnings.some((w) => w.includes('position.x'))).toBe(true);
     expect(warnings.some((w) => w.includes('saturation'))).toBe(true);
   });
@@ -281,7 +281,7 @@ describe('normalizeDraft', () => {
     expect(meta.author).toBeUndefined();
     expect(meta.sortOrder).toBeUndefined();
     expect(meta.isActive).toBeUndefined();
-    expect(draft.pose[0].silhouette).toBeUndefined();
+    expect((draft.pose as any[])[0].silhouette).toBeUndefined();
   });
 
   it('18. 非人像浅树（majorStyle 为空串，style=L2，method=L3）→ 全链保留且无 warning', () => {

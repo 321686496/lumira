@@ -22,10 +22,10 @@ function chainable(rows: unknown) {
 
 function buildService(opts: { selectRows?: unknown[]; cached?: unknown } = {}) {
   const select = jest.fn(() => chainable(opts.selectRows ?? []));
-  const insertValues = jest.fn(async () => undefined);
+  const insertValues = jest.fn(async (_values: any) => undefined);
   const insert = jest.fn(() => ({ values: insertValues }));
   const updateWhere = jest.fn(async () => undefined);
-  const updateSet = jest.fn(() => ({ where: updateWhere }));
+  const updateSet = jest.fn((_patch: any) => ({ where: updateWhere }));
   const update = jest.fn(() => ({ set: updateSet }));
   const deleteWhere = jest.fn(async () => undefined);
   const del = jest.fn(() => ({ where: deleteWhere }));
