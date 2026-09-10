@@ -1,9 +1,10 @@
 // lumira-server/packages/backend/src/modules/ai/llm-client.spec.ts
-// OpenAI 兼容 vision chat 客户端单测（Task 3，TDD）
+// OpenAI 兼容 chat 客户端单测（Task 3，TDD）
 // 用例 1~8 与 task-3-brief.md 关键用例一一对应；9~13 为补充用例
 // （网络错误 / 空内容 / 404 降级 / 降级后仍失败 / 非 jsonMode 不重试）
+// 用例 14~16 为 Task 2（textChat）追加：纯文本请求形状 / textModel 回退 / jsonMode 降级
 
-import { LlmConfig, VisionChatInput, visionChat } from './llm-client';
+import { LlmConfig, VisionChatInput, textChat, visionChat } from './llm-client';
 
 /** baseUrl 故意带尾斜杠：验证拼接前先规范化去掉 */
 const CFG: LlmConfig = {
@@ -191,5 +192,54 @@ describe('visionChat', () => {
 
     await expect(visionChat(CFG, baseInput())).rejects.toThrow('参数错误');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ===== textChat（Task 2 追加）=====
+describe('textChat', () => {
+  /** textChat 用：配置了独立 textModel */
+  const TEXT_CFG: LlmConfig = {
+    provider: 'qwen',
+    baseUrl: 'https://x.example/v1',
+    apiKey: 'sk-test',
+    visionModel: 'qwen-vl-max',
+    textModel: 'qwen-plus',
+  };
+
+  it('14. 请求体为纯文本 messages（无 image_url），model 取 textModel', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValueOnce(okResponse('hello'));
+
+    const out = await textChat(TEXT_CFG, { systemPrompt: 'sys', userText: 'hi' });
+
+    expect(out).toBe('hello');
+    const body = parseBody(fetchMock.mock.calls[0][1]);
+    expect(body.model).toBe('qwen-plus');
+    expect(body.messages).toEqual([
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'hi' },
+    ]);
+  });
+
+  it('15. 未配置 textModel → model 回退 visionModel', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValueOnce(okResponse('hello'));
+
+    await textChat({ ...TEXT_CFG, textModel: undefined }, { systemPrompt: 'sys', userText: 'hi' });
+
+    const body = parseBody(fetchMock.mock.calls[0][1]);
+    expect(body.model).toBe('qwen-vl-max');
+  });
+
+  it('16. jsonMode 400 时自动降级重试（复用 visionChat 同款逻辑）', async () => {
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(errorResponse(400, { error: { message: 'response_format not supported' } }))
+      .mockResolvedValueOnce(okResponse('{"a":1}'));
+
+    const out = await textChat(TEXT_CFG, { systemPrompt: 'sys', userText: 'hi', jsonMode: true });
+
+    expect(out).toBe('{"a":1}');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(parseBody(fetchMock.mock.calls[0][1]).response_format).toEqual({ type: 'json_object' });
+    expect(parseBody(fetchMock.mock.calls[1][1]).response_format).toBeUndefined();
   });
 });
