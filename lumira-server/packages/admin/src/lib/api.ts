@@ -33,6 +33,8 @@ import type {
   AiConfigTestResult,
   AiAnalyzeResult,
   AiImageResult,
+  AiImageTaskId,
+  AiImageStatusResult,
 } from '@/types/admin';
 
 // 重新导出纯函数，供 server-only 调用方使用（客户端组件请直接从 @/lib/category-tree 导入）
@@ -521,12 +523,16 @@ export const api = {
       body: formData,
     }),
 
-  /** multipart：meta 草稿 JSON 文本 + reference 参考图（可选） */
-  aiGenerateImage: (formData: FormData) =>
-    adminFetch<AiImageResult>('/templates/ai-generate-image', {
+  /** 提交生图任务（multipart meta + reference 可选）→ 立即返回 taskId */
+  aiGenerateImageStart: (formData: FormData) =>
+    adminFetch<AiImageTaskId>('/templates/ai-generate-image', {
       method: 'POST',
       body: formData,
     }),
+
+  /** 查询生图任务状态（done 带 image/mimeType；error 带 error） */
+  aiGenerateImageStatus: (taskId: string) =>
+    adminFetch<AiImageStatusResult>(`/templates/ai-generate-image/tasks/${taskId}`),
 
   /** multipart：image 文件 + meta JSON（{ mode, crop }，可选） */
   aiGenerateSilhouette: (formData: FormData) =>

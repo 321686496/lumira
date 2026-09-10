@@ -2,12 +2,12 @@
 // AI 模板制作端点（Task 5：ai-analyze 识别；Task 7/9 再并入生图 / 剪影端点）
 // 设计文档：docs/specs/2026-09-09-ai-template-one-click-creation-design.md 第三节
 
-import { Controller, Post, Req, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Param, Req, UseGuards, BadRequestException, NotFoundException } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
 import { UploadFile } from '../templates/admin-templates.service';
 import { AiAnalyzeService } from './ai-analyze.service';
-import { AiGenerateImageService } from './ai-generate-image.service';
+import { AiImageTaskService } from './ai-image-task.service';
 import { AiSilhouetteService } from './ai-generate-silhouette.service';
 
 @Controller('admin/templates')
@@ -15,7 +15,7 @@ import { AiSilhouetteService } from './ai-generate-silhouette.service';
 export class AiTemplatesController {
   constructor(
     private readonly aiAnalyzeService: AiAnalyzeService,
-    private readonly aiGenerateImageService: AiGenerateImageService,
+    private readonly aiImageTaskService: AiImageTaskService,
     private readonly aiSilhouetteService: AiSilhouetteService,
   ) {}
 
@@ -26,13 +26,28 @@ export class AiTemplatesController {
     return this.aiAnalyzeService.analyze(image, text);
   }
 
-  /** AI 生成模板效果图（multipart：meta 草稿 JSON 文本必填语义 + reference 参考图可选） */
+  /**
+   * AI 生成模板效果图（异步任务式：multipart meta 草稿 JSON 文本语义 + reference 参考图可选）
+   * 返回 { taskId }，前端轮询 GET ai-generate-image/tasks/:taskId 获取结果（避免同步长请求超时）。
+   */
   @Post('ai-generate-image')
   async generateImage(@Req() req: FastifyRequest) {
     const { meta, reference } = await parseAiMultipart(req);
-    const result = await this.aiGenerateImageService.generate(reference, meta);
-    // HTTP 契约：{ image: base64, mimeType }（service 内部为 GenerateImageResult 字段名）
-    return { image: result.base64, mimeType: result.mimeType };
+    return this.aiImageTaskService.submit(reference, meta);
+  }
+
+  /** 查询生图任务状态（done 带 image/mimeType，error 带 error；任务不存在则 404） */
+  @Get('ai-generate-image/tasks/:taskId')
+  async getImageTask(@Param('taskId') taskId: string) {
+    const task = this.aiImageTaskService.get(taskId);
+    if (!task) throw new NotFoundException('Image task not found');
+    return {
+      taskId: task.id,
+      status: task.status,
+      image: task.result?.image,
+      mimeType: task.result?.mimeType,
+      error: task.error,
+    };
   }
 
   /** AI 生成剪影（multipart：image 文件 + meta JSON 可选，纯本地计算不依赖 ai-config） */
