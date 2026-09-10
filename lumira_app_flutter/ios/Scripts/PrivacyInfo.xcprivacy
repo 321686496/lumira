@@ -2,20 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- 本模板用于修复 App Store TestFlight ITMS-91061：
-	     Flutter.framework 与旧版（兼容 Flutter 3.7）插件框架未内置隐私清单。
-	     由 Runner 的 "Inject Privacy Manifests" 构建阶段脚本复制到每个缺失清单的
-	     内嵌框架中。这些 SDK 不追踪用户：不采集数据、不存在追踪域名。 -->
 	<key>NSPrivacyTracking</key>
 	<false/>
 	<key>NSPrivacyTrackingDomains</key>
 	<array/>
 	<key>NSPrivacyCollectedDataTypes</key>
-	<array>
-		<!-- Flutter 引擎/插件会写入并提供 NSUserDefaults、文件时间戳、系统
-		     启动时间、磁盘空间等系统状态给 App，但这些均不随设备跨厂商共享，
-		     故不属于 NSPrivacyCollectedDataType，此处留空仅作说明。 -->
-	</array>
+	<array/>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
 		<dict>
@@ -31,9 +23,7 @@
 			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
-				<string>0A2A.1</string>
 				<string>C617.1</string>
-				<string>3B52.1</string>
 			</array>
 		</dict>
 		<dict>
@@ -49,7 +39,6 @@
 			<string>NSPrivacyAccessedAPICategoryDiskSpace</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
-				<string>85F4.1</string>
 				<string>E174.1</string>
 			</array>
 		</dict>
