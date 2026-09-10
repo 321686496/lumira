@@ -29,15 +29,26 @@ export class AiAnalyzeService {
   ) {}
 
   /**
-   * 示例图（可选）+ 文字描述（可选）→ 模板草稿：
-   * 校验（至少一项；text ≤ 500 字）→ 读活跃分类树 → 取启用配置 →
-   * 图存在走 visionChat（文字作补充要求）/ 仅文字走 textChat → JSON 容错提取 → 归一化
+   * 示例图（可选）+ 文字描述（可选）+ Step1 附加输入 → 模板草稿：
+   * 校验（至少一项；text ≤ 500 字；poseCount 1~6）→ 读活跃分类树 → 取启用配置（未配置 503）→
+   * 图存在走 visionChat（extras 注入识别指令）/ 仅文字走 textChat → JSON 容错提取 → 归一化
    */
   async analyze(
     image: UploadFile | undefined,
     text: string | undefined,
+    extra: { textDesc?: string | null; creationReq?: string | null; poseCount?: string | null } = {},
   ): Promise<{ draft: Record<string, unknown>; warnings: string[] }> {
-    // 1. 输入校验：至少一项；text 长度
+    // 0. 姿势个数：'1'~'6' 整数字符串合法；其余（空/非法）= AI 自动判断
+    let poseCount: number | null = null;
+    if (extra.poseCount !== null && extra.poseCount !== undefined && extra.poseCount !== '') {
+      const n = Number(extra.poseCount);
+      if (!Number.isInteger(n) || n < 1 || n > 6) {
+        throw new BadRequestException('poseCount 必须是 1~6 的整数（留空则由 AI 自动判断）');
+      }
+      poseCount = n;
+    }
+
+    // 1. 输入校验：至少一项；text 长度；图 mimetype / 大小
     const trimmedText = (text ?? '').trim();
     if (!image && !trimmedText) {
       throw new BadRequestException('请至少提供示例图或文字描述之一');
@@ -68,12 +79,16 @@ export class AiAnalyzeService {
     // 3. 取启用配置（未配置/未启用 → 503 透传）
     const cfg = await this.aiConfigService.getActiveConfig();
 
-    // 4. 按输入组合分叉：有图走视觉模型（文字作补充要求），仅文字走文本模型
+    // 4. 按输入组合分叉：有图走视觉模型（extras 注入识别指令），仅文字走文本模型
     let content: string;
     if (image) {
       content = await visionChat(cfg.vision, {
         systemPrompt: buildAnalyzeSystemPrompt(categories),
-        userText: buildAnalyzeUserPrompt(trimmedText || undefined),
+        userText: buildAnalyzeUserPrompt({
+          textDesc: extra.textDesc?.trim() || trimmedText || undefined,
+          creationReq: extra.creationReq,
+          poseCount,
+        }),
         imageBase64: image.buffer.toString('base64'),
         imageMime: image.mimetype,
         temperature: 0.3,
@@ -82,7 +97,11 @@ export class AiAnalyzeService {
     } else {
       content = await textChat(cfg.text, {
         systemPrompt: buildTextOnlySystemPrompt(categories),
-        userText: buildTextOnlyUserPrompt(trimmedText),
+        userText: buildTextOnlyUserPrompt({
+          textDesc: trimmedText,
+          creationReq: extra.creationReq,
+          poseCount,
+        }),
         temperature: 0.3,
         jsonMode: true,
       });

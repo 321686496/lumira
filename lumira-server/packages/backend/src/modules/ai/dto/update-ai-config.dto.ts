@@ -63,6 +63,12 @@ export class UpdateAiConfigDto {
   @MaxLength(255)
   imageApiKey?: string;
 
+  /** 剪影专用模型：空串/缺省 = 与生图模型一致（存 null）；非空 = 单独指定 */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  silhouetteModel?: string;
+
   @IsBoolean()
   enabled!: boolean;
 }

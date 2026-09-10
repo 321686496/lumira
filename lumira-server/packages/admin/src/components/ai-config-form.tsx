@@ -62,6 +62,7 @@ interface FormState {
   visionModel: string;
   imageModel: string;
   textModel: string; // 留空 = 使用视觉模型
+  silhouetteModel: string; // 留空 = 与生图模型一致
   enabled: boolean;
 }
 
@@ -158,6 +159,7 @@ export function AiConfigForm({
           visionModel: initial.visionModel,
           imageModel: initial.imageModel,
           textModel: initial.textModel,
+          silhouetteModel: initial.silhouetteModel ?? '',
           enabled: initial.enabled,
         }
       : {
@@ -167,6 +169,7 @@ export function AiConfigForm({
           visionModel: PROVIDER_PRESETS.qwen.visionModel,
           imageModel: PROVIDER_PRESETS.qwen.imageModel,
           textModel: PROVIDER_PRESETS.qwen.textModel,
+          silhouetteModel: '',
           enabled: false,
         },
   );
@@ -291,6 +294,7 @@ export function AiConfigForm({
         visionModel: form.visionModel.trim(),
         imageModel: form.imageModel.trim(),
         textModel: form.textModel.trim(),
+        silhouetteModel: form.silhouetteModel.trim() || undefined,
         enabled: form.enabled,
       };
       if (textOverride.independent) {
@@ -481,7 +485,7 @@ export function AiConfigForm({
               AI 尚未配置
             </CardTitle>
             <CardDescription className="text-amber-800/80 dark:text-amber-300/80">
-              完成并保存下方配置后，向导页的「风格识别 / 生成效果图」功能才可用（剪影生成不依赖本配置）。
+              完成并保存下方配置后，向导页的「风格识别 / 生成效果图 / AI 剪影」功能才可用（剪影仍可切「本地抠图」，不依赖本配置）。
             </CardDescription>
           </CardHeader>
         </Card>
@@ -553,12 +557,36 @@ export function AiConfigForm({
           {/* 模态三：生图模型 */}
           {renderModalitySection('image')}
 
+          {/* 剪影专用模型（AI 一键建模「生成剪影」用，平台跟随生图模态） */}
+          <div className="space-y-2 rounded-lg border border-border p-4">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="ai-silhouette-model">剪影模型（可选）</Label>
+              <button
+                type="button"
+                className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-40"
+                disabled={!form.imageModel.trim() || form.silhouetteModel.trim() === form.imageModel.trim()}
+                onClick={() => setForm((f) => ({ ...f, silhouetteModel: f.imageModel.trim() }))}
+              >
+                同生图模型
+              </button>
+            </div>
+            <Input
+              id="ai-silhouette-model"
+              value={form.silhouetteModel}
+              onChange={(e) => setForm((f) => ({ ...f, silhouetteModel: e.target.value }))}
+              placeholder="留空 = 使用生图模型（用于 AI 一键建模的剪影生成）"
+            />
+            <p className="text-xs text-muted-foreground">
+              AI 一键建模「生成剪影」选用 AI 方式时使用的模型；不填则与生图模型一致，平台与 Key 跟随生图模态
+            </p>
+          </div>
+
           {/* 启用开关 */}
           <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
             <div>
               <div className="text-sm font-medium text-foreground">启用 AI 功能</div>
               <div className="text-xs text-muted-foreground">
-                关闭后，向导页的识别与生图请求将返回「AI 未配置或未启用」；剪影生成不受影响
+                关闭后，向导页的识别、生图与 AI 剪影请求将返回「AI 未配置或未启用」；本地抠图剪影不受影响
               </div>
             </div>
             <Switch

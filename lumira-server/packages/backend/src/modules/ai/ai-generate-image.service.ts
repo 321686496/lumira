@@ -29,9 +29,13 @@ export class AiGenerateImageService {
 
   /**
    * 生成模板效果图：取启用配置（未配置 503）→ 解析草稿 JSON（非法 400）→
-   * 构建 prompt + 厂商尺寸 → generateImage（有参考图时 doubao/openai 走图生图）
+   * 构建 prompt（可选附加用户额外要求）+ 厂商尺寸 → generateImage（有参考图时 doubao/openai 走图生图）
    */
-  async generate(reference: UploadFile | undefined, metaJson: string | null): Promise<GenerateImageResult> {
+  async generate(
+    reference: UploadFile | undefined,
+    metaJson: string | null,
+    extraPrompt?: string | null,
+  ): Promise<GenerateImageResult> {
     // 1. 取启用配置（未配置/未启用 → 503 透传）
     const cfg = await this.aiConfigService.getActiveConfig();
 
@@ -48,8 +52,9 @@ export class AiGenerateImageService {
       }
     }
 
-    // 3. 构建 prompt（拼接 → 文本模态润色，失败回退拼接值）+ 按厂商映射尺寸 → 生图
-    const rawPrompt = buildImagePrompt(draft);
+    // 3. 构建 prompt（extraPrompt = 用户附加提示词，拼在末尾；拼接 → 文本模态润色，失败回退拼接值）
+    //    + 按厂商映射尺寸 → 生图（有参考图时 doubao/openai 走图生图）
+    const rawPrompt = buildImagePrompt(draft, extraPrompt);
     const { prompt } = await polishPrompt(cfg.text, rawPrompt);
     return generateImage(cfg.image, {
       prompt,

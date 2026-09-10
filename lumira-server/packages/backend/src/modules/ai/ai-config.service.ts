@@ -25,6 +25,8 @@ export interface AiConfigView {
   textPlatform: { provider: string; baseUrl: string; apiKeyMasked: string } | null;
   /** 生图模态独立平台（null = 跟随共享平台） */
   imagePlatform: { provider: string; baseUrl: string; apiKeyMasked: string } | null;
+  /** 剪影专用模型：null = 与生图模型一致 */
+  silhouetteModel: string | null;
   enabled: boolean;
 }
 
@@ -36,7 +38,7 @@ export interface AiModalityEndpoint {
   model: string;
 }
 
-/** getActiveConfig() 返回的可用配置（供 ai-analyze / 生图使用） */
+/** getActiveConfig() 返回的可用配置（供 ai-analyze / 生图 / 剪影使用） */
 export interface ActiveAiConfig {
   /** 共享平台（视觉模态） */
   vision: AiModalityEndpoint;
@@ -44,6 +46,8 @@ export interface ActiveAiConfig {
   text: AiModalityEndpoint;
   /** 生图模态：独立平台 ?? 共享平台 */
   image: AiModalityEndpoint;
+  /** 生效的剪影模型（未单独指定时已回退为 imageModel；平台走 image 模态端点，调用方直接使用） */
+  silhouetteModel: string;
   /** 是否配置了独立文本模型（连通测试分支用） */
   hasCustomTextModel: boolean;
 }
@@ -94,15 +98,17 @@ export class AiConfigService {
         row.imageProvider && row.imageBaseUrl
           ? { provider: row.imageProvider, baseUrl: row.imageBaseUrl, apiKeyMasked: maskKey(row.imageApiKey ?? '') }
           : null,
+      silhouetteModel: row.silhouetteModel ?? null,
       enabled: row.enabled === 1,
     };
   }
 
-  /** upsert id=1；apiKey 空串/缺省 = 保留原值；首次保存必须给 apiKey */
+  /** upsert id=1；apiKey 空串/缺省 = 保留原值；首次保存必须给 apiKey；silhouetteModel 空串归一为 null */
   async save(dto: UpdateAiConfigDto): Promise<AiConfigView> {
     const db = this.dbService.getDb();
     const now = Math.floor(Date.now() / 1000);
     const existing = await db.query.aiProviderConfig.findFirst();
+    const silhouetteModel = dto.silhouetteModel?.trim() || null;
 
     // 文本模态独立平台组：textProvider 非空 = 启用（需 baseUrl + 独立文本模型 + apiKey）；空/缺省 = 清除（跟随共享平台）
     let textProvider: string | null = null;
@@ -159,6 +165,7 @@ export class AiConfigService {
         imageProvider,
         imageBaseUrl,
         imageApiKey,
+        silhouetteModel,
         enabled: dto.enabled ? 1 : 0,
         createdAt: now,
         updatedAt: now,
@@ -178,6 +185,7 @@ export class AiConfigService {
           imageProvider,
           imageBaseUrl,
           imageApiKey,
+          silhouetteModel,
           enabled: dto.enabled ? 1 : 0,
           apiKey: dto.apiKey ? dto.apiKey : existing.apiKey, // 留空 = 不改
           updatedAt: now,
@@ -251,6 +259,7 @@ export class AiConfigService {
       image: hasImagePlatform
         ? { provider: row.imageProvider as string, baseUrl: row.imageBaseUrl as string, apiKey: row.imageApiKey as string, model: row.imageModel }
         : { ...shared, model: row.imageModel },
+      silhouetteModel: row.silhouetteModel?.trim() || row.imageModel,
       hasCustomTextModel,
     };
   }

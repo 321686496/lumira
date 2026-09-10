@@ -404,6 +404,8 @@ export interface AiProviderConfigView {
   textPlatform: AiPlatformOverride | null;
   /** 生图模态独立平台（null = 跟随共享平台） */
   imagePlatform: AiPlatformOverride | null;
+  /** 剪影专用模型：null = 与生图模型一致 */
+  silhouetteModel: string | null;
   enabled: boolean;
 }
 
@@ -416,6 +418,8 @@ export interface UpdateAiConfigPayload {
   imageModel: string;
   /** 空串/缺省 = 清除（回退视觉模型） */
   textModel?: string;
+  /** 剪影专用模型：空串/缺省 = 与生图模型一致 */
+  silhouetteModel?: string;
   enabled: boolean;
   /** 文本模态独立平台：提供 provider = 启用（需 textBaseUrl + textModel + 首次需 apiKey）；缺省 = 清除 */
   textProvider?: string;

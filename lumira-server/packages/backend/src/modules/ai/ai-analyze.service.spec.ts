@@ -238,18 +238,54 @@ describe('AiAnalyzeService — 多输入', () => {
     expect(textChatMock.mock.calls[0][1].userText).toContain('日系田园风');
   });
 
-  it('图 + 文 → visionChat 的 userText 注入「用户补充要求」', async () => {
+  it('图 + 文 → visionChat 的 userText 注入「用户文字描述」（text 无 textDesc 时回退）', async () => {
     const { service } = buildService();
     visionChatMock.mockResolvedValue(JSON.stringify(RAW_DRAFT));
     await service.analyze(imageFile(), '要侧拍');
     expect(visionChatMock).toHaveBeenCalledTimes(1);
-    expect(visionChatMock.mock.calls[0][1].userText).toContain('用户补充要求：要侧拍');
+    expect(visionChatMock.mock.calls[0][1].userText).toContain('用户文字描述：要侧拍');
   });
 
-  it('仅图（无文字）→ userText 不含补充要求段（现状不变）', async () => {
+  it('仅图（无文字）→ userText 不含附加输入段（现状不变）', async () => {
     const { service } = buildService();
     visionChatMock.mockResolvedValue(JSON.stringify(RAW_DRAFT));
     await service.analyze(imageFile(), undefined);
-    expect(visionChatMock.mock.calls[0][1].userText).not.toContain('用户补充要求');
+    expect(visionChatMock.mock.calls[0][1].userText).not.toContain('用户文字描述：');
+  });
+
+  it('附加输入注入：文字描述 / 创作要求 / 固定姿势个数注入 userText', async () => {
+    const { service } = buildService();
+    visionChatMock.mockResolvedValueOnce('{}');
+
+    await service.analyze(imageFile(), undefined, {
+      textDesc: '三连拍姿势，适合闺蜜出游',
+      creationReq: '偏胶片感',
+      poseCount: '3',
+    });
+
+    const [, input] = visionChatMock.mock.calls[0];
+    expect(input.userText).toContain('用户文字描述：三连拍姿势，适合闺蜜出游');
+    expect(input.userText).toContain('创作要求：偏胶片感');
+    expect(input.userText).toContain('pose 数组必须恰好输出 3 个姿势');
+  });
+
+  it('姿势个数缺省/自动：userText 含自动判断指令而非固定数量', async () => {
+    const { service } = buildService();
+    visionChatMock.mockResolvedValueOnce('{}');
+
+    await service.analyze(imageFile(), undefined, { textDesc: '', creationReq: '', poseCount: '' });
+
+    const [, input] = visionChatMock.mock.calls[0];
+    expect(input.userText).toContain('判断需要多少个姿势');
+    expect(input.userText).not.toContain('恰好输出');
+  });
+
+  it('poseCount 非法（越界 / 非整数）→ 400，不调用模型', async () => {
+    const { service } = buildService();
+
+    for (const bad of ['0', '7', '2.5', 'abc']) {
+      await expect(service.analyze(imageFile(), undefined, { poseCount: bad })).rejects.toThrow('poseCount');
+    }
+    expect(visionChatMock).not.toHaveBeenCalled();
   });
 });

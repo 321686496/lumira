@@ -12,9 +12,11 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { ServiceUnavailableException } from '@nestjs/common';
+import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import sharp, { type Sharp } from 'sharp';
 import type { InferenceSession } from 'onnxruntime-node';
+
+const logger = new Logger('SilhouettePipeline');
 
 export interface SilhouetteOptions {
   mode: 'sketch' | 'solid'; // 线稿剪影 | 实心剪影
@@ -189,19 +191,25 @@ async function runRmbg(input: Buffer): Promise<Buffer> {
  * 可选按 alpha 包围盒裁剪。返回透明底 PNG buffer。
  */
 export async function generateSilhouettePng(input: Buffer, opts: SilhouetteOptions): Promise<Buffer> {
+  const t0 = Date.now();
   // 先确认模型可用（缺失 → 503；此时无需解码输入，运营只需补装模型）
+  // 首次调用含模型加载（42MB 原生推理库 + ONNX 会话），单独计时便于区分"冷启动慢"与"推理慢"
+  const tSession = Date.now();
   await getRmbgSession();
+  const sessionMs = Date.now() - tSession;
 
   const meta = await sharp(input).metadata();
   const origW = meta.width ?? 0;
   const origH = meta.height ?? 0;
 
   // ① RMBG 推理（1024² matte）→ ② 缩回原尺寸单通道 alpha（人物前景遮罩）
+  const tRmbg = Date.now();
   const matteRaw = await runRmbg(input);
   const alphaRaw = await sharp(matteRaw, { raw: { width: RMBG_INPUT_SIZE, height: RMBG_INPUT_SIZE, channels: 1 } })
     .resize(origW, origH, { fit: 'fill' })
     .raw()
     .toBuffer();
+  const rmbgMs = Date.now() - tRmbg;
   const alphaJoinOpts = { raw: { width: origW, height: origH, channels: 1 as const } };
 
   // ③ 按模式合成结果图（base 尺寸 = 原尺寸，与 alphaRaw 严格一致才能 joinChannel）
@@ -229,6 +237,7 @@ export async function generateSilhouettePng(input: Buffer, opts: SilhouetteOptio
   // ④ 合成输出；可选按 alpha 包围盒裁掉全透明边距（无前景时保留原尺寸）。
   // 注意：extract 链在 joinChannel 之后会被 sharp 静默忽略，需先合成出图、
   // 再起新实例裁剪（PNG 无损，中间多一次编解码在 256-1024 图幅上可忽略）。
+  const tCompose = Date.now();
   let out = await result.png().toBuffer();
   if (opts.crop) {
     const bbox = computeAlphaBbox(alphaRaw, origW, origH);
@@ -239,5 +248,10 @@ export async function generateSilhouettePng(input: Buffer, opts: SilhouetteOptio
         .toBuffer();
     }
   }
+  // 阶段耗时日志（对齐工程惯例 stage time breakdown）：定位慢在模型加载 / 推理 / 合成
+  logger.log(
+    `silhouette done in ${Date.now() - t0}ms ${origW}x${origH} mode=${opts.mode} ` +
+    `(session=${sessionMs}ms rmbg=${rmbgMs}ms compose=${Date.now() - tCompose}ms)`,
+  );
   return out;
 }

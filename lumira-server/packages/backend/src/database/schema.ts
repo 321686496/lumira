@@ -345,6 +345,8 @@ export const aiProviderConfig = mysqlTable('ai_provider_config', {
   imageProvider: varchar('image_provider', { length: 32 }),
   imageBaseUrl: varchar('image_base_url', { length: 255 }),
   imageApiKey: varchar('image_api_key', { length: 255 }),
+  /** 剪影专用模型：NULL = 与生图模型一致；非空 = 单独指定的专用剪影模型 */
+  silhouetteModel: varchar('silhouette_model', { length: 64 }),
   enabled: int('enabled').notNull().default(0),
   createdAt: int('created_at').notNull(),
   updatedAt: int('updated_at').notNull(),

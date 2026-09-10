@@ -146,4 +146,20 @@ describe('buildImagePrompt', () => {
     const descOnly = buildImagePrompt({ meta: { description: '结构化长描述B' } });
     expect(descOnly).toContain('结构化长描述B');
   });
+
+  test('extraPrompt 非空：以「额外要求：」附加到 prompt 末尾（用户显式要求权重最高）', () => {
+    const prompt = buildImagePrompt(fullDraft(), '人物戴草帽，天空占比更大');
+    expect(prompt).toContain('额外要求：人物戴草帽，天空占比更大');
+    // 附加段在末尾（最接近结尾的逗号分隔段）
+    expect(prompt.lastIndexOf('额外要求：')).toBeGreaterThan(prompt.lastIndexOf('情绪'));
+  });
+
+  test('extraPrompt 为空串 / 纯空白 / null / undefined：不附加段，行为与旧版一致', () => {
+    const baseline = buildImagePrompt(fullDraft());
+    for (const extra of ['', '   ', null, undefined] as Array<string | null | undefined>) {
+      const prompt = buildImagePrompt(fullDraft(), extra);
+      expect(prompt).toBe(baseline);
+      expect(prompt).not.toContain('额外要求');
+    }
+  });
 });

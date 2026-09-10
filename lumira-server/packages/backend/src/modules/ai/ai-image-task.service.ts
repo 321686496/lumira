@@ -54,11 +54,12 @@ export class AiImageTaskService implements OnModuleDestroy {
   async submit(
     reference: UploadFile | undefined,
     metaJson: string | null,
+    extraPrompt?: string | null,
   ): Promise<{ taskId: string }> {
     await this.aiConfigService.getActiveConfig();
     const id = `img_${nanoid(16)}`;
     this.tasks.set(id, { id, status: 'pending', createdAt: Date.now() });
-    void this.run(id, reference, metaJson);
+    void this.run(id, reference, metaJson, extraPrompt);
     return { taskId: id };
   }
 
@@ -67,12 +68,13 @@ export class AiImageTaskService implements OnModuleDestroy {
     id: string,
     reference: UploadFile | undefined,
     metaJson: string | null,
+    extraPrompt?: string | null,
   ): Promise<void> {
     const task = this.tasks.get(id);
     if (!task) return;
     task.status = 'running';
     try {
-      const r = await this.aiGenerateImageService.generate(reference, metaJson);
+      const r = await this.aiGenerateImageService.generate(reference, metaJson, extraPrompt);
       task.status = 'done';
       task.result = { image: r.base64, mimeType: r.mimeType };
     } catch (err) {
