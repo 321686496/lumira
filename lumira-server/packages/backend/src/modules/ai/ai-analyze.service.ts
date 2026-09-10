@@ -71,7 +71,7 @@ export class AiAnalyzeService {
     // 4. 按输入组合分叉：有图走视觉模型（文字作补充要求），仅文字走文本模型
     let content: string;
     if (image) {
-      content = await visionChat(cfg, {
+      content = await visionChat(cfg.vision, {
         systemPrompt: buildAnalyzeSystemPrompt(categories),
         userText: buildAnalyzeUserPrompt(trimmedText || undefined),
         imageBase64: image.buffer.toString('base64'),
@@ -80,7 +80,7 @@ export class AiAnalyzeService {
         jsonMode: true,
       });
     } else {
-      content = await textChat(cfg, {
+      content = await textChat(cfg.text, {
         systemPrompt: buildTextOnlySystemPrompt(categories),
         userText: buildTextOnlyUserPrompt(trimmedText),
         temperature: 0.3,

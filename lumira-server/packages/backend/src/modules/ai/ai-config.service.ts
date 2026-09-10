@@ -28,16 +28,23 @@ export interface AiConfigView {
   enabled: boolean;
 }
 
-/** getActiveConfig() 返回的可用配置（供 ai-analyze / 生图使用，含明文 apiKey） */
-export interface ActiveAiConfig {
+/** 单模态运行时端点（含明文 apiKey） */
+export interface AiModalityEndpoint {
   provider: string;
   baseUrl: string;
   apiKey: string;
-  visionModel: string;
-  imageModel: string;
-  /** 有效文本模型（= textModel 配置值 || visionModel，永不为空） */
-  textModel: string;
-  /** 是否配置了独立文本模型 */
+  model: string;
+}
+
+/** getActiveConfig() 返回的可用配置（供 ai-analyze / 生图使用） */
+export interface ActiveAiConfig {
+  /** 共享平台（视觉模态） */
+  vision: AiModalityEndpoint;
+  /** 文本模态：独立平台 ?? 共享平台；model = textModel（跟随共享且未配置时回退 visionModel） */
+  text: AiModalityEndpoint;
+  /** 生图模态：独立平台 ?? 共享平台 */
+  image: AiModalityEndpoint;
+  /** 是否配置了独立文本模型（连通测试分支用） */
   hasCustomTextModel: boolean;
 }
 
@@ -53,7 +60,7 @@ export interface AiConfigTestResult {
 const TEST_IMAGE_PNG_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAxSURBVFhH7c4hAQAACMRA+if7VuAJAObEzNRVkv6s9rgOAAAAAAAAAAAAAAAAAABgANYGXMSkdFBBAAAAAElFTkSuQmCC';
 
-const TEST_NOTE = '生图模型与视觉模型使用同一 apiKey，可用性以首次生图为准';
+const TEST_NOTE = '生图模型按次计费，未做连通测试，可用性以首次生图为准';
 
 /** apiKey 脱敏：≤8 位全遮蔽；否则前 3 + **** + 后 2 */
 function maskKey(k: string): string {
@@ -191,17 +198,14 @@ export class AiConfigService {
     const t0 = Date.now();
     let vision: AiConfigTestResult['vision'];
     try {
-      await visionChat(
-        { provider: cfg.provider, baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, visionModel: cfg.visionModel },
-        {
-          systemPrompt: 'You are a connectivity test.',
-          userText: 'ping',
-          imageBase64: TEST_IMAGE_PNG_B64,
-          imageMime: 'image/png',
-          temperature: 0,
-          timeoutMs: 30_000,
-        },
-      );
+      await visionChat(cfg.vision, {
+        systemPrompt: 'You are a connectivity test.',
+        userText: 'ping',
+        imageBase64: TEST_IMAGE_PNG_B64,
+        imageMime: 'image/png',
+        temperature: 0,
+        timeoutMs: 30_000,
+      });
       vision = { ok: true, latencyMs: Date.now() - t0 };
     } catch (e) {
       vision = { ok: false, error: (e as Error).message };
@@ -211,15 +215,12 @@ export class AiConfigService {
     if (cfg.hasCustomTextModel) {
       const t1 = Date.now();
       try {
-        await textChat(
-          { provider: cfg.provider, baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, visionModel: cfg.visionModel, textModel: cfg.textModel },
-          {
-            systemPrompt: 'You are a connectivity test.',
-            userText: 'ping',
-            temperature: 0,
-            timeoutMs: 30_000,
-          },
-        );
+        await textChat(cfg.text, {
+          systemPrompt: 'You are a connectivity test.',
+          userText: 'ping',
+          temperature: 0,
+          timeoutMs: 30_000,
+        });
         text = { ok: true, latencyMs: Date.now() - t1 };
       } catch (e) {
         text = { ok: false, error: (e as Error).message };
@@ -236,14 +237,19 @@ export class AiConfigService {
     if (!row || row.enabled !== 1) {
       throw new ServiceUnavailableException('AI 未配置或未启用，请先在后台「AI 设置」中完成配置并启用');
     }
+    const hasCustomTextModel = (row.textModel ?? '').trim() !== '';
+    const hasTextPlatform = Boolean(row.textProvider?.trim() && row.textBaseUrl?.trim());
+    const hasImagePlatform = Boolean(row.imageProvider?.trim() && row.imageBaseUrl?.trim());
+    const shared = { provider: row.provider, baseUrl: row.baseUrl, apiKey: row.apiKey };
     return {
-      provider: row.provider,
-      baseUrl: row.baseUrl,
-      apiKey: row.apiKey,
-      visionModel: row.visionModel,
-      imageModel: row.imageModel,
-      textModel: (row.textModel ?? '').trim() !== '' ? (row.textModel as string) : row.visionModel,
-      hasCustomTextModel: (row.textModel ?? '').trim() !== '',
+      vision: { ...shared, model: row.visionModel },
+      text: hasTextPlatform
+        ? { provider: row.textProvider as string, baseUrl: row.textBaseUrl as string, apiKey: row.textApiKey as string, model: row.textModel as string }
+        : { ...shared, model: hasCustomTextModel ? (row.textModel as string) : row.visionModel },
+      image: hasImagePlatform
+        ? { provider: row.imageProvider as string, baseUrl: row.imageBaseUrl as string, apiKey: row.imageApiKey as string, model: row.imageModel }
+        : { ...shared, model: row.imageModel },
+      hasCustomTextModel,
     };
   }
 }
