@@ -1,6 +1,6 @@
 // lumira-server/packages/backend/test/ai-analyze.e2e-spec.ts
-// AI 识别端点 e2e（Task 5）
-// 覆盖：未配置 503（message 含「AI 设置」）/ 缺 image 400 / 非法 mimetype 400 / 无 token 401
+// AI 识别端点 e2e（Task 5，Task 3 多输入增强）
+// 覆盖：未配置 503（message 含「AI 设置」）/ 图文都缺 400 / text 超长 400 / 非法 mimetype 400 / 无 token 401
 // 注意：全程不保存 ai-config（保持未配置状态）；成功识别需真实厂商 API，走手动验收。
 
 import { Test } from '@nestjs/testing';
@@ -50,14 +50,24 @@ describe('AiTemplatesController ai-analyze (e2e)', () => {
     expect(res.body.message).toContain('AI 设置');
   });
 
-  it('POST /api/v1/admin/templates/ai-analyze — 缺 image 文件返回 400', async () => {
+  it('POST /api/v1/admin/templates/ai-analyze — 图文都缺返回 400', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/admin/templates/ai-analyze')
       .set('Authorization', `Bearer ${adminToken}`)
       .field('meta', 'x')
       .expect(400);
 
-    expect(res.body.message).toContain('image');
+    expect(res.body.message).toContain('示例图或文字描述');
+  });
+
+  it('POST /api/v1/admin/templates/ai-analyze — text 超 500 字返回 400', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/admin/templates/ai-analyze')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .field('text', '长'.repeat(501))
+      .expect(400);
+
+    expect(res.body.message).toContain('500');
   });
 
   it('POST /api/v1/admin/templates/ai-analyze — 非法 mimetype 返回 400', async () => {

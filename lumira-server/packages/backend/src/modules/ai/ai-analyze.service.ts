@@ -1,5 +1,6 @@
 // lumira-server/packages/backend/src/modules/ai/ai-analyze.service.ts
-// AI 识别编排（Task 5）：上传示例图 → visionChat 分析 → extractJson → normalizeDraft
+// AI 识别编排（Task 5，Task 3 多输入增强）：示例图（可选）+ 文字描述（可选）→
+// 有图走 visionChat（文字作补充要求）/ 仅文字走 textChat → extractJson → normalizeDraft
 // 设计文档：docs/specs/2026-09-09-ai-template-one-click-creation-design.md 第三节/第五节
 
 import { Injectable, BadRequestException } from '@nestjs/common';
@@ -8,8 +9,13 @@ import { DatabaseService } from '../../database/database.service';
 import { templateCategories } from '../../database/schema';
 import { MAX_IMAGE_BYTES, UploadFile } from '../templates/admin-templates.service';
 import { AiConfigService } from './ai-config.service';
-import { visionChat } from './llm-client';
-import { buildAnalyzeSystemPrompt, buildAnalyzeUserPrompt } from './analyze.prompt';
+import { visionChat, textChat } from './llm-client';
+import {
+  buildAnalyzeSystemPrompt,
+  buildAnalyzeUserPrompt,
+  buildTextOnlySystemPrompt,
+  buildTextOnlyUserPrompt,
+} from './analyze.prompt';
 import { extractJson, normalizeDraft, CategoryNode } from './normalize';
 
 /** 允许的示例图 mimetype */
@@ -23,17 +29,30 @@ export class AiAnalyzeService {
   ) {}
 
   /**
-   * 示例图 → 模板草稿：
-   * 校验 → 读活跃分类树 → 取启用配置（未配置 503）→ visionChat → JSON 容错提取 → 归一化
+   * 示例图（可选）+ 文字描述（可选）→ 模板草稿：
+   * 校验（至少一项；text ≤ 500 字）→ 读活跃分类树 → 取启用配置 →
+   * 图存在走 visionChat（文字作补充要求）/ 仅文字走 textChat → JSON 容错提取 → 归一化
    */
-  async analyze(image: UploadFile): Promise<{ draft: Record<string, unknown>; warnings: string[] }> {
-    // 1. 校验 mimetype / 大小（超限返回明确的 400，文案同 admin-templates 的 assertFileSize 风格）
-    if (!ALLOWED_IMAGE_MIMES.includes(image.mimetype)) {
-      throw new BadRequestException('仅支持 jpg/png/webp 图片');
+  async analyze(
+    image: UploadFile | undefined,
+    text: string | undefined,
+  ): Promise<{ draft: Record<string, unknown>; warnings: string[] }> {
+    // 1. 输入校验：至少一项；text 长度
+    const trimmedText = (text ?? '').trim();
+    if (!image && !trimmedText) {
+      throw new BadRequestException('请至少提供示例图或文字描述之一');
     }
-    if (image.buffer.byteLength > MAX_IMAGE_BYTES) {
-      const mb = (MAX_IMAGE_BYTES / 1024 / 1024).toFixed(0);
-      throw new BadRequestException(`示例图不能超过 ${mb}MB（当前${(image.buffer.byteLength / 1024 / 1024).toFixed(2)}MB）`);
+    if (trimmedText.length > 500) {
+      throw new BadRequestException('文字描述不能超过 500 字');
+    }
+    if (image) {
+      if (!ALLOWED_IMAGE_MIMES.includes(image.mimetype)) {
+        throw new BadRequestException('仅支持 jpg/png/webp 图片');
+      }
+      if (image.buffer.byteLength > MAX_IMAGE_BYTES) {
+        const mb = (MAX_IMAGE_BYTES / 1024 / 1024).toFixed(0);
+        throw new BadRequestException(`示例图不能超过 ${mb}MB（当前${(image.buffer.byteLength / 1024 / 1024).toFixed(2)}MB）`);
+      }
     }
 
     // 2. 读 DB 活跃分类树（行结构直接匹配 CategoryNode）
@@ -49,15 +68,25 @@ export class AiAnalyzeService {
     // 3. 取启用配置（未配置/未启用 → 503 透传）
     const cfg = await this.aiConfigService.getActiveConfig();
 
-    // 4. 视觉模型识别（temperature 0.3 + jsonMode，code fence 剥离兜底在 extractJson）
-    const content = await visionChat(cfg, {
-      systemPrompt: buildAnalyzeSystemPrompt(categories),
-      userText: buildAnalyzeUserPrompt(),
-      imageBase64: image.buffer.toString('base64'),
-      imageMime: image.mimetype,
-      temperature: 0.3,
-      jsonMode: true,
-    });
+    // 4. 按输入组合分叉：有图走视觉模型（文字作补充要求），仅文字走文本模型
+    let content: string;
+    if (image) {
+      content = await visionChat(cfg, {
+        systemPrompt: buildAnalyzeSystemPrompt(categories),
+        userText: buildAnalyzeUserPrompt(trimmedText || undefined),
+        imageBase64: image.buffer.toString('base64'),
+        imageMime: image.mimetype,
+        temperature: 0.3,
+        jsonMode: true,
+      });
+    } else {
+      content = await textChat(cfg, {
+        systemPrompt: buildTextOnlySystemPrompt(categories),
+        userText: buildTextOnlyUserPrompt(trimmedText),
+        temperature: 0.3,
+        jsonMode: true,
+      });
+    }
 
     // 5. 容错提取 JSON（失败 → 400 引导重试识别）
     const json = extractJson(content);
