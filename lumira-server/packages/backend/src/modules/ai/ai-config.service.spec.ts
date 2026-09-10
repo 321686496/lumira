@@ -106,6 +106,18 @@ describe('AiConfigService — textModel', () => {
     expect(result.text?.ok).toBe(true);
   });
 
+  it('test() 视觉测试图边长 >10px（部分厂商拒绝 1×1 图，回归防护）', async () => {
+    const service = new AiConfigService(readonlyDb(row()));
+    await service.test();
+    expect(visionChatMock).toHaveBeenCalledTimes(1);
+    const imgArg = visionChatMock.mock.calls[0][1] as { imageBase64: string };
+    const buf = Buffer.from(imgArg.imageBase64, 'base64');
+    // PNG 签名 + IHDR：宽高位于字节 16-23（大端 uint32）
+    expect(buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).toBe(true);
+    expect(buf.readUInt32BE(16)).toBeGreaterThan(10);
+    expect(buf.readUInt32BE(20)).toBeGreaterThan(10);
+  });
+
   it('test() textChat 失败 → text.ok=false 且 vision 不受影响', async () => {
     textChatMock.mockRejectedValue(new Error('boom'));
     const service = new AiConfigService(readonlyDb(row({ textModel: 'qwen-plus' })));

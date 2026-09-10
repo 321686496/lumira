@@ -45,9 +45,9 @@ export interface AiConfigTestResult {
   note: string;
 }
 
-/** 1x1 透明 PNG（连通性测试用最小图片） */
-const TINY_1PX_PNG_B64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+/** 32×32 纯色 PNG（连通性测试用最小合规图片；部分厂商要求图片边长 >10px，1×1 会被 400 拒绝） */
+const TEST_IMAGE_PNG_B64 =
+  'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAxSURBVFhH7c4hAQAACMRA+if7VuAJAObEzNRVkv6s9rgOAAAAAAAAAAAAAAAAAABgANYGXMSkdFBBAAAAAElFTkSuQmCC';
 
 const TEST_NOTE = '生图模型与视觉模型使用同一 apiKey，可用性以首次生图为准';
 
@@ -124,7 +124,7 @@ export class AiConfigService {
     return view;
   }
 
-  /** 最小请求连通性测试：vision（1px PNG + ping）；配置独立 textModel 时追加纯文本测试 */
+  /** 最小请求连通性测试：vision（32×32 PNG + ping）；配置独立 textModel 时追加纯文本测试 */
   async test(): Promise<AiConfigTestResult> {
     const cfg = await this.getActiveConfig();
     const t0 = Date.now();
@@ -135,7 +135,7 @@ export class AiConfigService {
         {
           systemPrompt: 'You are a connectivity test.',
           userText: 'ping',
-          imageBase64: TINY_1PX_PNG_B64,
+          imageBase64: TEST_IMAGE_PNG_B64,
           imageMime: 'image/png',
           temperature: 0,
           timeoutMs: 30_000,
