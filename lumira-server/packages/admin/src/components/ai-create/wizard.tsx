@@ -11,6 +11,7 @@ import Link from 'next/link';
 import TemplateForm, { type TemplateFormAiInjection } from '@/components/template-form';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { compressImage } from '@/lib/image-compress';
 import { aiAnalyzeAction, aiGenerateImageAction, aiGenerateSilhouetteAction } from '@/actions/ai';
@@ -64,6 +65,7 @@ export function AiCreateWizard({
   const [maxStep, setMaxStep] = useState(1);
   const [exampleFile, setExampleFile] = useState<File | null>(null);
   const [exampleUrl, setExampleUrl] = useState<string | null>(null);
+  const [inputText, setInputText] = useState('');
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [candidates, setCandidates] = useState<CoverCandidate[]>([]);
@@ -78,6 +80,7 @@ export function AiCreateWizard({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const busy = analyzing || Boolean(autoState?.running);
+  const hasInput = Boolean(exampleFile) || inputText.trim() !== '';
 
   const inject = (partial: Omit<TemplateFormAiInjection, 'stamp'>) =>
     setInjection({ stamp: ++stampRef.current, ...partial });
@@ -85,6 +88,19 @@ export function AiCreateWizard({
   const goto = (n: number) => {
     setStep(n);
     setMaxStep((m) => Math.max(m, n));
+  };
+
+  /** 换图 / 改文字 = 重置整个下游流程 */
+  const resetFlow = () => {
+    setDraft(null);
+    setWarnings([]);
+    setCandidates([]);
+    setSilhouetteFile(null);
+    setInjection(null);
+    setFormActivated(false);
+    setAutoState(null);
+    setStep(1);
+    setMaxStep(1);
   };
 
   const handleExamplePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -107,26 +123,25 @@ export function AiCreateWizard({
     setExampleFile(processed);
     setExampleUrl(URL.createObjectURL(processed));
     // 换图 = 重新开始整个流程
-    setDraft(null);
-    setWarnings([]);
-    setCandidates([]);
-    setSilhouetteFile(null);
-    setInjection(null);
-    setFormActivated(false);
-    setAutoState(null);
-    setStep(1);
-    setMaxStep(1);
+    resetFlow();
     if (e.target) e.target.value = '';
   };
 
-  /** 手动识别：成功后草稿回填 + 示例图作默认封面候选 → Step2 */
+  const handleTextChange = (v: string) => {
+    setInputText(v);
+    // 流程已启动后修改输入 = 重新开始
+    if (formActivated || step > 1) resetFlow();
+  };
+
+  /** 手动识别：成功后草稿回填 + 示例图作默认封面候选（纯文模式候选为空）→ Step2 */
   const handleAnalyze = async () => {
-    if (!exampleFile) return;
+    if (!hasInput) return;
     setAnalyzing(true);
     setErrorText(null);
-    const fd = new FormData();
-    fd.set('image', exampleFile);
-    const result = await aiAnalyzeAction(fd);
+    const analyzeFd = new FormData();
+    if (exampleFile) analyzeFd.set('image', exampleFile);
+    if (inputText.trim()) analyzeFd.set('text', inputText.trim());
+    const result = await aiAnalyzeAction(analyzeFd);
     setAnalyzing(false);
     if ('error' in result) {
       setErrorText(result.error);
@@ -134,26 +149,32 @@ export function AiCreateWizard({
     }
     setDraft(result.draft);
     setWarnings(result.warnings);
-    setCandidates([{
-      id: 'example',
-      file: exampleFile,
-      url: URL.createObjectURL(exampleFile),
-      source: 'example',
-    }]);
+    if (exampleFile) {
+      setCandidates([{
+        id: 'example',
+        file: exampleFile,
+        url: URL.createObjectURL(exampleFile),
+        source: 'example',
+      }]);
+      inject({ json: result.draft, images: [exampleFile], replaceImages: true });
+    } else {
+      setCandidates([]);
+      inject({ json: result.draft });
+    }
     setFormActivated(true);
-    inject({ json: result.draft, images: [exampleFile], replaceImages: true });
     goto(2);
   };
 
   /** 全自动：识别 → 生图作封面 → 线稿剪影 → 创建并上架；失败停在对应步骤转人工，已成功资产保留 */
   const runAutoAll = async () => {
-    if (!exampleFile) return;
+    if (!hasInput) return;
     setErrorText(null);
     setAutoState({ running: true, stage: 'analyzing' });
 
     // ① 识别
     const analyzeFd = new FormData();
-    analyzeFd.set('image', exampleFile);
+    if (exampleFile) analyzeFd.set('image', exampleFile);
+    if (inputText.trim()) analyzeFd.set('text', inputText.trim());
     const analyzeResult = await aiAnalyzeAction(analyzeFd);
     if ('error' in analyzeResult) {
       setAutoState(null);
@@ -164,23 +185,30 @@ export function AiCreateWizard({
     setDraft(draftLocal);
     setWarnings(analyzeResult.warnings);
     setFormActivated(true);
-    const exampleCandidate: CoverCandidate = {
-      id: 'example',
-      file: exampleFile,
-      url: URL.createObjectURL(exampleFile),
-      source: 'example',
-    };
+    let exampleCandidate: CoverCandidate | null = null;
+    if (exampleFile) {
+      exampleCandidate = {
+        id: 'example',
+        file: exampleFile,
+        url: URL.createObjectURL(exampleFile),
+        source: 'example',
+      };
+    }
 
-    // ② 生图作封面（参考图 = 示例图）
+    // ② 生图作封面（参考图 = 示例图，纯文模式无参考图）
     setAutoState({ running: true, stage: 'generating-image' });
     const genFd = new FormData();
     genFd.set('meta', JSON.stringify(draftLocal));
-    genFd.set('reference', exampleFile);
+    if (exampleFile) genFd.set('reference', exampleFile);
     const genResult = await aiGenerateImageAction(genFd);
     if ('error' in genResult) {
-      // 停在 Step3 转人工：示例图保底作封面，草稿保留
-      setCandidates([exampleCandidate]);
-      inject({ json: draftLocal, images: [exampleFile], replaceImages: true });
+      // 停在 Step3 转人工：示例图保底作封面，草稿保留（纯文模式候选为空）
+      setCandidates(exampleCandidate ? [exampleCandidate] : []);
+      if (exampleFile) {
+        inject({ json: draftLocal, images: [exampleFile], replaceImages: true });
+      } else {
+        inject({ json: draftLocal });
+      }
       goto(3);
       setAutoState({ running: false, stage: 'generating-image', error: genResult.error });
       return;
@@ -188,7 +216,7 @@ export function AiCreateWizard({
     const aiCover = base64ToFile(genResult.image, genResult.mimeType, `ai-cover-${Date.now()}.png`);
     setCandidates([
       { id: `ai-${Date.now()}`, file: aiCover, url: URL.createObjectURL(aiCover), source: 'ai' },
-      exampleCandidate,
+      ...(exampleCandidate ? [exampleCandidate] : []),
     ]);
     inject({ json: draftLocal, images: [aiCover], replaceImages: true });
 
@@ -305,7 +333,7 @@ export function AiCreateWizard({
             <div className="rounded-lg border border-dashed border-border p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-foreground">示例图（该风格的成片参考）</p>
+                  <p className="text-sm font-medium text-foreground">示例图（可选，该风格的成片参考）</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     AI 将分析画面中的风格 / 构图 / 光线 / 主体，生成可上线的模板表单草稿
                   </p>
@@ -332,6 +360,24 @@ export function AiCreateWizard({
               )}
             </div>
 
+            <div className="rounded-lg border border-border p-4">
+              <Label htmlFor="ai-input-text" className="text-sm font-medium text-foreground">
+                文字描述 / 创作要求（可选）
+              </Label>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                无示例图时可仅用文字描述；也可与示例图同用，AI 将向你的要求倾斜
+              </p>
+              <textarea
+                id="ai-input-text"
+                className="mt-2 min-h-[88px] w-full rounded-md border border-border bg-background p-2 text-sm"
+                maxLength={500}
+                placeholder="例：日系田园风，午后侧逆光，少女侧身回眸，画面清新通透"
+                value={inputText}
+                onChange={(e) => handleTextChange(e.target.value)}
+              />
+              <div className="mt-1 text-right text-xs text-muted-foreground">{inputText.length}/500</div>
+            </div>
+
             {errorText && (
               <div className="text-sm text-destructive">
                 {errorText}
@@ -348,10 +394,10 @@ export function AiCreateWizard({
             )}
 
             <div className="flex flex-wrap items-center gap-3">
-              <Button disabled={!exampleFile || busy} onClick={handleAnalyze}>
+              <Button disabled={!hasInput || busy} onClick={handleAnalyze}>
                 {analyzing ? '识别中…' : '开始识别'}
               </Button>
-              <Button variant="outline" disabled={!exampleFile || busy} onClick={runAutoAll}>
+              <Button variant="outline" disabled={!hasInput || busy} onClick={runAutoAll}>
                 <MagicWand size={14} className="mr-1" /> 全自动生成并上架
               </Button>
             </div>
