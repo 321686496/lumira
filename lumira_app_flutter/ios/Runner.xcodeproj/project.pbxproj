@@ -111,6 +111,7 @@
 				97C146EC1CF9000F007C117D /* Resources */,
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
+				8E4C2F0A51D9B73C6E2A04F1 /* Inject Privacy Manifests */,
 			);
 			buildRules = (
 			);
@@ -170,20 +171,40 @@
 
 /* Begin PBXShellScriptBuildPhase section */
 		3B06AD1E1E4923F5004D2608 /* Thin Binary */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "Thin Binary";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" embed_and_thin";
-		};
+				isa = PBXShellScriptBuildPhase;
+				alwaysOutOfDate = 1;
+				buildActionMask = 2147483647;
+				files = (
+				);
+				inputPaths = (
+				);
+				name = "Thin Binary";
+				outputPaths = (
+				);
+				runOnlyForDeploymentPostprocessing = 0;
+				shellPath = /bin/sh;
+				shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" embed_and_thin";
+			};
+			/* 修复 App Store TestFlight ITMS-91061：为内嵌且缺少隐私清单的 SDK 框架
+			  （Flutter.framework / device_info_plus / image_picker_ios / package_info_plus /
+			  share_plus / sqflite / url_launcher_ios / wakelock_plus 等，均为兼容 Flutter 3.7
+			  的旧版）注入 PrivacyInfo.xcprivacy。必须排在 Thin Binary(embed_and_thin) 之后，
+			  此时 Flutter.framework 已拷入 app 的 Frameworks。 */
+			8E4C2F0A51D9B73C6E2A04F1 /* Inject Privacy Manifests */ = {
+				isa = PBXShellScriptBuildPhase;
+				alwaysOutOfDate = 1;
+				buildActionMask = 2147483647;
+				files = (
+				);
+				inputPaths = (
+				);
+				name = "Inject Privacy Manifests";
+				outputPaths = (
+				);
+				runOnlyForDeploymentPostprocessing = 0;
+				shellPath = /bin/sh;
+				shellScript = "set -e\nSRC=\"$SRCROOT/PrivacyInfo.xcprivacy\"\nFRAMEWORKS_DIR=\"$TARGET_BUILD_DIR/$EXECUTABLE_FOLDER_PATH/Frameworks\"\nif [ ! -f \"$SRC\" ]; then\n  echo \"error: privacy manifest template not found: $SRC\"\n  exit 1\nfi\nif [ -d \"$FRAMEWORKS_DIR\" ]; then\n  for framework in \"$FRAMEWORKS_DIR\"/*.framework; do\n    [ -d \"$framework\" ] || continue\n    dest=\"$framework/PrivacyInfo.xcprivacy\"\n    if [ ! -f \"$dest\" ]; then\n      cp \"$SRC\" \"$dest\"\n      echo \"Injected PrivacyInfo.xcprivacy into ${framework##*/}\"\n    fi\n  done\nfi";
+			};
 		9740EEB61CF901F6004384FC /* Run Script */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
