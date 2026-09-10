@@ -2064,51 +2064,53 @@ export default function TemplateForm({
       </div>
 
       {(() => {
-        const previewNode = (
-          <div className="rounded-lg border border-border bg-card p-4">
-            <h3 className="text-sm font-medium text-foreground mb-3">模板预览</h3>
-            <PhonePreview
-              coverUrl={coverPreviewSrc}
-              silhouetteUrl={currentPose ? poseSilhouettePreview(currentPose) : null}
-              silhouetteType={currentPose?.silhouetteType ?? 'builtin'}
-              silhouetteBuiltinKey={currentPose?.silhouetteBuiltinKey ?? ''}
-              positionX={currentPose?.positionX ?? 0.5}
-              positionY={currentPose?.positionY ?? 0.5}
-              scale={currentPose?.scale ?? 1}
-              rotation={currentPose?.rotation ?? 0}
-              aspectRatio={watchedValues.aspectRatio}
-              overlayType={watchedValues.overlayType}
-              opacity={watchedValues.opacity}
-              cropRatio={watchedValues.cropRatio}
-              lut={watchedValues.lut}
-              colorBrightness={watchedValues.colorBrightness}
-              colorContrast={watchedValues.colorContrast}
-              colorSaturation={watchedValues.colorSaturation}
-              colorTemperature={watchedValues.colorTemperature}
-              colorTint={watchedValues.colorTint}
-              smoothStrength={watchedValues.smoothStrength}
-              sharpen={watchedValues.sharpen}
-              vignette={watchedValues.vignette}
-              grain={watchedValues.grain}
-              exposureCompensation={watchedValues.exposureCompensation}
-              isoMode={watchedValues.isoMode}
-              iso={watchedValues.iso}
-              shutterSpeed={watchedValues.shutterSpeed}
-              whiteBalance={watchedValues.whiteBalance}
-              flashMode={watchedValues.flashMode}
-              focusMode={watchedValues.focusMode}
-              lensSuggestion={watchedValues.lensSuggestion}
-              name={watchedValues.name}
-            />
-          </div>
+        const previewContent = (
+          <PhonePreview
+            coverUrl={coverPreviewSrc}
+            silhouetteUrl={currentPose ? poseSilhouettePreview(currentPose) : null}
+            silhouetteType={currentPose?.silhouetteType ?? 'builtin'}
+            silhouetteBuiltinKey={currentPose?.silhouetteBuiltinKey ?? ''}
+            positionX={currentPose?.positionX ?? 0.5}
+            positionY={currentPose?.positionY ?? 0.5}
+            scale={currentPose?.scale ?? 1}
+            rotation={currentPose?.rotation ?? 0}
+            aspectRatio={watchedValues.aspectRatio}
+            overlayType={watchedValues.overlayType}
+            opacity={watchedValues.opacity}
+            cropRatio={watchedValues.cropRatio}
+            lut={watchedValues.lut}
+            colorBrightness={watchedValues.colorBrightness}
+            colorContrast={watchedValues.colorContrast}
+            colorSaturation={watchedValues.colorSaturation}
+            colorTemperature={watchedValues.colorTemperature}
+            colorTint={watchedValues.colorTint}
+            smoothStrength={watchedValues.smoothStrength}
+            sharpen={watchedValues.sharpen}
+            vignette={watchedValues.vignette}
+            grain={watchedValues.grain}
+            exposureCompensation={watchedValues.exposureCompensation}
+            isoMode={watchedValues.isoMode}
+            iso={watchedValues.iso}
+            shutterSpeed={watchedValues.shutterSpeed}
+            whiteBalance={watchedValues.whiteBalance}
+            flashMode={watchedValues.flashMode}
+            focusMode={watchedValues.focusMode}
+            lensSuggestion={watchedValues.lensSuggestion}
+            name={watchedValues.name}
+          />
         );
-        // 向导模式 + 宿主就绪 → portal 到向导 sticky 面板（避免双预览）
+        // 向导模式 + 宿主就绪 → portal 到向导 sticky 面板（宿主面板自带卡片与标题，仅渲染预览本体）
         if (wizardMode && previewPortalTarget) {
-          return createPortal(previewNode, previewPortalTarget);
+          return createPortal(previewContent, previewPortalTarget);
         }
         return (
           <div className="hidden xl:block w-[300px] shrink-0">
-            <div className="sticky top-6 space-y-4">{previewNode}</div>
+            <div className="sticky top-6 space-y-4">
+              <div className="rounded-lg border border-border bg-card p-4">
+                <h3 className="text-sm font-medium text-foreground mb-3">模板预览</h3>
+                {previewContent}
+              </div>
+            </div>
           </div>
         );
       })()}

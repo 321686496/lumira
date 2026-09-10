@@ -291,7 +291,7 @@ export function AiCreateWizard({
         <div>
           <h1 className="text-xl font-semibold text-foreground">AI 一键建模</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            上传一张示例图，AI 自动识别风格 / 分类 / 相机与后期参数生成模板草稿，并可生成封面效果图与姿势剪影。
+            上传示例图或输入文字描述，AI 自动识别 / 构思风格、分类、相机与后期参数生成模板草稿，并可生成封面效果图与姿势剪影。
           </p>
         </div>
 
