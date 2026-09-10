@@ -73,7 +73,7 @@ export class AiConfigService {
       visionModel: row.visionModel,
       imageModel: row.imageModel,
       textModel: row.textModel ?? '',
-      effectiveTextModel: row.textModel || row.visionModel,
+      effectiveTextModel: row.textModel?.trim() ? row.textModel : row.visionModel,
       enabled: row.enabled === 1,
     };
   }

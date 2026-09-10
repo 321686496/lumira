@@ -141,6 +141,7 @@ export function AiCreateWizard({
 
   const handleTextChange = (v: string) => {
     setInputText(v);
+    setErrorText(null);
     // 流程已启动后修改输入 = 重新开始
     if (formActivated || step > 1) resetFlow();
   };
