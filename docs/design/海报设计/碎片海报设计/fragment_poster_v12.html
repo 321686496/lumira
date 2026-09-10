@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 碎片海报 V12（三套模板 · 任选深化）</title>
+<style>
+  :root{
+    --gold:#C9A96E;--gold-deep:#B08D4F;--ink:#2A2620;
+    --text2:#6B645C;--text3:#9A8F7C;
+    --surface:#FDFBF7;--surface-alt:#F4EFE5;--line:rgba(201,169,110,.30);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#EFEAE1;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:44px 20px 120px;-webkit-font-smoothing:antialiased}
+  .serif{font-family:"Noto Serif SC","Songti SC",Georgia,serif}
+  .hd{text-align:center;max-width:860px;margin:0 auto}
+  .hd h1{color:#4A4238;font-size:20px;letter-spacing:3px;font-weight:600}
+  .hd p{color:#8A7F6E;font-size:12px;letter-spacing:1.5px;line-height:2;margin-top:8px}
+  .hd p b{color:#A08A5F;font-weight:600}
+
+  .band-title{display:flex;align-items:center;justify-content:center;gap:14px;margin:54px auto 6px;color:#4A4238;font-size:15px;letter-spacing:3px;font-weight:700}
+  .band-title::before,.band-title::after{content:"";width:40px;height:1px;background:var(--line)}
+  .band-sub{text-align:center;color:#9A8F7C;font-size:10.5px;letter-spacing:1.5px;margin-bottom:18px;line-height:1.9}
+
+  #posters{display:flex;flex-wrap:wrap;gap:40px;justify-content:center;align-items:flex-start;max-width:1500px;margin:0 auto}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .sys-label{font-size:10.5px;color:#A08A5F;letter-spacing:1px;background:#F3ECE0;border:1px solid var(--line);padding:3px 12px;border-radius:12px}
+  .sys-label b{color:#6B5A3E}
+
+  .poster{width:290px;aspect-ratio:3/4;display:flex;flex-direction:column;position:relative;overflow:hidden;background:linear-gradient(180deg,#FDFBF7 0%,#FBF6EC 100%);border:1px solid var(--line);box-shadow:0 20px 48px -26px rgba(60,48,28,.32);border-radius:3px;padding:19px 19px 15px}
+
+  .g-top{display:flex;align-items:baseline;justify-content:space-between;flex:none}
+  .g-brand .en{font-size:10px;letter-spacing:4px;color:var(--gold-deep);font-weight:700}
+  .g-brand .zh{font-size:9px;letter-spacing:3px;color:var(--text3);margin-left:6px}
+  .g-prog{font-size:9px;letter-spacing:2px;color:var(--text3)}
+  .g-prog b{font-family:"Noto Serif SC",serif;color:var(--gold-deep);font-weight:700;font-size:10px;padding:0 1px}
+
+  .g-kicker{text-align:center;font-size:8.5px;letter-spacing:3px;color:var(--gold);margin-top:13px;flex:none}
+  .g-title{text-align:center;font-size:16px;line-height:1.5;color:var(--ink);font-weight:700;margin-top:6px;letter-spacing:.5px;flex:none}
+  .g-line{width:20px;height:1.5px;background:var(--gold);margin:10px auto 0;flex:none;opacity:.85}
+
+  .stage{margin-top:13px;flex:1;min-height:0;background:var(--surface-alt);border:1px solid rgba(201,169,110,.4);padding:13px 12px;display:flex}
+  .stage > *{width:100%}
+
+  .g-invite{flex:none;display:flex;align-items:center;gap:12px;margin-top:auto;padding-top:9px}
+  .g-invite::before,.g-invite::after{content:"";flex:1;height:1px;background:var(--line)}
+  .g-invite span{font-size:10px;color:#4A4238;line-height:1.7;letter-spacing:.5px;text-align:center;max-width:210px}
+  .g-foot{flex:none;margin-top:9px;padding-top:8px;border-top:1px solid rgba(201,169,110,.18);text-align:center;font-size:9px;letter-spacing:2px;color:var(--text2)}
+
+  /* --- 模板三件套的通用元素 --- */
+  .ph{position:relative;overflow:hidden;background:#e9e2d2;line-height:0;flex-shrink:0}
+  .ph img{width:100%;height:100%;object-fit:cover}
+  .ph .hj{position:absolute;left:5px;bottom:4px;background:rgba(20,16,10,.42);color:#FDFBF7;font-size:8px;letter-spacing:1px;padding:1px 5px;line-height:1.5;font-family:"Noto Serif SC",serif;z-index:2}
+
+  /* 模板① 主图+缩略 */
+  .tplA .stage{flex-direction:column;gap:10px;justify-content:center}
+  .tplA .hero{background:#fff;box-shadow:0 12px 22px -14px rgba(54,42,24,.45)}
+  .tplA .thumbs{display:flex;gap:8px;justify-content:center}
+  .tplA .thumbs .ph{box-shadow:0 8px 14px -12px rgba(54,42,24,.4)}
+
+  /* 模板② 杂志双栏 */
+  .tplB .stage{flex-direction:row;gap:10px}
+  .tplB .col-l{background:#fff;box-shadow:0 14px 24px -14px rgba(54,42,24,.45)}
+  .tplB .col-r{display:flex;flex-direction:column;gap:10px}
+  .tplB .col-r .ph{box-shadow:0 8px 14px -12px rgba(54,42,24,.4)}
+
+  /* 模板③ 拍立得错落墙 */
+  .tplC .stage{padding:15px 12px}
+  .tplC .wall{display:flex;flex-direction:column;justify-content:center;gap:9px;align-items:center}
+  .tplC .wrow{display:flex;justify-content:center;align-items:flex-start;gap:8px}
+  .tplC .pl{background:#fff;padding:6px 6px 18px;box-shadow:0 12px 20px -12px rgba(54,42,24,.42)}
+  .tplC .pl .frame{position:relative;overflow:hidden}
+  .tplC .pl .frame img{display:block;width:100%;height:100%;object-fit:cover}
+  .tplC .pl .cap{position:absolute;left:0;right:0;bottom:-18px;text-align:center;font-size:8px;letter-spacing:2px;color:rgba(150,140,120,.95);font-family:"Noto Serif SC",serif;line-height:18px}
+</style>
+</head>
+<body>
+  <div class="hd">
+    <h1>碎片分享海报 V12 · 三套版式任选</h1>
+    <p>三套<b>完全不同的排版</b>：① 大主图+等宽缩略条　② 杂志双栏　③ 拍立得错落墙。<br>
+    各自独立处理 1–5 张任意比例照片，风格差异明显。你挑中哪个，我再把它做深做实。滚动查看。</p>
+  </div>
+
+  <div id="postersWrap"></div>
+
+<script>
+/* ============ 基础数据 ============ */
+const CN = ['壹','贰','叁','肆','伍'];
+const RVAL = {'16:9':16/9,'1:1':1,'9:16':9/16,'4:3':4/3,'3:4':3/4};
+const RKEYS = Object.keys(RVAL);
+const RLAB = {'16:9':'16:9','1:1':'1:1','9:16':'9:16','4:3':'4:3','3:4':'3:4'};
+const SIZE = {'16:9':'landscape_16_9','1:1':'square','9:16':'portrait_16_9','4:3':'landscape_4_3','3:4':'portrait_4_3'};
+const PROMPTS = [
+  'warm golden hour sunlight streaming through a window, soft long shadows on a minimalist wall, cozy warm tone, photography',
+  'sunbeam through tree leaves casting light spots on the ground, golden bokeh, warm atmosphere, photography',
+  'warm lamp glow in a cozy room, soft golden light and gentle shadow, cinematic warm tone, photography',
+  'golden sunset silhouette portrait, warm rim light, emotional warm atmosphere, photography',
+  'city street lights at dusk bokeh, warm golden glow, cinematic night, photography',
+  'morning mist in a forest with soft light rays between trees, dreamy atmosphere, photography',
+  'cafe window light falling on a wooden table with a coffee cup, warm cozy tone, photography',
+  'seaside at golden hour, gentle waves shimmering with warm light, photography'
+];
+let cursor = 0;
+function imgFor(k){
+  const p = PROMPTS[cursor++ % PROMPTS.length];
+  return 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt='
+    + encodeURIComponent(p) + '&image_size=' + SIZE[k];
+}
+const ANGLES = [1.4, -2.2, 0.8, -1.4, 1.8, -1.0, 1.2, -1.8, 0.6, -0.6];
+function contain(w0,h0, W, H){ const s = Math.min(W/w0, H/h0); return [w0*s, h0*s]; }
+const TXS = ['光线碎片','收集远方','屋檐下','心情底片'];
+let tid = 0;
+
+/* ============ 模板① 主图 + 缩略条 ============ */
+function tplHeroInit(){
+  const st = document.createElement('div'); st.className = 'stage';
+  return st;
+}
+function tplHeroLayout(st, ratios, urls, W, H){
+  const n = ratios.length;
+  const m = n - 1;                 // 缩略条数量
+  const gap = 10;
+  const thumbRowH = n >= 3 ? 64 : 0;
+  const heroH = (n === 1) ? H : H - thumbRowH - gap;
+  // 主图：照片0，contain 进 (W, heroH)
+  const r0 = RVAL[ratios[0]];
+  const [hw, hh] = contain(r0, 1, W, heroH);
+  const hero = document.createElement('div');
+  hero.className = 'ph hero';
+  hero.style.width = hw.toFixed(1) + 'px'; hero.style.height = (hh - 0).toFixed(1) + 'px';
+  hero.innerHTML = '<img src="' + urls[0] + '"><span class="hj">' + CN[0] + '</span>';
+  st.appendChild(hero);
+  if(m > 0){
+    const row = document.createElement('div'); row.className = 'thumbs'; row.style.height = thumbRowH + 'px';
+    const s = (W - gap*(m-1)) / m;
+    for(let i = 1; i < n; i++){
+      const ph = document.createElement('div'); ph.className = 'ph';
+      ph.style.width = s.toFixed(1) + 'px'; ph.style.height = thumbRowH + 'px';
+      ph.innerHTML = '<img src="' + urls[i] + '"><span class="hj">' + CN[i] + '</span>';
+      row.appendChild(ph);
+    }
+    st.appendChild(row);
+  }
+}
+
+/* ============ 模板② 杂志双栏 ============ */
+function tplBInit(){
+  const st = document.createElement('div'); st.className = 'stage';
+  const l = document.createElement('div'); l.className = 'col-l'; l.id = 'bl';
+  const r = document.createElement('div'); r.className = 'col-r'; r.id = 'br';
+  st.appendChild(l); st.appendChild(r);
+  return {st, l, r};
+}
+function tplBLayout(st, ratios, urls, W, H){
+  const sep = tplBInit(); sep.st.style = ''; 
+  const n = ratios.length;
+  const gap = 10;
+  const lw = parseFloat(sep.l.style.width)||0;
+  const colW = W * 0.585;
+  // 左：照片0 contain 进 (colW, H)
+  const [hw, hh] = contain(RVAL[ratios[0]], 1, colW, H);
+  sep.l.style.width = colW + 'px'; sep.l.style.height = HH(hh); sep.l.style.minWidth = colW + 'px';
+  sep.l.style.alignSelf = 'center';
+  sep.l.innerHTML = '<div class="ph" style="width:100%;height:100%">'
+    + '<img src="' + urls[0] + '"><span class="hj">' + CN[0] + '</span></div>';
+  // 右：堆叠其余，每块高均分
+  const m = n - 1;
+  const rightW = W - colW - gap;
+  const perH = (H - gap*(m-1)) / m;
+  for(let i = 1; i < n; i++){
+    const ph = document.createElement('div'); ph.className = 'ph';
+    ph.style.width = '100%'; ph.style.height = perH + 'px';
+    ph.innerHTML = '<img src="' + urls[i] + '"><span class="hj">' + CN[i] + '</span>';
+    sep.r.appendChild(ph);
+  }
+  st.innerHTML = ''; st.appendChild(sep.l); st.appendChild(sep.r);
+}
+function HH(x){ return x; }
+
+/* ============ 模板③ 拍立得错落墙 ============ */
+function tplCInit(){
+  const st = document.createElement('div'); st.className = 'stage';
+  const w = document.createElement('div'); w.className = 'wall';
+  st.appendChild(w); return {st, w};
+}
+function solveRows(ratios, W, H, gap){
+  const n = ratios.length; if(n===0) return {rows:[]};
+  let best = null; const total = 1 << (n-1);
+  for(let mask=0; mask<total; mask++){
+    const rows=[]; let cur=[0];
+    for(let i=1;i<n;i++){ if(mask & (1<<(i-1))){ rows.push(cur); cur=[i]; } else cur.push(i); }
+    rows.push(cur);
+    const hs = rows.map(idx => (W - gap*(idx.length-1)) / idx.reduce((a,i)=>a+ratios[i],0));
+    const tot = hs.reduce((a,b)=>a+b,0) + gap*(rows.length-1);
+    const over = tot - H; const span = Math.max(...hs)-Math.min(...hs);
+    const score = (over<=0?over:-1e6-over)*100 - span*0.25;
+    if(!best || score>best.score) best={score, rows: rows.map((idx,r)=>({idx,h:hs[r]}))};
+  }
+  return best;
+}
+function tplCLayout(st, ratios, urls, W, H){
+  const sep = tplCInit();
+  const vals = ratios.map(r=>RVAL[r]); const gap=11;
+  const sol = solveRows(vals, W, H, gap) || {rows:[]};
+  let idx=0;
+  for(const row of sol.rows){
+    const rdiv = document.createElement('div'); rdiv.className='wrow';
+    for(const i of row.idx){
+      const w = row.h*vals[i], h = row.h;
+      const pl = document.createElement('div'); pl.className='pl';
+      pl.style.transform='rotate('+ANGLES[idx%ANGLES.length]+'deg)';
+      pl.innerHTML='<div class="frame" style="width:'+w.toFixed(1)+'px;height:'+h.toFixed(1)+'px">'
+        +'<img src="' + urls[i] + '"><div class="cap">' + CN[idx] + '</div></div>';
+      rdiv.appendChild(pl); idx++;
+    }
+    sep.w.appendChild(rdiv);
+  }
+  st.innerHTML=''; st.appendChild(sep.w);
+}
+
+/* ============ 组装 ============ */
+const GROUPS = [
+  { name:'模板① · 主图 + 等宽缩略条', cls:'tplA',
+    sub:'大主图撑起视觉，其余收成底部一排等宽小缩略（小图用裁切，主图原生比例完整）。干净、iPhone式。',
+    scenes: [['4:3','1:1','9:16','16:9','3:4'], ['16:9','9:16']] },
+  { name:'模板② · 杂志双栏', cls:'tplB',
+    sub:'左列粗壮竖向主图 + 右列细窄堆叠，杂志编辑排版。',
+    scenes: [['9:16','16:9','1:1','3:4'], ['1:1','16:9','4:3']] },
+  { name:'模板③ · 拍立得错落墙', cls:'tplC',
+    sub:'每张白框拍立得+手工小角度旋转错落相叠，零裁切、松散错落。',
+    scenes: [['16:9','1:1','9:16','4:3','3:4'], ['9:16','16:9']] },
+];
+
+function job(kind, ratios, cls){
+  const t = TXS[tid++ % TXS.length];
+  const done = ratios.length >= 5;
+  const cell = document.createElement('div');
+  cell.className = 'cell ' + (cls||'');
+  function pct(cur){ return done?('已集齐 <b>伍</b>/伍'):('已集 <b>' + CN[cur-1] + '</b>/伍'); }
+  cell.innerHTML =
+    '<span class="sys-label">' + ratios.map(r=>RLAB[r]).join('+') + ' · ' + ratios.length + '张</span>' +
+    '<div class="poster">' +
+      '<div class="g-top"><div class="g-brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>' +
+        '<div class="g-prog">' + pct(ratios.length) + '</div></div>' +
+      '<div class="g-kicker">' + t + '</div>' +
+      '<div class="g-title serif">' + (done?'5 枚光，<br>今天全部晒出来。':'最近的好光，<br>都被我一张张存下来了。') + '</div>' +
+      '<div class="g-line"></div>' +
+      '<div class="stage-holder"></div>' +
+      '<div class="g-invite"><span class="serif">' + (done?'集齐了，先晒为敬。<br>你们拍到过最好看的一张，是哪张？':'我的先晒到这儿——<br>你们的碎片，收集到第几枚了？') + '</span></div>' +
+      '<div class="g-foot">如画 LUMIRA · 记录每一帧光影</div>' +
+    '</div>';
+  return cell;
+}
+
+function render(){
+  const wrap = document.getElementById('postersWrap');
+  wrap.innerHTML='';
+  for(const g of GROUPS){
+    const tt = document.createElement('div'); tt.className='band-title'; tt.textContent=g.name;
+    const ss = document.createElement('div'); ss.className='band-sub'; ss.textContent=g.sub;
+    wrap.appendChild(tt); wrap.appendChild(ss);
+    const grid = document.createElement('div');
+    grid.style.cssText='display:flex;flex-wrap:wrap;gap:40px;justify-content:center;align-items:flex-start;max-width:1500px;margin:0 auto';
+    wrap.appendChild(grid);
+    for(const ratios of g.scenes){
+      const cell = job(g.cls, ratios);
+      grid.appendChild(cell);
+      const holder = cell.querySelector('.stage-holder');
+      holder.style.cssText = 'flex:1;min-height:0;display:flex;align-items:stretch;padding:0;background:transparent';
+      const st = document.createElement('div');
+      st.className = 'stage';
+      st.style.cssText = 'flex:1;min-height:0;margin-top:13px;width:100%;background:var(--surface-alt);border:1px solid rgba(201,169,110,.4);padding:13px 12px;display:flex';
+      holder.appendChild(st);
+      const urls = ratios.map(imgFor);
+      const cW = st.clientWidth, cH = st.clientHeight;
+      if(g.cls==='tplA') tplAppendA(st, ratios, urls, cW, cH);
+      else if(g.cls==='tplB') tplAppendB(st, ratios, urls, cW, cH);
+      else tplAppendC(st, ratios, urls, cW, cH);
+    }
+  }
+}
+
+/* 统一入口：清空 stage 并装入 */
+function tplAppendA(st, ratios, urls, W, H){ st.innerHTML=''; tplHeroAppend(st, ratios, urls, W, H); }
+function tplAppendB(st, ratios, urls, W, H){ st.innerHTML=''; tplBAppend(st, ratios, urls, W, H); }
+function tplAppendC(st, ratios, urls, W, H){
+  st.innerHTML=''; st.style.flexDirection='column'; st.style.justifyContent='center'; st.style.alignItems='center'; st.style.gap='0';
+  const wall=document.createElement('div'); wall.style.cssText='width:100%;display:flex;flex-direction:column;justify-content:center;gap:9px;align-items:center';
+  const vals=ratios.map(r=>RVAL[r]); const gap=11;
+  const sol=solveRows(vals, W, H, gap)||{rows:[]};
+  let idx=0;
+  for(const row of sol.rows){
+    const rdiv=document.createElement('div'); rdiv.style.cssText='display:flex;justify-content:center;align-items:flex-start;gap:8px';
+    for(const i of row.idx){
+      const w=row.h*vals[i], h=row.h;
+      const pl=document.createElement('div'); pl.style.cssText='background:#fff;padding:6px 6px 18px;box-shadow:0 12px 20px -12px rgba(54,42,24,.42);transform:rotate('+ANGLES[idx%ANGLES.length]+'deg)';
+      pl.innerHTML='<div class="frame" style="position:relative;overflow:hidden;width:'+w.toFixed(1)+'px;height:'+h.toFixed(1)+'px">'
+        +'<img src="'+urls[i]+'" style="display:block;width:100%;height:100%;object-fit:cover">'
+        +'<div class="cap" style="position:absolute;left:0;right:0;bottom:-18px;text-align:center;font-size:8px;letter-spacing:2px;color:rgba(150,140,120,.95);font-family:serif;line-height:18px">'+CN[idx]+'</div></div>';
+      rdiv.appendChild(pl); idx++;
+    }
+    wall.appendChild(rdiv);
+  }
+  st.appendChild(wall);
+}
+
+function tplHeroAppend(st, ratios, urls, W, H){
+  st.style.flexDirection='column'; st.style.gap='10px'; st.style.justifyContent='center'; st.style.alignItems='center';
+  const n=ratios.length, m=n-1; const gap=10;
+  const thumbRowH = m>0?60:0;
+  const heroH = n===1?H:H-thumbRowH-gap;
+  const [hw,hh]=contain(RVAL[ratios[0]],1,W,heroH);
+  const hero=document.createElement('div'); hero.className='ph hero';
+  hero.style.width=hw.toFixed(1)+'px'; hero.style.height=hh.toFixed(1)+'px';
+  hero.innerHTML='<img src="'+urls[0]+'"><span class="hj">'+CN[0]+'</span>';
+  st.appendChild(hero);
+  if(m>0){
+    const s=(W-gap*(m-1))/m;
+    const row=document.createElement('div'); row.style.cssText='display:flex;gap:8px;justify-content:center;align-items:center;height:'+thumbRowH+'px';
+    for(let i=1;i<n;i++){ const ph=document.createElement('div'); ph.className='ph'; ph.style.width=s.toFixed(1)+'px'; ph.style.height=thumbRowH+'px'; ph.innerHTML='<img src="'+urls[i]+'"><span class="hj">'+CN[i]+'</span>'; row.appendChild(ph); }
+    st.appendChild(row);
+  }
+}
+function tplBAppend(st, ratios, urls, W, H){
+  st.style.flexDirection='row'; st.style.gap='10px'; st.style.justifyContent='center'; st.style.alignItems='stretch';
+  const n=ratios.length, gap=10;
+  const colW=W*0.585;
+  const [hw,hh]=contain(RVAL[ratios[0]],1,colW,H);
+  const l=document.createElement('div'); l.style.cssText='background:#fff;box-shadow:0 14px 24px -14px rgba(54,42,24,.45)';
+  l.style.width=colW+'px'; l.style.height=hh+'px'; l.style.alignSelf='center';
+  l.innerHTML='<div class="ph" style="width:100%;height:100%"><img src="'+urls[0]+'"><span class="hj">'+CN[0]+'</span></div>';
+  const r=document.createElement('div'); r.style.cssText='display:flex;flex-direction:column;gap:10px;flex:1';
+  const m=n-1; const per=(H-gap*(m-1))/m;
+  for(let i=1;i<n;i++){ const ph=document.createElement('div'); ph.className='ph'; ph.style.width='100%'; ph.style.height=per+'px'; ph.innerHTML='<img src="'+urls[i]+'"><span class="hj">'+CN[i]+'</span>'; r.appendChild(ph); }
+  st.appendChild(l); st.appendChild(r);
+}
+
+render();
+</script>
+</body>
+</html>

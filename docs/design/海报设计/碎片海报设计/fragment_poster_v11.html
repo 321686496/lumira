@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 碎片海报 V11（按比例组合全量铺陈）</title>
+<style>
+  :root{
+    --gold:#C9A96E;--gold-deep:#B08D4F;--ink:#2A2620;
+    --text2:#6B645C;--text3:#9A8F7C;
+    --surface:#FDFBF7;--surface-alt:#F4EFE5;--line:rgba(201,169,110,.30);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#EFEAE1;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:44px 20px 120px;-webkit-font-smoothing:antialiased}
+  .serif{font-family:"Noto Serif SC","Songti SC",Georgia,serif}
+  .hd{text-align:center;max-width:860px;margin:0 auto}
+  .hd h1{color:#4A4238;font-size:20px;letter-spacing:3px;font-weight:600}
+  .hd p{color:#8A7F6E;font-size:12px;letter-spacing:1.5px;line-height:2;margin-top:8px}
+  .hd p b{color:#A08A5F;font-weight:600}
+
+  .band-title{display:flex;align-items:center;justify-content:center;gap:14px;margin:54px auto 8px;color:#4A4238;font-size:14px;letter-spacing:3px;font-weight:700}
+  .band-title::before,.band-title::after{content:"";width:40px;height:1px;background:var(--line)}
+  .band-sub{text-align:center;color:#9A8F7C;font-size:10.5px;letter-spacing:1.5px;margin-bottom:18px}
+
+  #posters{display:flex;flex-wrap:wrap;gap:40px;justify-content:center;align-items:flex-start;max-width:1500px;margin:0 auto}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .sys-label{font-size:10.5px;color:#A08A5F;letter-spacing:1px;background:#F3ECE0;border:1px solid var(--line);padding:3px 12px;border-radius:12px}
+
+  /* ============ 海报 ============ */
+  .poster{width:290px;aspect-ratio:3/4;display:flex;flex-direction:column;position:relative;overflow:hidden;background:linear-gradient(180deg,#FDFBF7 0%,#FBF6EC 100%);border:1px solid var(--line);box-shadow:0 20px 48px -26px rgba(60,48,28,.32);border-radius:3px;padding:19px 19px 15px}
+
+  .g-top{display:flex;align-items:baseline;justify-content:space-between;flex:none}
+  .g-brand .en{font-size:10px;letter-spacing:4px;color:var(--gold-deep);font-weight:700}
+  .g-brand .zh{font-size:9px;letter-spacing:3px;color:var(--text3);margin-left:6px}
+  .g-prog{font-size:9px;letter-spacing:2px;color:var(--text3)}
+  .g-prog b{font-family:"Noto Serif SC",serif;color:var(--gold-deep);font-weight:700;font-size:10px;padding:0 1px}
+
+  .g-kicker{text-align:center;font-size:8.5px;letter-spacing:3px;color:var(--gold);margin-top:13px;flex:none}
+  .g-title{text-align:center;font-size:16px;line-height:1.5;color:var(--ink);font-weight:700;margin-top:6px;letter-spacing:.5px;flex:none}
+  .g-line{width:20px;height:1.5px;background:var(--gold);margin:10px auto 0;flex:none;opacity:.85}
+
+  .board{margin-top:13px;flex:1;min-height:0;background:var(--surface-alt);border:1px solid rgba(201,169,110,.4);padding:13px 10px;display:flex;align-items:center}
+  .wall{width:100%;flex:1;display:flex;flex-direction:column;justify-content:center;gap:9px;align-items:center}
+  .wrow{display:flex;justify-content:center;align-items:flex-start;gap:8px}
+
+  .pl{background:#fff;padding:6px 6px 18px;box-shadow:0 12px 20px -12px rgba(54,42,24,.42)}
+  .pl .frame{position:relative;overflow:hidden}
+  .pl .frame img{display:block;width:100%;height:100%;object-fit:cover}
+  .pl .cap{position:absolute;left:0;right:0;bottom:-18px;text-align:center;font-size:8px;letter-spacing:2px;color:rgba(150,140,120,.95);font-family:"Noto Serif SC",serif;line-height:18px}
+
+  .g-invite{flex:none;display:flex;align-items:center;gap:12px;margin-top:auto;padding-top:9px}
+  .g-invite::before,.g-invite::after{content:"";flex:1;height:1px;background:var(--line)}
+  .g-invite span{font-size:10px;color:#4A4238;line-height:1.7;letter-spacing:.5px;text-align:center;max-width:210px}
+
+  .g-foot{flex:none;margin-top:9px;padding-top:8px;border-top:1px solid rgba(201,169,110,.18);text-align:center;font-size:9px;letter-spacing:2px;color:var(--text2)}
+</style>
+</head>
+<body>
+  <div class="hd">
+    <h1>碎片分享海报 V11 · 按比例组合全量铺陈</h1>
+    <p>把 1 张到 5 张、各种宽高比组合（含 16:9+9:16、3:4+4:3、1:1+9:16 等极端混搭）一次铺出来，验证「拍立得错落墙」能否稳定成立。<br>全部照片<b>原生比例完整露出、零裁切</b>，卡片恒定 3:4。往下翻，分组看。</p>
+  </div>
+
+  <div id="postersWrap"></div>
+
+<script>
+/* ================= 基础数据 ================= */
+const CN = ['壹','贰','叁','肆','伍'];
+const RVAL = {'16:9':16/9,'1:1':1,'9:16':9/16,'4:3':4/3,'3:4':3/4};
+const RKEYS = Object.keys(RVAL);
+const RLAB = {'16:9':'16:9','1:1':'1:1','9:16':'9:16','4:3':'4:3','3:4':'3:4'};
+const SIZE = {'16:9':'landscape_16_9','1:1':'square','9:16':'portrait_16_9','4:3':'landscape_4_3','3:4':'portrait_4_3'};
+const PROMPTS = [
+  'warm golden hour sunlight streaming through a window, soft long shadows on a minimalist wall, cozy warm tone, photography',
+  'sunbeam through tree leaves casting light spots on the ground, golden bokeh, warm atmosphere, photography',
+  'warm lamp glow in a cozy room, soft golden light and gentle shadow, cinematic warm tone, photography',
+  'golden sunset silhouette portrait, warm rim light, emotional warm atmosphere, photography',
+  'city street lights at dusk bokeh, warm golden glow, cinematic night, photography',
+  'morning mist in a forest with soft light rays between trees, dreamy atmosphere, photography',
+  'cafe window light falling on a wooden table with a coffee cup, warm cozy tone, photography',
+  'seaside at golden hour, gentle waves shimmering with warm light, photography'
+];
+let cursor = 0;
+function imgFor(k){
+  const p = PROMPTS[cursor++ % PROMPTS.length];
+  return 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt='
+    + encodeURIComponent(p) + '&image_size=' + SIZE[k];
+}
+const ANGLES = [1.4, -2.2, 0.8, -1.4, 1.8, -1.0, 1.2, -1.8, 0.6, -0.6];
+
+/* ================= 求解：等高行 + 原生比例 ================= */
+function solveRows(ratios, W, H, gap){
+  const n = ratios.length;
+  if(n === 0) return {rows:[]};
+  let best = null;
+  const total = 1 << (n - 1);
+  for(let mask = 0; mask < total; mask++){
+    const rows = []; let cur = [0];
+    for(let i = 1; i < n; i++){
+      if(mask & (1 << (i - 1))){ rows.push(cur); cur = [i]; }
+      else cur.push(i);
+    }
+    rows.push(cur);
+    const hs = rows.map(idx => {
+      const k = idx.length, sum = idx.reduce((a, i) => a + ratios[i], 0);
+      return (W - gap * (k - 1)) / sum;
+    });
+    const tot = hs.reduce((a, b) => a + b, 0) + gap * (rows.length - 1);
+    const over = tot - H;
+    const span = Math.max(...hs) - Math.min(...hs);
+    const score = (over <= 0 ? over : -1e6 - over) * 100 - span * 0.25;
+    if(!best || score > best.score) best = {score, rows: rows.map((idx, r) => ({idx, h: hs[r]}))};
+  }
+  return best;
+}
+
+/* ================= 文案 ================= */
+const TXS = [
+  { kicker:'光线碎片', ing:'最近的好光，<br>都被我一张张存下来了。', done:'5 枚光，一枚没漏。<br>今天全部晒出来。' },
+  { kicker:'收集远方', ing:'去过的地方，<br>都收进这一张里了。', done:'远方集齐了，<br>晒晒我的收藏。' },
+  { kicker:'屋檐下',   ing:'我的小屋，<br>也有很好看的光。', done:'屋檐下的光存满了，<br>忍不住晒一下。' },
+  { kicker:'心情底片', ing:'说不出口的心情，<br>照片替我说了。', done:'那些心情，<br>终于都有了形状。' }
+];
+let tid = 0;
+
+/* ================= 场景（固定覆盖各比例组合） ================= */
+function allPairs(){
+  const out = [];
+  for(let i = 0; i < RKEYS.length; i++)
+    for(let j = i + 1; j < RKEYS.length; j++)
+      out.push([RKEYS[i], RKEYS[j]]);
+  return out;
+}
+const GROUPS = [
+  { name:'单张 · 每种比例', sub:'看 16:9 / 9:16 / 1:1 / 4:3 / 3:4 各一张时的大图效果',
+    scenes: RKEYS.map(r => [r]) },
+  { name:'两张 · 全组合（含极端混搭）', sub:'16:9+9:16、3:4+4:3、1:1+9:16 等全部两两组合',
+    scenes: allPairs() },
+  { name:'三张 · 代表性混搭', sub:'三张不同比例的错落效果',
+    scenes: [['16:9','9:16','3:4'],['1:1','4:3','9:16'],['16:9','1:1','9:16'],['3:4','9:16','16:9'],['4:3','3:4','1:1'],['9:16','9:16','16:9']] },
+  { name:'四张 + 五张 · 密集错落', sub:'四至五张、含五档比例全混的极限情况',
+    scenes: [['1:1','16:9','9:16','4:3'],['16:9','3:4','9:16','4:3'],['9:16','1:1','16:9','3:4','4:3'],['16:9','9:16','1:1','9:16','16:9']] },
+];
+
+function buildPoster(ratios){
+  const t = TXS[tid++ % TXS.length];
+  const done = ratios.length >= 5;
+  const remain = 5 - ratios.length;
+  const cell = document.createElement('div');
+  cell.className = 'cell';
+  cell.innerHTML =
+    '<span class="sys-label">' + ratios.map(r => RLAB[r]).join(' + ') + ' · ' + ratios.length + '张</span>' +
+    '<div class="poster">' +
+      '<div class="g-top">' +
+        '<div><span class="g-brand en">LUMIRA</span><span class="g-brand zh">如画</span></div>' +
+        '<div class="g-prog">' + (done ? '已集齐 <b>伍</b>/伍' : '已集 <b>' + CN[ratios.length-1] + '</b>/伍') + '</div>' +
+      '</div>' +
+      '<div class="g-kicker">' + t.kicker + '</div>' +
+      '<div class="g-title serif">' + (done ? t.done : t.ing) + '</div>' +
+      '<div class="g-line"></div>' +
+      '<div class="board"><div class="wall"></div></div>' +
+      '<div class="g-invite"><span class="serif">' +
+        (done ? '集齐了，先晒为敬。<br>你们拍到过最好看的一张，是哪张？'
+              : '我的先晒到这儿——<br>你们的碎片，收集到第几枚了？') +
+      '</span></div>' +
+      '<div class="g-foot">如画 LUMIRA · 记录每一帧光影</div>' +
+    '</div>';
+  return cell;
+}
+
+function layout(cell, ratios){
+  const wall = cell.querySelector('.wall');
+  const H = wall.clientHeight, W = wall.clientWidth;
+  const GAP = 11;
+  const vals = ratios.map(r => RVAL[r]);
+  const sol = solveRows(vals, W, H, GAP) || {rows:[]};
+  let idx = 0;
+  for(const row of sol.rows){
+    const rdiv = document.createElement('div');
+    rdiv.className = 'wrow';
+    for(const i of row.idx){
+      const w = row.h * vals[i], h = row.h;
+      const pl = document.createElement('div');
+      pl.className = 'pl';
+      pl.style.transform = 'rotate(' + ANGLES[idx % ANGLES.length] + 'deg)';
+      pl.innerHTML =
+        '<div class="frame" style="width:' + w.toFixed(1) + 'px;height:' + h.toFixed(1) + 'px">' +
+          '<img src="' + imgFor(ratios[i]) + '" alt=""><div class="cap">' + CN[idx] + '</div>' +
+        '</div>';
+      rdiv.appendChild(pl);
+      idx++;
+    }
+    wall.appendChild(rdiv);
+  }
+}
+
+function render(){
+  const wrap = document.getElementById('postersWrap');
+  wrap.innerHTML = '';
+  for(const g of GROUPS){
+    const t = document.createElement('div');
+    t.className = 'band-title'; t.textContent = g.name;
+    const s = document.createElement('div');
+    s.className = 'band-sub'; s.textContent = g.sub;
+    wrap.appendChild(t); wrap.appendChild(s);
+    const grid = document.createElement('div');
+    grid.id = 'posters'; grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:40px;justify-content:center;align-items:flex-start';
+    wrap.appendChild(grid);
+    for(const ratios of g.scenes){
+      const cell = buildPoster(ratios);
+      grid.appendChild(cell);
+      layout(cell, ratios);
+    }
+  }
+}
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 碎片分享海报 V6（经典留白 · 给照片与情绪做减法）</title>
+<style>
+  :root{
+    --gold:#C9A96E;--gold-deep:#B08D4F;--ink:#2A2620;
+    --text2:#6B645C;--text3:#9A8F7C;
+    --surface:#FDFBF7;--surface-alt:#F6F1E8;--line:rgba(201,169,110,.30);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#EFEAE1;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:44px 20px 110px;display:flex;flex-direction:column;align-items:center;gap:14px;-webkit-font-smoothing:antialiased}
+  .serif{font-family:"Noto Serif SC","Songti SC",Georgia,serif}
+  .page-title{color:#4A4238;font-size:18px;letter-spacing:3px;font-weight:600;display:flex;align-items:center;gap:12px}
+  .page-title::before,.page-title::after{content:"";width:44px;height:1px;background:var(--line)}
+  .page-sub{color:#8A7F6E;font-size:12px;letter-spacing:1.5px;text-align:center;line-height:2;max-width:760px}
+  .page-sub b{color:#A08A5F;font-weight:600}
+
+  /* ===== 随机重掷控件 ===== */
+  .ctrl{margin-top:20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:center}
+  .btn{cursor:pointer;background:var(--surface);border:1px solid var(--gold);color:var(--gold-deep);font-size:12px;letter-spacing:2px;padding:9px 22px;border-radius:999px;font-weight:600;transition:all .2s}
+  .btn:hover{background:var(--gold);color:#FDFBF7}
+  .ctrl .hint{font-size:10.5px;color:#8A7F6E;letter-spacing:1px}
+
+  /* ===== 海报矩阵 ===== */
+  #posters{margin-top:26px;display:flex;flex-wrap:wrap;gap:46px;justify-content:center;align-items:flex-start;max-width:1240px}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .sys-label{font-size:10px;color:#A08A5F;letter-spacing:1.5px;background:#F3ECE0;border:1px solid var(--line);padding:3px 12px;border-radius:12px}
+
+  /* ============ 海报 · 经典留白 ============ */
+  .poster{width:340px;aspect-ratio:3/4;position:relative;overflow:hidden;background:linear-gradient(180deg,#FDFBF7 0%,#FBF6EC 100%);border:1px solid var(--line);box-shadow:0 24px 60px -28px rgba(60,48,28,.32);border-radius:3px;display:flex;flex-direction:column;padding:22px 24px 18px}
+
+  /* ① 头部：字标 + 极简进度 */
+  .g-top{display:flex;align-items:baseline;justify-content:space-between;flex:none}
+  .g-brand{display:inline-flex;align-items:baseline;gap:7px}
+  .g-brand .en{font-size:11px;letter-spacing:4px;color:var(--gold-deep);font-weight:700}
+  .g-brand .zh{font-size:10px;letter-spacing:3px;color:var(--text3)}
+  .g-prog{font-size:10px;letter-spacing:2px;color:var(--text3)}
+  .g-prog b{font-family:"Noto Serif SC",serif;color:var(--gold-deep);font-weight:700;font-size:11px;padding:0 1px}
+
+  /* ② 情绪标题区 */
+  .g-kicker{text-align:center;font-size:9px;letter-spacing:3.5px;color:var(--gold);margin-top:22px;flex:none}
+  .g-title{text-align:center;font-size:18px;line-height:1.6;color:var(--ink);font-weight:700;margin-top:8px;letter-spacing:.5px;flex:none}
+  .g-line{width:24px;height:1.5px;background:var(--gold);margin:14px auto 0;flex:none;opacity:.85}
+
+  /* ③ 照片墙（主角）：等高自适应 · 零裁切 · 大间距 */
+  .g-gallery{height:204px;margin-top:16px;display:flex;flex-direction:column;justify-content:space-evenly;flex:none}
+  .g-row{display:flex;justify-content:center;gap:10px;flex:none}
+  .g-ph{position:relative;background:var(--surface-alt);line-height:0;flex:none;box-shadow:inset 0 0 0 1px rgba(201,169,110,.18)}
+  .g-ph img{width:100%;height:100%;object-fit:cover;display:block}
+
+  /* ④ 编号小字：墙下安静一行 */
+  .g-nums{text-align:center;font-size:9px;letter-spacing:3px;color:var(--text3);margin-top:12px;flex:none}
+  .g-nums b{font-family:"Noto Serif SC",serif;color:var(--gold-deep);font-weight:700;margin:0 3px}
+
+  /* 未集齐：一句话，不做虚线框 */
+  .g-strip{margin-top:9px;text-align:center;font-size:9px;letter-spacing:2px;color:var(--text3);flex:none}
+
+  /* ⑤ 晒图邀请：一行衬线，两侧发丝线 */
+  .g-invite{margin-top:auto;display:flex;align-items:center;gap:14px;flex:none}
+  .g-invite::before,.g-invite::after{content:"";flex:1;height:1px;background:var(--line)}
+  .g-invite span{font-size:11px;color:#4A4238;line-height:1.7;letter-spacing:.5px;text-align:center;max-width:236px}
+
+  /* ⑥ 落款：单行 */
+  .g-foot{margin-top:12px;padding-top:10px;border-top:1px solid rgba(201,169,110,.18);text-align:center;font-size:9.5px;letter-spacing:2px;color:var(--text2);flex:none}
+  .g-foot b{font-family:"Noto Serif SC",serif;color:var(--gold-deep);font-weight:700;padding:0 1px}
+
+  /* ===== 文案表 & 说明 ===== */
+  .copywrap{margin-top:46px;width:min(880px,94vw);background:#F7F2E9;border:1px solid var(--line);border-radius:6px;padding:26px 30px 24px}
+  .copywrap h3{font-size:14px;letter-spacing:3px;color:#4A4238;font-weight:700;display:flex;align-items:center;gap:10px}
+  .copywrap h3::before{content:"";width:20px;height:1px;background:var(--gold)}
+  .copywrap .cp-sub{font-size:10.5px;color:#8A7F6E;letter-spacing:1px;margin-top:6px;line-height:1.9}
+  table{width:100%;border-collapse:collapse;margin-top:16px}
+  th{font-size:9.5px;letter-spacing:2px;color:var(--gold-deep);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{font-size:11px;color:#4A4238;letter-spacing:.5px;padding:10px;border-bottom:1px solid rgba(201,169,110,.14);line-height:1.7;vertical-align:top}
+  td.cat{font-weight:700;white-space:nowrap}
+
+  .note{margin-top:42px;width:min(880px,94vw);background:rgba(253,251,247,.6);border:1px solid rgba(201,169,110,.2);border-radius:6px;padding:22px 28px}
+  .note h3{font-size:13px;letter-spacing:2.5px;color:#4A4238;font-weight:700;margin-bottom:12px}
+  .note p{font-size:11.5px;color:#6B645C;line-height:2;letter-spacing:.5px}
+  .note p b{color:var(--gold-deep)}
+  .note code{font-family:Consolas,monospace;font-size:10.5px;background:rgba(201,169,110,.12);padding:1px 5px;border-radius:3px}
+</style>
+</head>
+<body>
+  <div class="page-title">碎片分享 · 海报 V6（经典留白）</div>
+  <div class="page-sub">
+    眼睛只休息在两处：<b>照片墙</b> 与 <b>情绪标题</b>。其余全部退到发丝线与留白里。<br>
+    保留品牌三项：暖白纸感 · 金色发丝线 · 衬线标题 · 3:4 竖版。砍掉：菱形点 / 印章胶囊 / 照片编号角标 / 角落锚点 / 虚线猜谜空位。<br>
+    照片仍是「等高自适应 · 零裁切」，但间距放宽、无阴影、编号下移成一行小字。点按钮可无限重掷随机比例验证。
+  </div>
+
+  <div class="ctrl">
+    <button class="btn" id="reroll">随机换一批照片（比例随机）</button>
+    <span class="hint">每点一次，6 张海报的照片比例全部重新随机——验证布局对任意比例组合都成立</span>
+  </div>
+
+  <div id="posters"></div>
+
+  <!-- ================= 文案系统 ================= -->
+  <div class="copywrap">
+    <h3>情绪文案系统（延续 V5 语感 · 说人话不装）</h3>
+    <div class="cp-sub">原则：只留一行为感而发的情绪标题；夸的是照片，不是 App。所有文案只用真实数据（碎片名、进度），不虚构日期等。</div>
+    <table>
+      <thead>
+        <tr><th>碎片类型</th><th>Kicker</th><th>情绪标题 · 进行中</th><th>情绪标题 · 已集齐</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="cat">光线碎片</td><td>光线碎片</td><td>最近的好光，<br>都被我一张张存下来了。</td><td>5 枚光，一枚没漏。<br>今天全部晒出来。</td></tr>
+        <tr><td class="cat">室外碎片</td><td>收集远方</td><td>去过的地方，<br>都收进这一张里了。</td><td>远方集齐了，<br>晒晒我的收藏。</td></tr>
+        <tr><td class="cat">室内碎片</td><td>屋檐下</td><td>我的小屋，<br>也有很好看的光。</td><td>屋檐下的光存满了，<br>忍不住晒一下。</td></tr>
+        <tr><td class="cat">情绪碎片</td><td>心情底片</td><td>说不出口的心情，<br>照片替我说了。</td><td>那些心情，<br>终于都有了形状。</td></tr>
+      </tbody>
+    </table>
+    <table style="margin-top:8px">
+      <thead><tr><th>位置</th><th>文案</th></tr></thead>
+      <tbody>
+        <tr><td class="cat">晒图邀请 · 进行中</td><td>我的先晒到这儿——你们的碎片，收集到第几枚了？</td></tr>
+        <tr><td class="cat">晒图邀请 · 已集齐</td><td>集齐了，先晒为敬。你们拍到过最好看的一张，是哪张？</td></tr>
+        <tr><td class="cat">未集齐提示</td><td>还差 N 枚 · 拍到好光马上补上（一句话，不做虚线框）</td></tr>
+        <tr><td class="cat">编号小字</td><td>壹 贰 叁 …（照片墙下方一行，淡化处理）</td></tr>
+        <tr><td class="cat">落款</td><td>已集 叁 / 伍 · 如画 LUMIRA · 记录每一帧光影（单行）</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================= 设计说明 ================= -->
+  <div class="note">
+    <h3>V6 到底改了哪几刀</h3>
+    <p>
+      <b>① 头部砍到两元素</b>：左「如画 LUMIRA」字标 + 右极简进度「叁 / 伍」。删印章胶囊、删 kicker 印章、删菱形点——
+      上一版把「状态」表达了三遍（胶囊 + 编号角标 + 菱形进度点），这一版只留右上角一行数字。<br>
+      <b>② 情绪标题独立成区</b>：Kicker 与标题之间拉开节奏（margin 22→8）；标题从中等 17px 提到 18px、行距 1.55→1.6，
+      与标题之间只有一条 24px 的金发丝线收尾，不叠第二条标题层。<br>
+      <b>③ 照片墙做主角、做干净</b>：间距 6→10px、去掉照片上的编号角标（移到下方一行）、去掉每张的描边阴影，
+      只留极淡的 1px 内描边；高度 192→204px 给足呼吸。求解器逻辑不变——任意比例组合完整露出、零裁切、零变形。<br>
+      <b>④ 未集齐只留一句话</b>：不再画任何虚线猜谜空位，收集到新照片后整版重排。<br>
+      <b>⑤ 底部单行落款</b>：菱形点 + 进度 + 标语三件套，压成一行 `已集 叁 / 伍 · 如画 LUMIRA · 记录每一帧光影`。<br><br>
+      <b>Flutter 落地提示</b>：与 V5 一致，同一套求解器 `<code>solveRows</code>` 约 80 行 Dart 可复用，照片比例解析复用
+      `<code>_resolveAspectRatio</code>；改动只是把间距/字号/去角标等常量与标签结构调整一下，成本低。
+    </p>
+  </div>
+
+<script>
+/* ================= 基础数据 ================= */
+const CN = ['壹','贰','叁','肆','伍','陆','柒','捌','玖','拾'];
+const RVAL = {'16:9':16/9,'1:1':1,'9:16':9/16,'4:3':4/3,'3:4':3/4};
+const RKEYS = Object.keys(RVAL);
+const SIZE = {'16:9':'landscape_16_9','1:1':'square','9:16':'portrait_16_9','4:3':'landscape_4_3','3:4':'portrait_4_3'};
+const PROMPTS = [
+  'warm golden hour sunlight streaming through a window, soft long shadows on a minimalist wall, cozy warm tone, photography',
+  'sunbeam through tree leaves casting light spots on the ground, golden bokeh, warm atmosphere, photography',
+  'warm lamp glow in a cozy room, soft golden light and gentle shadow, cinematic warm tone, photography',
+  'golden sunset silhouette portrait, warm rim light, emotional warm atmosphere, photography',
+  'city street lights at dusk bokeh, warm golden glow, cinematic night, photography',
+  'morning mist in a forest with soft light rays between trees, dreamy atmosphere, photography',
+  'cafe window light falling on a wooden table with a coffee cup, warm cozy tone, photography',
+  'seaside at golden hour, gentle waves shimmering with warm light, photography'
+];
+let imgCursor = 0;
+function imgFor(rKey){
+  const p = PROMPTS[imgCursor++ % PROMPTS.length];
+  return 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt='
+    + encodeURIComponent(p) + '&image_size=' + SIZE[rKey];
+}
+
+/* ================= 求解式自适应排版 ================= */
+function solveRows(ratios, W, H, gap){
+  const n = ratios.length;
+  if(n === 0) return {rows:[]};
+  let best = null;
+  const total = 1 << (n - 1);
+  for(let mask = 0; mask < total; mask++){
+    const rows = []; let cur = [0];
+    for(let i = 1; i < n; i++){
+      if(mask & (1 << (i - 1))){ rows.push(cur); cur = [i]; }
+      else cur.push(i);
+    }
+    rows.push(cur);
+    const hs = rows.map(idx => {
+      const k = idx.length;
+      const sum = idx.reduce((a, i) => a + ratios[i], 0);
+      let h = (W - gap * (k - 1)) / sum;
+      if(h > H) h = H;
+      return h;
+    });
+    const tot = hs.reduce((a, b) => a + b, 0) + gap * (rows.length - 1);
+    const over = tot - H;
+    const score = over <= 0.5 ? over : over + 1e6;
+    if(!best || score > best.score){
+      best = {score, rows: rows.map((idx, r) => ({idx, h: hs[r]}))};
+    }
+  }
+  return best;
+}
+
+/* ================= 场景定义 ================= */
+const SCENES = [
+  { name:'光线碎片', kicker:'光线碎片', current:3, max:5,
+    ratios:['16:9','1:1','9:16'],
+    titleIng:'最近的好光，<br>都被我一张张存下来了。',
+    titleDone:'5 枚光，一枚没漏。<br>今天全部晒出来。' },
+  { name:'室外碎片', kicker:'收集远方', current:5, max:5,
+    ratios:['1:1','1:1','1:1','1:1','1:1'],
+    titleDone:'远方集齐了，<br>晒晒我的收藏。',
+    titleIng:'去过的地方，<br>都收进这一张里了。' },
+  { name:'室内碎片', kicker:'屋檐下', current:5, max:5,
+    ratios:['16:9','16:9','16:9','16:9','16:9'],
+    titleDone:'屋檐下的光存满了，<br>忍不住晒一下。',
+    titleIng:'我的小屋，<br>也有很好看的光。' },
+  { name:'情绪碎片', kicker:'心情底片', current:5, max:5,
+    ratios:['1:1','9:16','16:9','4:3','3:4'],
+    titleDone:'那些心情，<br>终于都有了形状。',
+    titleIng:'说不出口的心情，<br>照片替我说了。' },
+  { name:'光线碎片', kicker:'光线碎片', current:5, max:5,
+    ratios:['9:16','9:16','9:16','9:16','9:16'],
+    titleDone:'5 枚光，一枚没漏。<br>今天全部晒出来。',
+    titleIng:'最近的好光，<br>都被我一张张存下来了。' },
+  { name:'情绪碎片', kicker:'心情底片', current:1, max:5,
+    ratios:['4:3'],
+    titleIng:'说不出口的心情，<br>照片替我说了。',
+    titleDone:'那些心情，<br>终于都有了形状。' },
+];
+
+function describeRatios(ratios){
+  const u = [...new Set(ratios)];
+  if(ratios.length === 1) return '单张';
+  if(u.length === 1) return '全是' + u[0];
+  return '混合' + u.length + '档比例';
+}
+
+/* ================= 渲染 ================= */
+const GALLERY_H = 204, GAP = 10;
+
+function buildPoster(sc){
+  const done = sc.current >= sc.max;
+  const remain = sc.max - sc.current;
+  const cell = document.createElement('div');
+  cell.className = 'cell';
+  cell.innerHTML =
+    '<span class="sys-label">' + sc.name + ' · ' + (done ? '已集齐' : '进行中') +
+      ' · ' + describeRatios(sc.ratios) + ' · ' + sc.current + '/' + sc.max + '</span>' +
+    '<div class="poster">' +
+      '<div class="g-top">' +
+        '<div class="g-brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>' +
+        '<div class="g-prog">' + (done
+          ? '已集齐 <b>' + CN[sc.max - 1] + '</b>/' + CN[sc.max - 1]
+          : '已集 <b>' + CN[sc.current - 1] + '</b>/' + CN[sc.max - 1]) + '</div>' +
+      '</div>' +
+      '<div class="g-kicker">' + sc.kicker + '</div>' +
+      '<div class="g-title serif">' + (done ? sc.titleDone : sc.titleIng) + '</div>' +
+      '<div class="g-line"></div>' +
+      '<div class="g-gallery"></div>' +
+      '<div class="g-nums">' +
+        Array.from({length: sc.current}, (_, i) =>
+          '<b>' + CN[i] + '</b>·'
+            + (done?'':'\u00a0')).join('').replace(/·\u00a0/g,'·\u00a0') +
+      '</div>' +
+      (done ? '' : '<div class="g-strip">还差 ' + CN[remain - 1] + ' 枚 · 拍到好光马上补上</div>') +
+      '<div class="g-invite"><span class="serif">' +
+        (done ? '集齐了，先晒为敬。<br>你们拍到过最好看的一张，是哪张？'
+              : '我的先晒到这儿——<br>你们的碎片，收集到第几枚了？') +
+      '</span></div>' +
+      '<div class="g-foot">' + (done
+        ? '已集齐 如画 LUMIRA · 记录每一帧光影'
+        : '如画 LUMIRA · 记录每一帧光影') + '</div>' +
+    '</div>';
+  return cell;
+}
+
+function renderAll(){
+  const wrap = document.getElementById('posters');
+  wrap.innerHTML = '';
+  for(const sc of SCENES){
+    const urls = sc.ratios.map(imgFor);
+    const cell = buildPoster(sc);
+    wrap.appendChild(cell);
+    const gal = cell.querySelector('.g-gallery');
+    const W = gal.clientWidth;
+    const ratios = sc.ratios.map(r => RVAL[r]);
+    const sol = solveRows(ratios, W, GALLERY_H, GAP);
+    let idx = 0;
+    for(const row of sol.rows){
+      const rdiv = document.createElement('div');
+      rdiv.className = 'g-row';
+      rdiv.style.height = row.h + 'px';
+      for(const i of row.idx){
+        const w = row.h * ratios[i];
+        const ph = document.createElement('div');
+        ph.className = 'g-ph';
+        ph.style.width = w.toFixed(1) + 'px';
+        ph.style.height = row.h.toFixed(1) + 'px';
+        ph.innerHTML = '<img src="' + urls[i] + '" alt="">';
+        rdiv.appendChild(ph);
+        idx++;
+      }
+      gal.appendChild(rdiv);
+    }
+  }
+}
+
+document.getElementById('reroll').addEventListener('click', () => {
+  for(const sc of SCENES){
+    sc.ratios = sc.ratios.map(() => RKEYS[Math.floor(Math.random() * RKEYS.length)]);
+  }
+  renderAll();
+});
+
+renderAll();
+</script>
+</body>
+</html>

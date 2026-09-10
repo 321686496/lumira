@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -14,7 +13,6 @@ import '../../../core/db/database_provider.dart'
     show galleryDaoProvider, watermarkDaoProvider;
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/effects/breathing_tap.dart';
 import '../../../shared/widgets/lumira/lumira.dart'
     show
@@ -73,10 +71,19 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
 
   /// 背景照片字节（模板模式为示例照片，应用模式为真实照片）。
   Uint8List? _photoBytes;
-  String? _photoDataUrl;
+
+  /// 预览底图：加载时按目标宽解码一次并常驻，切换底部 Tab（面板高度变化）
+  /// 不再因布局约束变化而反复重新解码，从而消除预览闪烁/延迟加载。
+  ui.Image? _previewImage;
   double? _sourceAspect;
 
   late final TextEditingController _textEditController;
+
+  /// 文字输入框的焦点节点，供「＋文本 / 点选画布文字」时自动聚焦改字。
+  late final FocusNode _textFocusNode;
+
+  /// 本次编辑的模板是否由「预置水印」另存而来（保存这类会生成新的自定义水印）。
+  bool _fromPreset = false;
   bool _isSaving = false;
 
   // 拖拽 / 缩放起始快照。
@@ -105,6 +112,7 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
   void initState() {
     super.initState();
     _textEditController = TextEditingController();
+    _textFocusNode = FocusNode();
     _initTemplate();
     _loadBaseImage();
   }
@@ -112,6 +120,8 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
   @override
   void dispose() {
     _textEditController.dispose();
+    _textFocusNode.dispose();
+    _previewImage?.dispose();
     super.dispose();
   }
 
@@ -147,8 +157,11 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     if (source == null) {
       // 新建空白模板（模板模式 + templateId == null）。
       _template = _newBlankTemplate();
+      _fromPreset = false;
     } else {
       _template = _copyForEdit(source);
+      // 由预置编辑而来 → 保存会另存为新的自定义水印，需提示用户。
+      _fromPreset = source.type == WatermarkTemplateType.preset;
     }
   }
 
@@ -209,18 +222,27 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
         final data = await rootBundle.load(_sampleAsset);
         bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
       }
-      final codec = await ui.instantiateImageCodec(bytes);
+      // 预览底图按目标宽解码一次并常驻。若改用按布局实时算 cacheWidth 的组件，
+      // 切换底部 Tab（面板高度变化）会改变预览约束 → 触发反复重解码，造成闪烁/延迟。
+      // 保存/应用仍使用原始 [_photoBytes] 全量渲染，此处仅用于预览（有损降采样可接受）。
+      final codec = await ui.instantiateImageCodec(
+        bytes,
+        targetWidth: 1536,
+        allowUpscaling: false,
+      );
       final frame = await codec.getNextFrame();
       final image = frame.image;
+      codec.dispose();
       final w = image.width;
       final h = image.height;
-      image.dispose();
-      codec.dispose();
-      if (!mounted) return;
+      if (!mounted) {
+        image.dispose();
+        return;
+      }
+      _previewImage?.dispose();
       setState(() {
+        _previewImage = image;
         _photoBytes = bytes;
-        _photoDataUrl =
-            bytes.isEmpty ? null : 'data:image/jpeg;base64,${base64Encode(bytes)}';
         _sourceAspect = (w > 0 && h > 0) ? w / h : 1.0;
       });
     } catch (e) {
@@ -236,6 +258,22 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     setState(() {
       _selectedElementId = el.id;
       _textEditController.text = el.text;
+    });
+  }
+
+  /// 选中文字元素并立即进入「样式」Tab 聚焦文本输入框，让「改字」一触即达。
+  ///
+  /// 注意：不能复用 [_selectElement]（它被 chip 选择 / 复制等复用），否则每次
+  /// 选中都会强制切 tab。切 tab 后需等下一帧 TextField 持有 FocusNode 再聚焦。
+  void _selectAndEditText(WatermarkElement el) {
+    _selectElement(el);
+    setState(() => _tab = _EditorTab.style);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // 光标移到末尾，便于追加输入。
+      _textEditController.selection =
+          TextSelection.collapsed(offset: _textEditController.text.length);
+      _textFocusNode.requestFocus();
     });
   }
 
@@ -255,6 +293,10 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
       _selectedElementId = el.id;
       _textEditController.text = el.text;
     });
+    // 文本元素：自动切入「样式」Tab 并聚焦输入框，避免「找不到改字入口」。
+    if (type == WatermarkElementType.text) {
+      _selectAndEditText(el);
+    }
   }
 
   void _copyElement(WatermarkElement el) {
@@ -328,6 +370,27 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
       _template.name = '自定义水印';
     }
     final container = ProviderScope.containerOf(context, listen: false);
+    final ok = await _persistTemplateAndActivate(container);
+    if (!mounted) return;
+    if (!ok) {
+      LumiraToast.show(context, '保存失败，请重试');
+      return;
+    }
+    if (_fromPreset) {
+      // 预置不可覆盖：编辑已另存为新的自定义水印，明确告知避免误以为未保存成功。
+      LumiraToast.show(
+        context,
+        '已基于预置水印另存为自定义水印，请到「水印管理」查看',
+        duration: const Duration(seconds: 2),
+      );
+    }
+    Navigator.of(context).maybePop();
+  }
+
+  /// 将当前 [template] 写入库并设为「当前选中水印」。
+  ///
+  /// 返回是否成功；失败不更新任何状态（避免"看似保存成功实则未生效"）。
+  Future<bool> _persistTemplateAndActivate(ProviderContainer container) async {
     try {
       final dao = await ref.read(watermarkDaoProvider.future);
       // insert 使用 ConflictAlgorithm.replace：同 id 即原地覆盖（编辑自定义水印），
@@ -335,11 +398,12 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
       await dao.insert(_template);
       ref.read(customWatermarksProvider.notifier).state =
           _mergeSavedTemplate(ref.read(customWatermarksProvider), _template);
-    } catch (e) {
-      debugPrint('[watermark-editor] persist custom template failed: $e');
+      setWatermarkActive(container, _template.id);
+      return true;
+    } catch (e, st) {
+      debugPrint('[watermark-editor] persist custom template failed: $e\n$st');
+      return false;
     }
-    setWatermarkActive(container, _template.id);
-    if (mounted) Navigator.of(context).maybePop();
   }
 
   /// 将保存后的模板并入自定义列表：同 id 原地替换（保持原位置），否则插入最前。
@@ -357,6 +421,8 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
 
   Future<void> _saveApply() async {
     if (_isSaving || _photoBytes == null) return;
+    // 同步把编辑后的模板设为新的「当前水印」需要用到 container，提前捕获避免跨异步 gap 使用 context。
+    final container = ProviderScope.containerOf(context, listen: false);
     final saveMode = await showLumiraSaveModeSheet(context: context);
     if (saveMode == null || !mounted) return;
     setState(() => _isSaving = true);
@@ -395,9 +461,15 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
       ));
       ref.invalidate(galleryDaoProvider);
 
+      // 同步把编辑后的模板设为新的「当前水印」，保证后续拍摄也生效。
+      final promoted = await _persistTemplateAndActivate(container);
+
       if (mounted) {
-        LumiraToast.show(context, '已另存为新照片',
-            duration: const Duration(seconds: 1));
+        LumiraToast.show(
+          context,
+          promoted ? '已另存为新照片' : '照片已保存，但水印保存失败',
+          duration: const Duration(seconds: 2),
+        );
         Navigator.of(context).maybePop();
       }
     } catch (e, st) {
@@ -660,9 +732,17 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
   }
 
   Widget _photoImage() {
-    final url = _photoDataUrl;
-    if (url == null || url.isEmpty) return const SizedBox.shrink();
-    return LumiraImage(url, fit: BoxFit.fill);
+    final img = _previewImage;
+    if (img == null) return const SizedBox.shrink();
+    // RawImage 直接复用已解码的 [img]：不随每次 rebuild 重新解码，消除闪烁。
+    return SizedBox.expand(
+      child: RepaintBoundary(
+        child: RawImage(
+          image: img,
+          fit: BoxFit.fill,
+        ),
+      ),
+    );
   }
 
   /// 拍立得预览：白边向外扩展，照片区域缩小并被四周白边包围；
@@ -836,13 +916,17 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     final left = base.left + e.x * base.width - fontSize * 0.5;
     final top = base.top + e.y * base.height - fontSize;
     final selected = e.id == _selectedElementId;
+    final tokens = ref.read(themeTokensProvider);
 
     return Positioned(
           left: left,
           top: top,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () => _selectElement(e),
+            // 文字元素点选即可进入「样式」Tab 改字；日期等其它元素仅选中。
+            onTap: () => e.type == WatermarkElementType.text
+                ? _selectAndEditText(e)
+                : _selectElement(e),
             // 单指拖拽 = 焦点位移（focalPointDelta），双指捏合 = scale。
             // scale 手势是 pan 的超集，不能同时声明两者。
             onScaleStart: (_) {
@@ -868,22 +952,43 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
                   : null,
               child: Transform.rotate(
                 angle: e.rotation,
-                child: Text(
-                  e.text,
-                  maxLines: 1,
-                  textAlign: e.textAlign,
-                  style: TextStyle(
-                    fontSize: fontSize,
-                    color: e.color,
-                    fontWeight: e.bold ? FontWeight.bold : FontWeight.normal,
-                    fontStyle: e.italic ? FontStyle.italic : FontStyle.normal,
-                    letterSpacing: e.letterSpacing,
-                  ),
-                ),
+                child: _renderElementContent(e, fontSize, tokens),
               ),
             ),
           ),
         );
+  }
+
+  /// 元素绘制主体：空文本独占虚线占位（可点、可见），其余渲染真实文本。
+  Widget _renderElementContent(
+      WatermarkElement e, double fontSize, ThemeTokens tokens) {
+    if (e.type == WatermarkElementType.text && e.text.isEmpty) {
+      return CustomPaint(
+        painter: _DashedBorderPainter(color: tokens.textTertiary, radius: 6),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minWidth: 120, minHeight: fontSize * 1.4),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Text(
+              '输入文字',
+              style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+            ),
+          ),
+        ),
+      );
+    }
+    return Text(
+      e.text,
+      maxLines: 1,
+      textAlign: e.textAlign,
+      style: TextStyle(
+        fontSize: fontSize,
+        color: e.color,
+        fontWeight: e.bold ? FontWeight.bold : FontWeight.normal,
+        fontStyle: e.italic ? FontStyle.italic : FontStyle.normal,
+        letterSpacing: e.letterSpacing,
+      ),
+    );
   }
 
   // === 底部操作栏 ===
@@ -1106,6 +1211,11 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
             ],
           ],
         ),
+        const SizedBox(height: 8),
+        Text(
+          '点选文字元素即可在「样式」页直接改字',
+          style: TextStyle(fontSize: 11, color: tokens.textTertiary),
+        ),
       ],
     );
   }
@@ -1173,6 +1283,7 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
         if (el.type == WatermarkElementType.text)
           LumiraTextField(
             controller: _textEditController,
+            focusNode: _textFocusNode,
             hintText: '输入文本',
             onChanged: (v) {
               el.text = v;
@@ -1748,4 +1859,43 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
       ],
     );
   }
+}
+
+/// 空心虚线圆角边框画笔：为空文本元素提供「待输入」占位外观。
+class _DashedBorderPainter extends CustomPainter {
+  _DashedBorderPainter({required this.color, this.radius = 6});
+
+  final Color color;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    const dashWidth = 4.0;
+    const dashGap = 3.0;
+
+    final rrect = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      Radius.circular(radius),
+    );
+    final path = Path()..addRRect(rrect);
+    final metrics = path.computeMetrics();
+    for (final metric in metrics) {
+      double distance = 0;
+      while (distance < metric.length) {
+        canvas.drawPath(
+          metric.extractPath(distance, distance + dashWidth),
+          paint,
+        );
+        distance += dashWidth + dashGap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedBorderPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.radius != radius;
 }

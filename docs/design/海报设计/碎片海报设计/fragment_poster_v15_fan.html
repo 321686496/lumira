@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 碎片海报 V15 · 收拢的扇片</title>
+<style>
+  :root{
+    --gold:#C9A96E;--gold-deep:#A9884B;--ink:#26211A;
+    --text2:#6B6257;--text3:#9C9180;
+    --surface:#FDFBF7;--surface-alt:#F3EDE1;--line:rgba(201,169,110,.34);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#EFEAE0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:44px 20px 120px;-webkit-font-smoothing:antialiased}
+  .serif{font-family:"Noto Serif SC","Songti SC",Georgia,serif}
+  .hd{text-align:center;max-width:760px;margin:0 auto}
+  .hd h1{color:#4A4236;font-size:20px;letter-spacing:3px;font-weight:600}
+  .hd p{color:#8A7F6E;font-size:12px;letter-spacing:1.5px;line-height:2;margin-top:8px}
+  .hd p b{color:#A08A5F;font-weight:600}
+  .band-title{display:flex;align-items:center;justify-content:center;gap:14px;margin:54px auto 8px;color:#4A4236;font-size:15px;letter-spacing:3px;font-weight:700}
+  .band-title::before,.band-title::after{content:"";width:40px;height:1px;background:var(--line)}
+
+  /* ============ 海报：收拢的扇片 ============ */
+  .poster{width:320px;aspect-ratio:3/4;position:relative;overflow:hidden;background:linear-gradient(180deg,#FDFBF7 0%,#F9F3E8 100%);border:1px solid var(--line);box-shadow:0 22px 54px -28px rgba(60,48,28,.34);border-radius:4px;padding:28px 24px 26px;display:flex;flex-direction:column}
+
+  .g-brand{display:flex;align-items:baseline;justify-content:center;gap:8px}
+  .g-brand .en{font-size:10px;letter-spacing:5px;color:var(--gold-deep);font-weight:700}
+  .g-brand .zh{font-size:9px;letter-spacing:3px;color:var(--text3)}
+
+  .g-seal{position:absolute;top:20px;right:20px;font-size:9px;font-weight:600;letter-spacing:2px;padding:3px 11px;border:1px solid var(--gold);border-radius:999px;color:var(--gold-deep)}
+  .done .g-seal{background:var(--gold);color:#FDFBF7}
+
+  .g-title{text-align:center;font-size:24px;font-weight:700;color:var(--ink);letter-spacing:2px;line-height:1.4;margin-top:18px}
+  .g-line{width:44px;height:1.5px;background:var(--gold);margin:14px auto 0;opacity:.9}
+
+  /* 扇区 */
+  .fan{flex:1;min-height:0;margin-top:16px;position:relative}
+  .fan-base{position:absolute;inset:0}
+  .blade{position:absolute;bottom:34px;left:50%;transform-origin:50% 100%;will-change:transform}
+  .blade-inner{width:58px;height:190px;clip-path:polygon(22% 0,78% 0,63% 100%,37% 100%);background:var(--surface-alt);position:relative}
+  .blade-inner img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .blade .rib{position:absolute;left:50%;bottom:-34px;width:1.5px;height:40px;background:var(--gold);transform:translateX(-50%);opacity:.5}
+  .blade.empty .blade-inner{background:rgba(245,239,228,.5)}
+  .blade.empty .inner{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .blade.empty .plus{font-size:20px;font-weight:300;color:var(--gold);line-height:1}
+  .blade.empty .lab{font-size:8px;letter-spacing:2px;color:var(--text3);margin-top:3px}
+  .pivot{position:absolute;left:50%;bottom:20px;width:16px;height:16px;transform:translateX(-50%);border-radius:50%;background:var(--gold-deep);box-shadow:0 0 0 4px rgba(201,169,110,.18)}
+  .pivot::after{content:"";position:absolute;inset:3px;border-radius:50%;background:#FDFBF7}
+
+  /* 底部 */
+  .foot{margin-top:14px;display:flex;align-items:center;justify-content:space-between}
+  .foot .cnt{font-size:10px;letter-spacing:2px;color:var(--text2)}
+  .foot .cnt b{font-family:Georgia,serif;font-size:16px;color:var(--gold-deep);font-weight:700;padding:0 2px}
+  .foot .slogan{font-size:9px;letter-spacing:3px;color:var(--text3)}
+</style>
+</head>
+<body>
+  <div class="hd">
+    <h1>碎片分享海报 V15 · 收拢的扇片</h1>
+    <p>五枚照片长成<b>柔软扇片</b>，从底部一点向四周<a>收拢成一束光</a>——像一扇折扇重新合拢。<br>空缺是羽毛般半透明的「待收集」扇片，集齐时扇面完整。</p>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:44px;justify-content:center;align-items:flex-start;margin-top:10px"></div>
+  <div id="wrap" style="display:flex;flex-wrap:wrap;gap:44px;justify-content:center;align-items:flex-start"></div>
+
+<script>
+  const CN=['壹','贰','叁','肆','伍'];
+  const SHOTS=['lumiA','lumiB','lumiC','lumiD','lumiE'];
+  function img(seed,w,h){return 'https://picsum.photos/seed/'+seed+'/'+w+'/'+h;}
+  function fan(filled, done){
+    const p=document.createElement('div');
+    p.className='poster'+(done?' done':'');
+    p.innerHTML=
+      '<span class="g-seal">'+(done?'集齐':'收集中')+'</span>'+
+      '<div class="g-brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>'+
+      '<div class="g-title serif">'+(done?'光已收拢':'正在收拢晨光')+'</div>'+
+      '<div class="g-line"></div>'+
+      '<div class="fan"><div class="fan-base"></div><span class="pivot"></span></div>'+
+      '<div class="foot"><span class="cnt">已收集 <b>'+filled+'</b> / 5</span>'+
+        '<span class="slogan">如画 LUMIRA · 记录每一帧光影</span></div>';
+    const base=p.querySelector('.fan-base');
+    const n=5, step=23; // 扇叶张角
+    for(let i=0;i<n;i++){
+      const idx=i-(n-1)/2;
+      const ang=idx*step;
+      const bl=document.createElement('div');
+      bl.className='blade'+(i<filled?'':' empty');
+      bl.style.transform='translateX(-50%) rotate('+ang+'deg)';
+      let inner;
+      if(i<filled){
+        inner='<div class="blade-inner"><img src="'+img(SHOTS[i],120,340)+'"></div><span class="rib"></span>';
+      } else {
+        inner='<div class="blade-inner"><div class="inner"><span class="plus">+</span><span class="lab">待收集</span></div></div><span class="rib"></span>';
+      }
+      bl.innerHTML=inner;
+      base.appendChild(bl);
+    }
+    return p;
+  }
+  const wrap=document.getElementById('wrap');
+  function cell(p){
+    const c=document.createElement('div');
+    c.style.cssText='display:flex;flex-direction:column;align-items:center;gap:12px';
+    const lab=document.createElement('span');
+    lab.style.cssText='font-size:10.5px;color:#A08A5F;letter-spacing:1px;border:1px solid var(--line);padding:3px 12px;border-radius:12px;background:#F3ECE0';
+    c.appendChild(lab); c.appendChild(p); return c;
+  }
+  function branch(label,p,highlight){
+    const c=cell(p); c.querySelector('span').textContent=label;
+    if(highlight){c.querySelector('span').style.background='var(--gold)';c.querySelector('span').style.color='#FDFBF7';}
+    wrap.appendChild(c);
+  }
+  branch('光线碎片 · 收集中 3/5', fan(3,false));
+  branch('光线碎片 · 已集齐 5/5', fan(5,true), true);
+</script>
+</body>
+</html>

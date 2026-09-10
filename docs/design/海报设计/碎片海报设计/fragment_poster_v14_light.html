@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 碎片海报 V14 · 割裂的光线</title>
+<style>
+  :root{
+    --gold:#C9A96E;--gold-deep:#A9884B;--ink:#262115;--near-ink:#2A241C;
+    --text2:#6B6257;--text3:#9C9180;
+    --surface:#FDFBF7;--surface-alt:#F5EFE4;--line:rgba(201,169,110,.34);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#EFEAE0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:44px 20px 120px;-webkit-font-smoothing:antialiased}
+  .serif{font-family:"Noto Serif SC","Songti SC",Georgia,serif}
+  .hd{text-align:center;max-width:760px;margin:0 auto}
+  .hd h1{color:#4A4236;font-size:20px;letter-spacing:3px;font-weight:600}
+  .hd p{color:#8A7F6E;font-size:12px;letter-spacing:1.5px;line-height:2;margin-top:8px}
+  .hd p b{color:#A08A5F;font-weight:600}
+  .band-title{display:flex;align-items:center;justify-content:center;gap:14px;margin:54px auto 8px;color:#4A4236;font-size:15px;letter-spacing:3px;font-weight:700}
+  .band-title::before,.band-title::after{content:"";width:40px;height:1px;background:var(--line)}
+  .band-sub{text-align:center;color:#9C9180;font-size:10.5px;letter-spacing:1.5px;margin-bottom:24px;line-height:1.9}
+
+  /* ============ 海报：极简编辑排版，大留白 + 非居中标题 ============ */
+  .poster{width:320px;aspect-ratio:3/4;position:relative;overflow:hidden;background:var(--surface);border:1px solid var(--line);box-shadow:0 22px 54px -28px rgba(60,48,28,.34);border-radius:4px;padding:34px 30px 26px;display:flex;flex-direction:column}
+
+  .g-brand{display:flex;align-items:baseline;gap:8px}
+  .g-brand .en{font-size:10px;letter-spacing:5px;color:var(--gold-deep);font-weight:700}
+  .g-brand .zh{font-size:9px;letter-spacing:3px;color:var(--text3)}
+
+  .g-kicker{font-size:9px;letter-spacing:3px;color:var(--gold);margin-top:30px}
+  .g-title{font-size:28px;font-weight:700;color:var(--ink);letter-spacing:1px;line-height:1.35;margin-top:6px}
+  .g-rule{width:56px;height:2px;background:linear-gradient(90deg,var(--gold-deep),var(--gold));margin-top:16px}
+
+  /* 照片区：错落矩形 + 一道贯穿的「光迹」斜线 */
+  .photo-zone{flex:1;min-height:0;margin-top:22px;position:relative}
+  .cols{display:grid;grid-template-columns:1.2fr 1fr;gap:10px;height:100%}
+  .col-left{display:flex;flex-direction:column;gap:10px}
+  .col-right{display:flex;flex-direction:column;gap:10px}
+  .ph{position:relative;overflow:hidden;background:var(--surface-alt);flex:none}
+  .ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .ph .num{position:absolute;left:8px;top:8px;width:18px;height:18px;border:1px solid rgba(253,251,247,.9);color:#FDFBF7;font-size:9px;letter-spacing:.5px;display:flex;align-items:center;justify-content:center;background:rgba(38,33,21,.35)}
+  .ph .num b{font-family:Georgia,serif;font-weight:600}
+  .ph.empty{background:transparent;border:1px dashed var(--gold-soft2,#c9a96e);display:flex;align-items:center;justify-content:center;flex-direction:column;color:var(--text3)}
+  .ph.empty .plus{font-size:20px;font-weight:300;color:var(--gold);line-height:1}
+  .ph.empty .lab{font-size:8px;letter-spacing:3px;margin-top:3px}
+  .h-left-1{height:52%}
+  .h-left-2{height:auto;flex:1}
+  .h-right-1{height:34%}
+  .h-right-2{height:auto;flex:1}
+
+  /* 贯穿照片区的金色光迹斜线 */
+  .beam{position:absolute;pointer-events:none;width:110%;height:1.5px;background:var(--gold);top:50%;left:-5%;transform:rotate(-12deg);opacity:.75;z-index:3}
+
+  /* 底部 */
+  .foot{margin-top:20px;display:flex;align-items:baseline;justify-content:space-between;position:relative;z-index:4}
+  .foot .cnt{font-size:10px;letter-spacing:2px;color:var(--text2)}
+  .foot .cnt b{font-family:Georgia,serif;font-size:16px;color:var(--gold-deep);font-weight:700;padding:0 2px}
+  .foot .slogan{font-size:9px;letter-spacing:3px;color:var(--text3)}
+</style>
+</head>
+<body>
+  <div class="hd">
+    <h1>碎片分享海报 V14 · 割裂的光线</h1>
+    <p>保持<b>矩形照片</b>的分寸与克制，用<b>错落大小 + 一条贯穿的金色光迹斜线</b>切开画面——<br>像一束被分成五片的光。大留白、非居中衬线标题，冷峻的高级感。</p>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:44px;justify-content:center;align-items:flex-start;margin-top:10px">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:12px">
+      <span class="sys-label" style="font-size:10.5px;color:#A08A5F;border:1px solid var(--line);padding:3px 12px;border-radius:12px">光线碎片 · 收集中 3/5</span>
+      <div class="poster">
+        <div class="g-brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+        <div class="g-kicker">光线碎片</div>
+        <div class="g-title serif">一束光，<br>被切成五片。</div>
+        <div class="g-rule"></div>
+        <div class="photo-zone">
+          <div class="cols">
+            <div class="col-left">
+              <div class="ph h-left-1"><img src="https://picsum.photos/seed/lumi1/300/230"><span class="num"><b>壹</b></span></div>
+              <div class="ph h-left-2"><img src="https://picsum.photos/seed/lumi2/300/200"><span class="num"><b>贰</b></span></div>
+            </div>
+            <div class="col-right">
+              <div class="ph empty h-right-1"><span class="plus">+</span><span class="lab">待收集</span></div>
+              <div class="ph empty h-right-2"><span class="plus">+</span><span class="lab">待收集</span></div>
+            </div>
+          </div>
+          <div class="beam"></div>
+        </div>
+        <div class="foot"><span class="cnt">已收集 <b>3</b> / 5</span><span class="slogan">如画 LUMIRA</span></div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;align-items:center;gap:12px">
+      <span class="sys-label" style="font-size:10.5px;color:#A08A5F;border:1px solid var(--line);padding:3px 12px;border-radius:12px;background:var(--gold);color:#FDFBF7">光线碎片 · 已集齐 5/5</span>
+      <div class="poster">
+        <div class="g-brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+        <div class="g-kicker">光线碎片</div>
+        <div class="g-title serif">五片光，<br>拼回同一束。</div>
+        <div class="g-rule"></div>
+        <div class="photo-zone">
+          <div class="cols">
+            <div class="col-left">
+              <div class="ph h-left-1"><img src="https://picsum.photos/seed/lumi3/300/230"><span class="num"><b>壹</b></span></div>
+              <div class="ph h-left-2"><img src="https://picsum.photos/seed/lumi4/300/200"><span class="num"><b>叁</b></span></div>
+            </div>
+            <div class="col-right">
+              <div class="ph h-right-1"><img src="https://picsum.photos/seed/lumi5/300/140"><span class="num"><b>贰</b></span></div>
+              <div class="ph h-right-2"><img src="https://picsum.photos/seed/lumi6/300/200"><span class="num"><b>肆</b></span></div>
+            </div>
+          </div>
+          <div class="beam"></div>
+        </div>
+        <div class="foot"><span class="cnt">已收集 <b>5</b> / 5</span><span class="slogan">如画 LUMIRA</span></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
