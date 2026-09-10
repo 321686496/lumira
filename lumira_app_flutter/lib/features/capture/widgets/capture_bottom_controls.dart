@@ -58,25 +58,28 @@ class CaptureBottomBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
-    // scrim：immersive=黑渐变（现状）；theme=画布色渐变（照片向画布过渡）
+    // 底部背景：
+    // - 非沉浸（theme）模式：纯色画布底，去掉渐变（画布色渐变与控件衔接显突兀）
+    // - 沉浸（immersive）模式：保留黑色渐变 scrim（相机页通用暗色过渡）
     final appearance = ref.watch(CaptureState.captureAppearanceProvider);
     final tokens = ref.watch(themeTokensProvider);
-    final scrimBase =
-        appearance == CaptureAppearance.theme ? tokens.canvas : Colors.black;
+    final decoration = appearance == CaptureAppearance.theme
+        ? BoxDecoration(color: tokens.canvas)
+        : BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.transparent,
+                Colors.black.withOpacity(0.3),
+                Colors.black.withOpacity(0.7),
+                Colors.black.withOpacity(0.95),
+              ],
+              stops: const [0.0, 0.4, 0.7, 1.0],
+            ),
+          );
     return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.transparent,
-            scrimBase.withOpacity(0.3),
-            scrimBase.withOpacity(0.7),
-            scrimBase.withOpacity(0.95),
-          ],
-          stops: const [0.0, 0.4, 0.7, 1.0],
-        ),
-      ),
+      decoration: decoration,
       child: Padding(
         padding: EdgeInsets.only(bottom: bottomPadding),
         // clipBehavior: Clip.none 允许缩放轮盘向上溢出到取景器区域

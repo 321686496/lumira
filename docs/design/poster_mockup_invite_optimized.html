@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>如画 LUMIRA · 邀请海报（排版重构版）</title>
+<style>
+  /* ===== PosterPalette（poster_common.dart 1:1），只换排版布局，不换品牌语言 ===== */
+  :root{
+    --surface:#FDFBF7; --surfaceAlt:#F6F1E8;
+    --gold:#C9A96E; --goldDeep:#B08D4F; --goldSoft:#E8CFA4;
+    --ink:#1A1A1A; --text2:#6B645C; --text3:#8E867B;
+    --line:rgba(201,169,110,.34);
+    --serif:"Noto Serif SC","Songti SC",STSong,Georgia,serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+    background:linear-gradient(180deg,#ECE7DC,#E5E0D4); padding:48px 16px 64px;
+    font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif; -webkit-font-smoothing:antialiased;}
+  .page-hd{text-align:center; max-width:720px;}
+  .page-hd h1{font-size:17px; color:#4A4238; letter-spacing:4px; font-weight:600;}
+  .page-hd .sub{font-size:11px; color:#8A8478; letter-spacing:1.5px; margin-top:8px; line-height:1.9;}
+
+  .scale-wrap{width:430px; height:790px; position:relative;}
+  .poster{position:absolute; left:0; top:0; width:300px; height:533.33px;
+    transform:scale(1.48); transform-origin:top left; overflow:hidden; border-radius:20px;
+    background:var(--surface); display:flex; flex-direction:column;
+    padding:26px 28px 15px;
+    box-shadow:0 40px 90px -36px rgba(86,56,38,.5);
+    border:1px solid var(--line);}
+
+  /* ===== 顶部：品牌行 ===== */
+  .brandrow{display:flex; align-items:center; flex:none;}
+  .brandrow .en{font-family:Georgia,serif; font-size:11px; font-weight:600; letter-spacing:4px; color:var(--goldDeep); line-height:1.2;}
+  .brandrow .zh{font-size:10px; letter-spacing:2px; color:var(--text3); margin-left:6px; line-height:1.2;}
+  .brandrow .tag{margin-left:auto; font-family:Georgia,serif; font-style:italic; font-size:9px; letter-spacing:2.5px; color:var(--text2); line-height:1.2;}
+
+  /* ===== ① 照片区：竖向主视觉，贴顶部，作为整卡第一视觉 ===== */
+  .photo{position:relative; margin:12px -17px 0; height:116px;}
+  .photo img{width:100%; height:100%; object-fit:cover; display:block;}
+  .photo::after{content:""; position:absolute; inset:0;
+    background:linear-gradient(180deg,rgba(0,0,0,0) 58%,rgba(20,14,8,.30));}
+  .seal{position:absolute; left:8px; bottom:8px; z-index:2;
+    display:inline-flex; align-items:center; gap:4px;
+    padding:4px 9px 4px 8px; border:1px solid rgba(232,207,164,.88); border-radius:999px;
+    background:rgba(26,26,26,.32);}
+  .seal span{font-size:8.5px; letter-spacing:2px; color:#fff; line-height:1.1;}
+
+  /* ===== ② 标题区：与照片形成强对比 ===== */
+  .slogan{margin-top:12px; font-family:var(--serif);
+    font-size:22px; font-weight:700; letter-spacing:2px; line-height:1.34; color:var(--ink);}
+  .slogan em{font-style:normal; color:var(--goldDeep);}
+  .rule{margin-top:8px; display:flex; align-items:center; gap:6px;}
+  .rule i{flex:none; width:40px; height:2px; background:var(--gold);}
+  .rule span{font-size:8px; letter-spacing:2px; color:var(--text3); line-height:1;}
+
+  /* ===== ③ 痛点：改为「痛点 → 解法」两栏对照式排版，省行、更有逻辑 ===== */
+  .pains{margin-top:10px; display:flex; flex-direction:column; gap:5px;}
+  .pain-line{display:flex; align-items:baseline;}
+  .pain-line i{flex:none; width:5px; height:5px; border-radius:50%; background:var(--gold); margin-right:9px; align-self:center;}
+  .pain-line span{font-size:10px; letter-spacing:1px; color:var(--text2); line-height:1.5;}
+
+  /* ===== ④ 邀请人：金线引言块 ===== */
+  .inviter{margin-top:10px; padding-left:12px; border-left:2px solid var(--gold);}
+  .quote{font-family:var(--serif); font-size:11.5px; font-weight:600;
+    letter-spacing:.5px; color:var(--text2); line-height:1.55;}
+  .author{margin-top:7px; display:flex; align-items:center; gap:7px;}
+  .ava{width:22px; height:22px; border-radius:50%;
+    background:linear-gradient(135deg,var(--gold),#8E867B);
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-size:10px; font-weight:600; line-height:1;}
+  .who{font-size:11.5px; font-weight:600; letter-spacing:1px; color:var(--ink); line-height:1.2;}
+  .suf{font-size:9.5px; letter-spacing:1px; color:var(--text3); line-height:1.2;}
+
+  /* ===== ⑤ 奖励行动区：从「底部小面板」改为「金色描边奖励卡」，整体更强 ===== */
+  .action{margin-top:12px; display:flex; align-items:center; gap:13px;
+    background:var(--surfaceAlt); border:1px solid var(--line); border-radius:16px;
+    padding:10px 13px;}
+  .action .l{flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-start;}
+  .cap{font-size:8.5px; font-weight:600; letter-spacing:3px; color:var(--goldDeep); line-height:1.2;}
+  .numrow{margin-top:4px; display:flex; align-items:baseline; gap:3px;}
+  .plus{font-family:Georgia,serif; font-size:15px; font-weight:700; color:var(--goldDeep);}
+  .num{font-family:Georgia,serif; font-size:30px; font-weight:700; color:var(--goldDeep); line-height:1;}
+  .unit{font-size:11px; font-weight:600; color:var(--goldDeep); letter-spacing:1px;}
+  .use{margin-top:6px; font-size:9px; letter-spacing:.5px; color:var(--text3); line-height:1.5;}
+  .vline{width:1px; align-self:stretch; background:var(--line); flex:none;}
+  .action .r{flex:none; display:flex; flex-direction:column; align-items:center; gap:3px;}
+  .qr{width:54px; height:54px; padding:5px; background:#fff; border:1px solid var(--line); border-radius:8px;}
+  .qr img{width:100%; height:100%; display:block;}
+  .code{font-family:Georgia,serif; font-size:12.5px; font-weight:700; letter-spacing:2.5px; color:var(--ink); line-height:1.2;}
+  .hint{font-size:7.5px; letter-spacing:1.5px; color:var(--text3); line-height:1.2;}
+
+  /* ===== 落款 ===== */
+  .foot{margin-top:10px; padding-top:9px; border-top:1px solid var(--line); display:flex; align-items:baseline;}
+  .foot .en{font-family:Georgia,serif; font-size:10px; font-weight:600; letter-spacing:3px; color:var(--goldDeep); line-height:1.2;}
+  .foot .zh{font-size:10px; color:var(--text3); line-height:1.2; margin-left:4px;}
+  .foot .slogan{margin-left:auto; font-size:9px; letter-spacing:1px; color:var(--text3); line-height:1.2; font-family:"PingFang SC","Microsoft YaHei",sans-serif; font-weight:400;}
+</style>
+</head>
+<body>
+
+  <div class="page-hd">
+    <h1>邀请海报 · 排版重构版</h1>
+    <div class="sub">保持暖白金线品牌语言 · 内容全保留 · 只改排版与布局<br/>① 痛点改为「要点圆点清单」(不再是顿号堆叠) ② 标题下加金线+英文小注 ③ 奖励区升级为金色描边卡片</div>
+  </div>
+
+  <div class="scale-wrap">
+    <div class="poster">
+      <!-- 品牌行 -->
+      <div class="brandrow">
+        <svg width="14" height="14" viewBox="0 0 15 15" fill="none" style="margin-right:7px; flex:none;"><path d="M1.2 4.2V1.2h3M10.8 1.2h3v3M13.8 10.8v3h-3M4.2 13.8h-3v-3" stroke="#B08D4F" stroke-width="1.4" stroke-linecap="round"/></svg>
+        <span class="en">LUMIRA</span>
+        <span class="zh">如画</span>
+        <span class="tag">Invitation</span>
+      </div>
+
+      <!-- ① 照片 -->
+      <div class="photo">
+        <img src="https://picsum.photos/seed/lumira-portrait-gold/600/840.jpg" alt="template result"/>
+        <div class="seal">
+          <svg width="9" height="9" viewBox="0 0 15 15" fill="none"><path d="M1.2 4.2V1.2h3M10.8 1.2h3v3M13.8 10.8v3h-3M4.2 13.8h-3v-3" stroke="#E8CFA4" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span>套模板 · 随手拍</span>
+        </div>
+      </div>
+
+      <!-- ② 标题 + 金线注 -->
+      <div class="slogan">不会拍照？<br/><em>套个模板</em>就会</div>
+      <div class="rule"><i></i><span>ONE TEMPLATE · ONE TAP</span></div>
+
+      <!-- ③ 痛点（点状清单） -->
+      <div class="pains">
+        <div class="pain-line"><i></i><span>调参数太麻烦 · 不会构图摆姿势</span></div>
+        <div class="pain-line"><i></i><span>帮拍没角度 · 照片总是很普通</span></div>
+      </div>
+
+      <!-- ④ 邀请人 -->
+      <div class="inviter">
+        <div class="quote">「我用它拍出了最近最满意的照片」</div>
+        <div class="author">
+          <div class="ava">满</div>
+          <span class="who">@小满</span>
+          <span class="suf">· 邀你加入如画</span>
+        </div>
+      </div>
+
+      <!-- ⑤ 奖励行动卡 -->
+      <div class="action">
+        <div class="l">
+          <div class="cap">新 人 礼</div>
+          <div class="numrow"><span class="plus">+</span><span class="num">30</span><span class="unit">积分 · 双方同得</span></div>
+          <div class="use">积分可解锁精美模板</div>
+        </div>
+        <div class="vline"></div>
+        <div class="r">
+          <div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=K2A9XQ&margin=0" alt="QR" crossorigin="anonymous"/></div>
+          <div class="code">K2A9XQ</div>
+          <div class="hint">长按识别领取</div>
+        </div>
+      </div>
+
+      <!-- 落款 -->
+      <div class="foot">
+        <span class="en">LUMIRA</span>
+        <span class="zh">· 如画</span>
+        <span class="slogan">如你所见，皆成画卷</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-hd sub">
+    品牌语言（暖白底/金发丝/衬线标题）完全不变，只在样式与布局上做这几处变化，让版式和之前判若两版：<br/>
+    ①② 痛点从「顿号+双字对齐」改成「圆点要点清单」，节奏更顺；③ 标题下增加一条金线 + 「ONE TEMPLATE · ONE TAP」英文小注，形成编辑标注；④ 奖励区去掉原来空空的底部面板，改成带金描边的「奖励卡」，视觉更完整更像主 CTA。
+  </div>
+</body>
+</html>

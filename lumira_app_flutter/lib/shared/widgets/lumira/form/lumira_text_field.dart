@@ -33,6 +33,7 @@ class LumiraTextField extends ConsumerStatefulWidget {
     this.enabled = true,
     this.maxLines = 1,
     this.maxLength,
+    this.focusNode,
   });
 
   final TextEditingController controller;
@@ -49,25 +50,32 @@ class LumiraTextField extends ConsumerStatefulWidget {
   final int maxLines;
   final int? maxLength;
 
+  /// 外部传入的焦点节点（用于自动聚焦）。缺省时内部自建并自管理。
+  final FocusNode? focusNode;
+
   @override
   ConsumerState<LumiraTextField> createState() => _LumiraTextFieldState();
 }
 
 class _LumiraTextFieldState extends ConsumerState<LumiraTextField> {
-  late FocusNode _focusNode;
   bool _focused = false;
+
+  late final FocusNode _focusNode;
 
   @override
   void initState() {
     super.initState();
-    _focusNode = FocusNode();
+    _focusNode = widget.focusNode ?? FocusNode();
     _focusNode.addListener(_handleFocusChange);
   }
 
   @override
   void dispose() {
     _focusNode.removeListener(_handleFocusChange);
-    _focusNode.dispose();
+    // 仅释放内部自建的节点；外部传入的节点由调用方生命周期管理。
+    if (widget.focusNode == null) {
+      _focusNode.dispose();
+    }
     super.dispose();
   }
 

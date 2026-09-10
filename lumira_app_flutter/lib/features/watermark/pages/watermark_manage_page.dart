@@ -183,7 +183,10 @@ class _WatermarkManagePageState extends ConsumerState<WatermarkManagePage> {
     final presets = ref.watch(presetWatermarksProvider);
     final customs = ref.watch(customWatermarksProvider);
 
-    final templates = [...presets, ...customs];
+    // 自定义水印置顶（最新创建在前），系统预置模板在后。
+    final customsSorted = [...customs]
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final templates = [...customsSorted, ...presets];
     final activeId = settings.activeTemplateId;
     final layout = settings.manageLayout;
     final isGrid = layout == WatermarkManageLayout.grid;

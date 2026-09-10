@@ -158,17 +158,23 @@ void main() {
       final initialCount = editorState(tester).template.elements.length;
       expect(initialCount, greaterThan(0));
 
-      // 新增文本元素
+      // 新增文本元素（自动切入「样式」tab 并聚焦输入框）
       await tester.tap(find.text('＋文本'));
-      await settle(tester, UIStyle.neumorphic);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+      // 停用光标闪烁，避免后续 pumpAndSettle 被持续排帧卡住
+      tester.binding.focusManager.primaryFocus?.unfocus();
+      await tester.pump();
       expect(
         editorState(tester).template.elements.length,
         initialCount + 1,
       );
       final newId = editorState(tester).template.elements.last.id;
 
-      // 新增后自动选中，出现删除按钮
+      // 新增后自动选中；删除按钮位于元素 tab，需先切回
       expect(editorState(tester).selectedElementId, newId);
+      await tester.tap(find.byKey(const ValueKey('wm-tab-element')));
+      await settle(tester, UIStyle.neumorphic);
       await tester.tap(find.text('删除'));
       await settle(tester, UIStyle.neumorphic);
       expect(
@@ -212,11 +218,14 @@ void main() {
       await tester.tap(find.text('拍立得'));
       await settle(tester, UIStyle.neumorphic);
 
-      // 2) 切到元素 Tab 并新增一个文本元素（自动选中）
+      // 2) 切到元素 Tab 并新增一个文本元素（自动选中并聚焦输入）
       await tester.tap(find.byKey(const ValueKey('wm-tab-element')));
       await settle(tester, UIStyle.neumorphic);
       await tester.tap(find.text('＋文本'));
-      await settle(tester, UIStyle.neumorphic);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+      tester.binding.focusManager.primaryFocus?.unfocus(); // 停用光标闪烁
+      await tester.pump();
       final newId = editorState(tester).template.elements.last.id;
       expect(editorState(tester).selectedElementId, newId);
 

@@ -395,6 +395,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
       final container = ProviderScope.containerOf(context, listen: false);
       loadWatermarkSettings(container);
       loadCustomWatermarks(container);
+      // 从 DB 异步加载拍摄页/预览页外观（沉浸式 vs 跟随主题）。
+      // 修复：原仅在设置页 initState 加载，应用冷启动直奔拍摄页时 provider 保持默认
+      // immersive，导致用户保存的偏好要打开设置页后才生效；这里与拍摄页入口一并加载。
+      CaptureState.loadCaptureAppearance(container);
     });
   }
 

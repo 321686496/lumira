@@ -28,8 +28,20 @@ final bannerRecommendationProvider =
     usageDao: await ref.watch(usageDaoProvider.future),
     interestDao: await ref.watch(userInterestsDaoProvider.future),
   );
-  final operationInputs = await _loadOperationInputs(ref);
-  return service.buildBanners(operationInputs: operationInputs);
+  // 并行加载运营位所需条件与远端运营条目目录；
+  // 两者各自容错（_tryLoad / operationBanners 三级兜底），不阻塞 Banner 主流程。
+  // 远端目录必须注入 buildBanners，否则 slot 0 停留静态 kOperationBanners，
+  // 后台改动无法在首页生效（曾因漏传导致死代码）。
+  final results = await Future.wait([
+    _loadOperationInputs(ref),
+    _loadOperationBanners(ref),
+  ]);
+  final operationInputs = results[0] as OperationUserInputs;
+  final operationBanners = results[1] as List<OperationBanner>;
+  return service.buildBanners(
+    operationInputs: operationInputs,
+    operationBanners: operationBanners,
+  );
 });
 
 /// 汇聚运营位条件所需的用户状态（远端；离线/失败降级为 null → 不出运营位）。

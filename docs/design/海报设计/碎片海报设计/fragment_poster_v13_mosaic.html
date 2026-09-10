@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 碎片海报 V13 · 对角斜裂</title>
+<style>
+  :root{
+    --gold:#C9A96E;--gold-deep:#A9884B;--ink:#2A241C;
+    --text2:#6B6257;--text3:#9C9180;
+    --surface:#FDFBF7;--surface-alt:#F3EDE2;--line:rgba(201,169,110,.34);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#EFEAE0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:44px 20px 120px;-webkit-font-smoothing:antialiased}
+  .serif{font-family:"Noto Serif SC","Songti SC",Georgia,serif}
+  .hd{text-align:center;max-width:800px;margin:0 auto}
+  .hd h1{color:#4A4236;font-size:20px;letter-spacing:3px;font-weight:600}
+  .hd p{color:#8A7F6E;font-size:12px;letter-spacing:1.5px;line-height:2;margin-top:8px}
+  .hd p b{color:#A08A5F;font-weight:600}
+  .band-title{display:flex;align-items:center;justify-content:center;gap:14px;margin:54px auto 8px;color:#4A4236;font-size:15px;letter-spacing:3px;font-weight:700}
+  .band-title::before,.band-title::after{content:"";width:40px;height:1px;background:var(--line)}
+
+  .poster{width:320px;aspect-ratio:3/4;position:relative;overflow:hidden;background:linear-gradient(180deg,#FDFBF7 0%,#FBF5EA 100%);border:1px solid var(--line);box-shadow:0 22px 54px -28px rgba(60,48,28,.34);border-radius:4px}
+  .hairline{position:absolute;inset:8px;border:1px solid var(--line);pointer-events:none;z-index:3}
+  .hairline b{position:absolute;width:14px;height:14px;border:1.5px solid var(--gold)}
+  .hairline b:nth-child(1){top:-2px;left:-2px;border-right:none;border-bottom:none}
+  .hairline b:nth-child(2){top:-2px;right:-2px;border-left:none;border-bottom:none}
+  .hairline b:nth-child(3){bottom:-2px;left:-2px;border-right:none;border-top:none}
+  .hairline b:nth-child(4){bottom:-2px;right:-2px;border-left:none;border-top:none}
+
+  .g-top{position:absolute;top:20px;left:32px;right:30px;display:flex;justify-content:space-between;align-items:center;z-index:4}
+  .g-brand{display:flex;align-items:baseline;gap:7px}
+  .g-brand .en{font-size:10px;letter-spacing:4px;color:var(--gold-deep);font-weight:700}
+  .g-brand .zh{font-size:9px;letter-spacing:3px;color:var(--text3)}
+  .g-seal{font-size:9px;font-weight:600;letter-spacing:2px;padding:3px 11px;border:1px solid var(--gold);border-radius:999px;color:var(--gold-deep);background:rgba(253,251,247,.86)}
+  .done .g-seal{background:var(--gold);color:#FDFBF7;font-weight:700}
+
+  /* ============ 碎片拼板：放大、向右下出血出界（版式=图文交叠·题压图） ============ */
+  .board{position:absolute;top:40px;left:8px;width:316px;height:243px;z-index:1}
+  .board svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+  .crack{fill:none;stroke:rgba(201,169,110,.78);stroke-width:1.6;stroke-linejoin:round}
+  .crack-hi{fill:none;stroke:var(--gold);stroke-width:1.4;stroke-linejoin:round}
+
+  /* 标题压在图片左上角，衬线 + 淡暖白底托保证可读 */
+  .g-ttl{position:absolute;top:66px;left:44px;z-index:2;background:rgba(253,251,247,.9);border:1px solid rgba(201,169,110,.4);border-radius:6px;padding:14px 16px 15px;max-width:200px}
+  .g-title{text-align:left;font-size:26px;font-weight:700;color:var(--ink);letter-spacing:1px;line-height:1.28}
+  .g-sub{text-align:left;font-size:10px;letter-spacing:1.5px;color:var(--gold-deep);margin-top:8px}
+  .g-line{width:24px;height:1.5px;background:var(--gold);margin:10px 0 0;opacity:.9}
+
+  .g-foot{position:absolute;left:0;right:0;bottom:22px;z-index:4;text-align:center}
+  .g-foot .pct{font-size:11px;letter-spacing:3px;color:var(--text2)}
+  .g-foot .pct b{font-family:Georgia,serif;font-size:15px;color:var(--gold-deep);font-weight:700;padding:0 2px}
+  .g-foot .slogan{font-size:9px;letter-spacing:3px;color:var(--text3);margin-top:5px}
+</style>
+</head>
+<body>
+  <div class="hd">
+    <h1>碎片分享海报 V13 · 对角斜裂</h1>
+    <p>整帧被一条<b>斜向主裂缝</b>劈开，三条支缝错落切开，成 5 块参差略倾的碎片——像一张被撕开一角的光影。<br>拼捡时光、金色裂缝只描一遍；空缺是参差裂洞。</p>
+  </div>
+
+  <div id="wrap" style="display:flex;flex-wrap:wrap;gap:46px;justify-content:center;align-items:flex-start;margin-top:36px"></div>
+
+<script>
+  const W=272, H=209;
+
+  /* —— 子段（相邻碎片共享同一数组，保证精确咬合） —— */
+  const leftTop =jag([{x:0,y:0},{x:0,y:64}]);
+  const leftBot =jag([{x:0,y:64},{x:0,y:209}]);
+  const topL    =jag([{x:0,y:0},{x:88,y:0},{x:176,y:0}]);
+  const topR    =jag([{x:176,y:0},{x:224,y:0},{x:272,y:0}]);
+  const rightA  =jag([{x:272,y:0},{x:272,y:90},{x:272,y:150}]);
+  const rightB  =jag([{x:272,y:150},{x:272,y:209}]);
+  const bottomL =jag([{x:0,y:209},{x:38,y:209},{x:76,y:209}]);
+  const bottomM =jag([{x:76,y:209},{x:142,y:209},{x:208,y:209}]);
+  const bottomR =jag([{x:208,y:209},{x:272,y:209}]);
+  /* 裂缝（主对角 dv + 三支缝），做锯齿破损 */
+  const d0=jag([{x:0,y:64},{x:50,y:76},{x:90,y:94}],2.6);
+  const d1=jag([{x:90,y:94},{x:128,y:108},{x:160,y:120}],2.6);
+  const d2=jag([{x:160,y:120},{x:188,y:127},{x:220,y:133}],2.4);
+  const d3=jag([{x:220,y:133},{x:244,y:141},{x:272,y:150}],2.6);
+  const brUp =jag([{x:176,y:0},{x:170,y:58},{x:160,y:120}],2.4);
+  const brDn1=jag([{x:90,y:94},{x:84,y:150},{x:76,y:209}],2.6);
+  const brDn2=jag([{x:220,y:133},{x:214,y:170},{x:208,y:209}],2.4);
+
+  /* ǃ 无参锯齿（默认边留给外框，不碎） */
+  function jag(pts, amp){
+    if(!amp) return pts.map(p=>({x:p.x,y:p.y}));
+    const out=[{x:pts[0].x,y:pts[0].y}]; let sign=1;
+    for(let i=0;i<pts.length-1;i++){
+      const a=pts[i],b=pts[i+1];
+      const dx=b.x-a.x, dy=b.y-a.y, L=Math.hypot(dx,dy)||1;
+      const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+      out.push({x:mx+(-dy/L)*amp*sign, y:my+(dx/L)*amp*sign});
+      out.push({x:b.x,y:b.y});
+      sign=-sign;
+    }
+    return out;
+  }
+  const rev=a=>a.concat().reverse().map(p=>({x:p.x,y:p.y}));
+  function join(...segs){
+    const out=[];
+    for(const seg of segs) for(const p of seg){
+      const l=out[out.length-1];
+      if(!l || l.x!==p.x || l.y!==p.y) out.push(p);
+    }
+    const l=out[out.length-1];
+    if(l.x===out[0].x && l.y===out[0].y) out.pop();
+    return out;
+  }
+  /* —— 五块碎片（闭合多边形） —— */
+  const ALL=[
+    join(topL,  brUp,      rev(d1), rev(d0),       rev(leftTop)),   // F1 左上
+    join(topR,  rightA,    rev(d3), rev(d2),       rev(brUp)),      // F2 右上
+    join(d0,    brDn1,     rev(bottomL), rev(leftBot)),            // F3 左下
+    join(d1,    d2,        brDn2,     rev(bottomM), rev(brDn1)),   // F4 中下
+    join(d3,    rightB,    rev(bottomR), rev(brDn2))               // F5 右下
+  ];
+
+  function pathOf(pts){ return pts.map((p,i)=> (i?'L':'M')+p.x+' '+p.y).join(' ')+' Z'; }
+  function bbox(pts){
+    const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
+    return {x:Math.min(...xs), y:Math.min(...ys), w:Math.max(...xs)-Math.min(...xs), h:Math.max(...ys)-Math.min(...ys)};
+  }
+  function centroid(pts){ return {x:pts.reduce((a,p)=>a+p.x,0)/pts.length, y:pts.reduce((a,p)=>a+p.y,0)/pts.length}; }
+  const SHOTS=['lumiA','lumiB','lumiC','lumiD','lumiE'];
+
+  function build(filled){
+    const done=filled>=5;
+    const post=document.createElement('div');
+    post.className='poster'+(done?' done':'');
+    post.innerHTML=
+      '<span class="hairline"><b></b><b></b><b></b><b></b></span>'+
+      '<div class="g-top"><div class="g-brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>'+
+        '<span class="g-seal">'+(done?'拼好了':'拼碎片')+'</span></div>'+
+      '<div class="board"></div>'+
+      '<div class="g-ttl">'+
+        '<div class="g-title serif">'+(done?'撕开的光，拼齐了':'正在捡回被撕开的光')+'</div>'+
+        '<div class="g-sub">'+(done?'斜裂的碎片，重新落回原处':'还差 '+(5-filled)+' 角 · 一起来捡')+'</div>'+
+        '<div class="g-line"></div>'+
+      '</div>'+
+      '<div class="g-foot"><span class="pct">已收集 <b>'+filled+'</b> / 5</span>'+
+        '<div class="slogan">如画 LUMIRA · 记录每一帧光影</div></div>';
+    const board=post.querySelector('.board');
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.setAttribute('viewBox','0 0 '+W+' '+H);
+    svg.setAttribute('preserveAspectRatio','none');
+    svg.style.overflow='visible';
+    board.appendChild(svg);
+
+    ALL.forEach((pts,i)=>{
+      const d=pathOf(pts), clipId='fr'+i+'_'+filled;
+      const defs=document.createElementNS('http://www.w3.org/2000/svg','defs');
+      const cp=document.createElementNS('http://www.w3.org/2000/svg','clipPath');
+      cp.setAttribute('id',clipId);
+      const cpath=document.createElementNS('http://www.w3.org/2000/svg','path');
+      cpath.setAttribute('d',d); cp.appendChild(cpath); defs.appendChild(cp);
+      svg.appendChild(defs);
+      if(i<filled){
+        const bb=bbox(pts);
+        const img=document.createElementNS('http://www.w3.org/2000/svg','image');
+        img.setAttributeNS('http://www.w3.org/1999/xlink','xlink:href',
+          'https://picsum.photos/seed/'+SHOTS[i]+'/'+Math.round(bb.w*3)+'/'+Math.round(bb.h*3));
+        img.setAttribute('x',bb.x); img.setAttribute('y',bb.y);
+        img.setAttribute('width',bb.w); img.setAttribute('height',bb.h);
+        img.setAttribute('preserveAspectRatio','xMidYMid slice');
+        img.setAttribute('clip-path','url(#'+clipId+')');
+        svg.appendChild(img);
+        const st=document.createElementNS('http://www.w3.org/2000/svg','path');
+        st.setAttribute('d',d); st.setAttribute('class','crack'); svg.appendChild(st);
+      } else {
+        const hole=document.createElementNS('http://www.w3.org/2000/svg','path');
+        hole.setAttribute('d',d); hole.setAttribute('fill','rgba(246,241,232,.72)');
+        hole.setAttribute('stroke','rgba(201,169,110,.82)');
+        hole.setAttribute('stroke-width','1.5'); hole.setAttribute('stroke-dasharray','5 4');
+        svg.appendChild(hole);
+        const c=centroid(pts);
+        const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+        t.setAttribute('x',c.x); t.setAttribute('y',c.y-4); t.setAttribute('text-anchor','middle');
+        t.style.cssText='font-size:9.5px;fill:#9C9180;letter-spacing:1px';
+        t.textContent='+ 待拼';
+        svg.appendChild(t);
+      }
+    });
+    return post;
+  }
+
+  function branch(label,post,hl){
+    const c=document.createElement('div');
+    c.style.cssText='display:flex;flex-direction:column;align-items:center;gap:12px';
+    const lab=document.createElement('span');
+    lab.style.cssText='font-size:10.5px;color:#A08A5F;letter-spacing:1px;border:1px solid var(--line);padding:3px 12px;border-radius:12px;background:#F3ECE0';
+    lab.textContent=label;
+    if(hl){lab.style.background='var(--gold)';lab.style.color='#FDFBF7';}
+    c.appendChild(lab); c.appendChild(post); wrap.appendChild(c);
+  }
+  branch('光影碎片 · 拼了 3 角', build(3));
+  branch('光影碎片 · 拼了 5 角（完成）', build(5), true);
+</script>
+</body>
+</html>
