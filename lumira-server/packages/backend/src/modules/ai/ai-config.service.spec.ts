@@ -142,6 +142,22 @@ describe('AiConfigService — textModel', () => {
     expect(cfg.text.model).toBe('qwen-vl-max'); // text 未配置 → 回退 visionModel
   });
 
+  it('getActiveConfig() 文本独立平台 provider/baseUrl 已设但 apiKey 为 NULL → 视为未配置，回退共享平台（防御手工 SQL 缺 key）', async () => {
+    const service = new AiConfigService(
+      readonlyDb(row({ textProvider: 'openai', textBaseUrl: 'https://o.example/v1', textApiKey: null, textModel: 'gpt-x' })),
+    );
+    const cfg = await service.getActiveConfig();
+    expect(cfg.text).toEqual({ provider: 'qwen', baseUrl: 'https://x.example', apiKey: 'sk-1234567890', model: 'gpt-x' });
+  });
+
+  it('getActiveConfig() 生图独立平台缺 apiKey → 视为未配置，回退共享平台', async () => {
+    const service = new AiConfigService(
+      readonlyDb(row({ imageProvider: 'zhipu', imageBaseUrl: 'https://z.example/v1', imageApiKey: '' })),
+    );
+    const cfg = await service.getActiveConfig();
+    expect(cfg.image).toEqual({ provider: 'qwen', baseUrl: 'https://x.example', apiKey: 'sk-1234567890', model: 'wanx2.1-t2i-turbo' });
+  });
+
   it('getActiveConfig() 未启用 → 503', async () => {
     const service = new AiConfigService(readonlyDb(row({ enabled: 0 })));
     await expect(service.getActiveConfig()).rejects.toThrow(ServiceUnavailableException);
