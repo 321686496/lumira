@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 碎片海报 V17 · 情绪 × 进度</title>
+<style>
+  :root{
+    --gold:#C9A96E;--gold-deep:#A9884B;--gold-soft:#E4D3AF;
+    --ink:#2A241C;--text2:#6B6257;--text3:#9C9180;
+    --surface:#FDFBF7;--surface-alt:#F3EDE2;--line:rgba(201,169,110,.34);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#EFEAE0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:44px 20px 120px;-webkit-font-smoothing:antialiased}
+  .serif{font-family:"Noto Serif SC","Songti SC",Georgia,serif}
+  .hd{text-align:center;max-width:780px;margin:0 auto}
+  .hd h1{color:#4A4236;font-size:20px;letter-spacing:3px;font-weight:600}
+  .hd p{color:#8A7F6E;font-size:12px;letter-spacing:1.5px;line-height:2;margin-top:8px}
+  .hd p b{color:#A08A5F;font-weight:600}
+  #wrap{display:flex;flex-wrap:wrap;gap:48px;justify-content:center;align-items:flex-start;margin-top:36px}
+  .branch{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .branch > span{font-size:10.5px;color:#A08A5F;letter-spacing:1px;border:1px solid var(--line);padding:3px 12px;border-radius:12px;background:#F3ECE0}
+
+  .poster{width:320px;aspect-ratio:3/4;position:relative;overflow:hidden;background:linear-gradient(180deg,#FDFBF7 0%,#FBF5EA 100%);border:1px solid var(--line);box-shadow:0 22px 54px -28px rgba(60,48,28,.36);border-radius:4px}
+  .hairline{position:absolute;inset:8px;border:1px solid var(--line);pointer-events:none;z-index:6}
+  .board svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;display:block}
+  .seal{font-size:8.5px;font-weight:600;letter-spacing:2px;padding:3px 11px;border:1px solid var(--gold);border-radius:999px;color:var(--gold-deep);background:rgba(253,251,247,.7)}
+
+  /* ------------ A · 上情绪 / 中拼板 / 下进度 ------------ */
+  .A .pad{position:absolute;inset:24px 30px}
+  .A .brand{display:flex;align-items:baseline;gap:7px}
+  .A .brand .en{font-size:10px;letter-spacing:4px;color:var(--gold-deep);font-weight:700}
+  .A .brand .zh{font-size:9px;letter-spacing:3px;color:var(--text3)}
+  .A .kicker{font-size:9px;letter-spacing:3px;color:var(--gold-deep);margin-top:20px}
+  .A .ttl{font-size:25px;font-weight:700;color:var(--ink);letter-spacing:1px;line-height:1.32;margin-top:9px}
+  .A .ttl em{font-style:normal;color:var(--gold-deep)}
+  .A .poem{margin-top:12px;font-size:9.5px;letter-spacing:.5px;color:var(--text2);line-height:1.9;padding-left:11px;border-left:1.5px solid var(--gold-soft)}
+  .A .boardbox{width:100%;aspect-ratio:272/209;position:relative;z-index:1;margin-top:22px;box-shadow:0 14px 28px -18px rgba(60,48,28,.4);outline:1px solid var(--line);outline-offset:6px}
+  .A .prog{margin-top:26px;border-top:1px solid var(--line);padding-top:14px;display:flex;align-items:center;gap:14px}
+  .A .big{font-family:Georgia,serif;font-size:34px;font-weight:700;color:var(--gold-deep);line-height:1}
+  .A .big small{font-size:12px;color:var(--text3);font-weight:400;font-family:-apple-system,"PingFang SC",sans-serif}
+  .A .pmeta{flex:1;min-width:0}
+  .A .pbar{display:flex;gap:4px}
+  .A .pbar i{flex:1;height:3px;background:var(--line);border-radius:2px}
+  .A .pbar i.on{background:var(--gold)}
+  .A .ptext{margin-top:7px;font-size:8.5px;letter-spacing:1.5px;color:var(--text3)}
+
+  /* ------------ B · 居中留白 / 情绪金句 ------------ */
+  .B{padding:0}
+  .B .box{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;text-align:center}
+  .B .brand{display:flex;align-items:baseline;gap:7px;margin-top:26px}
+  .B .brand .en{font-size:9px;letter-spacing:5px;color:var(--gold-deep);font-weight:700}
+  .B .brand .zh{font-size:8.5px;letter-spacing:3px;color:var(--text3)}
+  .B .kicker{font-size:8.5px;letter-spacing:4px;color:var(--gold-deep);margin-top:24px}
+  .B .ttl{font-size:24px;font-weight:700;color:var(--ink);letter-spacing:1px;line-height:1.4;margin-top:12px}
+  .B .ttl em{font-style:normal;color:var(--gold-deep)}
+  .B .goldline{width:30px;height:1.5px;background:var(--gold);opacity:.9;margin-top:14px}
+  .B .boardbox{width:82%;aspect-ratio:272/209;position:relative;z-index:1;margin-top:20px;box-shadow:0 16px 30px -18px rgba(60,48,28,.4)}
+  .B .quote{margin-top:18px;font-size:10px;letter-spacing:.5px;color:var(--ink);line-height:1.9;padding:0 34px}
+  .B .quote .q{color:var(--gold-deep)}
+  .B .prog{margin-top:16px;display:flex;flex-direction:column;align-items:center}
+  .B .plabel{font-size:10px;letter-spacing:3px;color:var(--text2)}
+  .B .plabel b{font-family:Georgia,serif;font-size:18px;color:var(--gold-deep);padding:0 2px}
+  .B .pbar{display:flex;gap:5px;margin-top:9px}
+  .B .pbar i{width:20px;height:3px;background:var(--line);border-radius:2px}
+  .B .pbar i.on{background:var(--gold)}
+  .B .motto{margin-top:auto;padding-bottom:20px;font-size:8px;letter-spacing:3px;color:var(--text3)}
+
+  /* ------------ C · 暗底大片 / 拼板随光而来 ------------ */
+  .C{background:#12100C;padding:0}
+  .C .fullsvg{position:absolute;inset:0;z-index:1}
+  .C .fullsvg svg{width:100%;height:100%;display:block}
+  .C .shade{position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 0%,rgba(0,0,0,0) 0%,rgba(10,8,5,.74) 74%),linear-gradient(0deg,#0a0805 0%,rgba(10,8,5,0) 60%);z-index:2}
+  .C .top{position:absolute;top:0;left:0;right:0;padding:26px 30px 0;display:flex;justify-content:space-between;align-items:center;z-index:4}
+  .C .top .en{letter-spacing:4px;color:#E7CE9E}
+  .C .top .zh{letter-spacing:3px;color:rgba(255,255,255,.6)}
+  .C .cs{font-size:8.5px;letter-spacing:2px;color:rgba(231,206,158,.85);border:1px solid rgba(231,206,158,.55);padding:3px 11px;border-radius:999px}
+  .C .btm{position:absolute;left:0;right:0;bottom:0;padding:0 30px 28px;z-index:4}
+  .C .kicker{font-size:9px;letter-spacing:4px;color:#E7CE9E}
+  .C .ttl{color:#FFF8EC;font-size:28px;line-height:1.3;margin-top:10px}
+  .C .ttl em{font-style:normal;color:#E7CE9E}
+  .C .poem{color:rgba(255,255,255,.74);font-size:9.5px;letter-spacing:.5px;line-height:1.9;margin-top:10px;padding-left:11px;border-left:1.5px solid rgba(231,206,158,.5)}
+  .C .goldline{margin-top:16px;height:1.5px;width:100%;background:linear-gradient(90deg,var(--gold),rgba(201,169,110,0));opacity:.9}
+  .C .prog{margin-top:16px;display:flex;align-items:center;gap:14px}
+  .C .big{font-family:Georgia,serif;font-size:34px;font-weight:700;color:#F0D9AB;line-height:1}
+  .C .big small{font-size:12px;color:rgba(255,255,255,.5);font-weight:400;font-family:-apple-system,"PingFang SC",sans-serif}
+  .C .pmeta{flex:1;min-width:0}
+  .C .pbar{display:flex;gap:4px}
+  .C .pbar i{flex:1;height:3px;background:rgba(255,255,255,.18);border-radius:2px}
+  .C .pbar i.on{background:var(--gold)}
+  .C .ptext{margin-top:7px;font-size:8.5px;letter-spacing:1.5px;color:rgba(255,255,255,.55)}
+</style>
+</head>
+<body>
+  <div class="hd">
+    <h1>碎片海报 V17 · 情绪为魂 × 进度为骨（3 版式）</h1>
+    <p>每个版式都把<b>情绪化文案（金句标题 + 诗意正文）</b>和<b>收集进度（3/5 + 进度条）</b>分别做成清晰的视觉层，不再藏进页脚。</p>
+  </div>
+  <div id="wrap"></div>
+
+<script>
+  const W=272,H=209,filled=3,total=5;
+
+  function fragBoardSVG(pid){
+    const jag=(pts,amp)=>{
+      if(!amp) return pts.map(p=>({x:p.x,y:p.y}));
+      const out=[{x:pts[0].x,y:pts[0].y}];let s=1;
+      for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1],dx=b.x-a.x,dy=b.y-a.y,L=Math.hypot(dx,dy)||1;
+        out.push({x:(a.x+b.x)/2+(-dy/L)*amp*s,y:(a.y+b.y)/2+(dx/L)*amp*s});out.push({x:b.x,y:b.y});s=-s;}
+      return out;
+    };
+    const lT=jag([{x:0,y:0},{x:0,y:64}]),lB=jag([{x:0,y:64},{x:0,y:209}]);
+    const tL=jag([{x:0,y:0},{x:88,y:0},{x:176,y:0}]),tR=jag([{x:176,y:0},{x:224,y:0},{x:272,y:0}]);
+    const rA=jag([{x:272,y:0},{x:272,y:90},{x:272,y:150}]),rB=jag([{x:272,y:150},{x:272,y:209}]);
+    const bL=jag([{x:0,y:209},{x:38,y:209},{x:76,y:209}]),bM=jag([{x:76,y:209},{x:142,y:209},{x:208,y:209}]),bR=jag([{x:208,y:209},{x:272,y:209}]);
+    const d0=jag([{x:0,y:64},{x:50,y:76},{x:90,y:94}],2.6),d1=jag([{x:90,y:94},{x:128,y:108},{x:160,y:120}],2.6),d2=jag([{x:160,y:120},{x:188,y:127},{x:220,y:133}],2.4),d3=jag([{x:220,y:133},{x:244,y:141},{x:272,y:150}],2.6);
+    const bUp=jag([{x:176,y:0},{x:170,y:58},{x:160,y:120}],2.4),bDn1=jag([{x:90,y:94},{x:84,y:150},{x:76,y:209}],2.6),bDn2=jag([{x:220,y:133},{x:214,y:170},{x:208,y:209}],2.4);
+    const rev=a=>a.concat().reverse().map(p=>({x:p.x,y:p.y}));
+    const join=(...ss)=>{const o=[];for(const s of ss)for(const p of s){const l=o[o.length-1];if(!l||l.x!==p.x||l.y!==p.y)o.push(p);}const l=o[o.length-1];if(l.x===o[0].x&&l.y===o[0].y)o.pop();return o;};
+    const faces=[
+      join(tL,bUp,rev(d1),rev(d0),rev(lT)),
+      join(tR,rA,rev(d3),rev(d2),rev(bUp)),
+      join(d0,bDn1,rev(bL),rev(lB)),
+      join(d1,d2,bDn2,rev(bM),rev(bDn1)),
+      join(d3,rB,rev(bR),rev(bDn2))
+    ];
+    const pathOf=pts=>pts.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
+    const bbox=pts=>{const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y);return{x:Math.min(...xs),y:Math.min(...ys),w:Math.max(...xs)-Math.min(...xs),h:Math.max(...ys)-Math.min(...ys)}};
+    const cent=pts=>({x:pts.reduce((a,p)=>a+p.x,0)/pts.length,y:pts.reduce((a,p)=>a+p.y,0)/pts.length});
+    const shots=['lumiA','lumiB','lumiC','lumiD','lumiE'];
+    let html='';
+    faces.forEach((pts,i)=>{
+      const d=pathOf(pts),cid=pid+'_fr'+i;
+      html+='<defs><clipPath id="'+cid+'"><path d="'+d+'"/></clipPath></defs>';
+      if(i<filled){
+        const bb=bbox(pts);
+        html+='<image x="'+bb.x+'" y="'+bb.y+'" width="'+bb.w+'" height="'+bb.h+'" preserveAspectRatio="xMidYMid slice" clip-path="url(#'+cid+')" href="https://picsum.photos/seed/'+shots[i]+'/'+Math.round(bb.w*3)+'/'+Math.round(bb.h*3)+'"/>';
+        html+='<path d="'+d+'" fill="none" stroke="rgba(201,169,110,.78)" stroke-width="1.6" stroke-linejoin="round"/>';
+      }else{
+        const c=cent(pts);
+        html+='<path d="'+d+'" fill="rgba(246,241,232,.72)" stroke="rgba(201,169,110,.82)" stroke-width="1.5" stroke-dasharray="5 4"/>';
+        html+='<text x="'+c.x+'" y="'+(c.y-4)+'" text-anchor="middle" style="font-size:9px;fill:#9C9180;letter-spacing:1px">+ 待拼</text>';
+      }
+    });
+    return html;
+  }
+
+  const progBar=n=>{let h='';for(let i=0;i<total;i++)h+='<i'+(i<n?' class="on"':'')+'></i>';return h;};
+  const brand=(light)=>(light? '<div class="brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>'
+                          : '<div class="top"><div class="brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div></div>');
+
+  function poster(L){
+    const p=document.createElement('div');p.className='poster '+L;
+    const svgInner='<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="overflow:visible">'+fragBoardSVG(L+'_'+filled)+'</svg>';
+
+    if(L==='A'){
+      p.innerHTML=
+        '<span class="hairline"></span>'+
+        '<div class="pad">'+
+          '<div class="brand"><span class="en">LUMIRA</span><span class="zh">如画</span>'+
+            '<span style="margin-left:auto" class="seal">拼碎片</span></div>'+
+          '<div class="kicker">FRAGMENTS · 光影碎片集</div>'+
+          '<div class="ttl serif">光，正<em>一片片</em>归位</div>'+
+          '<div class="poem">天空被切开，光漏了下来。<br>每一缕，都曾在某个黄昏被你留住。</div>'+
+          '<div class="boardbox board">'+svgInner+'</div>'+
+          '<div class="prog"><div class="big">'+filled+'<small> / '+total+'</small></div>'+
+            '<div class="pmeta"><div class="pbar">'+progBar(filled)+'</div>'+
+            '<div class="ptext">还差 '+(total-filled)+' 缕 · 一起凑齐一束光</div></div>'+
+        '</div>';
+    }
+    else if(L==='B'){
+      p.innerHTML=
+        '<span class="hairline"></span>'+
+        '<div class="box">'+
+          '<div class="brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>'+
+          '<div class="kicker">光影碎片集</div>'+
+          '<div class="ttl serif">光，正<em>一片片</em>归位</div>'+
+          '<div class="goldline"></div>'+
+          '<div class="boardbox board">'+svgInner+'</div>'+
+          '<div class="quote"><span class="q">“</span>天空被切开，光漏了下来。<br>每一缕，都是我和你抄下的黄昏。<span class="q">”</span></div>'+
+          '<div class="prog"><div class="plabel">已 <b>'+filled+'</b> / '+total+' · 还差 <b>'+('0'+(total-filled))+'</b> 缕点亮完整</div>'+
+            '<div class="pbar">'+progBar(filled)+'</div></div>'+
+          '<div class="motto">如 画 · 记 录 每 一 帧 光 影</div>'+
+        '</div>';
+    }
+    else if(L==='C'){
+      p.innerHTML=
+        '<div class="fullsvg"><svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="width:100%;height:100%;display:block;overflow:visible">'+fragBoardSVG(L+'_'+filled)+'</svg></div>'+
+        '<div class="shade"></div>'+
+        '<div class="top"><div class="brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div><span class="cs">拼碎片</span></div>'+
+        '<div class="btm">'+
+          '<div class="kicker">光影碎片集 · FRAGMENTS</div>'+
+          '<div class="ttl serif">光，正<em>一片片</em>归位</div>'+
+          '<div class="poem">天空被切开，光漏了下来。每一缕，都曾在你掌心停过。</div>'+
+          '<div class="goldline"></div>'+
+          '<div class="prog"><div class="big">'+filled+'<small> / '+total+'</small></div>'+
+            '<div class="pmeta"><div class="pbar">'+progBar(filled)+'</div>'+
+            '<div class="ptext">还差 '+(total-filled)+' 缕 · 一起凑齐一束光</div></div>'+
+        '</div>';
+    }
+    return p;
+  }
+
+  function branch(label,post){const c=document.createElement('div');c.className='branch';const s=document.createElement('span');s.textContent=label;c.appendChild(s);c.appendChild(post);wrap.appendChild(c);}
+  branch('① 上情绪标题 · 中拼板 · 下进度横条', poster('A'));
+  branch('② 居中留白 · 情绪金句 · 极简进度', poster('B'));
+  branch('③ 暗底大牌 · 拼板铺展 · 光从暗里来', poster('C'));
+</script>
+</body>
+</html>
