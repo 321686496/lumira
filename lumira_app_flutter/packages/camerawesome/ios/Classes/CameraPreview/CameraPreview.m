@@ -25,6 +25,12 @@ static WbResidual WbResidualIdentity = { 1.0f, 1.0f, 1.0f };
   // 供 restoreAutoWhiteBalance 跳过「拍照后恢复自动白平衡」。
   WbResidual _wbResidual;
   BOOL _wbManuallyLocked;
+  // 全局色调映射翻转后的会话重启：串行后台队列 + 去抖 timer。
+  // stopRunning/startRunning 是阻塞调用（0.1~0.3s），不能在主线程
+  // （method channel / sample buffer 回调线程）执行，否则拖动白平衡
+  // 滑杆跨极端档阈值时取景器与 UI 一起冻结；去抖合并拖动中的连续翻转。
+  dispatch_queue_t _toneRestartQueue;
+  dispatch_source_t _toneRestartSource;
 }
 
 - (instancetype)initWithCameraSensor:(CameraSensor)sensor
@@ -41,6 +47,21 @@ static WbResidual WbResidualIdentity = { 1.0f, 1.0f, 1.0f };
   _dispatchQueue = dispatchQueue;
   _wbResidual = WbResidualIdentity;
   _wbManuallyLocked = NO;
+
+  // 全局色调映射翻转后的去抖会话重启（见 restartSessionForToneMappingFlip）。
+  _toneRestartQueue = dispatch_queue_create("lumira.wb.tone-restart", DISPATCH_QUEUE_SERIAL);
+  _toneRestartSource = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, _toneRestartQueue);
+  __weak typeof(self) weakSelf = self;
+  dispatch_source_set_event_handler(_toneRestartSource, ^{
+    __strong typeof(weakSelf) self = weakSelf;
+    if (self == nil) return;
+    // 去抖期间会话可能已被外部 stop（离开拍摄页），此时无需重启
+    if (!self->_captureSession.isRunning) return;
+    NSLog(@"[WB] restarting capture session to engage global tone mapping");
+    [self->_captureSession stopRunning];
+    [self->_captureSession startRunning];
+  });
+  dispatch_resume(_toneRestartSource);
 
   // 取景器逐帧效果处理器（锐化/磨皮/暗角/颗粒 + 全屏均匀色矩阵）。
   _previewEffectProcessor = [[PreviewEffectProcessor alloc] init];
@@ -188,6 +209,9 @@ static WbResidual WbResidualIdentity = { 1.0f, 1.0f, 1.0f };
 }
 
 - (void)dealloc {
+  if (_toneRestartSource) {
+    dispatch_source_cancel(_toneRestartSource);
+  }
   if (_latestPixelBuffer) {
     CFRelease(_latestPixelBuffer);
   }
@@ -264,6 +288,10 @@ static WbResidual WbResidualIdentity = { 1.0f, 1.0f, 1.0f };
 - (void)stop {
   // 回到连续自动白平衡，避免异常拍摄残留的 Locked 旧增益影响下次预览
   [self restoreAutoWhiteBalance];
+  // 作废 pending 的去抖会话重启（见 restartSessionForToneMappingFlip）：
+  // 否则离开拍摄页后 timer 触发会把刚 stop 的会话重新拉起空跑耗电。
+  // 下次属性翻转时会重新 arm，行为不受影响。
+  dispatch_source_set_timer(_toneRestartSource, DISPATCH_TIME_FOREVER, 0, 0);
   [_captureSession stopRunning];
 }
 
@@ -414,7 +442,8 @@ static AVCaptureWhiteBalanceGains ClampExtremeWbGains(AVCaptureWhiteBalanceGains
 // startRunning 时全局映射才真正生效。表现为：退出 App 冷启动后首次把白平衡拉到
 // 极端档，取景器/成片中下部仍被局部色调映射的区域曲线中和掉冷调；而重进拍摄页
 // 或切前后摄后（设备属性跨会话保留、无需翻转）一切正常。修复：翻转发生且会话
-// 正在运行时 stopRunning+startRunning 重启会话，强制 ISP 重建渲染管线。
+// 正在运行时重启会话（去抖 + 后台队列，见 RestartSessionForToneMappingFlip），
+// 强制 ISP 重建渲染管线。
 static int SetWbGlobalToneMapping(AVCaptureDevice *device, BOOL global, BOOL *outFlipped) {
   if (outFlipped != NULL) *outFlipped = NO;
   if (@available(iOS 13.0, *)) {
@@ -521,7 +550,7 @@ static AVCaptureWhiteBalanceGains GainsForTemperatureWithResidual(CGFloat k,
   [_captureDevice unlockForConfiguration];
 
   // 色调映射在会话运行中翻转后不会即时传导到 ISP（见 SetWbGlobalToneMapping
-  // 注释），重启会话强制其以新属性值重建渲染管线。
+  // 注释），调度去抖重启让 ISP 以新属性值重建渲染管线。
   [self restartSessionForToneMappingFlip:toneFlipped];
 }
 
@@ -529,14 +558,24 @@ static AVCaptureWhiteBalanceGains GainsForTemperatureWithResidual(CGFloat k,
 /// 画面仍按旧模式渲染）。重启会话让 ISP 以翻转后的属性值重建管线——等价于
 /// 「以目标值启动会话」这一已被验证可行的路径（重进拍摄页/切换前后摄后全局
 /// 映射正常生效，正是因为那些路径下属性无需在运行中翻转）。仅在会话运行中
-/// 翻转时执行；未运行的会话会在 startRunning 时读取当前属性值，无需重启。
-/// 代价：滑杆跨过极端档阈值（3400K/7600K）时预览短暂停顿约 0.1~0.3 秒。
+/// 翻转时调度；未运行的会话会在 startRunning 时读取当前属性值，无需重启。
+///
+/// 调度方式（去抖 + 后台队列，修复拖动滑杆时取景器卡顿）：
+/// (1) stopRunning/startRunning 是阻塞调用（0.1~0.3s），绝不能在主线程执行——
+///     method channel 与 sample buffer 回调都在主线程，同步重启会让取景器
+///     帧投递与滑杆 UI 同时冻结；
+/// (2) 拖动中滑杆反复跨越极端档阈值（3400K/7600K）会连续翻转属性，每次都
+///     重启会让预览反复断流。dispatch_source timer 每次翻转重置 150ms 计时，
+///     合并为「最后一次翻转后仅重启一次」；重启执行时采样的是设备当前属性
+///     （最终值），正确性不受合并影响。
 - (void)restartSessionForToneMappingFlip:(BOOL)flipped {
   if (!flipped) return;
   if (!_captureSession.isRunning) return;
-  NSLog(@"[WB] tone mapping flipped mid-session; restarting capture session to engage ISP");
-  [_captureSession stopRunning];
-  [_captureSession startRunning];
+  NSLog(@"[WB] tone mapping flipped mid-session; scheduling debounced session restart");
+  dispatch_source_set_timer(
+      _toneRestartSource,
+      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
+      DISPATCH_TIME_FOREVER, 0);
 }
 
 /// 更新取景器逐帧效果参数（线程安全，可任意线程调用）。
