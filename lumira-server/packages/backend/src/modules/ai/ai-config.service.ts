@@ -21,6 +21,10 @@ export interface AiConfigView {
   textModel: string;
   /** 有效文本模型 = textModel || visionModel */
   effectiveTextModel: string;
+  /** 文本模态独立平台（null = 跟随共享平台） */
+  textPlatform: { provider: string; baseUrl: string; apiKeyMasked: string } | null;
+  /** 生图模态独立平台（null = 跟随共享平台） */
+  imagePlatform: { provider: string; baseUrl: string; apiKeyMasked: string } | null;
   enabled: boolean;
 }
 
@@ -74,6 +78,14 @@ export class AiConfigService {
       imageModel: row.imageModel,
       textModel: row.textModel ?? '',
       effectiveTextModel: row.textModel?.trim() ? row.textModel : row.visionModel,
+      textPlatform:
+        row.textProvider && row.textBaseUrl
+          ? { provider: row.textProvider, baseUrl: row.textBaseUrl, apiKeyMasked: maskKey(row.textApiKey ?? '') }
+          : null,
+      imagePlatform:
+        row.imageProvider && row.imageBaseUrl
+          ? { provider: row.imageProvider, baseUrl: row.imageBaseUrl, apiKeyMasked: maskKey(row.imageApiKey ?? '') }
+          : null,
       enabled: row.enabled === 1,
     };
   }
@@ -83,6 +95,43 @@ export class AiConfigService {
     const db = this.dbService.getDb();
     const now = Math.floor(Date.now() / 1000);
     const existing = await db.query.aiProviderConfig.findFirst();
+
+    // 文本模态独立平台组：textProvider 非空 = 启用（需 baseUrl + 独立文本模型 + apiKey）；空/缺省 = 清除（跟随共享平台）
+    let textProvider: string | null = null;
+    let textBaseUrl: string | null = null;
+    let textApiKey: string | null = null;
+    if (dto.textProvider?.trim()) {
+      if (!dto.textBaseUrl?.trim()) {
+        throw new BadRequestException('文本独立平台必须填写 baseUrl');
+      }
+      if (!(dto.textModel ?? '').trim()) {
+        throw new BadRequestException('文本使用独立平台时必须填写文本模型（无法回退视觉模型）');
+      }
+      const resolvedTextApiKey = dto.textApiKey?.trim() || existing?.textApiKey;
+      if (!resolvedTextApiKey) {
+        throw new BadRequestException('首次配置独立平台必须填写 API Key');
+      }
+      textProvider = dto.textProvider;
+      textBaseUrl = dto.textBaseUrl.trim();
+      textApiKey = resolvedTextApiKey;
+    }
+
+    // 生图模态独立平台组：语义同文本组（imageModel 为必填列，无需单独校验模型）
+    let imageProvider: string | null = null;
+    let imageBaseUrl: string | null = null;
+    let imageApiKey: string | null = null;
+    if (dto.imageProvider?.trim()) {
+      if (!dto.imageBaseUrl?.trim()) {
+        throw new BadRequestException('生图独立平台必须填写 baseUrl');
+      }
+      const resolvedImageApiKey = dto.imageApiKey?.trim() || existing?.imageApiKey;
+      if (!resolvedImageApiKey) {
+        throw new BadRequestException('首次配置独立平台必须填写 API Key');
+      }
+      imageProvider = dto.imageProvider;
+      imageBaseUrl = dto.imageBaseUrl.trim();
+      imageApiKey = resolvedImageApiKey;
+    }
 
     if (!existing) {
       if (!dto.apiKey) {
@@ -96,6 +145,12 @@ export class AiConfigService {
         visionModel: dto.visionModel,
         imageModel: dto.imageModel,
         textModel: dto.textModel ?? '',
+        textProvider,
+        textBaseUrl,
+        textApiKey,
+        imageProvider,
+        imageBaseUrl,
+        imageApiKey,
         enabled: dto.enabled ? 1 : 0,
         createdAt: now,
         updatedAt: now,
@@ -109,6 +164,12 @@ export class AiConfigService {
           visionModel: dto.visionModel,
           imageModel: dto.imageModel,
           textModel: dto.textModel ?? '',
+          textProvider,
+          textBaseUrl,
+          textApiKey,
+          imageProvider,
+          imageBaseUrl,
+          imageApiKey,
           enabled: dto.enabled ? 1 : 0,
           apiKey: dto.apiKey ? dto.apiKey : existing.apiKey, // 留空 = 不改
           updatedAt: now,

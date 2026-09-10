@@ -85,6 +85,8 @@ describe('AiConfigController (e2e)', () => {
     expect(res.body.imageModel).toBe('qwen-max');
     expect(res.body.textModel).toBe('');
     expect(res.body.effectiveTextModel).toBe('qwen-vl-max');
+    expect(res.body.textPlatform).toBe(null);
+    expect(res.body.imagePlatform).toBe(null);
     expect(res.body.enabled).toBe(true);
 
     const getRes = await request(app.getHttpServer())
@@ -120,6 +122,62 @@ describe('AiConfigController (e2e)', () => {
       .expect(200);
 
     expect(getRes.body.apiKeyMasked).toBe('sk-****89');
+  });
+
+  it('PUT /api/v1/admin/ai-config — 保存文本独立平台组 → GET 返回 textPlatform（apiKey 脱敏）', async () => {
+    await request(app.getHttpServer())
+      .put('/api/v1/admin/ai-config')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        provider: 'qwen',
+        baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        apiKey: '',
+        visionModel: 'qwen-vl-max',
+        imageModel: 'qwen-max',
+        enabled: true,
+        textModel: 'gpt-4o-mini',
+        textProvider: 'openai',
+        textBaseUrl: 'https://api.openai.com/v1',
+        textApiKey: 'sk-text-123456789',
+      })
+      .expect(200);
+
+    const getRes = await request(app.getHttpServer())
+      .get('/api/v1/admin/ai-config')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(getRes.body.textPlatform).toEqual({
+      provider: 'openai',
+      baseUrl: 'https://api.openai.com/v1',
+      apiKeyMasked: 'sk-****89',
+    });
+    expect(getRes.body.imagePlatform).toBe(null);
+    // 独立平台不影响共享配置
+    expect(getRes.body.apiKeyMasked).toBe('sk-****89');
+  });
+
+  it('PUT /api/v1/admin/ai-config — 不带独立平台字段再保存 → 覆盖组清除（GET 返回 null）', async () => {
+    await request(app.getHttpServer())
+      .put('/api/v1/admin/ai-config')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        provider: 'qwen',
+        baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        apiKey: '',
+        visionModel: 'qwen-vl-max',
+        imageModel: 'qwen-max',
+        enabled: true,
+      })
+      .expect(200);
+
+    const getRes = await request(app.getHttpServer())
+      .get('/api/v1/admin/ai-config')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(getRes.body.textPlatform).toBe(null);
+    expect(getRes.body.imagePlatform).toBe(null);
   });
 
   it('POST /api/v1/admin/ai-config/test — 未启用时返回 503 并提示到「AI 设置」', async () => {
