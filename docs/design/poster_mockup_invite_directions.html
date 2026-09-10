@@ -3,9 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>如画 LUMIRA · 邀请海报方向选板</title>
+<title>如画 LUMIRA · 邀请海报选板（图作装饰·文字为主）</title>
 <style>
-  /* 品牌语言统一（发布） */
   :root{
     --surface:#FDFBF7; --surfaceAlt:#ECE6DA;
     --gold:#C9A96E; --goldDeep:#B08D4F; --goldSoft:#E8CFA4;
@@ -17,11 +16,11 @@
   body{min-height:100vh; background:linear-gradient(180deg,#EDE8DE,#E4DFD3);
     padding:44px 20px 60px; font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif; -webkit-font-smoothing:antialiased;}
   h1{text-align:center; font-size:18px; color:#4A4238; letter-spacing:4px; font-weight:600;}
-  .lead{text-align:center; font-size:12px; color:#8A8478; letter-spacing:1.5px; margin:10px auto 40px; line-height:1.9; max-width:720px;}
+  .lead{text-align:center; font-size:12px; color:#8A8478; letter-spacing:1.5px; margin:10px auto 40px; line-height:1.9; max-width:760px;}
+  .lead b{color:#4A4238;}
 
   .rack{display:flex; gap:26px; justify-content:center; align-items:flex-start; flex-wrap:wrap;}
 
-  /* 缩略卡：真实 300x533 @ 0.6 */
   .slot{width:200px; display:flex; flex-direction:column; align-items:center;}
   .holder{width:180px; height:320px; border-radius:12px; overflow:hidden;
     box-shadow:0 26px 50px -30px rgba(86,56,38,.6);}
@@ -30,348 +29,244 @@
   .label b{font-size:15px; color:#4A4238; letter-spacing:2px; font-weight:700;}
   .label p{font-size:11px; color:#8A8478; letter-spacing:1px; margin-top:6px; line-height:1.7;}
 
-  /* ============ 卡片共通底 ============ */
   .poster{background:var(--surface); display:flex; flex-direction:column;
     overflow:hidden; border-radius:18px; border:1px solid var(--line);}
 
-  /* ================= 方向 A：极简大字 ================= */
-  .a{ padding:34px 32px 26px;}
-  .a .brand{display:flex; align-items:baseline;}
-  .a .brand .zh{font-family:var(--serif); font-size:12px; font-weight:700; letter-spacing:4px; color:var(--ink);}
-  .a .brand .en{margin-left:8px; font-family:Georgia,serif; font-size:7.5px; letter-spacing:3px; color:var(--goldDeep);}
-  .a .title{margin-top:52px;}
-  .a .title .l{font-family:var(--serif); font-size:40px; font-weight:700; letter-spacing:2px; line-height:1.22; color:var(--ink);}
+  /* ===== 顶部装饰带（图片只作氛围，占约 1/4，不上主体文字） ===== */
+  .band{flex:none; position:relative; width:100%; height:150px; overflow:hidden; background:#E9E2D6;}
+  .band img{width:100%; height:100%; object-fit:cover; display:block;}
+  .band::after{content:""; position:absolute; inset:0;
+    background:linear-gradient(180deg,rgba(8,5,2,0) 45%,rgba(253,251,247,.98));}
+  .band .brandmark{position:absolute; left:16px; top:14px; z-index:2;
+    display:flex; align-items:baseline;}
+  .band .brandmark .en{font-family:Georgia,serif; font-size:8px; letter-spacing:3px; color:#F5EFE4; font-weight:600; text-shadow:0 1px 6px rgba(0,0,0,.25);}
+  .band .brandmark .zh{margin-left:8px; font-family:var(--serif); font-size:10px; font-weight:700; letter-spacing:4px; color:#fff; text-shadow:0 1px 6px rgba(0,0,0,.25);}
+
+  .content{flex:1; min-height:0; display:flex; flex-direction:column; padding:20px 28px 18px;}
+
+  .spacer{flex:1 1 auto;}
+
+  /* 奖励+二维码行动行（所有方向统一） */
+  .money{margin-top:14px; display:flex; align-items:center; justify-content:space-between;
+    padding-top:12px; border-top:1px solid var(--line); flex:none;}
+  .money .cap{font-size:7px; letter-spacing:3px; color:var(--goldDeep); font-weight:600;}
+  .money .numrow{display:flex; align-items:baseline; gap:2px; margin-top:2px;}
+  .money .plus{font-family:Georgia,serif; font-size:11px; color:var(--goldDeep); font-weight:700;}
+  .money .num{font-family:Georgia,serif; font-size:24px; color:var(--goldDeep); font-weight:700;}
+  .money .unit{font-size:8.5px; color:var(--text2); letter-spacing:1px; font-weight:600;}
+  .money .r{display:flex; align-items:center; gap:8px;}
+  .money .r .c{display:flex; flex-direction:column; align-items:center; gap:2px;}
+  .money .r .c .code{font-family:Georgia,serif; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--ink);}
+  .money .r .c .hint{font-size:6.5px; letter-spacing:1.5px; color:var(--text3);}
+  .money .r .qr{width:46px; height:46px; padding:4px; background:#fff; border:1px solid var(--line); border-radius:7px;}
+  .money .r .qr img{width:100%; height:100%;}
+
+  /* ================= 方向 A：大字 sologan（文字最大） ================= */
+  .a .title{margin-top:30px; flex:none;}
+  .a .title .l{font-family:var(--serif); font-size:42px; font-weight:700; letter-spacing:3px; line-height:1.18; color:var(--ink);}
   .a .title .l em{font-style:normal; color:var(--goldDeep);}
-  .a .title .l2{margin-top:4px; font-family:var(--serif); font-size:40px; font-weight:700; letter-spacing:2px; line-height:1.22;}
-  .a .pains{margin-top:30px;}
-  .a .pains .p{font-size:10px; letter-spacing:1.5px; color:var(--text2); line-height:1.9;}
-  .a .pains .p b{font-family:var(--serif); color:var(--ink);}
-  .a .spacer{flex:1;}
-  .a .action{display:flex; align-items:center; gap:14px; padding-top:16px; border-top:1px solid var(--line);}
-  .a .action .l{flex:1;}
-  .a .action .cap{font-size:7px; letter-spacing:3px; color:var(--goldDeep); font-weight:600;}
-  .a .action .numrow{display:flex; align-items:baseline; gap:2px; margin-top:2px;}
-  .a .action .plus{font-family:Georgia,serif; font-size:11px; color:var(--goldDeep); font-weight:700;}
-  .a .action .num{font-family:Georgia,serif; font-size:22px; color:var(--goldDeep); font-weight:700;}
-  .a .action .unit{font-size:8.5px; color:var(--text2); letter-spacing:1px; font-weight:600;}
-  .a .r{display:flex; flex-direction:column; align-items:center; gap:2px;}
-  .a .qr{width:44px; height:44px; padding:3px; background:#fff; border:1px solid var(--line); border-radius:7px;}
-  .a .qr img{width:100%; height:100%;}
-  .a .code{font-family:Georgia,serif; font-size:10px; font-weight:700; letter-spacing:2px; color:var(--ink);}
-  .a .hint{font-size:6px; letter-spacing:1px; color:var(--text3);}
+  .a .title .l2{margin-top:2px; font-family:var(--serif); font-size:42px; font-weight:700; letter-spacing:3px; line-height:1.18;}
+  .a .pains{flex:none;}
+  .a .pains .p{font-size:11px; letter-spacing:1.5px; color:var(--text2); line-height:1.9;}
+  .a .pains .p b{font-family:var(--serif); color:var(--ink); font-weight:700; font-size:12px;}
 
-  /* ================= 方向 B：上图下净白 ================= */
-  .b .photo{flex:none; width:100%; height:280px;}
-  .b .photo img{width:100%; height:100%; object-fit:cover;}
-  .b .content{flex:1; display:flex; flex-direction:column; padding:24px 28px 18px;}
-  .b .brand{display:flex; align-items:baseline;}
-  .b .brand .zh{font-family:var(--serif); font-size:11px; font-weight:700; letter-spacing:4px; color:var(--ink);}
-  .b .brand .en{margin-left:8px; font-family:Georgia,serif; font-size:7px; letter-spacing:3px; color:var(--goldDeep);}
-  .b .title{margin-top:16px;}
-  .b .title .l{font-family:var(--serif); font-size:30px; font-weight:700; letter-spacing:2px; line-height:1.22; color:var(--ink);}
+  /* ================= 方向 B：痛点居中收拢 + 大字标题 ================= */
+  .b .title{margin-top:28px; flex:none;}
+  .b .title .l{font-family:var(--serif); font-size:30px; font-weight:700; letter-spacing:2px; line-height:1.25; color:var(--ink);}
   .b .title .l em{font-style:normal; color:var(--goldDeep);}
-  .b .title .l2{margin-top:2px; font-family:var(--serif); font-size:30px; font-weight:700; letter-spacing:2px; line-height:1.22;}
-  .b .pains{margin-top:14px;}
-  .b .pains .p{font-size:10px; letter-spacing:1.4px; color:var(--text2); line-height:1.7;}
-  .b .pains .p b{font-family:var(--serif); color:var(--ink);}
-  .b .spacer{flex:1;}
-  .b .action{border-top:1px solid var(--line); padding-top:14px; display:flex; align-items:center; gap:14px;}
-  .b .action .l{flex:1;}
-  .b .action .cap{font-size:7px; letter-spacing:3px; color:var(--goldDeep); font-weight:600;}
-  .b .action .numrow{display:flex; align-items:baseline; gap:2px; margin-top:2px;}
-  .b .action .plus{font-family:Georgia,serif; font-size:11px; color:var(--goldDeep); font-weight:700;}
-  .b .action .num{font-family:Georgia,serif; font-size:22px; color:var(--goldDeep); font-weight:700;}
-  .b .action .unit{font-size:8.5px; color:var(--text2); letter-spacing:1px; font-weight:600;}
-  .b .r{display:flex; flex-direction:column; align-items:center; gap:2px;}
-  .b .qr{width:44px; height:44px; padding:3px; background:#fff; border:1px solid var(--line); border-radius:7px;}
-  .b .qr img{width:100%; height:100%;}
-  .b .code{font-family:Georgia,serif; font-size:10px; font-weight:700; letter-spacing:2px; color:var(--ink);}
-  .b .hint{font-size:6px; letter-spacing:1px; color:var(--text3);}
+  .b .pains{margin-top:16px; flex:none; display:flex; flex-direction:column; gap:9px;}
+  .b .p{display:flex; align-items:center; gap:10px;}
+  .b .p i{flex:none; width:6px; height:6px; border-radius:50%; background:var(--gold);}
+  .b .p span{font-size:11px; letter-spacing:1.5px; color:var(--ink);}
+  .b .p span b{font-family:var(--serif); font-weight:700; color:var(--goldDeep);}
+  .b .p .sub{display:block; font-size:9px; color:var(--text3); letter-spacing:1px; margin-top:2px;}
 
-  /* ================= 方向 C：杂志错位编辑 ================= */
-  .c{ position:relative; padding:34px 30px 26px;}
-  .c .brand{display:flex; align-items:baseline; justify-content:space-between;}
-  .c .brand .zh{font-family:var(--serif); font-size:11px; font-weight:700; letter-spacing:4px; color:var(--ink);}
-  .c .brand .en{font-family:Georgia,serif; font-size:7px; letter-spacing:3px; color:var(--goldDeep);}
-  .c .pains{margin-top:26px;}
-  .c .pains .p{font-size:9px; letter-spacing:2px; color:var(--text3); line-height:2;}
-  .c .pains .p b{font-family:var(--serif); color:var(--ink); font-weight:700; font-size:10px;}
-  .c .big{margin-top:18px; position:relative;}
-  .c .big .kick{font-family:Georgia,serif; font-style:italic; font-size:8px; letter-spacing:3px; color:var(--goldDeep);}
-  .c .big .title{font-family:var(--serif); font-size:44px; font-weight:700; letter-spacing:2px; line-height:1.15; color:var(--ink); margin-top:6px;}
-  .c .big .title em{font-style:normal; color:var(--goldDeep);}
-  .c .spacer{flex:1;}
-  .c .quote{font-family:var(--serif); font-size:10px; font-weight:600; color:var(--text2); line-height:1.6;
-    border-left:2px solid var(--gold); padding-left:12px; margin-bottom:14px;}
-  .c .quote .author{display:block; font-family:"PingFang SC",sans-serif; font-size:9px; font-weight:500; color:var(--text3); margin-top:4px; letter-spacing:1px;}
-  .c .action{display:flex; align-items:center; gap:12px; padding-top:14px; border-top:1px solid var(--line);}
-  .c .action .l{flex:1;}
-  .c .action .cap{font-size:6.5px; letter-spacing:3px; color:var(--goldDeep); font-weight:600;}
-  .c .action .numrow{display:flex; align-items:baseline; gap:2px; margin-top:3px;}
-  .c .action .num{font-family:Georgia,serif; font-size:24px; color:var(--goldDeep); font-weight:700;}
-  .c .action .unit{font-size:8.5px; color:var(--text2); letter-spacing:1px; font-weight:600;}
-  .c .r{display:flex; flex-direction:column; align-items:center; gap:2px;}
-  .c .qr{width:44px; height:44px; padding:3px; background:#fff; border:1px solid var(--line); border-radius:7px;}
-  .c .qr img{width:100%; height:100%;}
-  .c .code{font-family:Georgia,serif; font-size:10px; font-weight:700; letter-spacing:2px; color:var(--ink);}
-  .c .hint{font-size:6px; letter-spacing:1px; color:var(--text3);}
+  /* ================= 方向 C：三痛点卡片式收拢（重点） ================= */
+  .c .title{margin-top:26px; flex:none;}
+  .c .title .l{font-family:var(--serif); font-size:28px; font-weight:700; letter-spacing:2px; line-height:1.28; color:var(--ink);}
+  .c .title .l em{font-style:normal; color:var(--goldDeep);}
+  .c .pains{margin-top:16px; flex:none; display:flex; flex-direction:column; gap:8px;}
+  .c .pill{display:flex; align-items:baseline; gap:10px; padding:9px 12px;
+    background:var(--surfaceAlt); border:1px solid var(--line); border-radius:10px;}
+  .c .pill .k{flex:none; font-family:var(--serif); font-size:12px; font-weight:700; color:var(--goldDeep); letter-spacing:1px;}
+  .c .pill span{font-size:10.5px; letter-spacing:1px; color:var(--ink);}
+  .c .pill span b{font-family:var(--serif); font-weight:700;}
 
-  /* ================= 方向 D：拍立得胶片 ================= */
-  .d{padding:16px 16px 24px;}
-  .d .top{display:flex; align-items:baseline; padding:0 4px 10px;}
-  .d .top .zh{font-family:var(--serif); font-size:11px; font-weight:700; letter-spacing:4px; color:var(--ink);}
-  .d .top .en{margin-left:8px; font-family:Georgia,serif; font-size:7px; letter-spacing:3px; color:var(--goldDeep);}
-  .d .top .tag{margin-left:auto; font-family:Georgia,serif; font-style:italic; font-size:7px; color:var(--text3); letter-spacing:2px;}
-  .d .pic{position:relative; width:100%; height:380px; overflow:hidden; border-radius:12px; background:#E9E2D6;}
-  .d .pic img{width:100%; height:100%; object-fit:cover;}
-  .d .pic::after{content:""; position:absolute; inset:0;
-    background:linear-gradient(180deg,rgba(8,5,2,0) 55%,rgba(8,5,2,.28));}
-  .d .cap{position:absolute; left:14px; bottom:12px; z-index:2;
-    font-family:var(--serif); font-size:10px; letter-spacing:2px; color:#fff; font-weight:600;}
-  .d .pad{margin-top:14px; padding:0 6px;}
-  .d .title{font-family:var(--serif); font-size:15px; font-weight:700; letter-spacing:1px; color:var(--ink); line-height:1.5;}
-  .d .title em{font-style:normal; color:var(--goldDeep);}
-  .d .sub{margin-top:8px; display:flex; align-items:flex-end; justify-content:space-between;}
-  .d .sub .p{font-size:7.5px; letter-spacing:1px; color:var(--text2); line-height:1.6;}
-  .d .sub .p b{font-family:var(--serif); color:var(--ink); font-weight:700;}
-  .d .sub .r{display:flex; align-items:center; gap:7px;}
-  .d .sub .r .qr{width:38px; height:38px; padding:3px; background:#fff; border:1px solid var(--line); border-radius:6px;}
-  .d .sub .r .qr img{width:100%; height:100%;}
-  .d .sub .r .c{display:flex; flex-direction:column; align-items:center; gap:1px;}
-  .d .sub .r .c .code{font-family:Georgia,serif; font-size:9px; font-weight:700; letter-spacing:1.5px; color:var(--ink);}
-  .d .sub .r .c .hint{font-size:5.5px; letter-spacing:1px; color:var(--text3);}
+  /* ================= 方向 D：左标题 + 右侧痛点代号（双栏文字） ================= */
+  .d .cols{margin-top:28px; display:flex; gap:22px; flex:1; flex:none;}
+  .d .left{flex:1.1; display:flex; flex-direction:column;}
+  .d .left .title{font-family:var(--serif); font-size:32px; font-weight:700; letter-spacing:2px; line-height:1.25; color:var(--ink);}
+  .d .left .title em{font-style:normal; color:var(--goldDeep);}
+  .d .left .rule{width:36px; height:1px; background:var(--gold); margin:16px 0;}
+  .d .right{flex:1; display:flex; flex-direction:column; gap:8px; padding-left:16px; border-left:1px solid var(--line);}
+  .d .idx{font-family:Georgia,serif; font-size:9px; letter-spacing:2px; color:var(--goldDeep);}
+  .d .idx b{font-family:var(--serif); font-size:12px; letter-spacing:1px; color:var(--ink); font-weight:700;}
+  .d .idx span{display:block; font-size:9px; color:var(--text3); letter-spacing:1px;}
 
-  /* ================= 方向 E：竖排书卷 ================= */
-  .e{padding:30px 26px 24px; position:relative;}
-  .e .brand{display:flex; align-items:baseline;}
-  .e .brand .en{font-family:Georgia,serif; font-size:7px; letter-spacing:3px; color:var(--goldDeep);}
-  .e .brand .zh{margin-left:8px; font-family:var(--serif); font-size:11px; font-weight:700; letter-spacing:4px; color:var(--ink);}
-  .e .body{margin-top:34px; display:flex; gap:18px;}
-  .e .side{display:flex; flex-direction:column; flex:1;}
-  .e .side .kick{font-family:Georgia,serif; font-style:italic; font-size:7px; letter-spacing:3px; color:var(--goldDeep);}
-  .e .side .line{width:1px; flex:1; background:var(--line); margin:10px 0;}
-  .e .side .p{font-size:7.5px; letter-spacing:1px; color:var(--text2); line-height:1.9;}
-  .e .side .p b{font-family:var(--serif); color:var(--ink); font-weight:700;}
-  .e .vt{margin-left:6px; font-family:var(--serif); font-weight:700; font-size:30px; line-height:1.28;
-    letter-spacing:6px; color:var(--ink); writing-mode:vertical-rl; text-orientation:upright;}
-  .e .vt em{font-style:normal; color:var(--goldDeep);}
-  .e .spacer{flex:1;}
-  .e .foot{margin-top:26px; display:flex; align-items:flex-end; justify-content:space-between; border-top:1px solid var(--line); padding-top:12px;}
-  .e .foot .l .cap{font-size:6.5px; letter-spacing:3px; color:var(--goldDeep); font-weight:600;}
-  .e .foot .l .numrow{display:flex; align-items:baseline; gap:2px; margin-top:2px;}
-  .e .foot .l .plus{font-family:Georgia,serif; font-size:10px; color:var(--goldDeep); font-weight:700;}
-  .e .foot .l .num{font-family:Georgia,serif; font-size:20px; color:var(--goldDeep); font-weight:700;}
-  .e .foot .l .unit{font-size:8px; color:var(--text2); letter-spacing:1px; font-weight:600;}
-  .e .foot .r{display:flex; align-items:center; gap:7px;}
-  .e .foot .r .qr{width:40px; height:40px; padding:3px; background:#fff; border:1px solid var(--line); border-radius:6px;}
-  .e .foot .r .qr img{width:100%; height:100%;}
-  .e .foot .r .c{display:flex; flex-direction:column; align-items:center; gap:1px;}
-  .e .foot .r .c .code{font-family:Georgia,serif; font-size:9px; font-weight:700; letter-spacing:1.5px; color:var(--ink);}
-  .e .foot .r .c .hint{font-size:5.5px; letter-spacing:1px; color:var(--text3);}
+  /* ================= 方向 E：书法大字 + 痛点一句（最经典） ================= */
+  .e .title{margin-top:34px; flex:none; text-align:center;}
+  .e .title .l{font-family:var(--serif); font-size:40px; font-weight:700; letter-spacing:8px; line-height:1.2; color:var(--ink);}
+  .e .title .l em{font-style:normal; color:var(--goldDeep);}
+  .e .pains{margin-top:18px; flex:none; text-align:center;}
+  .e .pains .p{display:inline-block; font-size:11px; letter-spacing:2px; color:var(--text2); line-height:2.1;}
+  .e .pains .p b{font-family:var(--serif); font-weight:700; color:var(--ink); font-size:12px;}
 
-  /* ================= 方向 F：大图解构（右侧竖条图 + 左侧文字） ================= */
-  .f{padding:26px 24px 22px;}
-  .f .brand{display:flex; align-items:baseline;}
-  .f .brand .zh{font-family:var(--serif); font-size:11px; font-weight:700; letter-spacing:4px; color:var(--ink);}
-  .f .brand .en{margin-left:8px; font-family:Georgia,serif; font-size:7px; letter-spacing:3px; color:var(--goldDeep);}
-  .f .cols{margin-top:22px; display:flex; gap:16px; flex:1;}
-  .f .left{display:flex; flex-direction:column; flex:1;}
-  .f .left .title{font-family:var(--serif); font-size:26px; font-weight:700; letter-spacing:1px; line-height:1.3; color:var(--ink);}
-  .f .left .title em{font-style:normal; color:var(--goldDeep);}
-  .f .left .rule{width:34px; height:1px; background:var(--gold); margin:14px 0; flex:none;}
-  .f .left .p{font-size:8px; letter-spacing:1px; color:var(--text2); line-height:2; flex:none;}
-  .f .left .p b{font-family:var(--serif); color:var(--ink); font-weight:700;}
-  .f .left .spacer{flex:1;}
-  .f .left .action{padding-top:12px; border-top:1px solid var(--line);}
-  .f .left .cap{font-size:6.5px; letter-spacing:3px; color:var(--goldDeep); font-weight:600;}
-  .f .left .numrow{display:flex; align-items:baseline; gap:2px; margin-top:3px;}
-  .f .left .num{font-family:Georgia,serif; font-size:22px; color:var(--goldDeep); font-weight:700;}
-  .f .left .unit{font-size:8.5px; color:var(--text2); letter-spacing:1px; font-weight:600;}
-  .f .right{flex:none; width:104px; position:relative; border-radius:10px; overflow:hidden;}
-  .f .right img{width:100%; height:100%; object-fit:cover; display:block;}
-  .f .right::after{content:""; position:absolute; inset:0;
-    background:linear-gradient(180deg,rgba(8,5,2,0) 55%,rgba(8,5,2,.26));}
-  .f .right .code{position:absolute; left:50%; bottom:12px; transform:translateX(-50%);
-    font-family:Georgia,serif; font-size:9px; font-weight:700; letter-spacing:2px; color:#fff; line-height:1.2;}
-  .f .foot{margin-top:16px; display:flex; align-items:baseline; border-top:1px solid var(--line); padding-top:10px;}
-  .f .foot .zh{font-family:var(--serif); font-size:9px; font-weight:600; letter-spacing:3px; color:var(--goldDeep);}
-  .f .foot .en{font-size:8px; color:var(--text3); margin-left:4px; letter-spacing:1.5px;}
-  .f .foot .slogan{margin-left:auto; font-size:7px; letter-spacing:1px; color:var(--text3);}
+  /* ================= 方向 F：文字上移 + 组合（店家卖点味最淡） ================= */
+  .f .title{margin-top:28px; flex:none;}
+  .f .title .l{font-family:var(--serif); font-size:34px; font-weight:700; letter-spacing:3px; line-height:1.2; color:var(--ink);}
+  .f .title .l em{font-style:normal; color:var(--goldDeep);}
+  .f .pains{margin-top:14px; flex:none;}
+  .f .pains .p{font-size:10.5px; letter-spacing:1.5px; color:var(--text2); line-height:1.9;}
+  .f .pains .p b{font-family:var(--serif); font-weight:700; color:var(--ink); font-size:11.5px;}
+
+  .foot{margin-top:10px; padding-top:8px; border-top:1px solid var(--line); display:flex; align-items:baseline; flex:none;}
+  .foot .zh{font-family:var(--serif); font-size:9px; font-weight:600; letter-spacing:3px; color:var(--goldDeep);}
+  .foot .en{font-size:8px; color:var(--text3); margin-left:4px; letter-spacing:1.5px;}
+  .foot .slogan{margin-left:auto; font-size:7px; letter-spacing:1px; color:var(--text3);}
 </style>
 </head>
 <body>
-  <h1>如画 · 邀请海报方向选板</h1>
-  <div class="lead">三个方向都保持暖白金线衬线品牌语言 · 只挑版式结构<br/>点你喜欢的方向说的感受，我再单独放大精修</div>
+  <h1>如画 · 邀请海报选板</h1>
+  <div class="lead">原则固定：<b>图片只作顶部装饰带（1/4）· 文字才是主体（3/4）</b><br/>标题 / 痛点 / 奖励 / 邀请码全部放大清晰呈现 · 六个方向只改文字区排版</div>
 
   <div class="rack">
 
     <!-- 方向 A -->
     <div class="slot">
       <div class="holder"><div class="poster a">
-        <div class="brand"><span class="zh">如 画</span><span class="en">LUMIRA</span></div>
-        <div class="title">
-          <div class="l">随手一拍，</div>
-          <div class="l2"><em>亦成作品</em>。</div>
+        <div class="band">
+          <div class="brandmark"><span class="en">LUMIRA</span><span class="zh">如 画</span></div>
+          <img src="https://picsum.photos/seed/lumira-band-a/600/300.jpg" alt=""/>
         </div>
-        <div class="pains">
-          <div class="p">不<b>调参数</b> · 不<b>会构图</b> · 不<b>会摆姿</b>，套模板就出片</div>
-        </div>
-        <div class="spacer"></div>
-        <div class="action">
-          <div class="l">
-            <div class="cap">新人礼</div>
-            <div class="numrow"><span class="plus">+</span><span class="num">30</span><span class="unit">积分·双方同得</span></div>
-          </div>
-          <div class="r">
-            <div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=K2A9XQ&margin=0" crossorigin="anonymous"/></div>
-            <div class="code">K2A9XQ</div>
-            <div class="hint">长按识别</div>
+        <div class="content">
+          <div class="title"><div class="l">随手一拍，</div><div class="l2"><em>亦成作品</em>。</div></div>
+          <div class="spacer"></div>
+          <div class="pains"><div class="p">不<b>调参数</b> · 不<b>会构图</b> · 不<b>会摆姿</b>，套模板就出片</div></div>
+          <div class="money">
+            <div><div class="cap">新人礼</div><div class="numrow"><span class="plus">+</span><span class="num">30</span><span class="unit">积分 双方同得</span></div></div>
+            <div class="r"><div class="c"><div class="code">K2A9XQ</div><div class="hint">长按识别加入</div></div><div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=K2A9XQ&margin=0" crossorigin="anonymous"/></div></div>
           </div>
         </div>
       </div></div>
-      <div class="label"><b>方向 A · 极简大字</b><p>纯文字主导<br/>超大标题 + 大留白·像 Apple</p></div>
+      <div class="label"><b>A · 超大标语</b><p>文字区最干净<br/>slogan 最大最聚焦</p></div>
     </div>
 
     <!-- 方向 B -->
     <div class="slot">
       <div class="holder"><div class="poster b">
-        <div class="photo"><img src="https://picsum.photos/seed/lumira-hero-c/600/560.jpg" alt="作品"/></div>
+        <div class="band">
+          <div class="brandmark"><span class="en">LUMIRA</span><span class="zh">如 画</span></div>
+          <img src="https://picsum.photos/seed/lumira-band-b/600/300.jpg" alt=""/>
+        </div>
         <div class="content">
-          <div class="brand"><span class="zh">如 画</span><span class="en">LUMIRA</span></div>
-          <div class="title">
-            <div class="l">随手一拍，</div>
-            <div class="l2"><em>亦成作品</em></div>
+          <div class="title"><div class="l">随手一拍，<em>亦成作品</em></div></div>
+          <div class="pains">
+            <div class="p"><i></i><span><b>调参数</b>太麻烦<span class="sub">模板已替你调好</span></span></div>
+            <div class="p"><i></i><span><b>构图</b>学不会<span class="sub">打开即好看</span></span></div>
+            <div class="p"><i></i><span><b>摆姿势</b>不会<span class="sub">照着剪影就行</span></span></div>
           </div>
-          <div class="pains"><div class="p">不<b>调参</b>·不<b>构图</b>·不<b>摆姿</b>，套模板出片</div></div>
           <div class="spacer"></div>
-          <div class="action">
-            <div class="l">
-              <div class="cap">新人礼</div>
-              <div class="numrow"><span class="plus">+</span><span class="num">30</span><span class="unit">积分·双方同得</span></div>
-            </div>
-            <div class="r">
-              <div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=K2A9XQ&margin=0" crossorigin="anonymous"/></div>
-              <div class="code">K2A9XQ</div>
-              <div class="hint">长按识别</div>
-            </div>
+          <div class="money">
+            <div><div class="cap">新人礼</div><div class="numrow"><span class="plus">+</span><span class="num">30</span><span class="unit">积分 双方同得</span></div></div>
+            <div class="r"><div class="c"><div class="code">K2A9XQ</div><div class="hint">长按识别加入</div></div><div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=K2A9XQ&margin=0" crossorigin="anonymous"/></div></div>
           </div>
         </div>
       </div></div>
-      <div class="label"><b>方向 B · 上图下净白</b><p>顶图撑氛围<br/>下部极净白·杂志封面式</p></div>
+      <div class="label"><b>B · 痛点收拢</b><p>三大痛点列表<br/>每个带小注解释</p></div>
     </div>
 
     <!-- 方向 C -->
     <div class="slot">
       <div class="holder"><div class="poster c">
-        <div class="brand"><span class="zh">如 画</span><span class="en">LUMIRA</span><span class="en" style="margin-left:6px;">/ Invit</span></div>
-        <div class="pains">
-          <div class="p">不<b>调参数</b> 不<b>会构图</b> 不<b>会摆姿势</b></div>
+        <div class="band">
+          <div class="brandmark"><span class="en">LUMIRA</span><span class="zh">如 画</span></div>
+          <img src="https://picsum.photos/seed/lumira-band-c/600/300.jpg" alt=""/>
         </div>
-        <div class="big">
-          <div class="kick">shot &amp; share</div>
-          <div class="title">随手一拍<br/><em>亦成作品</em></div>
-        </div>
-        <div class="spacer"></div>
-        <div class="quote">「我用它拍出了最满意的照片」<span class="author">— @小满 · 邀你加入</span></div>
-        <div class="action">
-          <div class="l">
-            <div class="cap">新人礼</div>
-            <div class="numrow"><span class="num">+30</span><span class="unit">积分 双方同得</span></div>
+        <div class="content">
+          <div class="title"><div class="l">不调不学不摆，<em>照样出片</em></div></div>
+          <div class="pains">
+            <div class="pill"><span class="k">一</span><span>不<b>调参数</b> · 模板已调好</span></div>
+            <div class="pill"><span class="k">二</span><span>不<b>学构图</b> · 打开即好看</span></div>
+            <div class="pill"><span class="k">三</span><span>不<b>摆姿势</b> · 照着剪影</span></div>
           </div>
-          <div class="r">
-            <div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=K2A9XQ&margin=0" crossorigin="anonymous"/></div>
-            <div class="code">K2A9XQ</div>
-            <div class="hint">长按识别</div>
+          <div class="spacer"></div>
+          <div class="money">
+            <div><div class="cap">新人礼</div><div class="numrow"><span class="plus">+</span><span class="num">30</span><span class="unit">积分 双方同得</span></div></div>
+            <div class="r"><div class="c"><div class="code">K2A9XQ</div><div class="hint">长按识别加入</div></div><div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=K2A9XQ&margin=0" crossorigin="anonymous"/></div></div>
           </div>
         </div>
       </div></div>
-      <div class="label"><b>方向 C · 杂志错位编辑</b><p>非居中·字号强反差·有记忆点</p></div>
+      <div class="label"><b>C · 痛点卡片化</b><p>三条痛点卡片<br/>一二三排序·重点突出</p></div>
     </div>
 
     <!-- 方向 D -->
     <div class="slot">
       <div class="holder"><div class="poster d">
-        <div class="top">
-          <span class="zh">如 画</span><span class="en">LUMIRA</span>
-          <span class="tag">one shot · one frame</span>
+        <div class="band">
+          <div class="brandmark"><span class="en">LUMIRA</span><span class="zh">如 画</span></div>
+          <img src="https://picsum.photos/seed/lumira-band-d/600/300.jpg" alt=""/>
         </div>
-        <div class="pic">
-          <img src="https://picsum.photos/seed/lumira-polaroid-g/600/760.jpg" alt="作品"/>
-          <span class="cap">随手一拍 · 亦成作品</span>
-        </div>
-        <div class="pad">
-          <div class="title">不<b>调参数</b> · 不<b>会构图</b> · 不<b>会摆姿</b><br/>套上模板，<em>一按就出片</em></div>
-          <div class="sub">
-            <div class="p">新人礼 双方各 <b>+30</b> 积分<br/>可解锁付费模板</div>
-            <div class="r">
-              <div class="c">
-                <div class="code">K2A9XQ</div>
-                <div class="hint">长按识别加入</div>
-              </div>
-              <div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=K2A9XQ&margin=0" crossorigin="anonymous"/></div>
+        <div class="content">
+          <div class="cols">
+            <div class="left">
+              <div class="title">随手一拍<br/><em>亦成作品</em></div>
+              <div class="rule"></div>
+              <div style="font-size:10px;letter-spacing:1px;color:var(--text2);line-height:1.7;">套上模板·按下快门<br/>一键出片</div>
             </div>
+            <div class="right">
+              <div class="idx"><b>调参</b>太麻烦<span>模板替你搞定</span></div>
+              <div class="idx"><b>构图</b>不会<span>打开即好看</span></div>
+              <div class="idx"><b>摆姿</b>难题<span>照着剪影来</span></div>
+            </div>
+          </div>
+          <div class="spacer"></div>
+          <div class="money">
+            <div><div class="cap">新人礼</div><div class="numrow"><span class="plus">+</span><span class="num">30</span><span class="unit">积分 双方同得</span></div></div>
+            <div class="r"><div class="c"><div class="code">K2A9XQ</div><div class="hint">长按识别加入</div></div><div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=K2A9XQ&margin=0" crossorigin="anonymous"/></div></div>
           </div>
         </div>
       </div></div>
-      <div class="label"><b>方向 D · 拍立得胶片</b><p>照片大块 + 下摆白边<br/>生活感温度·不像广告</p></div>
+      <div class="label"><b>D · 双栏对照</b><p>左标题右痛点<br/>杂志对开编辑感</p></div>
     </div>
 
     <!-- 方向 E -->
     <div class="slot">
       <div class="holder"><div class="poster e">
-        <div class="brand"><span class="en">LUMIRA</span><span class="zh">如 画</span></div>
-        <div class="body">
-          <div class="side">
-            <div class="kick">the art of a moment</div>
-            <div class="line"></div>
-            <div class="p">不<b>调参数</b><br/>不<b>会构图</b><br/>不<b>会摆姿势</b><br/>也都能拍成作品</div>
-          </div>
-          <div class="vt">随手一拍<br/><em>亦成作品</em></div>
+        <div class="band">
+          <div class="brandmark"><span class="en">LUMIRA</span><span class="zh">如 画</span></div>
+          <img src="https://picsum.photos/seed/lumira-band-e/600/300.jpg" alt=""/>
         </div>
-        <div class="spacer"></div>
-        <div class="foot">
-          <div class="l">
-            <div class="cap">新人礼</div>
-            <div class="numrow"><span class="plus">+</span><span class="num">30</span><span class="unit">积分 双方同得</span></div>
-          </div>
-          <div class="r">
-            <div class="c">
-              <div class="code">K2A9XQ</div>
-              <div class="hint">扫码加入</div>
-            </div>
-            <div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=K2A9XQ&margin=0" crossorigin="anonymous"/></div>
+        <div class="content">
+          <div class="title"><div class="l">随手一拍</div><div class="l"><em>亦成作品</em></div></div>
+          <div class="pains"><div class="p"><b>调参数</b>·<b>构图</b>·<b>摆姿</b><br/>这些，交给我们</div></div>
+          <div class="spacer"></div>
+          <div class="money">
+            <div><div class="cap">新人礼</div><div class="numrow"><span class="plus">+</span><span class="num">30</span><span class="unit">积分 双方同得</span></div></div>
+            <div class="r"><div class="c"><div class="code">K2A9XQ</div><div class="hint">长按识别加入</div></div><div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=K2A9XQ&margin=0" crossorigin="anonymous"/></div></div>
           </div>
         </div>
       </div></div>
-      <div class="label"><b>方向 E · 竖排书卷</b><p>汉字纵向超大标题<br/>东方书店式美学·辨识度强</p></div>
+      <div class="label"><b>E · 书法大字</b><p>居中对齐书法标题<br/>最经典·最稳</p></div>
     </div>
 
     <!-- 方向 F -->
     <div class="slot">
       <div class="holder"><div class="poster f">
-        <div class="brand"><span class="zh">如 画</span><span class="en">LUMIRA</span></div>
-        <div class="cols">
-          <div class="left">
-            <div class="title">随手一拍<br/><em>亦成作品</em></div>
-            <div class="rule"></div>
-            <div class="p">不<b>调参数</b><br/>不<b>会构图</b><br/>不<b>会摆姿势</b><br/>套模板就出片</div>
-            <div class="spacer"></div>
-            <div class="action">
-              <div class="cap">新人礼</div>
-              <div class="numrow"><span class="num">+30</span><span class="unit">积分 双方同得</span></div>
-            </div>
-          </div>
-          <div class="right">
-            <img src="https://picsum.photos/seed/lumira-decon-g/208/520.jpg" alt="作品"/>
-            <span class="code">K2A9XQ</span>
-          </div>
+        <div class="band">
+          <div class="brandmark"><span class="en">LUMIRA</span><span class="zh">如 画</span></div>
+          <img src="https://picsum.photos/seed/lumira-band-f/600/300.jpg" alt=""/>
         </div>
-        <div class="foot">
-          <span class="zh">如 画</span><span class="en">LUMIRA</span>
-          <span class="slogan">如你所见，皆成画卷</span>
+        <div class="content">
+          <div class="title"><div class="l">不会拍？<em>也能出片</em></div></div>
+          <div class="pains"><div class="p">不<b>调参数</b> · 不<b>会构图</b> · 不<b>会摆姿势</b><br/>套上模板 · 按下快门 · 一键出片</div></div>
+          <div class="spacer"></div>
+          <div class="money">
+            <div><div class="cap">新人礼</div><div class="numrow"><span class="plus">+</span><span class="num">30</span><span class="unit">积分 双方同得</span></div></div>
+            <div class="r"><div class="c"><div class="code">K2A9XQ</div><div class="hint">长按识别加入</div></div><div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=K2A9XQ&margin=0" crossorigin="anonymous"/></div></div>
+          </div>
         </div>
       </div></div>
-      <div class="label"><b>方向 F · 大图解构</b><p>右侧竖条图 + 左侧文字<br/>杂志跨页对开·非处规</p></div>
+      <div class="label"><b>F · 直白卖点</b><p>痛点解法一句到底<br/>最直给简洁</p></div>
     </div>
 
   </div>
