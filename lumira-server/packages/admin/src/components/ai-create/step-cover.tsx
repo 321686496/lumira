@@ -61,11 +61,11 @@ export function StepCover({
 
   /** 生成同风格效果图（可多次点击重 roll；新生成图置顶） */
   const generate = async () => {
-    if (!exampleFile || !draft) return;
+    if (!draft) return;
     setGenerating(true);
     const fd = new FormData();
     fd.set('meta', JSON.stringify(draft));
-    fd.set('reference', exampleFile);
+    if (exampleFile) fd.set('reference', exampleFile);
     const result = await aiGenerateImageAction(fd);
     setGenerating(false);
     if ('error' in result) {
@@ -110,7 +110,7 @@ export function StepCover({
       <CardHeader>
         <CardTitle>选择封面</CardTitle>
         <CardDescription>
-          首图将作为封面与第一张效果图。可直接用示例图，或生成同风格效果图（可多次生成、可排序）。
+          首图将作为封面与第一张效果图。可用示例图作封面，或生成效果图（可多次生成、可排序）；无示例图时，效果图即为封面来源。
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -118,7 +118,7 @@ export function StepCover({
           <Button variant="outline" size="sm" disabled={!exampleFile || disabled} onClick={rollExampleToTop}>
             <ImageSquare size={14} className="mr-1" /> 用示例图（置顶）
           </Button>
-          <Button size="sm" disabled={!exampleFile || !draft || disabled} onClick={generate}>
+          <Button size="sm" disabled={!draft || disabled} onClick={generate}>
             <MagicWand size={14} className="mr-1" /> {generating ? '生成中…' : '生成效果图'}
           </Button>
         </div>

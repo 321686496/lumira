@@ -82,7 +82,9 @@ export function StepSilhouette({
             {([
               { key: 'cover', label: '封面图' },
               { key: 'example', label: '示例图' },
-            ] as const).map((opt) => (
+            ] as const)
+              .filter((opt) => opt.key !== 'example' || exampleFile !== null)
+              .map((opt) => (
               <button
                 key={opt.key}
                 type="button"
