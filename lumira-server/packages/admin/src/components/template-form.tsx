@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useEffect, useState, useTransition } from 'react';
+import { createPortal } from 'react-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -318,6 +319,8 @@ interface TemplateFormProps {
   aiInjection?: TemplateFormAiInjection | null;
   /** 向导模式：底部提交区渲染「上架 / 保存为未上架」双按钮 */
   wizardMode?: boolean;
+  /** 向导模式预览宿主节点：提供时预览面板经 portal 渲染到该节点（向导层 sticky 布局） */
+  previewPortalTarget?: HTMLElement | null;
 }
 
 export default function TemplateForm({
@@ -327,6 +330,7 @@ export default function TemplateForm({
   backendUrl = 'http://localhost:3000',
   aiInjection,
   wizardMode = false,
+  previewPortalTarget = null,
 }: TemplateFormProps) {
   const { toast } = useToast();
   const [step, setStep] = useState(0);
@@ -2059,8 +2063,8 @@ export default function TemplateForm({
         </form>
       </div>
 
-      <div className="hidden xl:block w-[300px] shrink-0">
-        <div className="sticky top-6 space-y-4">
+      {(() => {
+        const previewNode = (
           <div className="rounded-lg border border-border bg-card p-4">
             <h3 className="text-sm font-medium text-foreground mb-3">模板预览</h3>
             <PhonePreview
@@ -2097,8 +2101,17 @@ export default function TemplateForm({
               name={watchedValues.name}
             />
           </div>
-        </div>
-      </div>
+        );
+        // 向导模式 + 宿主就绪 → portal 到向导 sticky 面板（避免双预览）
+        if (wizardMode && previewPortalTarget) {
+          return createPortal(previewNode, previewPortalTarget);
+        }
+        return (
+          <div className="hidden xl:block w-[300px] shrink-0">
+            <div className="sticky top-6 space-y-4">{previewNode}</div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

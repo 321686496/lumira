@@ -6,7 +6,7 @@
 'use client';
 
 import * as React from 'react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import TemplateForm, { type TemplateFormAiInjection } from '@/components/template-form';
 import { Button } from '@/components/ui/button';
@@ -78,6 +78,18 @@ export function AiCreateWizard({
   const [autoState, setAutoState] = useState<{ running: boolean; stage: AutoStage; error?: string } | null>(null);
   const stampRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /** 预览宿主（TemplateForm portal 目标）与 xl 断点（决定宿主位置：右栏 sticky / stepper 下方） */
+  const [previewHost, setPreviewHost] = useState<HTMLDivElement | null>(null);
+  const [isXl, setIsXl] = useState(true);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1280px)');
+    const update = () => setIsXl(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
 
   const busy = analyzing || Boolean(autoState?.running);
   const hasInput = Boolean(exampleFile) || inputText.trim() !== '';
@@ -258,230 +270,258 @@ export function AiCreateWizard({
 
   const stageIndex = autoState ? AUTO_STAGES.indexOf(autoState.stage) : -1;
 
+  /** 常驻预览面板：识别前占位，识别后由 TemplateForm portal 填充宿主 */
+  const previewPanel = (
+    <div className="rounded-lg border border-border bg-card p-4">
+      <h3 className="text-sm font-medium text-foreground mb-3">实时预览</h3>
+      {!formActivated ? (
+        <div className="flex h-[480px] items-center justify-center rounded-md border border-dashed border-border px-4 text-center text-sm text-muted-foreground">
+          识别完成后此处实时预览参数、姿势与封面效果
+        </div>
+      ) : (
+        <div ref={setPreviewHost} />
+      )}
+    </div>
+  );
+
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">AI 一键建模</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          上传一张示例图，AI 自动识别风格 / 分类 / 相机与后期参数生成模板草稿，并可生成封面效果图与姿势剪影。
-        </p>
-      </div>
-
-      {/* 顶部 stepper */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        {WIZARD_STEPS.map((s, i) => (
-          <div key={s.n} className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              disabled={busy || s.n > maxStep}
-              onClick={() => setStep(s.n)}
-              className={cn(
-                'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
-                s.n === step
-                  ? 'bg-primary text-primary-foreground'
-                  : s.n < step || s.n <= maxStep
-                    ? 'bg-primary/10 text-primary'
-                    : 'bg-muted text-muted-foreground',
-              )}
-            >
-              <span className="flex h-5 w-5 items-center justify-center rounded-full border border-current text-[10px]">
-                {s.n < step ? <Check size={10} /> : s.n}
-              </span>
-              <span className="font-medium">{s.title}</span>
-            </button>
-            {i < WIZARD_STEPS.length - 1 && <span className="text-muted-foreground/50">→</span>}
-          </div>
-        ))}
-      </div>
-
-      {/* 全自动进度 / 失败提示 */}
-      {autoState?.running && (
-        <div className="rounded-md border border-primary/40 bg-primary/5 p-4">
-          <div className="flex items-center gap-2 text-sm font-medium text-primary">
-            <MagicWand size={16} /> 全自动进行中：{AUTO_STAGE_TEXT[autoState.stage]}
-          </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-primary/20">
-            <div
-              className="h-full bg-primary transition-all"
-              style={{ width: `${((stageIndex + 1) / AUTO_STAGES.length) * 100}%` }}
-            />
-          </div>
+    <div className="flex flex-col gap-4 xl:flex-row">
+      {/* 左列：向导主体 */}
+      <div className="min-w-0 flex-1 space-y-4">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">AI 一键建模</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            上传一张示例图，AI 自动识别风格 / 分类 / 相机与后期参数生成模板草稿，并可生成封面效果图与姿势剪影。
+          </p>
         </div>
-      )}
-      {autoState && !autoState.running && autoState.error && (
-        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-          全自动在「{AUTO_STAGE_TEXT[autoState.stage]}」阶段失败：{autoState.error}
-          。已停在当前步骤，可人工继续或调整后重试，已生成的草稿 / 封面已保留。
-        </div>
-      )}
 
-      {/* Step1 上传示例图 */}
-      {step === 1 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>上传示例图</CardTitle>
-            <CardDescription>jpg / png / webp，≤ 8MB；上传后自动压缩（服务端请求体限制）。</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={handleExamplePick}
-            />
-            <div className="rounded-lg border border-dashed border-border p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-foreground">示例图（可选，该风格的成片参考）</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    AI 将分析画面中的风格 / 构图 / 光线 / 主体，生成可上线的模板表单草稿
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Upload size={14} className="mr-1" /> {exampleFile ? '重新选择' : '选择图片'}
-                </Button>
-              </div>
-              {exampleUrl && (
-                <div className="mt-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={exampleUrl}
-                    alt="示例图预览"
-                    className="max-h-72 rounded-md border border-border object-contain"
-                  />
-                </div>
-              )}
+        {/* 顶部 stepper */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          {WIZARD_STEPS.map((s, i) => (
+            <div key={s.n} className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                disabled={busy || s.n > maxStep}
+                onClick={() => setStep(s.n)}
+                className={cn(
+                  'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
+                  s.n === step
+                    ? 'bg-primary text-primary-foreground'
+                    : s.n < step || s.n <= maxStep
+                      ? 'bg-primary/10 text-primary'
+                      : 'bg-muted text-muted-foreground',
+                )}
+              >
+                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-current text-[10px]">
+                  {s.n < step ? <Check size={10} /> : s.n}
+                </span>
+                <span className="font-medium">{s.title}</span>
+              </button>
+              {i < WIZARD_STEPS.length - 1 && <span className="text-muted-foreground/50">→</span>}
             </div>
+          ))}
+        </div>
 
-            <div className="rounded-lg border border-border p-4">
-              <Label htmlFor="ai-input-text" className="text-sm font-medium text-foreground">
-                文字描述 / 创作要求（可选）
-              </Label>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                无示例图时可仅用文字描述；也可与示例图同用，AI 将向你的要求倾斜
-              </p>
-              <textarea
-                id="ai-input-text"
-                className="mt-2 min-h-[88px] w-full rounded-md border border-border bg-background p-2 text-sm"
-                maxLength={500}
-                placeholder="例：日系田园风，午后侧逆光，少女侧身回眸，画面清新通透"
-                value={inputText}
-                onChange={(e) => handleTextChange(e.target.value)}
+        {/* 非 xl：预览面板置于 stepper 下方 */}
+        {!isXl && previewPanel}
+
+        {/* 全自动进度 / 失败提示 */}
+        {autoState?.running && (
+          <div className="rounded-md border border-primary/40 bg-primary/5 p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-primary">
+              <MagicWand size={16} /> 全自动进行中：{AUTO_STAGE_TEXT[autoState.stage]}
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-primary/20">
+              <div
+                className="h-full bg-primary transition-all"
+                style={{ width: `${((stageIndex + 1) / AUTO_STAGES.length) * 100}%` }}
               />
-              <div className="mt-1 text-right text-xs text-muted-foreground">{inputText.length}/500</div>
             </div>
+          </div>
+        )}
+        {autoState && !autoState.running && autoState.error && (
+          <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            全自动在「{AUTO_STAGE_TEXT[autoState.stage]}」阶段失败：{autoState.error}
+            。已停在当前步骤，可人工继续或调整后重试，已生成的草稿 / 封面已保留。
+          </div>
+        )}
 
-            {errorText && (
-              <div className="text-sm text-destructive">
-                {errorText}
-                {errorText.includes('AI 设置') && (
-                  <>
-                    {' '}前往{' '}
-                    <Link className="underline underline-offset-2" href="/dashboard/ai-config">
-                      AI 设置
-                    </Link>{' '}
-                    完成配置并启用
-                  </>
+        {/* Step1 上传示例图 */}
+        {step === 1 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>上传示例图</CardTitle>
+              <CardDescription>jpg / png / webp，≤ 8MB；上传后自动压缩（服务端请求体限制）。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleExamplePick}
+              />
+              <div className="rounded-lg border border-dashed border-border p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">示例图（可选，该风格的成片参考）</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      AI 将分析画面中的风格 / 构图 / 光线 / 主体，生成可上线的模板表单草稿
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload size={14} className="mr-1" /> {exampleFile ? '重新选择' : '选择图片'}
+                  </Button>
+                </div>
+                {exampleUrl && (
+                  <div className="mt-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={exampleUrl}
+                      alt="示例图预览"
+                      className="max-h-72 rounded-md border border-border object-contain"
+                    />
+                  </div>
                 )}
               </div>
-            )}
 
-            <div className="flex flex-wrap items-center gap-3">
-              <Button disabled={!hasInput || busy} onClick={handleAnalyze}>
-                {analyzing ? '识别中…' : '开始识别'}
-              </Button>
-              <Button variant="outline" disabled={!hasInput || busy} onClick={runAutoAll}>
-                <MagicWand size={14} className="mr-1" /> 全自动生成并上架
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              全自动：识别 → 生图作封面 → 生成线稿剪影 → 创建并上架；任一步失败将停在对应步骤转人工，已成功的资产（草稿 / 封面）保留。
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Step2 风格识别结果 */}
-      {step === 2 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>风格识别完成</CardTitle>
-            <CardDescription>草稿已回填到下方表单，全部字段可修改。</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {warnings.length > 0 && (
-              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                <div className="font-medium">AI 修正了以下内容，请重点复核：</div>
-                <ul className="mt-1 list-disc space-y-0.5 pl-5">
-                  {warnings.map((w, i) => (
-                    <li key={i}>{w}</li>
-                  ))}
-                </ul>
+              <div className="rounded-lg border border-border p-4">
+                <Label htmlFor="ai-input-text" className="text-sm font-medium text-foreground">
+                  文字描述 / 创作要求（可选）
+                </Label>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  无示例图时可仅用文字描述；也可与示例图同用，AI 将向你的要求倾斜
+                </p>
+                <textarea
+                  id="ai-input-text"
+                  className="mt-2 min-h-[88px] w-full rounded-md border border-border bg-background p-2 text-sm"
+                  maxLength={500}
+                  placeholder="例：日系田园风，午后侧逆光，少女侧身回眸，画面清新通透"
+                  value={inputText}
+                  onChange={(e) => handleTextChange(e.target.value)}
+                />
+                <div className="mt-1 text-right text-xs text-muted-foreground">{inputText.length}/500</div>
               </div>
-            )}
-            <Button disabled={busy} onClick={() => goto(3)}>
-              下一步：选择封面 <ArrowRight size={14} className="ml-1" />
-            </Button>
-          </CardContent>
-        </Card>
-      )}
 
-      {/* Step3 封面决策 */}
-      {step === 3 && (
-        <StepCover
-          exampleFile={exampleFile}
-          draft={draft}
-          candidates={candidates}
-          setCandidates={setCandidates}
-          busy={busy}
-          onApply={applyCover}
-        />
-      )}
+              {errorText && (
+                <div className="text-sm text-destructive">
+                  {errorText}
+                  {errorText.includes('AI 设置') && (
+                    <>
+                      {' '}前往{' '}
+                      <Link className="underline underline-offset-2" href="/dashboard/ai-config">
+                        AI 设置
+                      </Link>{' '}
+                      完成配置并启用
+                    </>
+                  )}
+                </div>
+              )}
 
-      {/* Step4 剪影决策 */}
-      {step === 4 && (
-        <StepSilhouette
-          coverFile={candidates[0]?.file ?? exampleFile}
-          exampleFile={exampleFile}
-          busy={busy}
-          onApply={applySilhouette}
-        />
-      )}
+              <div className="flex flex-wrap items-center gap-3">
+                <Button disabled={!hasInput || busy} onClick={handleAnalyze}>
+                  {analyzing ? '识别中…' : '开始识别'}
+                </Button>
+                <Button variant="outline" disabled={!hasInput || busy} onClick={runAutoAll}>
+                  <MagicWand size={14} className="mr-1" /> 全自动生成并上架
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                全自动：识别 → 生图作封面 → 生成线稿剪影 → 创建并上架；任一步失败将停在对应步骤转人工，已成功的资产（草稿 / 封面）保留。
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
-      {/* Step5 提交说明（提交按钮在 TemplateForm 底部） */}
-      {step === 5 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>确认并提交</CardTitle>
-            <CardDescription>
-              确认无误后，在下方表单底部（最后一步「后期处理」）点击「上架」或「保存为未上架」完成提交。
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-1 text-sm text-muted-foreground">
-            <p>· 封面与效果图已注入表单 Step2「效果图」区，可继续调整排序</p>
-            <p>· {silhouetteFile ? 'AI 剪影已应用到姿势 1，可在表单「姿势与剪影」步骤微调位置 / 缩放' : '未生成剪影，可在表单「姿势与剪影」步骤手动补充'}</p>
-            <p>· 提交成功后将跳转到模板列表</p>
-          </CardContent>
-        </Card>
-      )}
+        {/* Step2 风格识别结果 */}
+        {step === 2 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>风格识别完成</CardTitle>
+              <CardDescription>草稿已回填到下方表单，全部字段可修改。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {warnings.length > 0 && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                  <div className="font-medium">AI 修正了以下内容，请重点复核：</div>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                    {warnings.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <Button disabled={busy} onClick={() => goto(3)}>
+                下一步：选择封面 <ArrowRight size={14} className="ml-1" />
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
-      {/* 模板表单（识别成功后常驻，供各步骤随时查看/修改） */}
-      {formActivated && (
-        <div className="pt-2">
-          <h2 className="mb-3 text-base font-semibold text-foreground">模板表单（AI 草稿已回填，全部可修改）</h2>
-          <TemplateForm
-            categories={categories}
-            backendUrl={backendUrl}
-            wizardMode
-            aiInjection={injection}
+        {/* Step3 封面决策 */}
+        {step === 3 && (
+          <StepCover
+            exampleFile={exampleFile}
+            draft={draft}
+            candidates={candidates}
+            setCandidates={setCandidates}
+            busy={busy}
+            onApply={applyCover}
           />
+        )}
+
+        {/* Step4 剪影决策 */}
+        {step === 4 && (
+          <StepSilhouette
+            coverFile={candidates[0]?.file ?? exampleFile}
+            exampleFile={exampleFile}
+            busy={busy}
+            onApply={applySilhouette}
+          />
+        )}
+
+        {/* Step5 提交说明（提交按钮在 TemplateForm 底部） */}
+        {step === 5 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>确认并提交</CardTitle>
+              <CardDescription>
+                确认无误后，在下方表单底部（最后一步「后期处理」）点击「上架」或「保存为未上架」完成提交。
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-1 text-sm text-muted-foreground">
+              <p>· 封面与效果图已注入表单 Step2「效果图」区，可继续调整排序</p>
+              <p>· {silhouetteFile ? 'AI 剪影已应用到姿势 1，可在表单「姿势与剪影」步骤微调位置 / 缩放' : '未生成剪影，可在表单「姿势与剪影」步骤手动补充'}</p>
+              <p>· 提交成功后将跳转到模板列表</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 模板表单（识别成功后常驻，供各步骤随时查看/修改） */}
+        {formActivated && (
+          <div className="pt-2">
+            <h2 className="mb-3 text-base font-semibold text-foreground">模板表单（AI 草稿已回填，全部可修改）</h2>
+            <TemplateForm
+              categories={categories}
+              backendUrl={backendUrl}
+              wizardMode
+              aiInjection={injection}
+              previewPortalTarget={previewHost}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* xl：右栏 sticky 预览 */}
+      {isXl && (
+        <div className="hidden w-[300px] shrink-0 xl:block">
+          <div className="sticky top-6">{previewPanel}</div>
         </div>
       )}
     </div>
