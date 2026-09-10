@@ -8,7 +8,9 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { aiGenerateImageAction } from '@/actions/ai';
+import { aiGenerateImageStartAction } from '@/actions/ai';
+import { pollAiImageTask } from '@/lib/ai-task';
+import type { AiImageStatusResult } from '@/types/admin';
 import { base64ToFile } from './wizard';
 import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
 import { ImageSquare } from '@phosphor-icons/react/dist/csr/ImageSquare';
@@ -59,25 +61,35 @@ export function StepCover({
     });
   };
 
-  /** 生成同风格效果图（可多次点击重 roll；新生成图置顶） */
+  /** 生成同风格效果图（异步任务式：提交 taskId 后轮询结果，避免同步长请求超时；可多次点击重 roll） */
   const generate = async () => {
     if (!draft) return;
     setGenerating(true);
-    const fd = new FormData();
-    fd.set('meta', JSON.stringify(draft));
-    if (exampleFile) fd.set('reference', exampleFile);
-    const result = await aiGenerateImageAction(fd);
-    setGenerating(false);
-    if ('error' in result) {
-      toast({ variant: 'destructive', title: '生成失败', description: result.error });
-      return;
+    try {
+      const fd = new FormData();
+      fd.set('meta', JSON.stringify(draft));
+      if (exampleFile) fd.set('reference', exampleFile);
+      const start = await aiGenerateImageStartAction(fd);
+      if ('error' in start) {
+        toast({ variant: 'destructive', title: '生成失败', description: start.error });
+        return;
+      }
+      let status: AiImageStatusResult;
+      try {
+        status = await pollAiImageTask(start.taskId);
+      } catch (err) {
+        toast({ variant: 'destructive', title: '生成失败', description: (err as Error).message });
+        return;
+      }
+      const file = base64ToFile(status.image!, status.mimeType!, `ai-cover-${Date.now()}.png`);
+      setCandidates((prev) => [
+        { id: `ai-${Date.now()}-${prev.length}`, file, url: URL.createObjectURL(file), source: 'ai' },
+        ...prev,
+      ]);
+      toast({ title: '已生成效果图', description: '已置顶为封面候选，可继续重 roll 或调整排序' });
+    } finally {
+      setGenerating(false);
     }
-    const file = base64ToFile(result.image, result.mimeType, `ai-cover-${Date.now()}.png`);
-    setCandidates((prev) => [
-      { id: `ai-${Date.now()}-${prev.length}`, file, url: URL.createObjectURL(file), source: 'ai' },
-      ...prev,
-    ]);
-    toast({ title: '已生成效果图', description: '已置顶为封面候选，可继续重 roll 或调整排序' });
   };
 
   const move = (i: number, dir: -1 | 1) => {

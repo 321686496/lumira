@@ -441,8 +441,22 @@ export interface AiAnalyzeResult {
   warnings: string[];
 }
 
-/** POST /admin/templates/ai-generate-image / ai-generate-silhouette 结果（image = base64） */
+/** POST /admin/templates/ai-generate-silhouette 结果（同步，image = base64） */
 export interface AiImageResult {
   image: string;
   mimeType: string;
+}
+
+/** 提交生图任务 → 立即返回 taskId（异步任务式，前端轮询状态） */
+export interface AiImageTaskId {
+  taskId: string;
+}
+
+/** 查询生图任务状态（done 带 image/mimeType，error 带 error） */
+export interface AiImageStatusResult {
+  taskId: string;
+  status: 'pending' | 'running' | 'done' | 'error';
+  image?: string;
+  mimeType?: string;
+  error?: string;
 }

@@ -13,6 +13,8 @@ import type {
   AiConfigTestResult,
   AiAnalyzeResult,
   AiImageResult,
+  AiImageTaskId,
+  AiImageStatusResult,
 } from '@/types/admin';
 
 export async function getAiConfigAction(): Promise<
@@ -62,12 +64,24 @@ export async function aiAnalyzeAction(
   }
 }
 
-/** formData：meta 草稿 JSON 文本 + reference 参考图（可选） */
-export async function aiGenerateImageAction(
+/** formData：meta 草稿 JSON 文本 + reference 参考图（可选）→ 提交异步任务返回 taskId */
+export async function aiGenerateImageStartAction(
   formData: FormData,
-): Promise<AiImageResult | { error: string }> {
+): Promise<AiImageTaskId | { error: string }> {
   try {
-    return await api.aiGenerateImage(formData);
+    return await api.aiGenerateImageStart(formData);
+  } catch (e) {
+    if (e instanceof UnauthenticatedError) redirect('/login');
+    return { error: (e as Error).message };
+  }
+}
+
+/** 轮询生图任务状态 */
+export async function aiGenerateImageStatusAction(
+  taskId: string,
+): Promise<AiImageStatusResult | { error: string }> {
+  try {
+    return await api.aiGenerateImageStatus(taskId);
   } catch (e) {
     if (e instanceof UnauthenticatedError) redirect('/login');
     return { error: (e as Error).message };

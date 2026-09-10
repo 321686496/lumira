@@ -14,8 +14,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { compressImage } from '@/lib/image-compress';
-import { aiAnalyzeAction, aiGenerateImageAction, aiGenerateSilhouetteAction } from '@/actions/ai';
-import type { TemplateCategory } from '@/types/admin';
+import { aiAnalyzeAction, aiGenerateImageStartAction, aiGenerateSilhouetteAction } from '@/actions/ai';
+import { pollAiImageTask } from '@/lib/ai-task';
+import type { TemplateCategory, AiImageStatusResult } from '@/types/admin';
 import { StepCover, type CoverCandidate } from './step-cover';
 import { StepSilhouette } from './step-silhouette';
 import { Upload } from '@phosphor-icons/react/dist/csr/Upload';
@@ -208,14 +209,13 @@ export function AiCreateWizard({
       };
     }
 
-    // ② 生图作封面（参考图 = 示例图，纯文模式无参考图）
+    // ② 生图作封面（异步任务式：提交 taskId 后轮询；参考图 = 示例图，纯文模式无参考图）
     setAutoState({ running: true, stage: 'generating-image' });
     const genFd = new FormData();
     genFd.set('meta', JSON.stringify(draftLocal));
     if (exampleFile) genFd.set('reference', exampleFile);
-    const genResult = await aiGenerateImageAction(genFd);
-    if ('error' in genResult) {
-      // 停在 Step3 转人工：示例图保底作封面，草稿保留（纯文模式候选为空）
+    // 生图失败统一停在 Step3 转人工：示例图保底作封面，草稿保留（纯文模式候选为空）
+    const failGenerate = (err: string) => {
       setCandidates(exampleCandidate ? [exampleCandidate] : []);
       if (exampleFile) {
         inject({ json: draftLocal, images: [exampleFile], replaceImages: true });
@@ -223,10 +223,22 @@ export function AiCreateWizard({
         inject({ json: draftLocal });
       }
       goto(3);
-      setAutoState({ running: false, stage: 'generating-image', error: genResult.error });
+      setAutoState({ running: false, stage: 'generating-image', error: err });
+      return;
+    };
+    const genStart = await aiGenerateImageStartAction(genFd);
+    if ('error' in genStart) {
+      failGenerate(genStart.error);
       return;
     }
-    const aiCover = base64ToFile(genResult.image, genResult.mimeType, `ai-cover-${Date.now()}.png`);
+    let genStatus: AiImageStatusResult;
+    try {
+      genStatus = await pollAiImageTask(genStart.taskId);
+    } catch (err) {
+      failGenerate((err as Error).message);
+      return;
+    }
+    const aiCover = base64ToFile(genStatus.image!, genStatus.mimeType!, `ai-cover-${Date.now()}.png`);
     setCandidates([
       { id: `ai-${Date.now()}`, file: aiCover, url: URL.createObjectURL(aiCover), source: 'ai' },
       ...(exampleCandidate ? [exampleCandidate] : []),

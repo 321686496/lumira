@@ -77,4 +77,44 @@ describe('api client', () => {
       expect.anything(),
     );
   });
+
+  it('aiGenerateImageStart POSTs to /ai-generate-image and returns taskId', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ taskId: 'img_abc123' }),
+    });
+    const { api } = await import('../api');
+    const formData = new FormData();
+    formData.set('meta', '{}');
+    const result = await api.aiGenerateImageStart(formData);
+    expect(result).toEqual({ taskId: 'img_abc123' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/admin/templates/ai-generate-image'),
+      expect.objectContaining({ method: 'POST', body: formData }),
+    );
+  });
+
+  it('aiGenerateImageStatus GETs the task and returns done result', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({ taskId: 'img_abc123', status: 'done', image: 'aGVsbG8=', mimeType: 'image/png' }),
+    });
+    const { api } = await import('../api');
+    const result = await api.aiGenerateImageStatus('img_abc123');
+    expect(result).toEqual({
+      taskId: 'img_abc123',
+      status: 'done',
+      image: 'aGVsbG8=',
+      mimeType: 'image/png',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/admin/templates/ai-generate-image/tasks/img_abc123'),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+      }),
+    );
+  });
 });
