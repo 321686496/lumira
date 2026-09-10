@@ -19,14 +19,11 @@ export class AiTemplatesController {
     private readonly aiSilhouetteService: AiSilhouetteService,
   ) {}
 
-  /** AI 识别示例图 → 模板草稿（multipart：image 文件必填） */
+  /** AI 识别 → 模板草稿（multipart：image 文件与 text 文本至少一项） */
   @Post('ai-analyze')
   async analyze(@Req() req: FastifyRequest) {
-    const { image } = await parseAiMultipart(req);
-    if (!image) {
-      throw new BadRequestException('Missing "image" file');
-    }
-    return this.aiAnalyzeService.analyze(image);
+    const { image, text } = await parseAiMultipart(req);
+    return this.aiAnalyzeService.analyze(image, text);
   }
 
   /** AI 生成模板效果图（multipart：meta 草稿 JSON 文本必填语义 + reference 参考图可选） */
@@ -56,6 +53,8 @@ export class AiTemplatesController {
 /** AI 端点 multipart 解析结果 */
 export interface ParsedAiMultipart {
   meta: string | null;
+  /** 用户文字描述/创作要求（ai-analyze 可选输入） */
+  text?: string;
   image?: UploadFile;
   reference?: UploadFile;
 }
@@ -76,6 +75,8 @@ export async function parseAiMultipart(req: FastifyRequest): Promise<ParsedAiMul
     if (part.type === 'field') {
       if (part.fieldname === 'meta') {
         result.meta = part.value as string;
+      } else if (part.fieldname === 'text') {
+        result.text = part.value as string;
       }
     } else if (part.type === 'file') {
       const fieldname = part.fieldname as string;

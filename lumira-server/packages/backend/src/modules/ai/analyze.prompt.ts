@@ -92,11 +92,9 @@ const DRAFT_JSON_EXAMPLE = `{
     "lut": "japanese_fresh" }
 }`;
 
-/** 系统提示词：角色 + 分类树 + 枚举表 + 输出 JSON 契约 + 硬约束 */
-export function buildAnalyzeSystemPrompt(categories: CategoryNode[]): string {
-  return `你是资深人像摄影模板编辑，分析用户上传的示例图，产出可直接上线的摄影模板表单数据。
-
-## 分类树（meta.category 取一级 key；meta.classification.majorStyle/style/method 按层级逐级选择，只能从下列 key 中选择，禁止编造 key）
+/** 系统提示词公共主体：分类树 + 枚举表 + 输出 JSON 契约 + 硬约束（视觉/纯文字版共用） */
+function buildSystemPromptBody(categories: CategoryNode[]): string {
+  return `## 分类树（meta.category 取一级 key；meta.classification.majorStyle/style/method 按层级逐级选择，只能从下列 key 中选择，禁止编造 key）
 ${renderCategoryTree(categories)}
 
 ## 枚举值（只能使用下列 key，括号内中文标签仅供理解；不确定的字段直接省略，不要编造）
@@ -127,7 +125,25 @@ ${DRAFT_JSON_EXAMPLE}
 - 不输出 price / silhouette / author / sortOrder / isActive 字段。`;
 }
 
-/** 用户提示词（图片随 message 一并发送，文本只做指令引导） */
-export function buildAnalyzeUserPrompt(): string {
-  return '请分析这张示例图，按系统提示给出的输出 JSON 契约返回模板草稿。';
+/** 视觉识别版系统提示词（现状行为不变，仅结构拆分） */
+export function buildAnalyzeSystemPrompt(categories: CategoryNode[]): string {
+  return `你是资深人像摄影模板编辑，分析用户上传的示例图，产出可直接上线的摄影模板表单数据。\n\n${buildSystemPromptBody(categories)}`;
+}
+
+/** 纯文字构思版系统提示词（无示例图，基于文字描述构思模板） */
+export function buildTextOnlySystemPrompt(categories: CategoryNode[]): string {
+  return `你是资深人像摄影模板编辑。用户将提供一段风格描述或创作要求（没有示例图），请据此构思一个可直接上线的摄影模板，产出模板表单数据。描述未提及的字段，给出符合该风格的合理建议值（相机参数为复现该风格的估算值）。\n\n${buildSystemPromptBody(categories)}`;
+}
+
+/** 视觉识别版用户提示词（userText = 用户补充要求，识别结果向其倾斜） */
+export function buildAnalyzeUserPrompt(userText?: string): string {
+  const supplement = userText
+    ? `\n用户补充要求：${userText}\n识别结果需向该要求倾斜（如用户要求侧拍/秋日氛围，则构图、场景、后期相应调整）。`
+    : '';
+  return `请分析这张示例图，按系统提示给出的输出 JSON 契约返回模板草稿。${supplement}`;
+}
+
+/** 纯文字版用户提示词 */
+export function buildTextOnlyUserPrompt(userText: string): string {
+  return `请基于以下文字描述，按系统提示给出的输出 JSON 契约构思并返回模板草稿：\n${userText}`;
 }
