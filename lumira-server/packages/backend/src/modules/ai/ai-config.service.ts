@@ -6,7 +6,7 @@ import { Injectable, BadRequestException, ServiceUnavailableException } from '@n
 import { eq } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { aiProviderConfig } from '../../database/schema';
-import { visionChat } from './llm-client';
+import { visionChat, textChat } from './llm-client';
 import { UpdateAiConfigDto } from './dto/update-ai-config.dto';
 
 /** 脱敏后的配置视图（GET/PUT 返回；apiKey 永不回传明文） */
@@ -17,6 +17,10 @@ export interface AiConfigView {
   apiKeyMasked: string;
   visionModel: string;
   imageModel: string;
+  /** 存储值（'' = 未配置独立文本模型） */
+  textModel: string;
+  /** 有效文本模型 = textModel || visionModel */
+  effectiveTextModel: string;
   enabled: boolean;
 }
 
@@ -27,11 +31,17 @@ export interface ActiveAiConfig {
   apiKey: string;
   visionModel: string;
   imageModel: string;
+  /** 有效文本模型（= textModel 配置值 || visionModel，永不为空） */
+  textModel: string;
+  /** 是否配置了独立文本模型 */
+  hasCustomTextModel: boolean;
 }
 
 /** 连通性测试端点返回 */
 export interface AiConfigTestResult {
   vision: { ok: boolean; latencyMs?: number; error?: string };
+  /** 配置了独立文本模型时才有此字段 */
+  text?: { ok: boolean; latencyMs?: number; error?: string };
   note: string;
 }
 
@@ -62,6 +72,8 @@ export class AiConfigService {
       apiKeyMasked: maskKey(row.apiKey),
       visionModel: row.visionModel,
       imageModel: row.imageModel,
+      textModel: row.textModel ?? '',
+      effectiveTextModel: row.textModel || row.visionModel,
       enabled: row.enabled === 1,
     };
   }
@@ -83,6 +95,7 @@ export class AiConfigService {
         apiKey: dto.apiKey,
         visionModel: dto.visionModel,
         imageModel: dto.imageModel,
+        textModel: dto.textModel ?? '',
         enabled: dto.enabled ? 1 : 0,
         createdAt: now,
         updatedAt: now,
@@ -95,6 +108,7 @@ export class AiConfigService {
           baseUrl: dto.baseUrl,
           visionModel: dto.visionModel,
           imageModel: dto.imageModel,
+          textModel: dto.textModel ?? '',
           enabled: dto.enabled ? 1 : 0,
           apiKey: dto.apiKey ? dto.apiKey : existing.apiKey, // 留空 = 不改
           updatedAt: now,
@@ -110,10 +124,11 @@ export class AiConfigService {
     return view;
   }
 
-  /** 最小 vision 请求（1px PNG + 'ping'）连通性测试 */
+  /** 最小请求连通性测试：vision（1px PNG + ping）；配置独立 textModel 时追加纯文本测试 */
   async test(): Promise<AiConfigTestResult> {
     const cfg = await this.getActiveConfig();
     const t0 = Date.now();
+    let vision: AiConfigTestResult['vision'];
     try {
       await visionChat(
         { provider: cfg.provider, baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, visionModel: cfg.visionModel },
@@ -126,10 +141,31 @@ export class AiConfigService {
           timeoutMs: 30_000,
         },
       );
-      return { vision: { ok: true, latencyMs: Date.now() - t0 }, note: TEST_NOTE };
+      vision = { ok: true, latencyMs: Date.now() - t0 };
     } catch (e) {
-      return { vision: { ok: false, error: (e as Error).message }, note: TEST_NOTE };
+      vision = { ok: false, error: (e as Error).message };
     }
+
+    let text: AiConfigTestResult['text'];
+    if (cfg.hasCustomTextModel) {
+      const t1 = Date.now();
+      try {
+        await textChat(
+          { provider: cfg.provider, baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, visionModel: cfg.visionModel, textModel: cfg.textModel },
+          {
+            systemPrompt: 'You are a connectivity test.',
+            userText: 'ping',
+            temperature: 0,
+            timeoutMs: 30_000,
+          },
+        );
+        text = { ok: true, latencyMs: Date.now() - t1 };
+      } catch (e) {
+        text = { ok: false, error: (e as Error).message };
+      }
+    }
+
+    return text ? { vision, text, note: TEST_NOTE } : { vision, note: TEST_NOTE };
   }
 
   /** 未配置/未启用 → 503；供 ai-analyze 等业务端点复用 */
@@ -145,6 +181,8 @@ export class AiConfigService {
       apiKey: row.apiKey,
       visionModel: row.visionModel,
       imageModel: row.imageModel,
+      textModel: (row.textModel ?? '').trim() !== '' ? (row.textModel as string) : row.visionModel,
+      hasCustomTextModel: (row.textModel ?? '').trim() !== '',
     };
   }
 }

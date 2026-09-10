@@ -83,6 +83,8 @@ describe('AiConfigController (e2e)', () => {
     expect(res.body.apiKeyMasked).toBe('sk-****89');
     expect(res.body.visionModel).toBe('qwen-vl-max');
     expect(res.body.imageModel).toBe('qwen-max');
+    expect(res.body.textModel).toBe('');
+    expect(res.body.effectiveTextModel).toBe('qwen-vl-max');
     expect(res.body.enabled).toBe(true);
 
     const getRes = await request(app.getHttpServer())
