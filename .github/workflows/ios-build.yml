@@ -523,11 +523,12 @@ jobs:
       # 上传前统一用 Distribution 身份重签所有内嵌代码并校验，保证提交证书签名。
       - name: Re-sign embedded frameworks (fix ITMS 90034)
         if: ${{ success() && (inputs.sign == true || github.event_name == 'push') }}
-        env:
-          KEYCHAIN_PATH: "$RUNNER_TEMP/build.keychain-db"
         run: |
           set -e
           cd ${{ env.WORKSPACE }}
+          # 注意：$RUNNER_TEMP 必须在 run 脚本内由 shell 展开（env 块中不会被展开），
+          # 与「Create temporary keychain」步骤保持一致。
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
           IPA=$(ls build/ios/ipa/*.ipa | head -n1)
           [ -n "$IPA" ] || { echo "::error::未找到 IPA"; exit 1; }
 
