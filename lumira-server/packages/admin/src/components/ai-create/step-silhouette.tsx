@@ -69,7 +69,7 @@ export function StepSilhouette({
         fd.set('image', images[i]);
         fd.set('meta', JSON.stringify({ mode, crop, engine }));
         const result = await aiGenerateSilhouetteAction(fd);
-        if ('error' in result) {
+        if (!result || 'error' in result) {
           toast({
             variant: 'destructive',
             title: `第 ${i + 1} 张剪影生成失败`,
