@@ -7,6 +7,7 @@ import 'package:lumira_app_flutter/core/auth/auth_controller.dart';
 import 'package:lumira_app_flutter/core/auth/auth_dao.dart';
 import 'package:lumira_app_flutter/core/auth/auth_state.dart';
 import 'package:lumira_app_flutter/core/compliance/compliance_gate.dart';
+import 'package:lumira_app_flutter/core/db/database_provider.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
@@ -50,6 +51,7 @@ Widget _wrapWithRouter(
   AuthState? authState,
   _FakeAuthController? authController,
   bool awaitingCompliance = false,
+  bool failCompliancePersist = false,
 }) {
   final router = GoRouter(
     initialLocation: RouteNames.splash,
@@ -80,6 +82,11 @@ Widget _wrapWithRouter(
       uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
       authControllerProvider.overrideWith((ref) => controller),
       complianceAwaitingProvider.overrideWith((ref) => awaitingCompliance),
+      // 如果要求模拟合规落库失败，则 settingsDaoProvider 直接抛出异常
+      if (failCompliancePersist)
+        settingsDaoProvider.overrideWith((ref) async {
+          throw StateError('simulated persist failure');
+        }),
     ],
     child: MaterialApp.router(routerConfig: router),
   );
@@ -200,5 +207,36 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1800)); // 越过原 1.8s redirectTimer
     // 关键回归断言：即使已注册，待同意时也绝不跳走、弹窗仍在
     expect(find.text('用户协议与隐私政策'), findsOneWidget);
+  });
+
+  testWidgets('同意落库失败：不清除 awaiting、不导航、重新弹窗可重试', (tester) async {
+    await tester.pumpWidget(_wrapWithRouter(
+      const SplashPage(),
+      authState: const AuthState(
+        status: AuthStatus.registered,
+        isNewDevice: false,
+      ),
+      awaitingCompliance: true,
+      failCompliancePersist: true, // settingsDaoProvider 抛错
+    ));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // 容器引用，用于读取 awaiting 状态
+    final ctx = tester.element(find.byType(SplashPage));
+    final container = ProviderScope.containerOf(ctx, listen: false);
+
+    // 待同意状态下点击“同意并开始使用”
+    await tester.tap(find.text('同意并开始使用'));
+    await tester.pumpAndSettle();
+
+    // 落库失败：awaiting 必须仍为 true（不可视为已同意）
+    expect(container.read(complianceAwaitingProvider), isTrue,
+        reason: '落库失败时不得清除 awaiting 标志');
+    // 不得导航离开 Splash（未跳转 home）
+    expect(find.text('HOME'), findsNothing,
+        reason: '落库失败时不得绕开合规门控跳转首页');
+    // 重新弹出合规窗以便用户重试
+    expect(find.text('用户协议与隐私政策'), findsOneWidget,
+        reason: '落库失败应重新弹出合规窗以便重试');
   });
 }
