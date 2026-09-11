@@ -16,7 +16,7 @@
         "name": "EntryAbility",
         "srcEntry": "./ets/entryability/EntryAbility.ets",
         "description": "$string:EntryAbility_desc",
-        "icon": "$media:icon",
+        "icon": "$media:app_layered_image",
         "label": "$string:EntryAbility_label",
         // 放开 Ability 级布局方向：允许自动旋转（竖屏 + 横屏，不含竖屏倒置）。
         // 否则即使 Flutter 侧 setPreferredOrientations 已放开，HarmonyOS 窗口仍不旋转，

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -65,6 +65,7 @@ import '../features/profile/feedback/pages/feedback_page.dart';
 import '../features/profile/pages/profile_theme_page.dart';
 import '../features/points/pages/points_wallet_page.dart';
 import '../features/points/pages/points_transactions_page.dart';
+import '../features/points/pages/points_recharge_page.dart';
 import '../features/rewards/pages/rewards_page.dart';
 import '../features/scenes/pages/scenes_page.dart';
 import '../features/tags/pages/my_tags_page.dart';
@@ -694,6 +695,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const PointsTransactionsPage(),
       ),
       GoRoute(
+        path: RouteNames.pointsRecharge,
+        name: 'pointsRecharge',
+        builder: (context, state) => const PointsRechargePage(),
+      ),
+      GoRoute(
         path: RouteNames.invite,
         name: 'invite',
         builder: (context, state) =>
@@ -734,3 +740,4 @@ final routerProvider = Provider<GoRouter>((ref) {
     ),
   );
 });
+// __write_test_marker__

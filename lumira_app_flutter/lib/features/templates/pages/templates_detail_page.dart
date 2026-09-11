@@ -183,14 +183,15 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
           variant: LumiraIconButtonVariant.filled,
         ),
       ],
-      // 分享海报：所有来源（内置/自定义/远程）模板均可分享
-      LumiraIconButton(
-        icon: Icons.photo_library_outlined,
-        onPressed: _goSharePoster,
-        color: tokens.textPrimary,
-        size: 20,
-        variant: LumiraIconButtonVariant.filled,
-      ),
+      // 分享海报：仅内置/远程模板可生成（自定义模板二维码无法定位详情，不允许海报分享）
+      if (!_isCustomTemplate)
+        LumiraIconButton(
+          icon: Icons.photo_library_outlined,
+          onPressed: _goSharePoster,
+          color: tokens.textPrimary,
+          size: 20,
+          variant: LumiraIconButtonVariant.filled,
+        ),
     ];
     if (heart == null && rest.isEmpty) return null;
     return [if (heart != null) heart, ...rest];
@@ -312,6 +313,11 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
   /// 分享当前模板：从 DAO 拉取完整 [TemplateRecord]，弹出「模板分享海报」预览
   /// （封面 + 模板名/分类 + 模板二维码），可导出到相册或分享到系统。
   Future<void> _goSharePoster() async {
+    // 自定义模板不允许生成模板分享海报（其二维码无法定位到模板详情）。
+    if (_isCustomTemplate) {
+      _showSnack('自定义模板不支持海报分享');
+      return;
+    }
     final id = _template?.id ?? widget.templateId;
     if (id == null || id.isEmpty) return;
     try {

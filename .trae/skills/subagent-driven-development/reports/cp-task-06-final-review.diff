@@ -1,0 +1,1089 @@
+﻿=== COMMITS (5b85cb7..HEAD) ===
+b0db7c9 fix(splash): 修复老用户（已注册）绕过合规门控的关键缺陷 — _maybeNavigate 补门控 + 同意后补跳转
+f254c8e feat(splash): 首启合规门控弹窗（同意才初始化，不同意退出）
+7598aa7 feat(splash): 合规弹窗组件 ComplianceDialog（链接式+同意/不同意）
+1a1d51e refactor(startup): 抽出 runPostComplianceInit 并加合规门控分支
+9446448 feat(compliance): 新增合规版本常量与等待态 Provider
+bf811d7 feat(db): user_settings 新增合规同意列 v57 (+SettingsDao 读写)
+4c1753c docs: 合规检查弹窗(Splash 首启门控)设计
+
+=== STAT ===
+ .../2026-09-11-compliance-dialog-air-gap-design.md |  80 +++++++++++
+ .../lib/core/compliance/compliance_gate.dart       |  14 ++
+ .../lib/core/db/dao/settings_dao.dart              |  32 +++++
+ .../lib/core/db/database_provider.dart             |  26 +++-
+ lumira_app_flutter/lib/core/db/tables.dart         |   6 +
+ .../lib/core/startup/post_compliance_init.dart     |  63 +++++++++
+ .../lib/features/splash/pages/splash_page.dart     |  58 ++++++++
+ .../features/splash/widgets/compliance_dialog.dart |  70 ++++++++++
+ lumira_app_flutter/lib/main.dart                   | 150 +++++----------------
+ .../test/core/db/compliance_agreement_test.dart    |  63 +++++++++
+ .../features/splash/compliance_dialog_test.dart    |  85 ++++++++++++
+ .../test/features/splash/splash_page_test.dart     |  34 +++++
+ 12 files changed, 564 insertions(+), 117 deletions(-)
+
+=== DIFF ===
+diff --git a/lumira_app_flutter/lib/core/compliance/compliance_gate.dart b/lumira_app_flutter/lib/core/compliance/compliance_gate.dart
+new file mode 100644
+index 0000000..a32d9e7
+--- /dev/null
++++ b/lumira_app_flutter/lib/core/compliance/compliance_gate.dart
+@@ -0,0 +1,14 @@
++import 'package:flutter_riverpod/flutter_riverpod.dart';
++
++/// 当前有效的合规文档版本。
++///
++/// 当《用户协议》《隐私政策》《个人信息清单与第三方SDK目录》任一内容更新时，
++/// 递增此版本号（与 compliance_content.dart 最新 updateAt 对齐），
++/// 使已同意用户在下一次启动时重新弹出并重新征得同意。
++const String complianceCurrentVersion = '2026-08-24';
++
++/// 是否处于「待合规同意」状态（true=需先同意再初始化/联网）。
++///
++/// 默认 false：由 main() 在启动时依据本地已同意版本与 [complianceCurrentVersion]
++/// 是否一致来设置；Splash 依据它决定是否弹出合规窗。
++final complianceAwaitingProvider = StateProvider<bool>((ref) => false);
+\ No newline at end of file
+diff --git a/lumira_app_flutter/lib/core/db/dao/settings_dao.dart b/lumira_app_flutter/lib/core/db/dao/settings_dao.dart
+index 490d25c..a06bdc9 100644
+--- a/lumira_app_flutter/lib/core/db/dao/settings_dao.dart
++++ b/lumira_app_flutter/lib/core/db/dao/settings_dao.dart
+@@ -541,11 +541,43 @@ class SettingsDao {
+               if (b.route == '/templates/detail' && b.templateId != null)
+                 'templateId': b.templateId,
+             },
+         ]),
+         Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+       },
+       where: 'id = ?',
+       whereArgs: [1],
+     );
+   }
++
++  /// 读取已同意的合规文档版本；未同意或未填时返回 null。
++  ///
++  /// 判定逻辑：`compliance_agreed` 未置 1，或 `compliance_version` 为空，均视为「需重新同意」。
++  Future<String?> getComplianceVersion() async {
++    final rows = await _db.query(
++      Tables.userSettings,
++      columns: [Tables.colComplianceAgreed, Tables.colComplianceVersion],
++      where: 'id = ?',
++      whereArgs: [1],
++    );
++    if (rows.isEmpty) return null;
++    final agreed = rows.first[Tables.colComplianceAgreed];
++    if (agreed != 1) return null;
++    final raw = rows.first[Tables.colComplianceVersion] as String?;
++    return (raw == null || raw.isEmpty) ? null : raw;
++  }
++
++  /// 写入已同意标记与文档版本（记录同意时间戳）。
++  Future<void> setComplianceAgreed(String version) async {
++    await _db.update(
++      Tables.userSettings,
++      {
++        Tables.colComplianceAgreed: 1,
++        Tables.colComplianceVersion: version,
++        Tables.colComplianceAgreedAt: DateTime.now().millisecondsSinceEpoch,
++        Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
++      },
++      where: 'id = ?',
++      whereArgs: [1],
++    );
++  }
+ }
+diff --git a/lumira_app_flutter/lib/core/db/database_provider.dart b/lumira_app_flutter/lib/core/db/database_provider.dart
+index 1e5bd30..65e5b99 100644
+--- a/lumira_app_flutter/lib/core/db/database_provider.dart
++++ b/lumira_app_flutter/lib/core/db/database_provider.dart
+@@ -26,21 +26,21 @@ import '../../core/auth/auth_dao.dart';
+ import '../../features/onboarding/data/questionnaire_dao.dart';
+ import '../../features/profile/data/profile_dao.dart';
+ import '../../features/notification/data/notification_dao.dart';
+ import 'dao/search_history_dao.dart';
+ import 'dao/user_interests_dao.dart';
+ import 'dao/templates_favorite_dao.dart';
+ import 'dao/templates_drafts_dao.dart';
+ import '../../features/templates/recommend/user_interests.dart';
+ 
+ const String _kDbName = 'lumira.db';
+-const int _kDbVersion = 56;
++const int _kDbVersion = 57;
+ 
+ /// 数据库 Provider
+ /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
+ final databaseProvider = FutureProvider<Database>((ref) async {
+   final dbDir = await getDatabasesPath();
+   final dbPath = p.join(dbDir, _kDbName);
+   final db = await openDatabase(
+     dbPath,
+     version: _kDbVersion,
+     onCreate: _onCreate,
+@@ -490,20 +490,23 @@ Future<void> _onCreate(Database db, int version) async {
+       ${Tables.colSeedV3Done} INTEGER NOT NULL DEFAULT 0,
+       ${Tables.colAutoDeblur} INTEGER NOT NULL DEFAULT 1,
+       ${Tables.colFreeModeCamera} TEXT,
+       ${Tables.colFreeModePostProcess} TEXT,
+       ${Tables.colFreeModeComposition} TEXT,
+       ${Tables.colWatermarkSettings} TEXT,
+       ${Tables.colCameraFacing} TEXT,
+       ${Tables.colAspectRatio} TEXT,
+       ${Tables.colCaptureAppearance} TEXT NOT NULL DEFAULT 'immersive',
+       ${Tables.colOperationBannersCache} TEXT,
++      ${Tables.colComplianceAgreed} INTEGER NOT NULL DEFAULT 0,
++      ${Tables.colComplianceVersion} TEXT,
++      ${Tables.colComplianceAgreedAt} INTEGER,
+       ${Tables.colUpdatedAt} INTEGER NOT NULL
+     )
+   ''');
+   batch.insert(Tables.userSettings, {
+     Tables.colId: 1,
+     Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+   });
+ 
+   // === user_tags / item_tags 表（v24，用户自定义标签 + 搜索） ===
+   batch.execute('''
+@@ -1624,20 +1627,41 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+       await _addColumnIfNotExists(
+         db,
+         Tables.userSettings,
+         Tables.colCaptureAppearance,
+         "TEXT NOT NULL DEFAULT 'immersive'",
+       );
+     } catch (e) {
+       debugPrint('v56 migration failed (silent fallback): $e');
+     }
+   }
++
++  if (oldVersion < 57) {
++    await _addColumnIfNotExists(
++      db,
++      Tables.userSettings,
++      Tables.colComplianceAgreed,
++      'INTEGER NOT NULL DEFAULT 0',
++    );
++    await _addColumnIfNotExists(
++      db,
++      Tables.userSettings,
++      Tables.colComplianceVersion,
++      'TEXT',
++    );
++    await _addColumnIfNotExists(
++      db,
++      Tables.userSettings,
++      Tables.colComplianceAgreedAt,
++      'INTEGER',
++    );
++  }
+ }
+ 
+ /// 修复 template_categories 表中的 corrupted 数据（v18 迁移）。
+ ///
+ /// 1. 删除 level 与 parent_key 不一致的记录：
+ ///    - level=1 但 parent_key NOT NULL → 应为 NULL
+ ///    - level>1 但 parent_key IS NULL → 应有父分类
+ /// 2. 清理重复记录（每个 key+COALESCE(parent_key,'') 仅保留 MIN(id)）
+ /// 3. 创建 NULL 安全唯一索引
+ Future<void> _fixCategoryData(Database db) async {
+diff --git a/lumira_app_flutter/lib/core/db/tables.dart b/lumira_app_flutter/lib/core/db/tables.dart
+index 894012a..c0ca591 100644
+--- a/lumira_app_flutter/lib/core/db/tables.dart
++++ b/lumira_app_flutter/lib/core/db/tables.dart
+@@ -167,20 +167,26 @@ class Tables {
+   static const String colShutterSound = 'shutter_sound';
+   static const String colCaptureAppearance = 'capture_appearance';
+   static const String colDefaultResolution = 'default_resolution';
+   static const String colWatermark = 'watermark';
+ 
+   // === user_settings 扩展列（v53 迁移新增，跟随系统的深浅色主题选择） ===
+   // 取值：ThemeKey.name（深色默认 'ink'，浅色默认 'warmWhite'）
+   static const String colThemeKeyDark = 'theme_key_dark';
+   static const String colThemeKeyLight = 'theme_key_light';
+ 
++  // === user_settings 扩展列（v57 迁移新增，合规协议同意状态） ===
++  // compliance_agreed: 1=已同意，0=未同意；compliance_version: 已同意时的文档版本（用于版本变更后重新弹出）
++  static const String colComplianceAgreed = 'compliance_agreed';
++  static const String colComplianceVersion = 'compliance_version';
++  static const String colComplianceAgreedAt = 'compliance_agreed_at';
++
+   // === auth 表（v5） ===
+   static const String auth = 'auth';
+   static const String colDeviceId = 'device_id';
+   static const String colOs = 'os';
+   static const String colToken = 'token';
+   static const String colIsNewDevice = 'is_new_device';
+   static const String colRegisteredAt = 'registered_at';
+   // === auth 表扩展列（v49 迁移新增，首启邀请码绑定弹层一次性标记） ===
+   static const String colInviteBindPromptShown = 'invite_bind_prompt_shown';
+ 
+diff --git a/lumira_app_flutter/lib/core/startup/post_compliance_init.dart b/lumira_app_flutter/lib/core/startup/post_compliance_init.dart
+new file mode 100644
+index 0000000..7736330
+--- /dev/null
++++ b/lumira_app_flutter/lib/core/startup/post_compliance_init.dart
+@@ -0,0 +1,63 @@
++// lumira_app_flutter/lib/core/startup/post_compliance_init.dart
++import 'package:device_info_plus/device_info_plus.dart';
++import 'package:flutter_riverpod/flutter_riverpod.dart';
++
++import '../../core/auth/auth_controller.dart';
++import '../../core/network/api_client.dart';
++import '../../features/profile/providers/profile_providers.dart';
++import '../../features/usage/usage_providers.dart';
++
++/// 同意合规后（或已同意直接进入）才执行的数据初始化链：
++/// 触发注册 → 等 token → 补传设备信息 + 同步个人资料/使用次数/内置模板/内置场景。
++/// 由 main()（非首启）与 Splash「同意后」共同调用，fire-and-forget，失败静默。
++Future<void> runPostComplianceInit(ProviderContainer container) async {
++  final auth = container.read(authControllerProvider.notifier);
++  // ignore: invalid_use_of_protected_member
++  if (auth.state.needsRegistration) {
++    // ignore: unawaited_futures
++    auth.registerIfNeeded();
++  }
++  final ok = await auth.ensureRegistered();
++  if (!ok) return;
++
++  await reportDeviceInfo(container, defaultResolveOs());
++  try { await (await container.read(profileSyncServiceProvider.future)).ensureLoadedIfMissing(); } catch (_) {}
++  try { await (await container.read(profileSyncServiceProvider.future)).syncPendingIfNeeded(); } catch (_) {}
++  try { await (await container.read(usageSyncServiceProvider.future)).runSync(); } catch (_) {}
++  try { await (await container.read(builtinTemplateSyncServiceProvider.future)).syncBuiltinTemplates(); } catch (_) {}
++  try { await (await container.read(builtinSceneSyncServiceProvider.future)).syncBuiltinScenes(); } catch (_) {}
++}
++
++/// 已注册设备启动时补传设备信息（PATCH /device/info，JWT 鉴权，失败静默）
++Future<void> reportDeviceInfo(ProviderContainer container, String os) async {
++  try {
++    final client = await container.read(apiClientProvider.future);
++    final info = await collectDeviceInfo(os);
++    await client.patch<bool>('/device/info', body: info, fromJson: (_) => true);
++  } catch (_) {}
++}
++
++/// 采集设备信息
++///
++/// 注意：鸿蒙（HarmonyOS）环境下 Platform.isAndroid / isIOS 均为 false，
++/// 若按平台分支填充字段会导致平台、系统版本、型号全部缺失。
++/// 故始终填充 platform（= os）与 appVersion，版本/型号用 try-catch 尽力采集：
++/// 鸿蒙 Flutter 提供 androidInfo 兼容实现，失败再回退 iosInfo，最终回退 os。
++Future<Map<String, dynamic>> collectDeviceInfo(String os) async {
++  final deviceInfo = DeviceInfoPlugin();
++  final data = <String, dynamic>{'platform': os, 'appVersion': '1.0.0'};
++  try {
++    final androidInfo = await deviceInfo.androidInfo;
++    data['osVersion'] = '${androidInfo.version.release} (API ${androidInfo.version.sdkInt})';
++    data['deviceModel'] = '${androidInfo.manufacturer} ${androidInfo.model}';
++  } catch (_) {
++    try {
++      final iosInfo = await deviceInfo.iosInfo;
++      data['osVersion'] = '${iosInfo.systemName} ${iosInfo.systemVersion}';
++      data['deviceModel'] = iosInfo.utsname.machine;
++    } catch (_) {
++      data['osVersion'] = os;
++    }
++  }
++  return data;
++}
+diff --git a/lumira_app_flutter/lib/features/splash/pages/splash_page.dart b/lumira_app_flutter/lib/features/splash/pages/splash_page.dart
+index 763fd14..32d0187 100644
+--- a/lumira_app_flutter/lib/features/splash/pages/splash_page.dart
++++ b/lumira_app_flutter/lib/features/splash/pages/splash_page.dart
+@@ -1,23 +1,27 @@
+ import 'dart:async';
++import 'dart:io';
+ 
+ import 'package:flutter/material.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ import 'package:go_router/go_router.dart';
+ 
+ import '../../../core/auth/auth_controller.dart';
+ import '../../../core/auth/auth_state.dart';
++import '../../../core/compliance/compliance_gate.dart';
+ import '../../../core/db/database_provider.dart';
+ import '../../../core/router/route_names.dart';
++import '../../../core/startup/post_compliance_init.dart';
+ import '../../../core/theme/app_theme.dart';
+ import '../../../core/theme/theme_controller.dart';
+ import '../../onboarding/services/questionnaire_sync_providers.dart';
++import '../widgets/compliance_dialog.dart';
+ import '../../../shared/widgets/brand/lumira_logo.dart';
+ import '../../../shared/widgets/common/fade_up.dart';
+ import '../../../shared/widgets/lumira/lumira.dart';
+ 
+ /// Splash 启动页
+ ///
+ /// 视觉规格来源：lumira-app/src/pages/splash/index.vue
+ /// - 居中布局：logo + 标题 + 副标题
+ /// - logo 120rpx→60dp aperture 图标，brand 色
+ /// - 标题 48rpx→24dp Noto Serif SC，600 字重
+@@ -36,24 +40,26 @@ class SplashPage extends ConsumerStatefulWidget {
+ 
+   @override
+   ConsumerState<SplashPage> createState() => _SplashPageState();
+ }
+ 
+ class _SplashPageState extends ConsumerState<SplashPage> {
+   static const Duration _redirectDelay = Duration(milliseconds: 1800);
+ 
+   Timer? _redirectTimer;
+   bool _navigated = false;
++  bool _complianceDialogShown = false;
+ 
+   @override
+   void initState() {
+     super.initState();
++    WidgetsBinding.instance.addPostFrameCallback((_) => _maybePresentCompliance());
+     // 1.8s 后跳转 home（用 context.go 替换路由栈，对齐 uni-app 的 reLaunch 语义）
+     _redirectTimer = Timer(_redirectDelay, _maybeNavigate);
+     // 监听 auth 状态：重试成功（registered）时自动跳转，并在注册完成后补传未同步问卷。
+     // 注意：ref.listen 只能在 build 中使用，initState 中需用 ref.listenManual。
+     // 不要在 failed 时自动拉起注册（ensureRegistered 会这样做）——那会把稳定的重试按钮
+     // 瞬间替换成 loading，让用户觉得“点了重试没反应”。
+     // 问卷同步也放到这里：等收敛到 registered（token 就绪）后再发鉴权请求，避免 401。
+     ref.listenManual<AuthState>(authControllerProvider, (previous, next) {
+       if (!_navigated && mounted && next.status == AuthStatus.registered) {
+         _maybeNavigate();
+@@ -66,20 +72,24 @@ class _SplashPageState extends ConsumerState<SplashPage> {
+   }
+ 
+   @override
+   void dispose() {
+     _redirectTimer?.cancel();
+     super.dispose();
+   }
+ 
+   void _maybeNavigate() {
+     if (_navigated || !mounted) return;
++    // 仍在等待合规同意（首启/版本变更）不可跳转，否则会绕过门控直接进 home
++    if (ref.read(complianceAwaitingProvider)) {
++      return;
++    }
+     final auth = ref.read(authControllerProvider);
+     // 只有 token 就绪（registered）才跳转。
+     // loading/fresh：注册进行中，此时 currentToken 可能为 null（旧 token 已被
+     // 401 失效清除），提前跳 home 会带空 token 发请求再次 401——表现为“进不去”。
+     // 改为让 splash 转圈等待，注册完成后由 listenManual 收到 registered 再跳。
+     // （这样即使服务器更换 JWT_SECRET 导致本地 token 失效，也能 401 自动重注册自愈进入。）
+     if (auth.status != AuthStatus.registered) return;
+     _navigated = true;
+     // 新设备首次注册且未填问卷 → 跳问卷页；否则跳首页
+     _routeAfterSplash(auth.isNewDevice);
+@@ -105,20 +115,68 @@ class _SplashPageState extends ConsumerState<SplashPage> {
+     ref.read(authControllerProvider.notifier).registerIfNeeded();
+   }
+ 
+   /// 注册完成后补传未同步的问卷（fire-and-forget，失败静默）
+   void _syncPendingQuestionnaire() {
+     ref.read(questionnaireSyncServiceProvider.future).then((service) {
+       service.syncPendingIfNeeded();
+     }).catchError((_) {});
+   }
+ 
++  /// 首次 build 后检查是否需弹合规窗（首启/版本变更时 waiting 为真）
++  void _maybePresentCompliance() {
++    if (_complianceDialogShown || !mounted) return;
++    if (!ref.read(complianceAwaitingProvider)) return;
++    _complianceDialogShown = true;
++    // ignore: unawaited_futures
++    _presentComplianceDialog();
++  }
++
++  Future<void> _presentComplianceDialog() async {
++    await showLumiraDialog<void>(
++      context: context,
++      barrierDismissible: false,
++      builder: (dialogCtx) => ComplianceDialog(
++        onAgree: () async {
++          await _agreeCompliance(dialogCtx);
++        },
++        onDisagree: _disagreeCompliance,
++      ),
++    );
++  }
++
++  Future<void> _agreeCompliance(BuildContext dialogCtx) async {
++    final container = ProviderScope.containerOf(context, listen: false);
++    try {
++      final dao = await ref.read(settingsDaoProvider.future);
++      await dao.setComplianceAgreed(complianceCurrentVersion);
++    } catch (_) {
++      // 落库失败静默，仍继续，避免用户被卡死
++    }
++    if (dialogCtx.mounted) {
++      Navigator.of(dialogCtx).pop();
++    }
++    ref.read(complianceAwaitingProvider.notifier).state = false;
++    // ignore: unawaited_futures
++    runPostComplianceInit(container);
++    // 同意后，若已注册（老用户）则主动跳转：此前 redirectTimer/_maybeNavigate 被合规门控堵住，
++    // 需要在此补跳。fresh/新用户走已有 listenManual → registered 触发跳转，无需本句。
++    if (ref.read(authControllerProvider).status == AuthStatus.registered) {
++      _maybeNavigate();
++    }
++  }
++
++  void _disagreeCompliance() {
++    // 未同意则退出应用（iOS/Android/OHOS 通用）
++    exit(0);
++  }
++
+   @override
+   Widget build(BuildContext context) {
+     final tokens = ref.watch(appThemeProvider).tokens;
+     final auth = ref.watch(authControllerProvider);
+ 
+     return Scaffold(
+       // #FAF7F2 默认主题 canvas；用 tokens.canvas 让所有主题都对齐
+       backgroundColor: tokens.canvas,
+       body: SafeArea(
+         child: Center(
+diff --git a/lumira_app_flutter/lib/features/splash/widgets/compliance_dialog.dart b/lumira_app_flutter/lib/features/splash/widgets/compliance_dialog.dart
+new file mode 100644
+index 0000000..0e38911
+--- /dev/null
++++ b/lumira_app_flutter/lib/features/splash/widgets/compliance_dialog.dart
+@@ -0,0 +1,70 @@
++import 'package:flutter/gestures.dart';
++import 'package:flutter/material.dart';
++import 'package:flutter_riverpod/flutter_riverpod.dart';
++import 'package:go_router/go_router.dart';
++
++import '../../../core/router/route_names.dart';
++import '../../../core/theme/theme_controller.dart';
++import '../../../core/theme/theme_tokens.dart';
++import '../../../shared/widgets/lumira/lumira.dart';
++
++/// 合规检查弹窗内容（链接式 + 同意/不同意）。
++///
++/// 由 Splash 通过 [showLumiraDialog] 承载；样式随 8 主题 × 4 风格经
++/// `appThemeProvider` 派生，链接用 `tokens.brandText`。
++class ComplianceDialog extends ConsumerWidget {
++  const ComplianceDialog({super.key, required this.onAgree, required this.onDisagree});
++
++  final VoidCallback onAgree;
++  final VoidCallback onDisagree;
++
++  @override
++  Widget build(BuildContext context, WidgetRef ref) {
++    final tokens = ref.watch(appThemeProvider).tokens;
++    final titleStyle = TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.35, color: tokens.textPrimary);
++    final bodyStyle = TextStyle(fontSize: 13, height: 1.6, color: tokens.textSecondary);
++
++    return Column(
++      mainAxisSize: MainAxisSize.min,
++      crossAxisAlignment: CrossAxisAlignment.stretch,
++      children: [
++        Text('用户协议与隐私政策', style: titleStyle),
++        const SizedBox(height: 12),
++        Text.rich(
++          TextSpan(
++            style: bodyStyle,
++            children: [
++              const TextSpan(text: '在使用前，请仔细阅读并充分理解'),
++              _link(context, '《用户协议》', RouteNames.profileComplianceAgreement, tokens),
++              const TextSpan(text: '、'),
++              _link(context, '《隐私政策》', RouteNames.profileCompliancePrivacy, tokens),
++              const TextSpan(text: '与'),
++              _link(context, '《个人信息清单与第三方SDK目录》', RouteNames.profileComplianceSdk, tokens),
++              const TextSpan(text: '。我们非常重视您的隐私。您点击「同意」即表示已阅读并同意上述协议，我们将在您同意后，再开始收集、处理您的个人信息并为您提供服务。'),
++            ],
++          ),
++        ),
++        const SizedBox(height: 20),
++        Row(
++          children: [
++            Expanded(
++              child: LumiraButton(variant: ButtonVariant.secondary, onPressed: onDisagree, child: const Text('不同意并退出')),
++            ),
++            const SizedBox(width: 12),
++            Expanded(
++              child: LumiraButton(variant: ButtonVariant.primary, onPressed: onAgree, child: const Text('同意并开始使用')),
++            ),
++          ],
++        ),
++      ],
++    );
++  }
++
++  TextSpan _link(BuildContext context, String text, String route, ThemeTokens tokens) {
++    return TextSpan(
++      text: text,
++      style: TextStyle(color: tokens.brandText, decoration: TextDecoration.underline, decorationColor: tokens.brandText),
++      recognizer: TapGestureRecognizer()..onTap = () => context.push(route),
++    );
++  }
++}
+\ No newline at end of file
+diff --git a/lumira_app_flutter/lib/main.dart b/lumira_app_flutter/lib/main.dart
+index 12eaa82..7a8c5a1 100644
+--- a/lumira_app_flutter/lib/main.dart
++++ b/lumira_app_flutter/lib/main.dart
+@@ -1,40 +1,39 @@
+ import 'package:dio/dio.dart';
+-import 'package:device_info_plus/device_info_plus.dart';
+ import 'package:flutter/material.dart';
+ import 'package:flutter/services.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ import 'package:go_router/go_router.dart';
+ 
+ import 'app/router.dart';
+ import 'core/auth/auth_controller.dart';
+ import 'core/auth/auth_dao.dart';
++import 'core/compliance/compliance_gate.dart';
+ import 'core/config/app_config.dart';
++import 'core/db/dao/settings_dao.dart';
+ import 'core/db/database_provider.dart';
+-import 'core/network/api_client.dart';
++import 'core/startup/post_compliance_init.dart';
+ import 'core/router/route_names.dart';
+ import 'core/services/deep_link_service.dart';
+ import 'core/theme/theme_controller.dart';
+ import 'core/theme/system_brightness_watcher.dart';
+ import 'core/utils/safe_share.dart';
+ import 'core/utils/share_reporter.dart';
+ import 'features/capture/data/capture_state.dart';
+ import 'features/points/data/points_repository.dart';
+ import 'features/profile/data/growth_models.dart';
+ import 'features/profile/data/profile_dao.dart';
+ import 'features/profile/data/profile_models.dart';
+-import 'features/profile/providers/profile_providers.dart';
+ import 'features/profile/services/growth_xp_provider.dart';
+ import 'features/templates/services/template_import_service.dart';
+ import 'features/templates/services/template_share_code.dart';
+ import 'features/templates/widgets/template_import_sheet.dart';
+-import 'features/usage/usage_providers.dart';
+ import 'shared/widgets/lumira/feedback/lumira_toast.dart';
+ 
+ /// 应用根 Widget（接入 ProviderScope + routerProvider + appThemeProvider）
+ class MyApp extends ConsumerWidget {
+   const MyApp({super.key});
+ 
+   @override
+   Widget build(BuildContext context, WidgetRef ref) {
+     final router = ref.watch(routerProvider);
+     final appTheme = ref.watch(appThemeProvider);
+@@ -81,25 +80,25 @@ Future<void> main() async {
+     onRegistered: (result) async {
+       final profile = result.profile;
+       if (profile == null) return;
+       final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+       await daos.profileDao.upsert(profile, now);
+     },
+   );
+ 
+   await authController.bootstrap();
+ 
+-  // 3. 若未注册则后台触发（不阻塞 UI，由 splash 监听状态）
+-  // ignore: invalid_use_of_protected_member
+-  if (authController.state.needsRegistration) {
+-    authController.registerIfNeeded(); // fire-and-forget
+-  }
++  // 3. 判断是否待合规同意：本地已同意版本与当前合规版本不一致即需先征得同意、
++  //    在此之前不得联网/采集（注册、上报设备信息等全部延后到同意后由
++  //    runPostComplianceInit 执行）。
++  final awaitingCompliance =
++      await daos.settingsDao.getComplianceVersion() != complianceCurrentVersion;
+ 
+   // 4. 注入 authController 到全局 Provider，启动 app
+   final container = ProviderContainer(
+     overrides: [
+       authControllerProvider.overrideWith((ref) => authController),
+     ],
+   );
+ 
+   // 4.5 分享积分上报：调起系统分享即计分（每日首享 +2，幂等由后端保证）
+   ShareReporter.onShare = () async {
+@@ -137,193 +136,112 @@ Future<void> main() async {
+   // 4.6 深链监听：冷启动链接 + 运行中链接
+   // ignore: unawaited_futures
+   DeepLinkService.instance.start(
+     onTemplateLink: (link) => _handleTemplateLink(container, link),
+   );
+ 
+   // 4.7 恢复持久化的主题与 UI 风格（写回 StateProvider，供首帧生效）
+   // ignore: unawaited_futures
+   restoreThemePreferences(container);
+ 
+-  // 5. 设备信息补传（修复历史版本平台信息缺失/误判，不阻塞启动）
+-  //
+-  // 注意：原来的 `if (!needsRegistration)` 判断会误触发——registerIfNeeded() 调用后
+-  // 状态已同步变为 loading，needsRegistration 立即为 false，导致未注册设备也提前
+-  // 发出 PATCH /device/info（token 尚未就绪）→ 无 Authorization → 401。
+-  // 统一改为先等待注册完成拿到有效 token，再执行鉴权请求。
+-  // ignore: unawaited_futures
+-  authController.ensureRegistered().then((ok) {
+-    if (!ok) return; // 注册失败：静默，splash 会显示重试入口
+-    _reportDeviceInfo(container, defaultResolveOs());
+-  });
+-
+-  // 6. 初始化个人资料：拉取/补传。同样等待注册完成拿到 token 后再执行。
+-  // ignore: unawaited_futures
+-  authController.ensureRegistered().then((ok) async {
+-    if (!ok) return;
+-    final sync = await container.read(profileSyncServiceProvider.future);
+-    await sync.ensureLoadedIfMissing();
+-    await sync.syncPendingIfNeeded();
+-  });
+-
+-  // 6.5 使用次数同步（启动时上报未同步埋点 + 拉取全站次数；失败静默不阻塞启动）
+-  // ignore: unawaited_futures
+-  authController.ensureRegistered().then((ok) async {
+-    if (!ok) return;
+-    try {
+-      final us = await container.read(usageSyncServiceProvider.future);
+-      await us.runSync();
+-    } catch (_) {
+-      // 网络/鉴权失败静默
+-    }
+-  });
+-
+-  // 6.6 内置模板名称同步（同步 id/名称到后端；失败静默不阻塞启动）
+-  // ignore: unawaited_futures
+-  authController.ensureRegistered().then((ok) async {
+-    if (!ok) return;
+-    try {
+-      final bts = await container.read(builtinTemplateSyncServiceProvider.future);
+-      await bts.syncBuiltinTemplates();
+-    } catch (_) {
+-      // 网络/鉴权失败静默
+-    }
+-  });
+-
+-  // 6.7 内置场景名称同步（同步 id/名称到后端；失败静默不阻塞启动）
+-  // ignore: unawaited_futures
+-  authController.ensureRegistered().then((ok) async {
+-    if (!ok) return;
+-    try {
+-      final bss = await container.read(builtinSceneSyncServiceProvider.future);
+-      await bss.syncBuiltinScenes();
+-    } catch (_) {
+-      // 网络/鉴权失败静默
+-    }
+-  });
++  // 5. 合规门控：若待同意，则注入 complianceAwaitingProvider=true，Splash 据其弹出
++  //    合规窗；同意前不做任何注册/采集/联网。已同意（非首启）则直接跑初始化链。
++  container.read(complianceAwaitingProvider.notifier).state = awaitingCompliance;
++  if (!awaitingCompliance) {
++    // ignore: unawaited_futures
++    runPostComplianceInit(container);
++  }
+ 
+   runApp(
+     UncontrolledProviderScope(
+       container: container,
+       child: const MyApp(),
+     ),
+   );
+ }
+ 
+ /// Bootstrap 阶段所需的 DAO 集合（Dart 2.19 无 records，用私有类承载）
+ class _BootstrapDaos {
+   final AuthDao authDao;
+   final UserProfileDao profileDao;
+-  const _BootstrapDaos({required this.authDao, required this.profileDao});
++  final SettingsDao settingsDao;
++  const _BootstrapDaos({
++    required this.authDao,
++    required this.profileDao,
++    required this.settingsDao,
++  });
+ }
+ 
+-/// 创建临时 ProviderContainer 用于 bootstrap 阶段读取 authDaoProvider / userProfileDaoProvider
++/// 创建临时 ProviderContainer 用于 bootstrap 阶段读取 authDaoProvider / userProfileDaoProvider / settingsDaoProvider
+ Future<_BootstrapDaos> _createBootstrapDaos() async {
+   final container = ProviderContainer();
+   await container.read(databaseProvider.future);
+   final authDao = await container.read(authDaoProvider.future);
+   final profileDao = await container.read(userProfileDaoProvider.future);
+-  return _BootstrapDaos(authDao: authDao, profileDao: profileDao);
++  final settingsDao = await container.read(settingsDaoProvider.future);
++  return _BootstrapDaos(authDao: authDao, profileDao: profileDao, settingsDao: settingsDao);
+ }
+ 
+ /// 设备注册回调
+ ///
+ /// 注意：原 plan 使用 Dart 3.0+ record 语法 `({String token, bool isNewDevice})`，
+ /// 但项目环境为 Dart 2.19.6（鸿蒙 Flutter 3.7.12），不支持 records，
+ /// 改用 RegisterResult 类（定义于 auth_controller.dart）
+ Future<RegisterResult> _doRegister({
+   required String deviceId,
+   required String os,
+ }) async {
+   final dio = Dio(BaseOptions(
+     baseUrl: AppConfig.baseUrl,
+     connectTimeout: AppConfig.connectTimeoutMs,
+     receiveTimeout: AppConfig.receiveTimeoutMs,
+     headers: {'Content-Type': 'application/json'},
+   ));
+ 
+-  final registerData = await _collectDeviceInfo(os);
++  final registerData = await collectDeviceInfo(os);
+   registerData['deviceId'] = deviceId;
+ 
+   final resp = await dio.post('/device/register', data: registerData);
+   final body = resp.data as Map<String, dynamic>;
+   final profileJson = body['profile'];
+   return RegisterResult(
+     token: body['token'] as String,
+     isNewDevice: body['isNewDevice'] as bool,
+     profile: profileJson is Map<String, dynamic>
+         ? ProfileData.fromJson(profileJson)
+         : null,
+   );
+ }
+ 
+-/// 采集设备信息
+-///
+-/// 注意：鸿蒙（HarmonyOS）环境下 Platform.isAndroid / isIOS 均为 false，
+-/// 若按平台分支填充字段会导致平台、系统版本、型号全部缺失。
+-/// 故始终填充 platform（= os）与 appVersion，版本/型号用 try-catch 尽力采集：
+-/// 鸿蒙 Flutter 提供 androidInfo 兼容实现，失败再回退 iosInfo，最终回退 os。
+-Future<Map<String, dynamic>> _collectDeviceInfo(String os) async {
+-  final deviceInfo = DeviceInfoPlugin();
+-  final data = <String, dynamic>{
+-    'platform': os,
+-    'appVersion': '1.0.0',
+-  };
+-  try {
+-    final androidInfo = await deviceInfo.androidInfo;
+-    data['osVersion'] = '${androidInfo.version.release} (API ${androidInfo.version.sdkInt})';
+-    data['deviceModel'] = '${androidInfo.manufacturer} ${androidInfo.model}';
+-  } catch (_) {
+-    try {
+-      final iosInfo = await deviceInfo.iosInfo;
+-      data['osVersion'] = '${iosInfo.systemName} ${iosInfo.systemVersion}';
+-      data['deviceModel'] = iosInfo.utsname.machine;
+-    } catch (_) {
+-      data['osVersion'] = os;
+-    }
+-  }
+-  return data;
+-}
+-
+-/// 已注册设备启动时补传设备信息（PATCH /device/info，JWT 鉴权，失败静默）
+-Future<void> _reportDeviceInfo(ProviderContainer container, String os) async {
+-  try {
+-    final client = await container.read(apiClientProvider.future);
+-    final info = await _collectDeviceInfo(os);
+-    await client.patch<bool>('/device/info', body: info, fromJson: (_) => true);
+-  } catch (_) {
+-    // 网络/鉴权失败不影响启动
+-  }
+-}
+-
+ /// 处理模板深链：完整 JSON → 直接导入；否则打开导入面板让用户手动操作。
+ void _handleTemplateLink(ProviderContainer container, String link) {
+   final parsed = TemplateShareCode.parseLink(link);
+-  if (parsed == null || !(parsed['meta'] is Map)) {
++  if (parsed == null || parsed['meta'] is! Map) {
+     // 无法解析或为轻量形式 → 打开导入面板手动粘贴/选择
+-    final ctx = rootNavigatorKey.currentContext;
+-    if (ctx != null && ctx.mounted) {
+-      TemplateImportSheet.show(ctx, onImported: (_) {});
++    final context = rootNavigatorKey.currentContext;
++    if (context != null && context.mounted) {
++      TemplateImportSheet.show(context, onImported: (_) {});
+     }
+     return;
+   }
+ 
+   // 完整 JSON → 直接导入本地
+   // ignore: unawaited_futures
+   container.read(templatesDaoProvider.future).then((dao) async {
+     final result = await TemplateImportService.importJson(
+       parsed,
+       dao: dao,
+       invalidateTemplates: () async {
+         container.invalidate(CaptureState.allTemplatesProvider);
+       },
+     );
+-    final ctx = rootNavigatorKey.currentContext;
+-    if (ctx == null || !ctx.mounted) return;
+-    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
++    final context = rootNavigatorKey.currentContext;
++    // ignore: use_build_context_synchronously
++    if (context == null || !context.mounted) return;
++    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+       content: Text(result.ok ? result.message : '导入失败：${result.error}'),
+     ));
+     if (result.ok) {
+-      GoRouter.of(ctx).go(RouteNames.profileMyTemplates);
++      GoRouter.of(context).go(RouteNames.profileMyTemplates);
+     }
+   });
+ }
+diff --git a/lumira_app_flutter/test/core/db/compliance_agreement_test.dart b/lumira_app_flutter/test/core/db/compliance_agreement_test.dart
+new file mode 100644
+index 0000000..4e550c6
+--- /dev/null
++++ b/lumira_app_flutter/test/core/db/compliance_agreement_test.dart
+@@ -0,0 +1,63 @@
++import 'package:flutter_test/flutter_test.dart';
++import 'package:sqflite_common_ffi/sqflite_ffi.dart';
++import 'package:sqflite/sqflite.dart';
++import 'package:lumira_app_flutter/core/db/dao/settings_dao.dart';
++import 'package:lumira_app_flutter/core/db/tables.dart';
++
++void main() {
++  late Database db;
++  late SettingsDao dao;
++
++  setUpAll(() {
++    sqfliteFfiInit();
++    databaseFactory = databaseFactoryFfi;
++  });
++
++  setUp(() async {
++    db = await openDatabase(
++      inMemoryDatabasePath,
++      version: 1,
++      onCreate: (db, v) async {
++        await db.execute('''
++          CREATE TABLE user_settings (
++            id INTEGER PRIMARY KEY DEFAULT 1,
++            compliance_agreed INTEGER NOT NULL DEFAULT 0,
++            compliance_version TEXT,
++            compliance_agreed_at INTEGER,
++            updated_at INTEGER NOT NULL
++          )
++        ''');
++        await db.insert('user_settings', {
++          'id': 1,
++          'updated_at': DateTime.now().millisecondsSinceEpoch,
++        });
++      },
++    );
++    dao = SettingsDao(db);
++  });
++
++  tearDown(() async => db.close());
++
++  test('getComplianceVersion returns null before agreement', () async {
++    expect(await dao.getComplianceVersion(), isNull);
++  });
++
++  test('setComplianceAgreed persists version and agreed flag', () async {
++    await dao.setComplianceAgreed('2026-08-24');
++    expect(await dao.getComplianceVersion(), '2026-08-24');
++    final rows = await db.query('user_settings', where: 'id = 1');
++    expect(rows.first['compliance_agreed'], equals(1));
++    expect(rows.first['compliance_version'], equals('2026-08-24'));
++  });
++
++  test('setComplianceAgreed overwrites previous version', () async {
++    await dao.setComplianceAgreed('2026-08-24');
++    await dao.setComplianceAgreed('2026-09-01');
++    expect(await dao.getComplianceVersion(), '2026-09-01');
++  });
++
++  test('getComplianceVersion returns null when row missing', () async {
++    await db.delete('user_settings', where: 'id = 1');
++    expect(await dao.getComplianceVersion(), isNull);
++  });
++}
+\ No newline at end of file
+diff --git a/lumira_app_flutter/test/features/splash/compliance_dialog_test.dart b/lumira_app_flutter/test/features/splash/compliance_dialog_test.dart
+new file mode 100644
+index 0000000..7a680a2
+--- /dev/null
++++ b/lumira_app_flutter/test/features/splash/compliance_dialog_test.dart
+@@ -0,0 +1,85 @@
++import 'package:flutter/material.dart';
++import 'package:flutter_riverpod/flutter_riverpod.dart';
++import 'package:flutter_test/flutter_test.dart';
++import 'package:go_router/go_router.dart';
++
++import 'package:lumira_app_flutter/core/router/route_names.dart';
++import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
++import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
++import 'package:lumira_app_flutter/features/splash/widgets/compliance_dialog.dart';
++
++/// 注册合规三个文档路由，供点链接 push 验证。
++final _complianceRoutes = <RouteBase>[
++  GoRoute(
++    path: RouteNames.profileComplianceAgreement,
++    builder: (_, __) => const Scaffold(body: Text('协议页')),
++  ),
++  GoRoute(
++    path: RouteNames.profileCompliancePrivacy,
++    builder: (_, __) => const Scaffold(body: Text('隐私页')),
++  ),
++  GoRoute(
++    path: RouteNames.profileComplianceSdk,
++    builder: (_, __) => const Scaffold(body: Text('SDK页')),
++  ),
++];
++
++Widget wrap(Widget child) {
++  final router = GoRouter(
++    initialLocation: '/x',
++    routes: [
++      GoRoute(path: '/x', builder: (_, __) => child),
++      ..._complianceRoutes,
++    ],
++  );
++  return ProviderScope(
++    overrides: [
++      themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
++      uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
++    ],
++    child: MaterialApp.router(routerConfig: router),
++  );
++}
++
++void main() {
++  testWidgets('渲染标题、三链接与两按钮文案', (tester) async {
++    await tester.pumpWidget(wrap(ComplianceDialog(
++      onAgree: () {},
++      onDisagree: () {},
++    )));
++    await tester.pump();
++
++    expect(find.text('用户协议与隐私政策'), findsOneWidget);
++    expect(find.textContaining('《用户协议》'), findsOneWidget);
++    expect(find.textContaining('《隐私政策》'), findsOneWidget);
++    expect(find.textContaining('《个人信息清单与第三方SDK目录》'), findsOneWidget);
++    expect(find.text('同意并开始使用'), findsOneWidget);
++    expect(find.text('不同意并退出'), findsOneWidget);
++  });
++
++  testWidgets('点「同意并开始使用」触发 onAgree', (tester) async {
++    var agreed = false;
++    await tester.pumpWidget(wrap(ComplianceDialog(
++      onAgree: () => agreed = true,
++      onDisagree: () {},
++    )));
++    await tester.pump();
++
++    await tester.tap(find.text('同意并开始使用'));
++    await tester.pump();
++    expect(agreed, isTrue);
++  });
++
++  testWidgets('点「不同意并退出」触发 onDisagree', (tester) async {
++    var disagreed = false;
++    await tester.pumpWidget(wrap(ComplianceDialog(
++      onAgree: () {},
++      onDisagree: () => disagreed = true,
++    )));
++    await tester.pump();
++
++    await tester.tap(find.text('不同意并退出'));
++    await tester.pump();
++    expect(disagreed, isTrue);
++  });
++}
+\ No newline at end of file
+diff --git a/lumira_app_flutter/test/features/splash/splash_page_test.dart b/lumira_app_flutter/test/features/splash/splash_page_test.dart
+index 069e041..60d2068 100644
+--- a/lumira_app_flutter/test/features/splash/splash_page_test.dart
++++ b/lumira_app_flutter/test/features/splash/splash_page_test.dart
+@@ -1,18 +1,19 @@
+ import 'package:flutter/material.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ import 'package:flutter_test/flutter_test.dart';
+ import 'package:go_router/go_router.dart';
+ 
+ import 'package:lumira_app_flutter/core/auth/auth_controller.dart';
+ import 'package:lumira_app_flutter/core/auth/auth_dao.dart';
+ import 'package:lumira_app_flutter/core/auth/auth_state.dart';
++import 'package:lumira_app_flutter/core/compliance/compliance_gate.dart';
+ import 'package:lumira_app_flutter/core/router/route_names.dart';
+ import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
+ import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
+ import 'package:lumira_app_flutter/features/splash/pages/splash_page.dart';
+ import 'package:lumira_app_flutter/shared/widgets/lumira/feedback/lumira_progress.dart';
+ import 'package:lumira_app_flutter/shared/widgets/brand/lumira_logo.dart';
+ 
+ /// 测试用 AuthDao stub（避免依赖 sqflite）
+ class _NoopDao implements AuthDaoLike {
+   @override
+@@ -41,20 +42,21 @@ class _FakeAuthController extends AuthController {
+         ) {
+     state = initial;
+   }
+ }
+ 
+ Widget _wrapWithRouter(
+   Widget child, {
+   ThemeKey theme = ThemeKey.warmWhite,
+   AuthState? authState,
+   _FakeAuthController? authController,
++  bool awaitingCompliance = false,
+ }) {
+   final router = GoRouter(
+     initialLocation: RouteNames.splash,
+     routes: [
+       GoRoute(
+         path: RouteNames.splash,
+         name: 'splash',
+         builder: (context, state) => child,
+       ),
+       GoRoute(
+@@ -70,20 +72,21 @@ Widget _wrapWithRouter(
+   final controller = authController ??
+       _FakeAuthController(
+         authState ?? const AuthState(status: AuthStatus.registered),
+       );
+ 
+   return ProviderScope(
+     overrides: [
+       themeKeyProvider.overrideWith((ref) => theme),
+       uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
+       authControllerProvider.overrideWith((ref) => controller),
++      complianceAwaitingProvider.overrideWith((ref) => awaitingCompliance),
+     ],
+     child: MaterialApp.router(routerConfig: router),
+   );
+ }
+ 
+ void main() {
+   testWidgets('SplashPage renders logo + title + caption + brand halo', (tester) async {
+     await tester.pumpWidget(_wrapWithRouter(const SplashPage()));
+     await tester.pump(const Duration(milliseconds: 100));
+ 
+@@ -160,11 +163,42 @@ void main() {
+     expect(fakeController.state.status, AuthStatus.failed);
+ 
+     // 点击重试按钮
+     await tester.tap(find.text('重试'));
+     await tester.pumpAndSettle();
+ 
+     // 验证 registerIfNeeded 被触发：状态从 failed 转为 registered
+     // （doRegister stub 立即返回成功，所以状态应为 registered）
+     expect(fakeController.state.status, AuthStatus.registered);
+   });
++
++  testWidgets('未待同意时不弹合规窗', (tester) async {
++    await tester.pumpWidget(_wrapWithRouter(const SplashPage()));
++    await tester.pump(const Duration(milliseconds: 100));
++    expect(find.text('用户协议与隐私政策'), findsNothing);
++  });
++
++  testWidgets('待同意时弹出合规窗', (tester) async {
++    await tester.pumpWidget(_wrapWithRouter(
++      const SplashPage(),
++      awaitingCompliance: true,
++    ));
++    await tester.pump(const Duration(milliseconds: 100));
++    expect(find.text('用户协议与隐私政策'), findsOneWidget);
++    expect(find.text('同意并开始使用'), findsOneWidget);
++    expect(find.text('不同意并退出'), findsOneWidget);
++  });
++
++  testWidgets('awaitingCompliance 且 auth 已注册：1.8s 后仍在弹窗不跳转', (tester) async {
++    await tester.pumpWidget(_wrapWithRouter(
++      const SplashPage(),
++      authState: const AuthState(
++        status: AuthStatus.registered,
++        isNewDevice: false,
++      ),
++      awaitingCompliance: true,
++    ));
++    await tester.pump(const Duration(milliseconds: 1800)); // 越过原 1.8s redirectTimer
++    // 关键回归断言：即使已注册，待同意时也绝不跳走、弹窗仍在
++    expect(find.text('用户协议与隐私政策'), findsOneWidget);
++  });
+ }

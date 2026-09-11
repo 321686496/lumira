@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 精选集导出海报 · 光影纸册（3:4 & 9:16 · 1-9张全版式）</title>
+<style>
+  :root{
+    --gold:#C9A96E;--gold-deep:#B08D4F;--gold-light:#E6D2A8;
+    --ink:#2B2620;--text2:#6B645C;--text3:#9C9078;
+    --surface:#FDFBF7;--line:rgba(201,169,110,.34);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:linear-gradient(165deg,#EAE4D8 0%,#F1EBDF 100%);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:44px 22px 130px;display:flex;flex-direction:column;align-items:center;-webkit-font-smoothing:antialiased}
+  .page-title{color:#3D362B;font-size:19px;letter-spacing:4px;font-weight:600;display:flex;align-items:center;gap:14px}
+  .page-title::before,.page-title::after{content:"";width:48px;height:1px;background:var(--line)}
+  .page-sub{color:#8A7F6E;font-size:12px;letter-spacing:2px;text-align:center;line-height:2;max-width:780px;margin-top:10px}
+  .serif{font-family:"Noto Serif SC","Songti SC",Georgia,serif}
+
+  section{width:100%;max-width:1420px;margin-top:70px;display:flex;flex-direction:column;align-items:center}
+  .sec-label{display:flex;align-items:center;gap:14px;margin-bottom:8px}
+  .sec-label .t{font-size:16px;letter-spacing:3px;color:#4A4238;font-weight:600}
+  .sec-label .d{font-size:11px;letter-spacing:1px;color:#A08A5F}
+  .sec-sub{font-size:11px;color:#9A8F7C;letter-spacing:1px;margin-bottom:30px;text-align:center}
+  .board{display:flex;flex-wrap:wrap;gap:26px;justify-content:center;align-items:stretch}
+
+  .poster{position:relative;background:var(--surface);border:1px solid rgba(201,169,110,.22);
+    border-radius:18px;box-shadow:0 26px 60px -32px rgba(56,44,24,.45);overflow:hidden;
+    display:flex;flex-direction:column}
+  .poster.p34{width:300px;height:400px}
+  .poster.p916{width:250px;height:444px}
+  .poster .inner{flex:1;min-height:0;display:flex;flex-direction:column;padding:15px 16px 13px}
+
+  .head{flex:0 0 auto}
+  .head .eyebrow{display:flex;align-items:center;gap:7px;font-size:9px;letter-spacing:3px;color:var(--gold-deep);font-weight:700}
+  .head .eyebrow::before{content:"";width:16px;height:1px;background:var(--gold)}
+  .head .title{margin-top:7px;font-size:18px;font-weight:700;color:var(--ink);letter-spacing:2px;line-height:1.22}
+  .head .desc{margin-top:4px;font-size:10px;color:var(--text2);line-height:1.55;letter-spacing:.5px}
+  .head .meta{margin-top:4px;font-size:8px;letter-spacing:1px;color:var(--text3)}
+
+  .grid{flex:1;min-height:0;margin-top:12px;display:grid;gap:3px;padding:2px;border-radius:12px;
+    background:linear-gradient(160deg,rgba(201,169,110,.16),rgba(201,169,110,.04))}
+  .grid .ph{overflow:hidden;border-radius:8px;background:#E9E0CE}
+  .grid .ph img{width:100%;height:100%;object-fit:cover;display:block}
+
+  .foot{flex:0 0 auto;margin-top:11px;padding-top:9px;border-top:1px solid var(--line);
+    display:flex;align-items:baseline;justify-content:space-between}
+  .foot .cnt{font-size:10px;letter-spacing:2px;color:var(--text2)}
+  .foot .cnt b{font-family:Georgia,serif;font-size:15px;color:var(--gold-deep);padding:0 3px;font-weight:600}
+  .foot .app{font-size:8px;letter-spacing:2px;color:var(--text3)}
+
+  .cell{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .cell .cap{font-size:10px;color:#85775B;letter-spacing:2px;background:#F2EAD9;border:1px solid var(--line);padding:3px 13px;border-radius:13px}
+  .badge{font-size:9px;color:#A08A5F;letter-spacing:1px}
+  .note{max-width:880px;margin-top:40px;text-align:center;font-size:11px;line-height:2;color:#9A8F7C;letter-spacing:1px}
+</style>
+</head>
+<body>
+  <div class="page-title">精选集 · 导出海报 · 光影纸册</div>
+  <div class="page-sub">4 张 / 9 张 → 微信式四宫格 / 九宫格（整齐密铺）<br>其余 1/2/3/5/6/7/8 张 → 错落大图+小图编辑排版 · 品牌语言统一（暖白 + 金色发丝线 + 衬线标题）</div>
+
+  <section>
+    <div class="sec-label"><span class="t">3:4 · 竖版</span><span class="d">Portrait</span></div>
+    <div class="sec-sub">竖屏画幅 · 适合分享到小红书 / 相册大图</div>
+    <div class="board" id="board34"></div>
+  </section>
+
+  <section>
+    <div class="sec-label"><span class="t">9:16 · 故事版</span><span class="d">Story</span></div>
+    <div class="sec-sub">超竖屏画幅 · 适合抖音 / ins 故事 / 朋友圈长图</div>
+    <div class="board" id="board916"></div>
+  </section>
+
+  <div class="note">
+    1/2/3/5/6/7/8 张为首图放大或错落补齐的编辑排版；4/9 张严格等于微信式宫格。<br>
+    可以指定某个张数先精修，或整体满意后我落地 Flutter。
+  </div>
+
+<script>
+  const IMG = [
+    'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=young%20woman%20in%20a%20flowing%20dress%20by%20the%20sea%20at%20golden%20hour%2C%20soft%20warm%20light%2C%20editorial%20travel%20photography&image_size=square_hd',
+    'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=girl%20walking%20through%20a%20wildflower%20meadow%2C%20back%20view%2C%20soft%20pastel%20tones%2C%20golden%20light%2C%20photography&image_size=square_hd',
+    'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=small%20harbor%20at%20sunset%20with%20boats%2C%20warm%20orange%20and%20dusty%20blue%20sky%2C%20travel%20photography&image_size=square_hd',
+    'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cozy%20cafe%20corner%20with%20latte%20art%20and%20croissant%2C%20warm%20morning%20sunlight%2C%20food%20photography&image_size=square_hd',
+    'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=misty%20mountain%20ridge%20at%20dawn%2C%20soft%20lavender%20and%20cream%20tones%2C%20minimalist%20landscape&image_size=square_hd',
+    'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sunlit%20old%20town%20alley%20with%20laundry%20lines%2C%20soft%20morning%20light%2C%20travel%20photography&image_size=square_hd',
+    'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sunbeams%20through%20a%20window%20on%20a%20wooden%20table%20with%20a%20book%2C%20cozy%20minimal%20still%20life&image_size=square_hd',
+    'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=quiet%20snow%20field%20at%20twilight%2C%20soft%20blue%20tones%2C%20minimalist%20landscape%20photography&image_size=square_hd',
+    'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=small%20flower%20shop%20facade%20with%20bicycles%2C%20soft%20daylight%2C%20european%20street%2C%20travel%20photography&image_size=square_hd'
+  ];
+
+  // 每张数的网格：[cols, rows, spans]  spans{k:[row,col,rowSpan,colSpan]} 按 0 起始索引；未列出的按顺序自动填充
+  const LAYOUTS = {
+    1:{cols:'1fr',              rows:'1fr',                spans:{}},
+    2:{cols:'1fr 1fr',          rows:'1fr',                spans:{}},
+    3:{cols:'1fr 1fr',          rows:'1fr 1fr',            spans:{0:[1,1,1,2]}},
+    4:{cols:'1fr 1fr',          rows:'1fr 1fr',            spans:{}},
+    5:{cols:'2fr 1fr 1fr',      rows:'1fr 1fr',            spans:{0:[1,1,1,2]}},
+    6:{cols:'1fr 1fr 1fr',      rows:'1fr 1fr',            spans:{}},
+    7:{cols:'1fr 1fr 1fr',      rows:'1fr 1fr 1fr',        spans:{0:[1,1,2,1],5:[3,1,1,2]}},
+    8:{cols:'1fr 1fr 1fr 1fr',  rows:'1fr 1fr',            spans:{}},
+    9:{cols:'1fr 1fr 1fr',      rows:'1fr 1fr 1fr',        spans:{}}
+  };
+
+  function buildPoster(count, ratio){
+    const L = LAYOUTS[count];
+    const poster = document.createElement('div');
+    poster.className = 'poster '+ratio;
+    const inner = document.createElement('div'); inner.className='inner';
+
+    const head = document.createElement('div'); head.className='head';
+    const eb = document.createElement('div'); eb.className='eyebrow'; eb.textContent='LUMIRA · 精选集';
+    const title = document.createElement('div'); title.className='title serif'; title.textContent='晴空旅行手记';
+    const desc = document.createElement('div'); desc.className='desc'; desc.textContent='把沿途的光，都收进这一页。';
+    const meta = document.createElement('div'); meta.className='meta'; meta.textContent='2026.08.31 · 旅行手记';
+    head.appendChild(eb); head.appendChild(title); head.appendChild(desc); head.appendChild(meta);
+
+    const grid = document.createElement('div'); grid.className='grid';
+    grid.style.gridTemplateColumns=L.cols;
+    grid.style.gridTemplateRows=L.rows;
+    for (let i=0;i<count;i++){
+      const ph=document.createElement('div'); ph.className='ph';
+      const img=document.createElement('img'); img.src=IMG[i%IMG.length]; ph.appendChild(img);
+      if (L.spans[i]){
+        const s=L.spans[i];
+        ph.style.gridRow=s[0]+' / '+(s[0]+s[2]);
+        ph.style.gridColumn=s[1]+' / '+(s[1]+s[3]);
+      }
+      grid.appendChild(ph);
+    }
+
+    const foot=document.createElement('div'); foot.className='foot';
+    const cnt=document.createElement('span'); cnt.className='cnt';
+    cnt.innerHTML='共收录 <b>'+count+'</b> 张';
+    const app=document.createElement('span'); app.className='app'; app.textContent='如画 LUMIRA';
+    foot.appendChild(cnt); foot.appendChild(app);
+
+    inner.appendChild(head); inner.appendChild(grid); inner.appendChild(foot);
+    poster.appendChild(inner);
+    return poster;
+  }
+
+  function render(boardId, ratio){
+    const board=document.getElementById(boardId);
+    for (let n=1;n<=9;n++){
+      const cell=document.createElement('div'); cell.className='cell';
+      const cap=document.createElement('span'); cap.className='cap'; cap.textContent=(n===4||n===9)? n+' 张 · 微信式宫格' : n+' 张';
+      cell.appendChild(cap);
+      cell.appendChild(buildPoster(n, ratio));
+      board.appendChild(cell);
+    }
+  }
+  render('board34','p34');
+  render('board916','p916');
+</script>
+</body>
+</html>

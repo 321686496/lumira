@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_tokens.dart';
 
 /// 单条积分获取途径数据
+///
+/// [route] 非空时该行整行可点击并跳转到对应页面（如「客服充值」进入充值说明页）。
 @immutable
 class PointsEarnWay {
   final IconData icon;
   final String title;
   final String desc;
+  final String? route;
 
-  const PointsEarnWay(this.icon, this.title, this.desc);
+  const PointsEarnWay(this.icon, this.title, this.desc, {this.route});
 }
 
 /// 全局积分获取途径列表（钱包页「获取积分」卡片与积分不足弹窗共用同一来源）
@@ -23,6 +28,12 @@ const List<PointsEarnWay> pointsEarnWays = [
   PointsEarnWay(Icons.emoji_events_outlined, '完成挑战', '+5 积分/次，每日上限 3 次'),
   PointsEarnWay(Icons.card_giftcard, '邀请好友', '双方各得 +30，每日上限 3 次'),
   PointsEarnWay(Icons.trending_up, '等级升级', '每级发放，档位递增'),
+  PointsEarnWay(
+    Icons.headset_mic_outlined,
+    '客服充值',
+    '联系客服充值，多充多送',
+    route: RouteNames.pointsRecharge,
+  ),
 ];
 
 /// 获取积分途径列表
@@ -67,7 +78,7 @@ class _SplitRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final content = Row(
       children: [
         Icon(way.icon, size: 16, color: tokens.brand),
         const SizedBox(width: 10),
@@ -81,11 +92,24 @@ class _SplitRow extends StatelessWidget {
             ),
           ),
         ),
-        Text(
-          way.desc,
-          style: TextStyle(fontSize: 11, color: tokens.textTertiary),
+        Flexible(
+          child: Text(
+            way.desc,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 11, color: tokens.textTertiary),
+          ),
         ),
+        if (way.route != null) ...[
+          const SizedBox(width: 4),
+          Icon(Icons.chevron_right, size: 14, color: tokens.textTertiary),
+        ],
       ],
+    );
+    if (way.route == null) return content;
+    return GestureDetector(
+      onTap: () => GoRouter.of(context).push(way.route!),
+      behavior: HitTestBehavior.opaque,
+      child: content,
     );
   }
 }
@@ -98,7 +122,7 @@ class _StackedRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final content = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
@@ -126,7 +150,15 @@ class _StackedRow extends StatelessWidget {
             ],
           ),
         ),
+        if (way.route != null)
+          Icon(Icons.chevron_right, size: 14, color: tokens.textTertiary),
       ],
+    );
+    if (way.route == null) return content;
+    return GestureDetector(
+      onTap: () => GoRouter.of(context).push(way.route!),
+      behavior: HitTestBehavior.opaque,
+      child: content,
     );
   }
 }

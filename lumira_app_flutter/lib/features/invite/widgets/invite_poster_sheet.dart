@@ -14,7 +14,7 @@ Future<void> showInvitePosterSheet({
   required String code,
   required ThemeTokens tokens,
 }) async {
-  // 卡片级捕获键：导入导出分享严格 3:4（1080×1440）的卡片本体，
+  // 卡片级捕获键：导入导出分享严格 9:16 的卡片本体（原 3:4，已随布局改竖版），
   // 而非整页预览容器（外层 posterKey 自持，二者为不同 GlobalKey 实例）。
   final plainContentKey = GlobalKey();
   await PosterGenerator.showPoster(

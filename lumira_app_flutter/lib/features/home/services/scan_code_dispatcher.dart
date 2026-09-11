@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../shared/widgets/lumira/lumira.dart' as lumira;
+import '../../templates/services/template_share_code.dart';
 import '../../templates/services/template_share_service.dart';
 import '../../templates/widgets/template_import_sheet.dart';
 
@@ -109,9 +111,34 @@ class ScanCodeDispatcher {
     return null;
   }
 
+  /// 尝试把离线模板链接解析为「可跳转模板详情的模板 id」。
+  ///
+  /// 模板/照片分享海报二维码编码 `lumira://tpl/{base64}`（[TemplateShareCode.buildPosterQrData]），
+  /// 其 .lumira JSON 携带稳定 `meta.id`（[TemplateExporter.exportToLumira]）。仅当该模板
+  /// 在内置/远程体系（`source != 'custom'`）且本地存在时，才能定位到对应模板详情页。
+  /// 返回 null 表示应回退到导入（自定义模板跨设备分享／二维码导入等场景）。
+  static Future<String?> _resolvePosterTemplateId(
+      WidgetRef ref, String rawLink) async {
+    final parsed = TemplateShareCode.parseLink(rawLink.trim());
+    if (parsed == null) return null;
+    final meta = parsed['meta'];
+    final id = meta is Map ? meta['id'] : null;
+    if (id is! String || id.isEmpty) return null;
+    try {
+      final dao = await ref.read(templatesDaoProvider.future);
+      final record = await dao.getById(id);
+      if (record == null || record.source == 'custom') return null;
+      return id;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// 执行分类结果对应的操作。
   ///
-  /// - 模板三类码：复用 [TemplateImportSheet.importScannedText] 导入（与「扫码导入」一致）。
+  /// - 离线模板链接（模板/照片分享海报）：优先跳转到对应模板详情；无法定位到
+  ///   详情（如自定义模板）时回退到导入（[templateOfflineLink]）。
+  /// - 分享码 / 在线 token：复用 [TemplateImportSheet.importScannedText] 导入。
   /// - 恢复码 / 邀请码：跳转对应页面并预填，由用户确认后触发（不直接执行，避免误操作）。
   /// - 未知：Toast 提示。
   static Future<void> execute(
@@ -120,8 +147,24 @@ class ScanCodeDispatcher {
     ScanCodeResult result,
   ) async {
     switch (result.type) {
-      case ScanCodeType.templateShareCode:
       case ScanCodeType.templateOfflineLink:
+        // 海报二维码（模板/照片分享海报）→ 跳转对应模板详情
+        final detailId = await _resolvePosterTemplateId(ref, result.rawText);
+        // ignore: use_build_context_synchronously
+        if (!context.mounted) return;
+        if (detailId != null) {
+          GoRouter.of(context).push(
+            RouteNames.withTemplateId(RouteNames.templatesDetail, detailId),
+          );
+        } else {
+          await TemplateImportSheet.importScannedText(
+            context,
+            ref,
+            result.rawText,
+          );
+        }
+        break;
+      case ScanCodeType.templateShareCode:
       case ScanCodeType.templateOnlineToken:
         await TemplateImportSheet.importScannedText(
           context,
