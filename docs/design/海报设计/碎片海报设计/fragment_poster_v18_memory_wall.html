@@ -11,16 +11,16 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { min-height: 100vh; display: grid; place-items: center; padding: 36px 20px; background: #EFEAE0; font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif; color: #2A241C; }
     .serif { font-family: "Noto Serif SC", "Songti SC", Georgia, serif; }
-    .poster { width: min(360px, calc((100vh - 72px) * 0.75)); min-width: 300px; aspect-ratio: 3 / 4; display: flex; flex-direction: column; padding: 21px 20px 15px; overflow: hidden; border: 1px solid rgba(201, 169, 110, .34); border-radius: 5px; background: linear-gradient(168deg, #FDFBF7 0%, #FBF5EA 58%, #F5EFE3 100%); box-shadow: 0 22px 54px -30px rgba(60, 48, 28, .36); }
+    .poster { width: min(360px, calc((100vh - 72px) * 0.75)); min-width: 300px; aspect-ratio: 3 / 4; display: flex; flex-direction: column; padding: 21px 20px 15px; overflow: hidden; border-radius: 5px; background: linear-gradient(168deg, #FDFBF7 0%, #FBF5EA 58%, #F5EFE3 100%); box-shadow: 0 22px 54px -30px rgba(60, 48, 28, .36); }
     .top { display: flex; align-items: flex-start; justify-content: space-between; }
-    .brand-en { font-size: 10px; font-weight: 700; letter-spacing: 4.2px; color: #A9884B; }
-    .brand-zh { margin-top: 3px; font-size: 8.8px; letter-spacing: 3px; color: #9C9180; }
-    .seal { padding: 4px 10px; border: 1px solid rgba(201, 169, 110, .72); border-radius: 999px; background: rgba(253, 251, 247, .72); font-size: 8.5px; font-weight: 600; letter-spacing: 2px; color: #A9884B; }
+    .brand-en { font-size: 10px; font-weight: 700; letter-spacing: 4.2px; color: #7A5E24; }
+    .brand-zh { margin-top: 3px; font-size: 8.8px; letter-spacing: 3px; color: #6B6257; }
+    .seal { padding: 4px 10px; border: 1px solid rgba(201, 169, 110, .72); border-radius: 999px; background: rgba(253, 251, 247, .72); font-size: 8.5px; font-weight: 600; letter-spacing: 2px; color: #7A5E24; }
     .title-block { margin-top: 15px; }
-    .kicker { font-size: 8.5px; font-weight: 600; letter-spacing: 3px; color: #A9884B; }
+    .kicker { font-size: 8.5px; font-weight: 600; letter-spacing: 3px; color: #7A5E24; }
     h1 { margin-top: 7px; font-size: 28px; font-weight: 700; line-height: 1.22; letter-spacing: 1px; }
     h1 em { font-style: normal; color: #A9884B; }
-    .subtitle { margin-top: 7px; font-size: 9.5px; line-height: 1.65; letter-spacing: .4px; color: #6B6257; }
+    .subtitle { margin-top: 7px; font-size: 9.5px; line-height: 1.65; letter-spacing: .4px; color: #5E5648; }
     .memory-wall { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.24fr 1fr; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 16px; }
     .memory-item { position: relative; overflow: hidden; border-radius: 5px; }
     .slot-1 { grid-column: 1; grid-row: 1 / span 2; }
@@ -30,8 +30,8 @@
     .slot-5 { grid-column: 2; grid-row: 3; }
     .memory-item img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
     .memory-item.filled::after { content: ""; position: absolute; inset: 0; border: 1px solid rgba(201, 169, 110, .42); border-radius: inherit; pointer-events: none; }
-    .number { position: absolute; top: 6px; left: 6px; z-index: 2; padding: 2px 6px; border-radius: 999px; background: rgba(253, 251, 247, .82); border: 1px solid rgba(169, 136, 75, .35); font-size: 7.5px; font-weight: 700; letter-spacing: 1px; color: #A9884B; }
-    .memory-item.pending { display: grid; place-items: center; border: 1px dashed rgba(169, 136, 75, .68); border-radius: 5px; background: rgba(246, 241, 232, .74); color: #9C9180; }
+    .number { position: absolute; top: 6px; left: 6px; z-index: 2; padding: 2px 6px; border-radius: 999px; background: rgba(253, 251, 247, .82); border: 1px solid rgba(169, 136, 75, .35); font-size: 7.5px; font-weight: 700; letter-spacing: 1px; color: #7A5E24; }
+    .memory-item.pending { display: grid; place-items: center; border: 1px dashed rgba(169, 136, 75, .68); border-radius: 5px; background: rgba(246, 241, 232, .74); color: #6B6257; }
     .pending span { font-size: 8.5px; letter-spacing: 1.5px; }
     .progress { display: flex; align-items: center; gap: 13px; margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(201, 169, 110, .34); }
     .count { min-width: 58px; font-family: Georgia, serif; font-size: 29px; font-weight: 700; line-height: 1; color: #A9884B; }
@@ -40,8 +40,8 @@
     .segments { display: flex; gap: 4px; }
     .segments i { flex: 1; height: 3px; border-radius: 2px; background: rgba(201, 169, 110, .24); }
     .segments i.on { background: #C9A96E; }
-    .invite { margin-top: 6px; font-size: 8.5px; letter-spacing: 1.4px; color: #9C9180; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .foot { margin-top: 9px; text-align: center; font-size: 7.5px; letter-spacing: 2.6px; color: #9C9180; }
+    .invite { margin-top: 6px; font-size: 8.5px; letter-spacing: 1.4px; color: #6B6257; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .foot { margin-top: 9px; text-align: center; font-size: 7.5px; letter-spacing: 2.6px; color: #6B6257; }
   </style>
 </head>
 <body>
@@ -62,10 +62,10 @@
       <figure class="memory-item slot-4 filled"><img src="https://picsum.photos/seed/lumira-v18-c/420/280" alt="已收集的横向光影照片"><figcaption class="number">03</figcaption></figure>
       <div class="memory-item slot-5 pending" role="img" aria-label="待拼碎片"><span>+ 待拼</span></div>
     </section>
-    <section class="progress" aria-label="收集进度">
+    <section class="progress" role="progressbar" aria-label="收集进度" aria-valuemin="0" aria-valuemax="5" aria-valuenow="3">
       <div class="count">3 <small>/ 5</small></div>
       <div class="progress-meta">
-        <div class="segments"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div>
+        <div class="segments" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div>
         <div class="invite">还差 2 帧 · 一起凑齐这束光</div>
       </div>
     </section>
