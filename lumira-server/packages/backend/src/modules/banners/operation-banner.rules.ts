@@ -11,4 +11,5 @@ export const OPERATION_BANNER_ROUTES = [
   '/invite',
   '/points/wallet',
   '/templates/unlock',
+  '/templates/detail',
 ] as const;

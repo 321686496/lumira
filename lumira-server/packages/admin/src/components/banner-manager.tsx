@@ -28,12 +28,13 @@ import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
 import { useToast } from '@/hooks/use-toast';
 import { saveBanner, removeBanner, setBannerActive, uploadBannerImage } from '@/actions/banners';
 import { toAssetUrl } from '@/lib/asset-url';
-import type { BannerAdminItem, BannerPayload } from '@/types/admin';
+import type { AdminTemplateListItem, BannerAdminItem, BannerPayload } from '@/types/admin';
 
 const ROUTE_OPTIONS = [
   { value: '/invite', label: '邀请页（/invite）' },
   { value: '/points/wallet', label: '积分钱包（/points/wallet）' },
   { value: '/templates/unlock', label: '模板解锁（/templates/unlock）' },
+  { value: '/templates/detail', label: '指定模板详情（/templates/detail）' },
 ];
 
 const ROUTE_LABEL = Object.fromEntries(ROUTE_OPTIONS.map((r) => [r.value, r.label])) as Record<string, string>;
@@ -58,6 +59,7 @@ interface FormState {
   route: string;
   condition: string;
   imageUrl: string;
+  templateId: string;
   sortOrder: number;
   isActive: boolean;
 }
@@ -70,6 +72,7 @@ const EMPTY_FORM: FormState = {
   route: '/invite',
   condition: 'nonNewUserNotInvited',
   imageUrl: '',
+  templateId: '',
   sortOrder: 0,
   isActive: true,
 };
@@ -79,7 +82,13 @@ function formatSec(value: number): string {
   return new Date(value * 1000).toLocaleString();
 }
 
-export function BannerManager({ banners }: { banners: BannerAdminItem[] }) {
+export function BannerManager({
+  banners,
+  templates,
+}: {
+  banners: BannerAdminItem[];
+  templates: AdminTemplateListItem[];
+}) {
   const router = useRouter();
   const { toast } = useToast();
 
@@ -128,6 +137,7 @@ export function BannerManager({ banners }: { banners: BannerAdminItem[] }) {
       route: b.route,
       condition: b.condition,
       imageUrl: b.imageUrl || '',
+      templateId: b.templateId || '',
       sortOrder: b.sortOrder,
       isActive: b.isActive === 1,
     });
@@ -191,6 +201,10 @@ export function BannerManager({ banners }: { banners: BannerAdminItem[] }) {
       setError('请填写角标文案');
       return;
     }
+    if (form.route === '/templates/detail' && !form.templateId) {
+      setError('选择「指定模板详情」后请在下方面板中选择一个目标模板');
+      return;
+    }
 
     const payload: BannerPayload = {
       title: form.title.trim(),
@@ -198,6 +212,8 @@ export function BannerManager({ banners }: { banners: BannerAdminItem[] }) {
       tag: form.tag.trim(),
       route: form.route,
       condition: form.condition,
+      // route 为模板详情时下发模板 id，其余清空
+      templateId: form.route === '/templates/detail' ? (form.templateId || '') : '',
       // 空串 = 清除配图；未改动时为后端原值，原样传回
       imageUrl: form.imageUrl,
       sortOrder: Number(form.sortOrder) || 0,
@@ -523,6 +539,87 @@ export function BannerManager({ banners }: { banners: BannerAdminItem[] }) {
                 </Select>
               </div>
             </div>
+
+            {/* 指定模板详情：可视化选择目标模板（选中自动回填模板封面为配图） */}
+            {form.route === '/templates/detail' && (
+              <div className="space-y-2">
+                <Label>选择目标模板 *</Label>
+                <p className="text-xs text-muted-foreground">
+                  点击选中一个模板作为点击 Banner 后的跳转目标（共 {templates.length} 个启用模板）。
+                </p>
+                <div className="grid max-h-56 grid-cols-2 gap-2 overflow-auto pr-1 sm:grid-cols-3">
+                  {templates.length === 0 && (
+                    <p className="col-span-full py-6 text-center text-xs text-muted-foreground">
+                      暂无启用中的模板，请先到「模板管理」上架模板。
+                    </p>
+                  )}
+                  {templates.map((t) => {
+                    const selected = form.templateId === t.id;
+                    const cover = toAssetUrl(t.coverUrl, '') ?? '';
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            templateId: t.id,
+                            // 选中模板时自动用其封面作 Banner 配图（视觉统一）
+                            imageUrl: t.coverUrl || form.imageUrl,
+                          })
+                        }
+                        className={[
+                          'group relative flex flex-col overflow-hidden rounded-lg border text-left transition',
+                          selected
+                            ? 'border-primary ring-2 ring-primary/40'
+                            : 'border-border hover:border-primary/50',
+                        ].join(' ')}
+                      >
+                        {cover ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={cover}
+                            alt=""
+                            className="aspect-[4/3] w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex aspect-[4/3] w-full items-center justify-center bg-muted text-xs text-muted-foreground">
+                            无封面
+                          </div>
+                        )}
+                        <div className="flex flex-col gap-0.5 p-2 min-w-0">
+                          <span
+                            className={[
+                              'truncate text-xs font-medium text-foreground',
+                              selected && 'text-primary',
+                            ].join(' ')}
+                            title={t.name}
+                          >
+                            {t.name}
+                          </span>
+                          {t.categoryName && (
+                            <span className="truncate text-[10px] text-muted-foreground/70">
+                              {t.categoryName}
+                              {t.price > 0 ? ` · ¥${t.price}` : ' · 免费'}
+                            </span>
+                          )}
+                          {t.isActive === false && (
+                            <span className="w-fit rounded bg-muted px-1 text-[10px] text-muted-foreground">
+                              已停用
+                            </span>
+                          )}
+                        </div>
+                        {selected && (
+                          <span className="absolute right-1.5 top-1.5 rounded bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                            已选
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">

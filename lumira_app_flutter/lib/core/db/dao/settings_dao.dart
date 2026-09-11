@@ -538,6 +538,8 @@ class SettingsDao {
               'route': b.route,
               'condition': b.condition.name,
               if (b.imageUrl != null) 'imageUrl': b.imageUrl,
+              if (b.route == '/templates/detail' && b.templateId != null)
+                'templateId': b.templateId,
             },
         ]),
         Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,

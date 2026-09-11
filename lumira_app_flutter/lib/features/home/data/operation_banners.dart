@@ -44,6 +44,7 @@ class OperationBanner {
     required this.route,
     required this.condition,
     this.imageUrl,
+    this.templateId,
   });
 
   final String id;
@@ -53,7 +54,7 @@ class OperationBanner {
   /// 如「邀请有礼」「积分乐园」「上新」
   final String tag;
 
-  /// 真实路由：/invite、/points/wallet、/templates/unlock
+  /// 真实路由：/invite、/points/wallet、/templates/unlock、/templates/detail
   final String route;
 
   /// 展示条件
@@ -62,6 +63,9 @@ class OperationBanner {
   /// 运营配图 URL（可空）：非空时 App 卡片右侧 40% 区域 contain 完整显示，
   /// 为空回退品牌渐变背景（与旧行为兼容）
   final String? imageUrl;
+
+  /// 目标模板 id（仅 route=/templates/detail 时有值）：用于拼模板详情页跳转
+  final String? templateId;
 }
 
 /// 运营条目目录（顺序即优先级，满足者最多取 1 条置于 slot 0）
@@ -114,6 +118,7 @@ const List<String> kOperationBannerRoutes = [
   '/invite',
   '/points/wallet',
   '/templates/unlock',
+  '/templates/detail',
 ];
 
 /// 后端下发条目 → 运营位模型；字段缺失/route 越白名单/condition 无法识别 → null（丢弃）。
@@ -135,9 +140,16 @@ OperationBanner? operationBannerFromJson(Map<String, dynamic> json) {
   if (condition == null) return null;
   final rawImage = json['imageUrl'];
   final imageUrl = rawImage is String && rawImage.isNotEmpty ? rawImage : null;
+  // 目标模板 id：route=/templates/detail 时必须携带非空值，否则 fail-safe 丢弃
+  final rawTemplateId = json['templateId'];
+  final templateId = rawTemplateId is String && rawTemplateId.isNotEmpty
+      ? rawTemplateId
+      : null;
+  if (route == '/templates/detail' && templateId == null) return null;
   return OperationBanner(
     id: id, title: title, subtitle: subtitle, tag: tag,
     route: route, condition: condition, imageUrl: imageUrl,
+    templateId: templateId,
   );
 }
 
@@ -161,13 +173,17 @@ OperationBanner? matchOperationBanner({
 /// 运营条目转首页 Banner 项（type=operation）。配图经 [HomeBannerItem.cover]
 /// 传递：非空时卡片右侧 40% 区域 contain 完整显示，空时品牌渐变背景。
 HomeBannerItem operationBannerToItem(OperationBanner banner) {
+  // route=/templates/detail 且携带目标模板 id 时，拼出模板详情页完整跳转路由
+  final route = (banner.route == '/templates/detail' && banner.templateId != null)
+      ? '/templates/detail?templateId=${banner.templateId}'
+      : banner.route;
   return HomeBannerItem(
     id: banner.id,
     title: banner.title,
     subtitle: banner.subtitle,
     imageSeed: 'banner-op-${banner.id}',
     tag: banner.tag,
-    route: banner.route,
+    route: route,
     cover: banner.imageUrl,
     type: BannerType.operation,
     bannerId: banner.id,
