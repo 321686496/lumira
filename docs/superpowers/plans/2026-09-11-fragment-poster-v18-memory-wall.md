@@ -12,7 +12,7 @@
 
 - Keep the poster at `3:4` portrait ratio.
 - Use the warm-white and gold palette from the approved spec.
-- Show five asymmetric slots with three filled and one pending at the lower right.
+- Show five asymmetric slots with three filled and two pending at middle-right and lower-right.
 - Do not modify Flutter, backend, admin, or shared production code.
 - Deliver only `docs/design/海报设计/碎片海报设计/fragment_poster_v18_memory_wall.html`.
 
@@ -31,7 +31,7 @@
 
 - [ ] **Step 1: Create the standalone mockup**
 
-Create the HTML with a `360px`-bounded `3:4` poster. The top uses left-aligned LUMIRA branding and a light `拼碎片` capsule. The title uses Noto Serif SC and an `em` accent. The photo wall uses CSS Grid with columns `1.24fr 1fr`, three rows, and `7px` gap. The tall upper-left photo spans rows 1–2; the upper right and middle right hold two photos; the bottom row holds one filled photo and one pending slot. The progress row has a large `3 / 5`, five segments with three filled, and `还差 2 帧 · 一起凑齐这束光`.
+Create the HTML with a `360px`-bounded `3:4` poster. The top uses left-aligned LUMIRA branding and a light `拼碎片` capsule. The title uses Noto Serif SC and an `em` accent. The photo wall uses CSS Grid with columns `1.24fr 1fr`, three rows, and `7px` gap. The tall upper-left photo spans rows 1–2; the upper right holds a filled photo, the middle right is pending, the lower left holds a filled wide photo, and the lower right is pending. The progress row has a large `3 / 5`, five segments with three filled, and `还差 2 帧 · 一起凑齐这束光`.
 
 - [ ] **Step 2: Open and inspect the mockup**
 
@@ -41,13 +41,13 @@ Run:
 Start-Process "docs/design/海报设计/碎片海报设计/fragment_poster_v18_memory_wall.html"
 ```
 
-Expected: One V18 poster is displayed, with one tall photo upper-left, two stacked photos right, one wide photo lower-left, and the lower-right pending slot.
+Expected: One V18 poster is displayed, with one tall photo upper-left, an upper-right filled photo, the middle-right pending slot, one wide photo lower-left, and the lower-right pending slot.
 
 - [ ] **Step 3: Check acceptance criteria**
 
 Verify each item visually:
 
-1. Three photo slots show placeholder photos; the lower-right slot shows `+ 待拼`.
+1. Three photo slots show placeholder photos; the middle-right and lower-right slots show `+ 待拼`.
 2. No diagonal crack, circular certificate frame, or equal-grid template appears.
 3. Progress reads `3 / 5`, with three of five gold segments filled.
 4. No text overflows or clips outside the poster.
