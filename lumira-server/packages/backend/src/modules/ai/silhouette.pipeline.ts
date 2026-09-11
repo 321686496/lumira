@@ -53,7 +53,7 @@ const DEFAULT_BBOX_THRESHOLD = 0.3;
 const DEFAULT_BBOX_PAD_RATIO = 0.05;
 
 // 素描线稿的反向模糊半径（colour-dodge 素描算法）
-const SKETCH_BLUR_SIGMA = 4;
+const SKETCH_BLUR_SIGMA = 7;
 
 // ===== 模型会话（单例懒加载） =====
 

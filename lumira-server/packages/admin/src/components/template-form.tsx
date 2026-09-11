@@ -352,6 +352,8 @@ export interface TemplateFormAiInjection {
   replaceImages?: boolean;
   /** 应用到当前姿势的剪影（AI 生成的透明底 PNG） */
   silhouette?: File | null;
+  /** 按顺序应用到各姿势的剪影列表（第 i 张 → 第 i 个姿势；缺省项跳过） */
+  silhouettes?: (File | null)[];
   /** Step5 决策回填 */
   isActive?: boolean;
   /** true=应用后立即提交（全自动模式，isActive 需同时给 true） */
@@ -369,6 +371,8 @@ interface TemplateFormProps {
   wizardMode?: boolean;
   /** 向导模式预览宿主节点：提供时预览面板经 portal 渲染到该节点（向导层 sticky 布局） */
   previewPortalTarget?: HTMLElement | null;
+  /** 图片列表变化回调：向导层同步表单当前实际效果图（供剪影批量生成使用） */
+  onImagesChange?: (files: File[]) => void;
 }
 
 export default function TemplateForm({
@@ -379,6 +383,7 @@ export default function TemplateForm({
   aiInjection,
   wizardMode = false,
   previewPortalTarget = null,
+  onImagesChange,
 }: TemplateFormProps) {
   const { toast } = useToast();
   const [step, setStep] = useState(0);
@@ -442,6 +447,9 @@ export default function TemplateForm({
   };
 
   const [poses, setPoses] = useState<PoseFormData[]>(() => buildInitialPoses());
+  useEffect(() => {
+    onImagesChange?.(imageFiles);
+  }, [imageFiles, onImagesChange]);
   const [pptplFile, setPptplFile] = useState<File | null>(null);
   const imageInputRef = React.useRef<HTMLInputElement>(null);
   const pptplInputRef = React.useRef<HTMLInputElement>(null);
@@ -1067,6 +1075,12 @@ export default function TemplateForm({
       setPoses((prev) => prev.map((p, i) => i === targetIndex
         ? { ...p, silhouetteType: 'image' as const, silhouetteFile: file, silhouetteUrl: URL.createObjectURL(file) }
         : p));
+    }
+    if (aiInjection.silhouettes) {
+      const files = aiInjection.silhouettes;
+      setPoses((prev) => prev.map((p, i) => (files[i]
+        ? { ...p, silhouetteType: 'image' as const, silhouetteFile: files[i]!, silhouetteUrl: URL.createObjectURL(files[i]!) }
+        : p)));
     }
     if (typeof aiInjection.isActive === 'boolean') setValue('isActive', aiInjection.isActive);
     if (aiInjection.autoSubmit) submitRef.current?.();

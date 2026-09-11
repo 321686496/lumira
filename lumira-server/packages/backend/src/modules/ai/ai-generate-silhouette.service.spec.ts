@@ -207,6 +207,23 @@ describe('AiSilhouetteService', () => {
       expect(genInput.prompt).toContain('黑色实心人形剪影');
     });
 
+    it('AI 剪影提示词禁止头发发丝、五官、颈纹等细节', async () => {
+      const service = new AiSilhouetteService(cfgService());
+      setupSharpForAi(Buffer.from('final-png'), Buffer.from('unused'));
+      generateImageMock.mockResolvedValue({
+        base64: Buffer.from('ai-gen-raw').toString('base64'),
+        mimeType: 'image/png',
+      });
+
+      for (const mode of ['sketch', 'solid'] as const) {
+        await service.generate(image(), JSON.stringify({ mode, crop: false, engine: 'ai' }));
+        const [, genInput] = generateImageMock.mock.calls.at(-1)!;
+        expect(genInput.prompt).toContain('禁止绘制发型发丝');
+        expect(genInput.prompt).toContain('五官');
+        expect(genInput.prompt).toContain('颈纹');
+      }
+    });
+
     it('crop=true：按前景包围盒裁剪（黑像素 bbox 1x1），返回裁剪后 PNG', async () => {
       const service = new AiSilhouetteService(cfgService());
       const croppedPng = Buffer.from('cropped-png');
