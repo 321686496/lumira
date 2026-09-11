@@ -4,6 +4,7 @@ import { BannersService } from './banners.service';
 import { DatabaseService } from '../../database/database.service';
 import { RedisService } from '../../common/redis/redis.service';
 import type { StorageAdapter } from '../../common/storage/storage-adapter.interface';
+import type { ImageCompressionService } from '../../common/storage/image-compression.service';
 import type { CreateBannerDto } from './dto/create-banner.dto';
 
 /** 可 await 的 drizzle 查询链 mock：from/where/orderBy/limit 链式后 resolve 出 rows */
@@ -41,8 +42,11 @@ function buildService(opts: { selectRows?: unknown[]; cached?: unknown } = {}) {
       `/uploads/${category}/${id}/${filename}` as string,
   );
   const storage = { write: storageWrite, deleteByDir: jest.fn() } as unknown as StorageAdapter;
+  const imageCompression = {
+    compress: jest.fn(async (buffer: Buffer) => ({ buffer, ext: 'png', changed: false })),
+  } as unknown as ImageCompressionService;
   return {
-    service: new BannersService(dbService, redis, storage),
+    service: new BannersService(dbService, redis, storage, imageCompression),
     select, insertValues, updateSet, redis, storageWrite,
   };
 }

@@ -8,6 +8,7 @@ import { DatabaseService } from '../../database/database.service';
 import { templates, templateCategories, templatePrices } from '../../database/schema';
 import { STORAGE_ADAPTER } from '../../common/storage/storage.provider';
 import type { StorageAdapter } from '../../common/storage/storage-adapter.interface';
+import { ImageCompressionService } from '../../common/storage/image-compression.service';
 import { RedisService } from '../../common/redis/redis.service';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
@@ -38,35 +39,13 @@ function assertFileSize(file: UploadFile, maxBytes: number, fieldLabel: string):
   }
 }
 
-/** 从文件名/mimetype 提取扩展名（小写，不含点）*/
-function extractExt(file: UploadFile): string {
-  // 优先用文件名扩展名
-  if (file.filename) {
-    const dot = file.filename.lastIndexOf('.');
-    if (dot >= 0) {
-      const ext = file.filename.slice(dot + 1).toLowerCase();
-      if (/^[a-z0-9]+$/.test(ext)) return ext;
-    }
-  }
-  // 回退到 mimetype 映射
-  const mimeMap: Record<string, string> = {
-    'image/jpeg': 'jpg',
-    'image/jpg': 'jpg',
-    'image/png': 'png',
-    'image/webp': 'webp',
-    'image/svg+xml': 'svg',
-    'image/gif': 'gif',
-    'application/json': 'json',
-  };
-  return mimeMap[file.mimetype] || 'bin';
-}
-
 @Injectable()
 export class AdminTemplatesService {
   constructor(
     private readonly dbService: DatabaseService,
     @Inject(STORAGE_ADAPTER) private readonly storage: StorageAdapter,
     private readonly redisService: RedisService,
+    private readonly imageCompression: ImageCompressionService,
   ) {}
 
   /** 模板内容变更后统一失效内容缓存 */
@@ -75,6 +54,10 @@ export class AdminTemplatesService {
     await this.redisService.delByPattern('lumira:cache:templateDetail:*');
     await this.redisService.delByPattern('lumira:cache:templatePrices:*');
     await this.redisService.delByPattern('lumira:cache:templateSearch:*');
+  }
+
+  private async compressUploadedImage(file: UploadFile, options?: { maxDim?: number; quality?: number }) {
+    return this.imageCompression.compress(file.buffer, file.filename, file.mimetype, options);
   }
 
   // ===== 列表 / 详情 =====
@@ -222,20 +205,25 @@ export class AdminTemplatesService {
     // 优先级：images 文件 > cover 文件（兼容旧 admin）> meta.images URL 数组
     let imagesArr: Array<{ url: string; data?: string }> = [];
     let coverUrl = '';
+    const coverImage = cover ? await this.compressUploadedImage(cover, { maxDim: 1600 }) : null;
+    const silhouetteImage = silhouette ? await this.compressUploadedImage(silhouette, { maxDim: 1024 }) : null;
+    const imageFiles = images ? await Promise.all(images.map(async (img, index) => ({
+      index,
+      image: await this.compressUploadedImage(img, { maxDim: 1600 }),
+    }))) : [];
+
     if (images && images.length > 0) {
       for (let i = 0; i < images.length; i++) {
-        const img = images[i];
-        const ext = extractExt(img);
-        const filename = `image_${i}.${ext}`;
-        const url = await this.storage.write('templates', id, filename, img.buffer);
+        const image = imageFiles.find((item) => item.index === i)!.image;
+        const filename = `image_${i}.${image.ext}`;
+        const url = await this.storage.write('templates', id, filename, image.buffer);
         imagesArr.push({ url });
       }
       coverUrl = imagesArr[0].url;
     } else if (cover) {
       // 旧单图路径：cover 文件同时作为效果图首元素
-      const coverExt = extractExt(cover);
-      const coverFilename = `cover.${coverExt}`;
-      coverUrl = await this.storage.write('templates', id, coverFilename, cover.buffer);
+      const coverFilename = `cover.${coverImage!.ext}`;
+      coverUrl = await this.storage.write('templates', id, coverFilename, coverImage!.buffer);
       imagesArr = [{ url: coverUrl }];
     } else if (Array.isArray(meta.images) && meta.images.length > 0) {
       // meta.images 已是 URL/data 数组（如复制场景），直接用
@@ -263,9 +251,8 @@ export class AdminTemplatesService {
     }
 
     if (silhouette) {
-      const silExt = extractExt(silhouette);
-      const silFilename = `silhouette.${silExt}`;
-      const silUrl = await this.storage.write('templates', id, silFilename, silhouette.buffer);
+      const silFilename = `silhouette.${silhouetteImage!.ext}`;
+      const silUrl = await this.storage.write('templates', id, silFilename, silhouetteImage!.buffer);
       if (posesArr.length > 0) {
         // 注入到首元素（不修改 meta 原值，做浅拷贝）
         const first = { ...posesArr[0] };
@@ -418,21 +405,26 @@ export class AdminTemplatesService {
     // 优先级：images 文件 > cover 文件 > meta.images URL 数组 > 旧 imagesJson/coverUrl
     let imagesArr: Array<{ url: string; data?: string }>;
     let coverUrl = existing.coverUrl;
+    const coverImage = cover ? await this.compressUploadedImage(cover, { maxDim: 1600 }) : null;
+    const silhouetteImage = silhouette ? await this.compressUploadedImage(silhouette, { maxDim: 1024 }) : null;
+    const imageFiles = images ? await Promise.all(images.map(async (img, index) => ({
+      index,
+      image: await this.compressUploadedImage(img, { maxDim: 1600 }),
+    }))) : [];
+
     if (images && images.length > 0) {
       imagesArr = [];
       for (let i = 0; i < images.length; i++) {
-        const img = images[i];
-        const ext = extractExt(img);
-        const filename = `image_${i}.${ext}`;
-        const url = await this.storage.write('templates', id, filename, img.buffer);
+        const image = imageFiles.find((item) => item.index === i)!.image;
+        const filename = `image_${i}.${image.ext}`;
+        const url = await this.storage.write('templates', id, filename, image.buffer);
         imagesArr.push({ url });
       }
       coverUrl = imagesArr[0].url;
     } else if (cover) {
       // 旧单图路径：cover 文件同时作为效果图首元素，丢弃旧 imagesJson 其他元素
-      const coverExt = extractExt(cover);
-      const coverFilename = `cover.${coverExt}`;
-      coverUrl = await this.storage.write('templates', id, coverFilename, cover.buffer);
+      const coverFilename = `cover.${coverImage!.ext}`;
+      coverUrl = await this.storage.write('templates', id, coverFilename, coverImage!.buffer);
       imagesArr = [{ url: coverUrl }];
     } else if (Array.isArray(meta.images)) {
       // meta.images 提供则覆盖（可空数组表示清空）
@@ -466,9 +458,8 @@ export class AdminTemplatesService {
     }
 
     if (silhouette) {
-      const silExt = extractExt(silhouette);
-      const silFilename = `silhouette.${silExt}`;
-      const silUrl = await this.storage.write('templates', id, silFilename, silhouette.buffer);
+      const silFilename = `silhouette.${silhouetteImage!.ext}`;
+      const silUrl = await this.storage.write('templates', id, silFilename, silhouetteImage!.buffer);
       if (posesArr.length > 0) {
         const first = { ...posesArr[0] };
         const silObj = (first.silhouette && typeof first.silhouette === 'object')
