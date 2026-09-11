@@ -10,10 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { aiGenerateImageStartAction } from '@/actions/ai';
-import { pollAiImageTask } from '@/lib/ai-task';
-import type { AiImageStatusResult } from '@/types/admin';
-import { base64ToFile } from './wizard';
+import { generateAiPoseImages } from '@/lib/ai-task';
 import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
 import { ImageSquare } from '@phosphor-icons/react/dist/csr/ImageSquare';
 import { ArrowLeft } from '@phosphor-icons/react/dist/csr/ArrowLeft';
@@ -65,34 +62,36 @@ export function StepCover({
     });
   };
 
-  /** 生成同风格效果图（异步任务式：提交 taskId 后轮询结果，避免同步长请求超时；可多次点击重 roll） */
+  /** 按姿势并行生成效果图；每个姿势独立任务并轮询结果，单张失败不影响其它任务。 */
   const generate = async () => {
     if (!draft) return;
     setGenerating(true);
     try {
-      const fd = new FormData();
-      fd.set('meta', JSON.stringify(draft));
-      if (exampleFile) fd.set('reference', exampleFile);
-      const extra = extraPrompt.trim();
-      if (extra) fd.set('extraPrompt', extra);
-      const start = await aiGenerateImageStartAction(fd);
-      if ('error' in start) {
-        toast({ variant: 'destructive', title: '生成失败', description: start.error });
-        return;
+      const results = await generateAiPoseImages({ draft, exampleFile, extraPrompt });
+      const files = results
+        .filter((result): result is { index: number; file: File } => Boolean(result.file))
+        .sort((a, b) => a.index - b.index)
+        .map((result) => result.file);
+      const errors = results.filter((result) => result.error);
+      if (files.length > 0) {
+        const generated: CoverCandidate[] = files.map((file, index) => ({
+          id: `ai-${Date.now()}-${index}-${candidates.length}`,
+          file,
+          url: URL.createObjectURL(file),
+          source: 'ai',
+        }));
+        setCandidates((prev) => [...generated, ...prev]);
       }
-      let status: AiImageStatusResult;
-      try {
-        status = await pollAiImageTask(start.taskId);
-      } catch (err) {
-        toast({ variant: 'destructive', title: '生成失败', description: (err as Error).message });
-        return;
+      errors.forEach((result) => {
+        toast({
+          variant: 'destructive',
+          title: `第 ${result.index + 1} 张姿势图生成失败`,
+          description: result.error || '请稍后重试',
+        });
+      });
+      if (files.length > 0) {
+        toast({ title: '姿势图生成完成', description: `成功 ${files.length} 张，已置顶为封面候选` });
       }
-      const file = base64ToFile(status.image!, status.mimeType!, `ai-cover-${Date.now()}.png`);
-      setCandidates((prev) => [
-        { id: `ai-${Date.now()}-${prev.length}`, file, url: URL.createObjectURL(file), source: 'ai' },
-        ...prev,
-      ]);
-      toast({ title: '已生成效果图', description: '已置顶为封面候选，可继续重 roll 或调整排序' });
     } catch (e) {
       // server action 抛错（网络中断 / 框架层错误）也必须恢复按钮，避免永久"生成中"
       toast({
@@ -144,7 +143,8 @@ export function StepCover({
             <ImageSquare size={14} className="mr-1" /> 用示例图（置顶）
           </Button>
           <Button size="sm" disabled={!draft || disabled} onClick={generate}>
-            <MagicWand size={14} className="mr-1" /> {generating ? '生成中…' : '生成效果图'}
+            <MagicWand size={14} className="mr-1" />
+            {generating ? '并行生成中…' : Array.isArray(draft?.pose) && draft.pose.length > 0 ? `并行生成 ${draft.pose.length} 张姿势图` : '生成姿势图'}
           </Button>
         </div>
 

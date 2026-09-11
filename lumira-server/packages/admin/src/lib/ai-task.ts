@@ -3,13 +3,106 @@
 // 后端提交返回 taskId 后，这里以固定间隔轮询状态直到 done/error/超时，避免同步长请求撑爆 Vercel serverless。
 
 import { aiGenerateImageStatusAction, aiGenerateSilhouetteStatusAction } from '@/actions/ai';
+import { aiGenerateImageStartAction, aiGenerateSilhouetteStartAction } from '@/actions/ai';
 import type { AiImageStatusResult, AiSilhouetteStatusResult } from '@/types/admin';
+import { compressImage } from '@/lib/image-compress';
 
 /** 用户可读的错误（含超时 / 上游失败 / 任务不存在） */
 export class AiTaskPollError extends Error {}
 
 const DEFAULT_INTERVAL_MS = 2000;
 const DEFAULT_TIMEOUT_MS = 180_000;
+
+export interface AiTaskFileResult {
+  index: number;
+  file?: File;
+  error?: string;
+}
+
+function base64ToFile(b64: string, mime: string, name: string): File {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new File([bytes], name, { type: mime });
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function posePrompt(pose: Record<string, unknown> | undefined, extraPrompt?: string | null): string {
+  const name = typeof pose?.name === 'string' ? pose.name.trim() : '';
+  const description = typeof pose?.description === 'string' ? pose.description.trim() : '';
+  const poseParts = [name, description].filter(Boolean);
+  const extra = typeof extraPrompt === 'string' ? extraPrompt.trim() : '';
+  return [...poseParts.map((part) => `姿势要求：${part}`), extra].filter(Boolean).join('；');
+}
+
+/** 并行提交每个姿势的生图任务，并分别轮询到完成；单张失败不影响其它任务。 */
+export async function generateAiPoseImages(options: {
+  draft: Record<string, unknown>;
+  exampleFile?: File | null;
+  extraPrompt?: string | null;
+}): Promise<AiTaskFileResult[]> {
+  const { draft, exampleFile, extraPrompt } = options;
+  const rawPose = draft.pose;
+  const poses = Array.isArray(rawPose)
+    ? rawPose.filter(isPlainObject)
+    : isPlainObject(rawPose)
+      ? [rawPose]
+      : [];
+  const targets = poses.length > 0 ? poses : [undefined];
+
+  return Promise.all(targets.map(async (pose, index) => {
+    try {
+      const fd = new FormData();
+      fd.set('meta', JSON.stringify(draft));
+      if (exampleFile) fd.set('reference', exampleFile);
+      const prompt = posePrompt(pose, extraPrompt);
+      if (prompt) fd.set('extraPrompt', prompt);
+      const start = await aiGenerateImageStartAction(fd);
+      if ('error' in start) throw new Error(start.error);
+      const result = await pollAiImageTask(start.taskId);
+      return {
+        index,
+        file: base64ToFile(result.image!, result.mimeType!, `ai-pose-${Date.now()}-${index}.png`),
+      };
+    } catch (err) {
+      return { index, error: (err as Error).message || '姿势图生成失败' };
+    }
+  }));
+}
+
+/** 并行提交剪影任务，并分别轮询到完成；结果保持源图顺序。 */
+export async function generateAiSilhouettes(options: {
+  images: File[];
+  mode: 'sketch' | 'solid';
+  crop: boolean;
+  engine: 'ai' | 'local';
+  onCompleted?: (completed: number) => void;
+}): Promise<AiTaskFileResult[]> {
+  const { images, mode, crop, engine, onCompleted } = options;
+  const generated = new Array<File | undefined>(images.length).fill(undefined);
+  const publish = () => onCompleted?.(generated.filter(Boolean).length);
+
+  return Promise.all(images.map(async (image, index) => {
+    try {
+      const source = await compressImage(image, { maxDim: 640, quality: 0.6 });
+      const fd = new FormData();
+      fd.set('image', source);
+      fd.set('meta', JSON.stringify({ mode, crop, engine }));
+      const start = await aiGenerateSilhouetteStartAction(fd);
+      if (!start || 'error' in start) throw new Error(start?.error || '剪影任务提交失败');
+      const result = await pollAiSilhouetteTask(start.taskId);
+      const file = base64ToFile(result.image!, result.mimeType!, `ai-silhouette-${Date.now()}-${index}.png`);
+      generated[index] = file;
+      publish();
+      return { index, file };
+    } catch (err) {
+      return { index, error: (err as Error).message || '剪影生成失败' };
+    }
+  }));
+}
 
 export interface AiTaskPollOptions {
   intervalMs?: number;
