@@ -214,6 +214,9 @@ Future<RegisterResult> _doRegister({
 
 /// 处理模板深链：完整 JSON → 直接导入；否则打开导入面板让用户手动操作。
 void _handleTemplateLink(ProviderContainer container, String link) {
+  // 合规门控优先：待同意时深链一律忽略，禁止导入/导航/弹出导入面板，
+  // 否则会绕过合规弹窗从 Splash 跳走。待用户同意并正常进入首页后此跳转自然丢弃。
+  if (container.read(complianceAwaitingProvider)) return;
   final parsed = TemplateShareCode.parseLink(link);
   if (parsed == null || parsed['meta'] is! Map) {
     // 无法解析或为轻量形式 → 打开导入面板手动粘贴/选择

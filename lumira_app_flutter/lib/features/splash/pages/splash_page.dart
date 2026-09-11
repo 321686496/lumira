@@ -146,11 +146,26 @@ class _SplashPageState extends ConsumerState<SplashPage> {
 
   Future<void> _agreeCompliance(BuildContext dialogCtx) async {
     final container = ProviderScope.containerOf(context, listen: false);
+    bool persisted = false;
     try {
       final dao = await ref.read(settingsDaoProvider.future);
       await dao.setComplianceAgreed(complianceCurrentVersion);
+      persisted = true;
     } catch (_) {
-      // 落库失败静默，仍继续，避免用户被卡死
+      persisted = false;
+    }
+    if (!persisted) {
+      // 同意未持久化：绝不能视为已同意，禁止注册/采集/导航。仅关闭弹窗并
+      // 重置状态，随后重新弹出合规窗让用户可重试，确保零采集直到落库成功。
+      if (dialogCtx.mounted) {
+        Navigator.of(dialogCtx).pop();
+      }
+      _complianceDialogShown = false;
+      if (mounted) {
+        // ignore: unawaited_futures
+        _presentComplianceDialog();
+      }
+      return;
     }
     if (dialogCtx.mounted) {
       Navigator.of(dialogCtx).pop();

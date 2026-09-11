@@ -1636,24 +1636,30 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
   }
 
   if (oldVersion < 57) {
-    await _addColumnIfNotExists(
-      db,
-      Tables.userSettings,
-      Tables.colComplianceAgreed,
-      'INTEGER NOT NULL DEFAULT 0',
-    );
-    await _addColumnIfNotExists(
-      db,
-      Tables.userSettings,
-      Tables.colComplianceVersion,
-      'TEXT',
-    );
-    await _addColumnIfNotExists(
-      db,
-      Tables.userSettings,
-      Tables.colComplianceAgreedAt,
-      'INTEGER',
-    );
+    try {
+      // v57: user_settings 新增 合规同意 相关列
+      // （compliance_agreed/compliance_version/compliance_agreed_at，用于首启合规门控）
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colComplianceAgreed,
+        'INTEGER NOT NULL DEFAULT 0',
+      );
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colComplianceVersion,
+        'TEXT',
+      );
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colComplianceAgreedAt,
+        'INTEGER',
+      );
+    } catch (e) {
+      debugPrint('v57 migration failed (silent fallback): $e');
+    }
   }
 }
 
