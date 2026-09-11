@@ -9,6 +9,7 @@ import { UploadFile } from '../templates/admin-templates.service';
 import { AiAnalyzeService } from './ai-analyze.service';
 import { AiImageTaskService } from './ai-image-task.service';
 import { AiSilhouetteService } from './ai-generate-silhouette.service';
+import { AiSilhouetteTaskService } from './ai-silhouette-task.service';
 
 @Controller('admin/templates')
 @UseGuards(AdminAuthGuard)
@@ -17,6 +18,7 @@ export class AiTemplatesController {
     private readonly aiAnalyzeService: AiAnalyzeService,
     private readonly aiImageTaskService: AiImageTaskService,
     private readonly aiSilhouetteService: AiSilhouetteService,
+    private readonly aiSilhouetteTaskService: AiSilhouetteTaskService,
   ) {}
 
   /** AI 识别 → 模板草稿（multipart：image 文件与 text/textDesc 文本至少一项；creationReq/poseCount 可选） */
@@ -71,6 +73,31 @@ export class AiTemplatesController {
     const result = await this.aiSilhouetteService.generate(image, meta);
     Logger.log(`ai-generate-silhouette: done in ${Date.now() - startedAt}ms`, 'AiTemplatesController');
     return result;
+  }
+
+  /**
+   * AI 剪影异步任务（multipart 与同步端点一致）：立即返回 taskId，前端轮询结果。
+   * 网关对 Server Action / 后端请求有 504 超时，同步端点仅供兼容保留。
+   */
+  @Post('ai-generate-silhouette/tasks')
+  async submitSilhouetteTask(@Req() req: FastifyRequest) {
+    const { image, meta } = await parseAiMultipart(req);
+    if (!image) throw new BadRequestException('Missing "image" file');
+    return this.aiSilhouetteTaskService.submit(image, meta);
+  }
+
+  /** 查询剪影任务状态（done 带 image/mimeType，error 带 error；任务不存在则 404） */
+  @Get('ai-generate-silhouette/tasks/:taskId')
+  async getSilhouetteTask(@Param('taskId') taskId: string) {
+    const task = this.aiSilhouetteTaskService.get(taskId);
+    if (!task) throw new NotFoundException('Silhouette task not found');
+    return {
+      taskId: task.id,
+      status: task.status,
+      image: task.result?.image,
+      mimeType: task.result?.mimeType,
+      error: task.error,
+    };
   }
 }
 

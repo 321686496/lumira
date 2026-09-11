@@ -356,6 +356,8 @@ export interface BannerAdminItem {
   subtitle: string;
   tag: string;
   route: string;
+  /** 目标模板 id（route=/templates/detail 时必填） */
+  templateId?: string;
   /** 配图完整 URL（空串 = 无配图） */
   imageUrl: string;
   condition: string;
@@ -372,6 +374,8 @@ export interface BannerPayload {
   subtitle?: string;
   tag?: string;
   route?: string;
+  /** 目标模板 id（route=/templates/detail 时必填） */
+  templateId?: string;
   /** 配图 URL：空串清除配图 */
   imageUrl?: string;
   condition?: string;
@@ -462,6 +466,20 @@ export interface AiImageTaskId {
 
 /** 查询生图任务状态（done 带 image/mimeType，error 带 error） */
 export interface AiImageStatusResult {
+  taskId: string;
+  status: 'pending' | 'running' | 'done' | 'error';
+  image?: string;
+  mimeType?: string;
+  error?: string;
+}
+
+/** 提交剪影异步任务 → 立即返回 taskId */
+export interface AiSilhouetteTaskId {
+  taskId: string;
+}
+
+/** 查询剪影任务状态（done 带 image/mimeType，error 带 error） */
+export interface AiSilhouetteStatusResult {
   taskId: string;
   status: 'pending' | 'running' | 'done' | 'error';
   image?: string;

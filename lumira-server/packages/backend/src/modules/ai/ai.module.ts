@@ -12,10 +12,11 @@ import { AiAnalyzeService } from './ai-analyze.service';
 import { AiGenerateImageService } from './ai-generate-image.service';
 import { AiImageTaskService } from './ai-image-task.service';
 import { AiSilhouetteService } from './ai-generate-silhouette.service';
+import { AiSilhouetteTaskService } from './ai-silhouette-task.service';
 
 @Module({
   imports: [DatabaseModule],
   controllers: [AiConfigController, AiTemplatesController],
-  providers: [AiConfigService, AiAnalyzeService, AiGenerateImageService, AiImageTaskService, AiSilhouetteService],
+  providers: [AiConfigService, AiAnalyzeService, AiGenerateImageService, AiImageTaskService, AiSilhouetteService, AiSilhouetteTaskService],
 })
 export class AiModule {}
