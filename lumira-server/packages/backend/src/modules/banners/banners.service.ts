@@ -6,6 +6,7 @@ import { RedisService } from '../../common/redis/redis.service';
 import { STORAGE_ADAPTER } from '../../common/storage/storage.provider';
 import { buildAssetUrl } from '../../common/storage/asset-url';
 import type { StorageAdapter } from '../../common/storage/storage-adapter.interface';
+import { ImageCompressionService } from '../../common/storage/image-compression.service';
 import { operationBanners } from '../../database/schema';
 import { CreateBannerDto } from './dto/create-banner.dto';
 import { UpdateBannerDto } from './dto/update-banner.dto';
@@ -28,6 +29,7 @@ export class BannersService {
     private readonly dbService: DatabaseService,
     private readonly redisService: RedisService,
     @Inject(STORAGE_ADAPTER) private readonly storage: StorageAdapter,
+    private readonly imageCompression: ImageCompressionService,
   ) {}
 
   /** 写操作后统一失效列表缓存（后台改配置 → App 端即刻可见） */
@@ -150,8 +152,9 @@ export class BannersService {
     if (buffer.length > BANNER_IMAGE_MAX_BYTES) {
       throw new BadRequestException('图片超过 2MB 上限');
     }
+    const compressed = await this.imageCompression.compress(buffer, `image.${ext}`, mimetype);
     const subId = `bnr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const storageKey = await this.storage.write('banners', subId, `image.${ext}`, buffer);
+    const storageKey = await this.storage.write('banners', subId, `image.${compressed.ext}`, compressed.buffer);
     return { url: buildAssetUrl(storageKey) };
   }
 
