@@ -67,36 +67,17 @@ export function StepSilhouette({
     const generated: (SilhouetteResult | undefined)[] = new Array(images.length).fill(undefined);
     const publish = () => setResults(generated.filter((item): item is SilhouetteResult => item !== undefined));
     try {
-      const tasks: Array<{ index: number; taskId: string }> = [];
-      for (let i = 0; i < images.length; i += 1) {
+      await Promise.all(images.map(async (image, index) => {
         try {
-          const source = await compressImage(images[i], { maxDim: 640, quality: 0.6 });
+          const source = await compressImage(image, { maxDim: 640, quality: 0.6 });
           const fd = new FormData();
           fd.set('image', source);
           fd.set('meta', JSON.stringify({ mode, crop, engine }));
           const start = await aiGenerateSilhouetteStartAction(fd);
           if (!start || 'error' in start) {
-            toast({
-              variant: 'destructive',
-              title: `第 ${i + 1} 张剪影提交失败`,
-              description: `${start?.error || '请求失败'}${tasks.length > 0 ? '；已提交的任务会继续生成' : ''}`,
-            });
-            continue;
+            throw new Error(start?.error || '请求失败');
           }
-          tasks.push({ index: i, taskId: start.taskId });
-        } catch (err) {
-          toast({
-            variant: 'destructive',
-            title: `第 ${i + 1} 张剪影提交失败`,
-            description: err instanceof Error ? err.message : String(err),
-          });
-          continue;
-        }
-      }
-
-      await Promise.all(tasks.map(async ({ index, taskId }) => {
-        try {
-          const result = await pollAiSilhouetteTask(taskId);
+          const result = await pollAiSilhouetteTask(start.taskId);
           const file = base64ToFile(result.image!, result.mimeType!, `ai-silhouette-${Date.now()}-${index}.png`);
           generated[index] = { file, url: URL.createObjectURL(file) };
           publish();
@@ -104,8 +85,8 @@ export function StepSilhouette({
         } catch (err) {
           toast({
             variant: 'destructive',
-            title: `第 ${index + 1} 张剪影生成失败`,
-            description: (err as Error).message,
+            title: `第 ${index + 1} 张剪影处理失败`,
+            description: `${err instanceof Error ? err.message : String(err)}；其余任务会继续生成`,
           });
         }
       }));
