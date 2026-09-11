@@ -174,6 +174,12 @@ class Tables {
   static const String colThemeKeyDark = 'theme_key_dark';
   static const String colThemeKeyLight = 'theme_key_light';
 
+  // === user_settings 扩展列（v57 迁移新增，合规协议同意状态） ===
+  // compliance_agreed: 1=已同意，0=未同意；compliance_version: 已同意时的文档版本（用于版本变更后重新弹出）
+  static const String colComplianceAgreed = 'compliance_agreed';
+  static const String colComplianceVersion = 'compliance_version';
+  static const String colComplianceAgreedAt = 'compliance_agreed_at';
+
   // === auth 表（v5） ===
   static const String auth = 'auth';
   static const String colDeviceId = 'device_id';

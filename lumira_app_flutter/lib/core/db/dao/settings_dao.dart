@@ -548,4 +548,36 @@ class SettingsDao {
       whereArgs: [1],
     );
   }
+
+  /// 读取已同意的合规文档版本；未同意或未填时返回 null。
+  ///
+  /// 判定逻辑：`compliance_agreed` 未置 1，或 `compliance_version` 为空，均视为「需重新同意」。
+  Future<String?> getComplianceVersion() async {
+    final rows = await _db.query(
+      Tables.userSettings,
+      columns: [Tables.colComplianceAgreed, Tables.colComplianceVersion],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return null;
+    final agreed = rows.first[Tables.colComplianceAgreed];
+    if (agreed != 1) return null;
+    final raw = rows.first[Tables.colComplianceVersion] as String?;
+    return (raw == null || raw.isEmpty) ? null : raw;
+  }
+
+  /// 写入已同意标记与文档版本（记录同意时间戳）。
+  Future<void> setComplianceAgreed(String version) async {
+    await _db.update(
+      Tables.userSettings,
+      {
+        Tables.colComplianceAgreed: 1,
+        Tables.colComplianceVersion: version,
+        Tables.colComplianceAgreedAt: DateTime.now().millisecondsSinceEpoch,
+        Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+  }
 }
