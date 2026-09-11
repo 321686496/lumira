@@ -6,7 +6,7 @@
 'use client';
 
 import * as React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import TemplateForm, { type TemplateFormAiInjection } from '@/components/template-form';
 import { Button } from '@/components/ui/button';
@@ -81,6 +81,8 @@ export function AiCreateWizard({
   const [exampleUrl, setExampleUrl] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
+  /** 模板表单当前实际效果图列表；剪影必须以此为准，避免继续使用已废弃的 Step3 候选缓存 */
+  const [formImages, setFormImages] = useState<File[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [candidates, setCandidates] = useState<CoverCandidate[]>([]);
   const [silhouetteFile, setSilhouetteFile] = useState<File | null>(null);
@@ -99,6 +101,7 @@ export function AiCreateWizard({
   const [silhouetteModelName, setSilhouetteModelName] = useState<string | null>(null);
   const stampRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleImagesChange = useCallback((files: File[]) => setFormImages(files), []);
 
   /** 预览宿主（TemplateForm portal 目标）与 xl 断点（决定宿主位置：右栏 sticky / stepper 下方） */
   const [previewHost, setPreviewHost] = useState<HTMLDivElement | null>(null);
@@ -341,10 +344,10 @@ export function AiCreateWizard({
   };
 
   /** Step4 应用剪影（null = 跳过）→ Step5 */
-  const applySilhouette = (file: File | null) => {
-    if (file) {
-      setSilhouetteFile(file);
-      inject({ silhouette: file });
+  const applySilhouette = (files: File[] | null) => {
+    if (files && files.length > 0) {
+      setSilhouetteFile(files[0]);
+      inject({ silhouettes: files });
     }
     goto(5);
   };
@@ -593,8 +596,7 @@ export function AiCreateWizard({
         {/* Step4 剪影决策 */}
         {step === 4 && (
           <StepSilhouette
-            coverFile={candidates[0]?.file ?? exampleFile}
-            exampleFile={exampleFile}
+            images={formImages}
             busy={busy}
             onApply={applySilhouette}
             aiAvailable={aiSilhouetteAvailable}
@@ -613,7 +615,7 @@ export function AiCreateWizard({
             </CardHeader>
             <CardContent className="space-y-1 text-sm text-muted-foreground">
               <p>· 封面与效果图已注入表单 Step2「效果图」区，可继续调整排序</p>
-              <p>· {silhouetteFile ? 'AI 剪影已应用到姿势 1，可在表单「姿势与剪影」步骤微调位置 / 缩放' : '未生成剪影，可在表单「姿势与剪影」步骤手动补充'}</p>
+              <p>· {silhouetteFile ? '剪影已按源图顺序应用到各姿势，可在表单「姿势与剪影」步骤微调位置 / 缩放' : '未生成剪影，可在表单「姿势与剪影」步骤手动补充'}</p>
               <p>· 提交成功后将跳转到模板列表</p>
             </CardContent>
           </Card>
@@ -629,6 +631,7 @@ export function AiCreateWizard({
               wizardMode
               aiInjection={injection}
               previewPortalTarget={previewHost}
+              onImagesChange={handleImagesChange}
             />
           </div>
         )}
