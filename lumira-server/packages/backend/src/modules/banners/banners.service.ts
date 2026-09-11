@@ -54,6 +54,8 @@ export class BannersService {
         subtitle: r.subtitle,
         tag: r.tag,
         route: r.route,
+        // 目标模板 id（route=/templates/detail 时 App 用于拼详情页跳转）
+        templateId: r.templateId,
         // 配图完整 URL（空串 = 无配图，App 回退品牌渐变背景）
         imageUrl: buildAssetUrl(r.imageUrl),
         condition: r.condition,
@@ -88,6 +90,7 @@ export class BannersService {
       subtitle: dto.subtitle,
       tag: dto.tag,
       route: dto.route,
+      templateId: dto.templateId ?? null,
       imageUrl: dto.imageUrl || null,
       condition: dto.condition,
       isActive: dto.isActive === false ? 0 : 1,
@@ -107,6 +110,7 @@ export class BannersService {
     if (dto.subtitle !== undefined) patch.subtitle = dto.subtitle;
     if (dto.tag !== undefined) patch.tag = dto.tag;
     if (dto.route !== undefined) patch.route = dto.route;
+    if ('templateId' in dto) patch.templateId = dto.templateId || null;
     // imageUrl：null/空串清除配图，其余原样存（storageKey 或完整 URL）
     if (dto.imageUrl !== undefined) patch.imageUrl = dto.imageUrl || null;
     if (dto.condition !== undefined) patch.condition = dto.condition;

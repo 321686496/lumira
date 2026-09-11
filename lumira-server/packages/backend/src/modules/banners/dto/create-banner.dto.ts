@@ -26,6 +26,12 @@ export class CreateBannerDto {
   @IsIn(OPERATION_BANNER_ROUTES)
   route!: string;
 
+  /** 目标模板 id（可空）：route 为 /templates/detail 时必填 */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  templateId?: string;
+
   /** 配图 URL（可空）：相对 storageKey（/uploads/...）或完整 http(s) URL */
   @IsOptional()
   @IsString()

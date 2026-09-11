@@ -321,6 +321,8 @@ export const operationBanners = mysqlTable('operation_banners', {
   subtitle: varchar('subtitle', { length: 255 }).notNull(),
   tag: varchar('tag', { length: 32 }).notNull(),
   route: varchar('route', { length: 128 }).notNull(),
+  // 目标模板 id（可空）：route 为 /templates/detail 时必填，App 据此跳转模板详情页
+  templateId: varchar('template_id', { length: 64 }),
   // 运营位配图（可空）：DB 存相对 storageKey，返回 App 时经 buildAssetUrl 拼公网 URL
   imageUrl: varchar('image_url', { length: 512 }),
   condition: varchar('condition', { length: 64 }).notNull(),

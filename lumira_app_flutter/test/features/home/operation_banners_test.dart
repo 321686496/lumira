@@ -90,6 +90,16 @@ void main() {
       expect(item.hasCover, isTrue);
       expect(item.type, BannerType.operation);
     });
+
+    test('route /templates/detail + templateId → 拼出模板详情跳转路由', () {
+      const banner = OperationBanner(
+        id: 'op_tpl', title: 't', subtitle: 's', tag: '上新',
+        route: '/templates/detail', condition: OperationCondition.hasLockedTemplate,
+        templateId: 'tpl_film_vintage',
+      );
+      final item = operationBannerToItem(banner);
+      expect(item.route, '/templates/detail?templateId=tpl_film_vintage');
+    });
   });
 
   group('operationBannerFromJson（后端下发解析）', () {
@@ -120,6 +130,24 @@ void main() {
       expect(operationBannerFromJson({...base, 'imageUrl': ''})!.imageUrl, isNull);
       expect(operationBannerFromJson(base)!.imageUrl, isNull);
       expect(operationBannerFromJson({...base, 'imageUrl': 42})!.imageUrl, isNull);
+    });
+
+    test('route /templates/detail 携带 templateId → 解析成功', () {
+      final b = operationBannerFromJson({
+        'id': 'op_tpl', 'title': 't', 'subtitle': 's', 'tag': '上新',
+        'route': '/templates/detail', 'condition': 'hasLockedTemplate',
+        'templateId': 'tpl_film_vintage',
+      });
+      expect(b, isNotNull);
+      expect(b!.route, '/templates/detail');
+      expect(b.templateId, 'tpl_film_vintage');
+    });
+
+    test('route /templates/detail 但缺 templateId → fail-safe 丢弃', () {
+      expect(operationBannerFromJson({
+        'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
+        'route': '/templates/detail', 'condition': 'hasLockedTemplate',
+      }), isNull);
     });
 
     test('route 不在白名单 → 丢弃', () {

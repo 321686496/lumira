@@ -28,6 +28,12 @@ export class UpdateBannerDto {
   @IsIn(OPERATION_BANNER_ROUTES)
   route?: string;
 
+  /** 目标模板 id：空串/缺省时清除 */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  templateId?: string | null;
+
   /** 配图 URL：null/空串清除配图；其余为相对 storageKey 或完整 http(s) URL */
   @IsOptional()
   @IsString()
