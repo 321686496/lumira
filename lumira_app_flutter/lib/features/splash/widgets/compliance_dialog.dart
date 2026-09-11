@@ -48,11 +48,11 @@ class ComplianceDialog extends ConsumerWidget {
         Row(
           children: [
             Expanded(
-              child: LumiraButton(variant: ButtonVariant.secondary, onPressed: onDisagree, child: const Text('不同意并退出')),
+              child: LumiraButton(variant: ButtonVariant.secondary, onPressed: onDisagree, child: const _NoWrapLabel('不同意并退出')),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: LumiraButton(variant: ButtonVariant.primary, onPressed: onAgree, child: const Text('同意并开始使用')),
+              child: LumiraButton(variant: ButtonVariant.primary, onPressed: onAgree, child: const _NoWrapLabel('同意并开始使用')),
             ),
           ],
         ),
@@ -65,6 +65,22 @@ class ComplianceDialog extends ConsumerWidget {
       text: text,
       style: TextStyle(color: tokens.brandText, decoration: TextDecoration.underline, decorationColor: tokens.brandText),
       recognizer: TapGestureRecognizer()..onTap = () => context.push(route),
+    );
+  }
+}
+
+/// 按钮标签：窄屏下按钮宽度不足时缩放文本以保持单行，避免「同意并开始使用」被挤压换行。
+class _NoWrapLabel extends StatelessWidget {
+  const _NoWrapLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.center,
+      child: Text(text, maxLines: 1, softWrap: false),
     );
   }
 }
