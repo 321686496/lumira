@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { aiProviderConfig } from '../../database/schema';
 import { visionChat, textChat } from './llm-client';
+import { generateImage, mapSize } from './image-client';
 import { UpdateAiConfigDto } from './dto/update-ai-config.dto';
 
 /** 脱敏后的配置视图（GET/PUT 返回；apiKey 永不回传明文） */
@@ -52,11 +53,18 @@ export interface ActiveAiConfig {
   hasCustomTextModel: boolean;
 }
 
-/** 连通性测试端点返回 */
+/** 连通性测试目标（text 永远测有效文本模型；silhouette 永远测有效剪影模型） */
+export type AiConfigTestTarget = 'vision' | 'text' | 'image' | 'silhouette';
+
+/** 单项模型连通性结果 */
+type AiConfigTargetResult = { ok: boolean; latencyMs?: number; error?: string };
+
+/** 连通性测试端点返回（只包含请求的目标） */
 export interface AiConfigTestResult {
-  vision: { ok: boolean; latencyMs?: number; error?: string };
-  /** 配置了独立文本模型时才有此字段 */
-  text?: { ok: boolean; latencyMs?: number; error?: string };
+  vision?: AiConfigTargetResult;
+  text?: AiConfigTargetResult;
+  image?: AiConfigTargetResult;
+  silhouette?: AiConfigTargetResult;
   note: string;
 }
 
@@ -64,7 +72,9 @@ export interface AiConfigTestResult {
 const TEST_IMAGE_PNG_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAxSURBVFhH7c4hAQAACMRA+if7VuAJAObEzNRVkv6s9rgOAAAAAAAAAAAAAAAAAABgANYGXMSkdFBBAAAAAElFTkSuQmCC';
 
-const TEST_NOTE = '生图模型按次计费，未做连通测试，可用性以首次生图为准';
+const TEST_NOTE = '生图 / 剪影为真实模型调用并按次计费；未选择的目标不测试';
+
+const ALL_TEST_TARGETS: AiConfigTestTarget[] = ['vision', 'text', 'image', 'silhouette'];
 
 /** apiKey 脱敏：空值返回空串（避免与脱敏后的 '****' 混淆）；≤8 位全遮蔽；否则前 3 + **** + 后 2 */
 function maskKey(k: string): string {
@@ -201,42 +211,57 @@ export class AiConfigService {
     return view;
   }
 
-  /** 最小请求连通性测试：vision（32×32 PNG + ping）；配置独立 textModel 时追加纯文本测试 */
-  async test(): Promise<AiConfigTestResult> {
+  /** 最小请求连通性测试：默认全测；显式 targets 只测所选目标（空、未知、重复均拒绝） */
+  async test(targets?: AiConfigTestTarget[]): Promise<AiConfigTestResult> {
     const cfg = await this.getActiveConfig();
-    const t0 = Date.now();
-    let vision: AiConfigTestResult['vision'];
-    try {
-      await visionChat(cfg.vision, {
-        systemPrompt: 'You are a connectivity test.',
-        userText: 'ping',
-        imageBase64: TEST_IMAGE_PNG_B64,
-        imageMime: 'image/png',
-        temperature: 0,
-        timeoutMs: 30_000,
-      });
-      vision = { ok: true, latencyMs: Date.now() - t0 };
-    } catch (e) {
-      vision = { ok: false, error: (e as Error).message };
+
+    const selected = targets ?? ALL_TEST_TARGETS;
+    if (selected.length === 0 || new Set(selected).size !== selected.length || selected.some((t) => !ALL_TEST_TARGETS.includes(t))) {
+      throw new BadRequestException('targets 必须是 vision/text/image/silhouette 的非空去重数组');
     }
 
-    let text: AiConfigTestResult['text'];
-    if (cfg.hasCustomTextModel) {
-      const t1 = Date.now();
+    const result: AiConfigTestResult = { note: TEST_NOTE };
+    const jobs = selected.map(async (target): Promise<[AiConfigTestTarget, AiConfigTargetResult]> => {
+      const startedAt = Date.now();
       try {
-        await textChat(cfg.text, {
-          systemPrompt: 'You are a connectivity test.',
-          userText: 'ping',
-          temperature: 0,
-          timeoutMs: 30_000,
-        });
-        text = { ok: true, latencyMs: Date.now() - t1 };
+        if (target === 'vision') {
+          await visionChat(cfg.vision, {
+            systemPrompt: 'You are a connectivity test.',
+            userText: 'ping',
+            imageBase64: TEST_IMAGE_PNG_B64,
+            imageMime: 'image/png',
+            temperature: 0,
+            timeoutMs: 30_000,
+          });
+        } else if (target === 'text') {
+          await textChat(cfg.text, {
+            systemPrompt: 'You are a connectivity test.',
+            userText: 'ping',
+            temperature: 0,
+            timeoutMs: 30_000,
+          });
+        } else {
+          await generateImage(
+            target === 'silhouette' ? { ...cfg.image, model: cfg.silhouetteModel } : cfg.image,
+            {
+              prompt: 'connectivity test',
+              size: mapSize(cfg.image.provider, '1:1'),
+              referenceBase64: target === 'silhouette' ? TEST_IMAGE_PNG_B64 : undefined,
+              referenceMime: target === 'silhouette' ? 'image/png' : undefined,
+            },
+            { requestTimeoutMs: 30_000 },
+          );
+        }
+        return [target, { ok: true, latencyMs: Date.now() - startedAt }];
       } catch (e) {
-        text = { ok: false, error: (e as Error).message };
+        return [target, { ok: false, error: (e as Error).message }];
       }
-    }
+    });
 
-    return text ? { vision, text, note: TEST_NOTE } : { vision, note: TEST_NOTE };
+    for (const [target, itemResult] of await Promise.all(jobs)) {
+      result[target] = itemResult;
+    }
+    return result;
   }
 
   /** 未配置/未启用 → 503；供 ai-analyze 等业务端点复用 */
