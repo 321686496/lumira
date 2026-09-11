@@ -33,7 +33,7 @@ import 'dao/templates_drafts_dao.dart';
 import '../../features/templates/recommend/user_interests.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 56;
+const int _kDbVersion = 57;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -497,6 +497,9 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colAspectRatio} TEXT,
       ${Tables.colCaptureAppearance} TEXT NOT NULL DEFAULT 'immersive',
       ${Tables.colOperationBannersCache} TEXT,
+      ${Tables.colComplianceAgreed} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colComplianceVersion} TEXT,
+      ${Tables.colComplianceAgreedAt} INTEGER,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
   ''');
@@ -1630,6 +1633,27 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     } catch (e) {
       debugPrint('v56 migration failed (silent fallback): $e');
     }
+  }
+
+  if (oldVersion < 57) {
+    await _addColumnIfNotExists(
+      db,
+      Tables.userSettings,
+      Tables.colComplianceAgreed,
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfNotExists(
+      db,
+      Tables.userSettings,
+      Tables.colComplianceVersion,
+      'TEXT',
+    );
+    await _addColumnIfNotExists(
+      db,
+      Tables.userSettings,
+      Tables.colComplianceAgreedAt,
+      'INTEGER',
+    );
   }
 }
 
