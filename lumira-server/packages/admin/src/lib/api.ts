@@ -36,6 +36,8 @@ import type {
   AiImageResult,
   AiImageTaskId,
   AiImageStatusResult,
+  AiSilhouetteTaskId,
+  AiSilhouetteStatusResult,
 } from '@/types/admin';
 
 // 重新导出纯函数，供 server-only 调用方使用（客户端组件请直接从 @/lib/category-tree 导入）
@@ -566,7 +568,18 @@ export const api = {
   aiGenerateImageStatus: (taskId: string) =>
     adminFetch<AiImageStatusResult>(`/templates/ai-generate-image/tasks/${taskId}`),
 
-  /** multipart：image 文件 + meta JSON（{ mode, crop, engine }，可选）。本地 ONNX 推理 / AI 生图均慢，超时 300s */
+  /** multipart：image 文件 + meta JSON（{ mode, crop, engine }，可选）。异步任务只做提交，立即返回 */
+  aiGenerateSilhouetteStart: (formData: FormData) =>
+    adminFetch<AiSilhouetteTaskId>('/templates/ai-generate-silhouette/tasks', {
+      method: 'POST',
+      body: formData,
+    }, AI_ENDPOINT_TIMEOUT_MS),
+
+  /** 轮询剪影异步任务 */
+  aiGenerateSilhouetteStatus: (taskId: string) =>
+    adminFetch<AiSilhouetteStatusResult>(`/templates/ai-generate-silhouette/tasks/${taskId}`),
+
+  /** 兼容保留：本地 ONNX 推理 / AI 生图均慢，同步端点超时 300s */
   aiGenerateSilhouette: (formData: FormData) =>
     adminFetch<AiImageResult>('/templates/ai-generate-silhouette', {
       method: 'POST',

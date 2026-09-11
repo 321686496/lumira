@@ -25,10 +25,10 @@ import { compressImage } from '@/lib/image-compress';
 import {
   aiAnalyzeAction,
   aiGenerateImageStartAction,
-  aiGenerateSilhouetteAction,
+  aiGenerateSilhouetteStartAction,
   getAiConfigAction,
 } from '@/actions/ai';
-import { pollAiImageTask } from '@/lib/ai-task';
+import { pollAiImageTask, pollAiSilhouetteTask } from '@/lib/ai-task';
 import type { TemplateCategory, AiImageStatusResult } from '@/types/admin';
 import { StepCover, type CoverCandidate } from './step-cover';
 import { StepSilhouette } from './step-silhouette';
@@ -310,14 +310,21 @@ export function AiCreateWizard({
       const silFd = new FormData();
       silFd.set('image', aiCover);
       silFd.set('meta', JSON.stringify({ mode: 'sketch', crop: true, engine: aiSilhouetteAvailable ? 'ai' : 'local' }));
-      const silResult = await aiGenerateSilhouetteAction(silFd);
-      if (!silResult || 'error' in silResult) {
-        // 停在 Step4 转人工：剪影留空
+      const silStart = await aiGenerateSilhouetteStartAction(silFd);
+      if (!silStart || 'error' in silStart) {
         goto(4);
-        setAutoState({ running: false, stage, error: silResult.error });
+        setAutoState({ running: false, stage, error: silStart?.error || '剪影任务提交失败' });
         return;
       }
-      const sil = base64ToFile(silResult.image, silResult.mimeType, `ai-silhouette-${Date.now()}.png`);
+      let silStatus;
+      try {
+        silStatus = await pollAiSilhouetteTask(silStart.taskId);
+      } catch (err) {
+        goto(4);
+        setAutoState({ running: false, stage, error: (err as Error).message });
+        return;
+      }
+      const sil = base64ToFile(silStatus.image!, silStatus.mimeType!, `ai-silhouette-${Date.now()}.png`);
       setSilhouetteFile(sil);
       goto(5);
 

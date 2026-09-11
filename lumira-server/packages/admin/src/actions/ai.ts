@@ -16,6 +16,8 @@ import type {
   AiImageResult,
   AiImageTaskId,
   AiImageStatusResult,
+  AiSilhouetteTaskId,
+  AiSilhouetteStatusResult,
 } from '@/types/admin';
 
 export async function getAiConfigAction(): Promise<
@@ -89,12 +91,24 @@ export async function aiGenerateImageStatusAction(
   }
 }
 
-/** formData：image 文件 + meta JSON（{ mode, crop }，可选） */
-export async function aiGenerateSilhouetteAction(
+/** formData：image 文件 + meta JSON（{ mode, crop, engine }，可选）→ 提交异步剪影任务 */
+export async function aiGenerateSilhouetteStartAction(
   formData: FormData,
-): Promise<AiImageResult | { error: string }> {
+): Promise<AiSilhouetteTaskId | { error: string }> {
   try {
-    return await api.aiGenerateSilhouette(formData);
+    return await api.aiGenerateSilhouetteStart(formData);
+  } catch (e) {
+    if (e instanceof UnauthenticatedError) redirect('/login');
+    return { error: (e as Error).message };
+  }
+}
+
+/** 轮询剪影异步任务状态 */
+export async function aiGenerateSilhouetteStatusAction(
+  taskId: string,
+): Promise<AiSilhouetteStatusResult | { error: string }> {
+  try {
+    return await api.aiGenerateSilhouetteStatus(taskId);
   } catch (e) {
     if (e instanceof UnauthenticatedError) redirect('/login');
     return { error: (e as Error).message };

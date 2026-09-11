@@ -2,8 +2,8 @@
 // 生图异步任务轮询工具（step-cover 手动生成 + wizard 全自动 复用）。
 // 后端提交返回 taskId 后，这里以固定间隔轮询状态直到 done/error/超时，避免同步长请求撑爆 Vercel serverless。
 
-import { aiGenerateImageStatusAction } from '@/actions/ai';
-import type { AiImageStatusResult } from '@/types/admin';
+import { aiGenerateImageStatusAction, aiGenerateSilhouetteStatusAction } from '@/actions/ai';
+import type { AiImageStatusResult, AiSilhouetteStatusResult } from '@/types/admin';
 
 /** 用户可读的错误（含超时 / 上游失败 / 任务不存在） */
 export class AiTaskPollError extends Error {}
@@ -64,6 +64,53 @@ export function pollAiImageTask(
     };
 
     // 立即首查，随后按间隔轮询
+    timer = setInterval(() => {
+      tick().catch((err) => fail((err as Error).message));
+    }, intervalMs);
+    void tick().catch((err) => fail((err as Error).message));
+  });
+}
+
+/** 轮询剪影异步任务直到完成，避免同步请求被网关 504 掐断。 */
+export function pollAiSilhouetteTask(
+  taskId: string,
+  options: AiTaskPollOptions = {},
+  onTick?: (status: AiSilhouetteStatusResult['status']) => void,
+): Promise<AiSilhouetteStatusResult> {
+  const { intervalMs = DEFAULT_INTERVAL_MS, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+  const deadline = Date.now() + timeoutMs;
+
+  return new Promise<AiSilhouetteStatusResult>((resolve, reject) => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const cleanup = () => {
+      if (timer) clearInterval(timer);
+    };
+    const fail = (message: string) => {
+      cleanup();
+      reject(new AiTaskPollError(message));
+    };
+    const tick = async () => {
+      if (Date.now() >= deadline) {
+        fail('剪影生成超时，请稍后重试');
+        return;
+      }
+      const res = await aiGenerateSilhouetteStatusAction(taskId);
+      if (!res || 'error' in res) {
+        fail((res as { error?: string } | undefined)?.error || '查询剪影任务失败');
+        return;
+      }
+      if (res.status === 'done') {
+        cleanup();
+        resolve(res);
+        return;
+      }
+      if (res.status === 'error') {
+        fail(res.error || '剪影生成失败，请重试');
+        return;
+      }
+      onTick?.(res.status);
+    };
+
     timer = setInterval(() => {
       tick().catch((err) => fail((err as Error).message));
     }, intervalMs);

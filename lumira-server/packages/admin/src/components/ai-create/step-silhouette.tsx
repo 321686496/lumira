@@ -10,7 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { aiGenerateSilhouetteAction } from '@/actions/ai';
+import { aiGenerateSilhouetteStartAction } from '@/actions/ai';
+import { pollAiSilhouetteTask } from '@/lib/ai-task';
 import { base64ToFile } from './wizard';
 import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
 import { cn } from '@/lib/utils';
@@ -62,28 +63,48 @@ export function StepSilhouette({
     }
     setGenerating(true);
     setProgress(0);
-    const generated: SilhouetteResult[] = [];
+    const generated: (SilhouetteResult | undefined)[] = new Array(images.length).fill(undefined);
+    const publish = () => setResults(generated.filter((item): item is SilhouetteResult => item !== undefined));
     try {
+      const tasks: Array<{ index: number; taskId: string }> = [];
       for (let i = 0; i < images.length; i += 1) {
         const fd = new FormData();
         fd.set('image', images[i]);
         fd.set('meta', JSON.stringify({ mode, crop, engine }));
-        const result = await aiGenerateSilhouetteAction(fd);
-        if (!result || 'error' in result) {
+        const start = await aiGenerateSilhouetteStartAction(fd);
+        if (!start || 'error' in start) {
           toast({
             variant: 'destructive',
-            title: `第 ${i + 1} 张剪影生成失败`,
-            description: `${result.error}${generated.length > 0 ? '；已完成的剪影已保留' : ''}`,
+            title: `第 ${i + 1} 张剪影提交失败`,
+            description: `${start?.error || '请求失败'}${tasks.length > 0 ? '；已提交的任务会继续生成' : ''}`,
           });
           continue;
         }
-        const file = base64ToFile(result.image, result.mimeType, `ai-silhouette-${Date.now()}-${i}.png`);
-        generated.push({ file, url: URL.createObjectURL(file) });
-        setResults([...generated]);
-        setProgress(i + 1);
+        tasks.push({ index: i, taskId: start.taskId });
       }
-      if (generated.length === 0) return;
-      toast({ title: '剪影生成完成', description: `已生成 ${generated.length}/${images.length} 张剪影` });
+
+      await Promise.all(tasks.map(async ({ index, taskId }) => {
+        try {
+          const result = await pollAiSilhouetteTask(taskId);
+          const file = base64ToFile(result.image!, result.mimeType!, `ai-silhouette-${Date.now()}-${index}.png`);
+          generated[index] = { file, url: URL.createObjectURL(file) };
+          publish();
+          setProgress(generated.filter(Boolean).length);
+        } catch (err) {
+          toast({
+            variant: 'destructive',
+            title: `第 ${index + 1} 张剪影生成失败`,
+            description: (err as Error).message,
+          });
+        }
+      }));
+
+      const completed = generated.filter(Boolean).length;
+      if (completed === 0) return;
+      toast({ title: '剪影生成完成', description: `已生成 ${completed}/${images.length} 张剪影` });
+      if (completed === images.length) {
+        setProgress(images.length);
+      }
     } catch (e) {
       toast({
         variant: 'destructive',
