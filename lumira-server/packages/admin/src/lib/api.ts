@@ -111,7 +111,10 @@ async function adminFetch<T>(
   }
   // 部分写操作（DELETE）可能返回空 body
   const text = await res.text();
-  if (!text) return undefined as T;
+  if (!text) {
+    if (init?.method === 'DELETE') return undefined as T;
+    throw new Error('后端返回空响应，请检查后端日志后重试');
+  }
   return JSON.parse(text) as T;
 }
 

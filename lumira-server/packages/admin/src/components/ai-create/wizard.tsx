@@ -311,7 +311,7 @@ export function AiCreateWizard({
       silFd.set('image', aiCover);
       silFd.set('meta', JSON.stringify({ mode: 'sketch', crop: true, engine: aiSilhouetteAvailable ? 'ai' : 'local' }));
       const silResult = await aiGenerateSilhouetteAction(silFd);
-      if ('error' in silResult) {
+      if (!silResult || 'error' in silResult) {
         // 停在 Step4 转人工：剪影留空
         goto(4);
         setAutoState({ running: false, stage, error: silResult.error });
