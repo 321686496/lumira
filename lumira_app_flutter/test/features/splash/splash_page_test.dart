@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lumira_app_flutter/core/auth/auth_controller.dart';
 import 'package:lumira_app_flutter/core/auth/auth_dao.dart';
 import 'package:lumira_app_flutter/core/auth/auth_state.dart';
+import 'package:lumira_app_flutter/core/compliance/compliance_gate.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
@@ -48,6 +49,7 @@ Widget _wrapWithRouter(
   ThemeKey theme = ThemeKey.warmWhite,
   AuthState? authState,
   _FakeAuthController? authController,
+  bool awaitingCompliance = false,
 }) {
   final router = GoRouter(
     initialLocation: RouteNames.splash,
@@ -77,6 +79,7 @@ Widget _wrapWithRouter(
       themeKeyProvider.overrideWith((ref) => theme),
       uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
       authControllerProvider.overrideWith((ref) => controller),
+      complianceAwaitingProvider.overrideWith((ref) => awaitingCompliance),
     ],
     child: MaterialApp.router(routerConfig: router),
   );
@@ -166,5 +169,22 @@ void main() {
     // 验证 registerIfNeeded 被触发：状态从 failed 转为 registered
     // （doRegister stub 立即返回成功，所以状态应为 registered）
     expect(fakeController.state.status, AuthStatus.registered);
+  });
+
+  testWidgets('未待同意时不弹合规窗', (tester) async {
+    await tester.pumpWidget(_wrapWithRouter(const SplashPage()));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('用户协议与隐私政策'), findsNothing);
+  });
+
+  testWidgets('待同意时弹出合规窗', (tester) async {
+    await tester.pumpWidget(_wrapWithRouter(
+      const SplashPage(),
+      awaitingCompliance: true,
+    ));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('用户协议与隐私政策'), findsOneWidget);
+    expect(find.text('同意并开始使用'), findsOneWidget);
+    expect(find.text('不同意并退出'), findsOneWidget);
   });
 }

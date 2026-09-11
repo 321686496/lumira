@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,11 +7,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/auth/auth_state.dart';
+import '../../../core/compliance/compliance_gate.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/startup/post_compliance_init.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../onboarding/services/questionnaire_sync_providers.dart';
+import '../widgets/compliance_dialog.dart';
 import '../../../shared/widgets/brand/lumira_logo.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
@@ -43,10 +47,12 @@ class _SplashPageState extends ConsumerState<SplashPage> {
 
   Timer? _redirectTimer;
   bool _navigated = false;
+  bool _complianceDialogShown = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybePresentCompliance());
     // 1.8s 后跳转 home（用 context.go 替换路由栈，对齐 uni-app 的 reLaunch 语义）
     _redirectTimer = Timer(_redirectDelay, _maybeNavigate);
     // 监听 auth 状态：重试成功（registered）时自动跳转，并在注册完成后补传未同步问卷。
@@ -110,6 +116,49 @@ class _SplashPageState extends ConsumerState<SplashPage> {
     ref.read(questionnaireSyncServiceProvider.future).then((service) {
       service.syncPendingIfNeeded();
     }).catchError((_) {});
+  }
+
+  /// 首次 build 后检查是否需弹合规窗（首启/版本变更时 waiting 为真）
+  void _maybePresentCompliance() {
+    if (_complianceDialogShown || !mounted) return;
+    if (!ref.read(complianceAwaitingProvider)) return;
+    _complianceDialogShown = true;
+    // ignore: unawaited_futures
+    _presentComplianceDialog();
+  }
+
+  Future<void> _presentComplianceDialog() async {
+    await showLumiraDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => ComplianceDialog(
+        onAgree: () async {
+          await _agreeCompliance(dialogCtx);
+        },
+        onDisagree: _disagreeCompliance,
+      ),
+    );
+  }
+
+  Future<void> _agreeCompliance(BuildContext dialogCtx) async {
+    final container = ProviderScope.containerOf(context, listen: false);
+    try {
+      final dao = await ref.read(settingsDaoProvider.future);
+      await dao.setComplianceAgreed(complianceCurrentVersion);
+    } catch (_) {
+      // 落库失败静默，仍继续，避免用户被卡死
+    }
+    if (dialogCtx.mounted) {
+      Navigator.of(dialogCtx).pop();
+    }
+    ref.read(complianceAwaitingProvider.notifier).state = false;
+    // ignore: unawaited_futures
+    runPostComplianceInit(container);
+  }
+
+  void _disagreeCompliance() {
+    // 未同意则退出应用（iOS/Android/OHOS 通用）
+    exit(0);
   }
 
   @override
