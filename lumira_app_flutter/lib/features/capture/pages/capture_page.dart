@@ -183,6 +183,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 用于 OHOS 快门冻结帧捕获（水印动画源，WYSIWYG）。
   GlobalKey _filteredPreviewKey = GlobalKey(debugLabel: 'filteredPreview');
 
+  double? _viewfinderPixelRatio;
+
   /// 上一次构建时的 facing，用于检测 facing 变化并重建 captureKey
   String? _lastFacingForKey;
 
@@ -1487,7 +1489,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
     }
     try {
       final sw = Stopwatch()..start();
-      final uiImage = await boundary.toImage();
+      final uiImage = await boundary.toImage(
+        pixelRatio: _viewfinderPixelRatio ?? 1.0,
+      );
       final byteData =
           await uiImage.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return null;
@@ -1840,6 +1844,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // 修复 Bug：watch facing 以在 facing 变化时重建 _viewfinderCaptureKey，
     // 强制 RepaintBoundary + CameraAwesomeBuilder 重建（切换 sensor）
     final facing = ref.watch(CaptureState.cameraFacingProvider);
+    _viewfinderPixelRatio = MediaQuery.of(context).devicePixelRatio;
     // 当前竖/横屏，供水印动画方向对齐（与成片管线一致）
     final isPortrait =
         MediaQuery.of(context).size.height >= MediaQuery.of(context).size.width;
@@ -2296,6 +2301,10 @@ class _ViewfinderArea extends ConsumerWidget {
     final ratioId = ref.watch(CaptureState.aspectRatioProvider);
     final facing = ref.watch(CaptureState.cameraFacingProvider);
     final fillLightEnabled = ref.watch(CaptureState.fillLightEnabledProvider);
+    final appearance = ref.watch(CaptureState.captureAppearanceProvider);
+    final frameColor = appearance == CaptureAppearance.theme
+        ? ref.watch(themeTokensProvider).canvas
+        : Colors.black;
     final screenSize = MediaQuery.of(context).size;
     final isPortrait = screenSize.height >= screenSize.width;
     final screenRatio = screenSize.width / screenSize.height;
@@ -2310,7 +2319,7 @@ class _ViewfinderArea extends ConsumerWidget {
       // 取景器容器大小变化方案（原生相机行为）：
       // 容器比例 = 目标比例时，cover 不额外裁切传感器图像，
       // 4:3 显示传感器全视角（最广），全屏 cover 裁切左右（视野变窄）。
-      // 容器外为纯黑背景，居中对称黑边。
+      // 容器外：immersive=纯黑；theme=当前主题画布色（跟随设置）。
       double vfW, vfH;
       if (isFullscreen) {
         vfW = screenSize.width;
@@ -2328,7 +2337,7 @@ class _ViewfinderArea extends ConsumerWidget {
       }
 
       return Container(
-        color: Colors.black,
+        color: frameColor,
         child: Center(
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 300),

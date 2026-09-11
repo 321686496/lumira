@@ -59,12 +59,12 @@ class CaptureBottomBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     // 底部背景：
-    // - 非沉浸（theme）模式：纯色画布底，去掉渐变（画布色渐变与控件衔接显突兀）
+    // - 非沉浸（theme）模式：不渲染底部面板，控件直接叠在取景器上，
+    //   避免非全屏比例外的画布色底板遮挡取景画面
     // - 沉浸（immersive）模式：保留黑色渐变 scrim（相机页通用暗色过渡）
     final appearance = ref.watch(CaptureState.captureAppearanceProvider);
-    final tokens = ref.watch(themeTokensProvider);
     final decoration = appearance == CaptureAppearance.theme
-        ? BoxDecoration(color: tokens.canvas)
+        ? null
         : BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,

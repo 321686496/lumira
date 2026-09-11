@@ -82,7 +82,6 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
   ui.Image? _displayImage;
   int _displayW = 0;
   int _displayH = 0;
-  bool _compositeReady = false;
   bool _disposed = false;
   bool _animationStarted = false;
 
@@ -107,17 +106,6 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
   }
 
   /// 应用占位原片；若成片合成已就绪则丢弃占位原片，避免回退。
-  void _applyPlaceholder(ui.Image image, int w, int h) {
-    if (_compositeReady) {
-      image.dispose();
-      return;
-    }
-    _displayImage?.dispose();
-    _displayImage = image;
-    _displayW = w;
-    _displayH = h;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -144,10 +132,7 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
         widget.onAnimationComplete();
       }
     });
-    // 快速路径：解码 + 方向对齐原片，立即显示，保证动画不空白。
-    _prepBase();
-    // 后台路径：水印（含拍立得白边）合成后替换显示。
-    _buildComposite();
+    _prepComposite();
     // 动画启动延后到首帧解码完成，保证各平台时长一致（见 _startAnimation）。
   }
 
@@ -183,92 +168,66 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
     }
   }
 
-  /// 快速路径：解码原片 → 方向对齐（仅原始成片源）→ 立即显示。
-  Future<void> _prepBase() async {
+  Future<void> _prepComposite() async {
     ui.Image? decoded;
     try {
       final bytes = await File(widget.photoPath).readAsBytes();
-      decoded = await _decodeSource();
-      if (decoded == null) throw Exception('decode failed');
-
-      final aligned = await _alignIfNeeded(decoded);
-      if (aligned != decoded) {
-        decoded.dispose();
-        decoded = aligned;
-      }
-      // 宽色域原片做正确的 P3→sRGB 换算，使动画画面与最终成片（已校色）色彩一致，
-      // 避免 iOS 相机 P3 原片被按 sRGB 解释导致的偏黄。
-      decoded = await _p3CorrectIfNeeded(decoded, bytes);
-      if (!mounted) {
-        decoded.dispose();
+      final source = await _decodeSource();
+      if (source == null) {
+        _startAnimation();
         return;
       }
-      final ui.Image img = decoded;
-      setState(() {
-        _applyPlaceholder(img, img.width, img.height);
-      });
-      // 首帧就绪：此刻才开始播放动画，保证 iOS/OHOS 动画时长一致（不因解码耗时被压缩）。
-      _startAnimation();
-    } catch (e) {
-      // 解码失败：无法展示画面，仍启动控制器以触发 onAnimationComplete，避免卡死拍摄流程。
-      debugPrint('[watermark-anim] base prep failed: $e');
-      _startAnimation();
-    }
-  }
-
-  /// 后台路径：把水印（含拍立得白边）合成到降采样后的照片上，完成后替换显示。
-  Future<void> _buildComposite() async {
-    ui.Image? source;
-    ui.Image? downscaled;
-    try {
-      final bytes = await File(widget.photoPath).readAsBytes();
-      source = await _decodeSource();
-      if (source == null) throw Exception('decode failed');
+      decoded = source;
 
       final aligned = await _alignIfNeeded(source);
+      decoded = aligned;
       if (aligned != source) {
         source.dispose();
-        source = aligned;
       }
+      decoded = await _p3CorrectIfNeeded(aligned, bytes);
+      if (!mounted || _disposed) return;
 
-      if (OhosImageProcessor.isSupported) {
-        // OHOS：原生解码已按 _decodeTargetDim 降采样，无需再次缩放。
-        downscaled = source;
-        source = null;
-      } else {
-        // 其他平台：降采样到展示目标尺寸，避免全尺寸合成耗时（仅两次瞬时对齐用图）。
-        downscaled = await _downscale(source, _decodeTargetDim);
-        source.dispose();
-        source = null;
+      final downscaled = OhosImageProcessor.isSupported
+          ? decoded
+          : await _downscale(decoded, _decodeTargetDim);
+      try {
+        final result = await WatermarkRenderer().render(
+          sourceImage: downscaled,
+          template: widget.watermarkTemplate,
+        );
+        final composite = await _rgbaToImage(
+          result.rgbaBytes,
+          result.width,
+          result.height,
+        );
+        if (!mounted || _disposed) {
+          composite.dispose();
+          return;
+        }
+        setState(() {
+          _applyDisplay(composite, result.width, result.height);
+        });
+        _startAnimation();
+      } finally {
+        if (!identical(downscaled, decoded)) {
+          downscaled.dispose();
+        }
       }
-
-      // 宽色域原片在降采样后做正确的 P3→sRGB 换算，与成片色彩一致（避免动画偏黄）。
-      downscaled = await _p3CorrectIfNeeded(downscaled, bytes);
-
-      final renderer = WatermarkRenderer();
-      final result = await renderer.render(
-        sourceImage: downscaled,
-        template: widget.watermarkTemplate,
-      );
-
-      final composite = await _rgbaToImage(
-        result.rgbaBytes,
-        result.width,
-        result.height,
-      );
-      if (!mounted || _disposed) {
-        composite.dispose();
-        return;
-      }
-      setState(() {
-        _compositeReady = true;
-        _applyDisplay(composite, result.width, result.height);
-      });
     } catch (e) {
-      debugPrint('[watermark-anim] composite build failed: $e');
+      debugPrint('[watermark-anim] watermark composite failed: $e');
+      final fallback = decoded;
+      if (fallback != null && mounted && !_disposed) {
+        decoded = null;
+        setState(() {
+          _applyDisplay(fallback, fallback.width, fallback.height);
+        });
+        _startAnimation();
+      }
+      if (!_animationStarted) {
+        _startAnimation();
+      }
     } finally {
-      downscaled?.dispose();
-      source?.dispose();
+      decoded?.dispose();
     }
   }
 

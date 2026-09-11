@@ -545,6 +545,14 @@ jobs:
           codesign -dv --verbose=4 "$APP" 2>&1 | grep -E 'Identifier|Authority|TeamIdentifier' || echo '  (app 无签名)'
           for fw in "$APP"/Frameworks/*.framework; do
             [ -d "$fw" ] || continue
+            if [ ! -f "$fw/PrivacyInfo.xcprivacy" ]; then
+              cp "$GITHUB_WORKSPACE/${{ env.WORKSPACE }}/ios/Scripts/PrivacyInfo.xcprivacy" "$fw/PrivacyInfo.xcprivacy"
+              echo "Injected PrivacyInfo.xcprivacy into $(basename "$fw")"
+            fi
+          done
+
+          for fw in "$APP"/Frameworks/*.framework; do
+            [ -d "$fw" ] || continue
             echo "--- $(basename "$fw") ---"
             codesign -dv --verbose=4 "$fw" 2>&1 | grep -E 'Identifier|Authority' || echo '  (无签名)'
           done
@@ -565,6 +573,7 @@ jobs:
           echo "=== 重签名校验（任一失败则中止上传）==="
           for fw in "$APP"/Frameworks/*.framework; do
             [ -d "$fw" ] || continue
+            [ -f "$fw/PrivacyInfo.xcprivacy" ] || { echo "::error::缺少隐私清单: $(basename "$fw")"; exit 1; }
             codesign --verify --deep --strict --verbose=2 "$fw" || exit 1
           done
           codesign --verify --deep --strict --verbose=2 "$APP" || exit 1

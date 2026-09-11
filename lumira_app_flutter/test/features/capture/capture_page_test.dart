@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:camerawesome_ohos/pigeon.dart';
 
+import 'package:lumira_app_flutter/core/theme/capture_appearance.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/capture/data/capture_state.dart';
@@ -61,6 +63,21 @@ void main() {
       }
       return null;
     });
+    const sensorsMethodChannel =
+        MethodChannel('dev.fluttercommunity.plus/sensors/method');
+    TestDefaultBinaryMessengerBinding.instance!.defaultBinaryMessenger
+        .setMockMethodCallHandler(sensorsMethodChannel, (call) async => null);
+    const accelerometerChannel =
+        MethodChannel('dev.fluttercommunity.plus/sensors/accelerometer');
+    TestDefaultBinaryMessengerBinding.instance!.defaultBinaryMessenger
+        .setMockMethodCallHandler(accelerometerChannel, (call) async => null);
+    const focusLockChannel = BasicMessageChannel<Object?>(
+      'dev.flutter.pigeon.camerawesome.CameraInterface.setFocusAndExposureLock',
+      CameraInterface.codec,
+    );
+    TestDefaultBinaryMessengerBinding.instance!.defaultBinaryMessenger
+        .setMockDecodedMessageHandler(
+            focusLockChannel, (message) async => <Object?>[]);
     router = GoRouter(
       initialLocation: '/capture',
       routes: [
@@ -98,6 +115,20 @@ void main() {
         MethodChannel('flutter.baseflow.com/permissions/methods');
     TestDefaultBinaryMessengerBinding.instance!.defaultBinaryMessenger
         .setMockMethodCallHandler(permChannel, null);
+    const sensorsMethodChannel =
+        MethodChannel('dev.fluttercommunity.plus/sensors/method');
+    TestDefaultBinaryMessengerBinding.instance!.defaultBinaryMessenger
+        .setMockMethodCallHandler(sensorsMethodChannel, null);
+    const accelerometerChannel =
+        MethodChannel('dev.fluttercommunity.plus/sensors/accelerometer');
+    TestDefaultBinaryMessengerBinding.instance!.defaultBinaryMessenger
+        .setMockMethodCallHandler(accelerometerChannel, null);
+    const focusLockChannel = BasicMessageChannel<Object?>(
+      'dev.flutter.pigeon.camerawesome.CameraInterface.setFocusAndExposureLock',
+      CameraInterface.codec,
+    );
+    TestDefaultBinaryMessengerBinding.instance!.defaultBinaryMessenger
+        .setMockDecodedMessageHandler(focusLockChannel, null);
   });
 
   Widget wrap(
@@ -256,6 +287,42 @@ void main() {
 
       await tester.pumpWidget(Container());
     }
+  });
+
+  testWidgets('theme appearance hides bottom panel and viewfinder frame', (tester) async {
+    final container = ProviderContainer(overrides: [
+      themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
+      uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
+      CaptureState.captureAppearanceProvider
+          .overrideWith((ref) => CaptureAppearance.theme),
+      cameraPreviewOverrideProvider.overrideWith((ref) => cameraPlaceholder),
+    ]);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await pumpWithPermission(tester);
+
+    final tokens = container.read(themeTokensProvider);
+    final canvasPanelFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is Container &&
+          widget.decoration is BoxDecoration &&
+          (widget.decoration! as BoxDecoration).color == tokens.canvas,
+    );
+    expect(canvasPanelFinder, findsNothing);
+
+    final blackFrameFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is Container &&
+          widget.decoration is BoxDecoration &&
+          (widget.decoration! as BoxDecoration).color == Colors.black,
+    );
+    expect(blackFrameFinder, findsNothing);
   });
 
   testWidgets('renders across 8 themes', (tester) async {
