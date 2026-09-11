@@ -187,4 +187,18 @@ void main() {
     expect(find.text('同意并开始使用'), findsOneWidget);
     expect(find.text('不同意并退出'), findsOneWidget);
   });
+
+  testWidgets('awaitingCompliance 且 auth 已注册：1.8s 后仍在弹窗不跳转', (tester) async {
+    await tester.pumpWidget(_wrapWithRouter(
+      const SplashPage(),
+      authState: const AuthState(
+        status: AuthStatus.registered,
+        isNewDevice: false,
+      ),
+      awaitingCompliance: true,
+    ));
+    await tester.pump(const Duration(milliseconds: 1800)); // 越过原 1.8s redirectTimer
+    // 关键回归断言：即使已注册，待同意时也绝不跳走、弹窗仍在
+    expect(find.text('用户协议与隐私政策'), findsOneWidget);
+  });
 }
