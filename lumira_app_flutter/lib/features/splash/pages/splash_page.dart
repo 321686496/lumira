@@ -79,6 +79,10 @@ class _SplashPageState extends ConsumerState<SplashPage> {
 
   void _maybeNavigate() {
     if (_navigated || !mounted) return;
+    // 仍在等待合规同意（首启/版本变更）不可跳转，否则会绕过门控直接进 home
+    if (ref.read(complianceAwaitingProvider)) {
+      return;
+    }
     final auth = ref.read(authControllerProvider);
     // 只有 token 就绪（registered）才跳转。
     // loading/fresh：注册进行中，此时 currentToken 可能为 null（旧 token 已被
@@ -154,6 +158,11 @@ class _SplashPageState extends ConsumerState<SplashPage> {
     ref.read(complianceAwaitingProvider.notifier).state = false;
     // ignore: unawaited_futures
     runPostComplianceInit(container);
+    // 同意后，若已注册（老用户）则主动跳转：此前 redirectTimer/_maybeNavigate 被合规门控堵住，
+    // 需要在此补跳。fresh/新用户走已有 listenManual → registered 触发跳转，无需本句。
+    if (ref.read(authControllerProvider).status == AuthStatus.registered) {
+      _maybeNavigate();
+    }
   }
 
   void _disagreeCompliance() {
