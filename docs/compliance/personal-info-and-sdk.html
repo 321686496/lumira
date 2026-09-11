@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人信息清单与第三方 SDK 目录 · 如画 Lumira</title>
+<style>
+  :root{
+    --ink:#26221b;
+    --sub:#6b6559;
+    --brand:#a1844f;
+    --paper:#fffdf7;
+    --line:#ebe5d6;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:#f3efe4;
+    color:var(--ink);
+    font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",sans-serif;
+    line-height:1.75;
+  }
+  .sheet{
+    max-width:760px;
+    margin:0 auto;
+    padding:56px 40px 72px;
+    background:var(--paper);
+  }
+  h1{
+    font-family:Georgia,"Songti SC","Noto Serif SC",serif;
+    font-size:28px;
+    font-weight:600;
+    letter-spacing:1px;
+    margin:0 0 6px;
+  }
+  .lede{
+    color:var(--sub);
+    font-size:13px;
+    margin:0 0 34px;
+  }
+  .lede em{font-style:normal;color:var(--brand);}
+  .rule{height:1px;background:var(--line);border:none;margin:28px 0;}
+  h2{
+    font-size:18px;
+    font-weight:600;
+    margin:34px 0 12px;
+    padding-left:12px;
+    border-left:3px solid var(--brand);
+  }
+  p{margin:12px 0;text-align:justify;}
+  .item{
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:14px 16px;
+    margin:12px 0;
+    background:#fcfaf4;
+  }
+  .item h3{
+    font-size:15px;
+    font-weight:600;
+    margin:0 0 8px;
+  }
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14px;
+  }
+  td{
+    border:1px solid var(--line);
+    padding:8px 12px;
+    vertical-align:top;
+  }
+  td.k{white-space:nowrap;color:var(--sub);width:1%;background:#faf7ee;}
+  footer{margin-top:44px;color:var(--sub);font-size:12px;border-top:1px solid var(--line);padding-top:16px;}
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <h1>个人信息清单与第三方 SDK 目录</h1>
+    <p class="lede">更新日期：<em>2026-08-24</em>　|　生效日期：2026-08-24　|　「如画 Lumira」</p>
+    <hr class="rule">
+
+    <h2>一、个人信息收集使用清单</h2>
+
+    <div class="item">
+      <h3>基础功能运行</h3>
+      <table>
+        <tr><td class="k">收集场景</td><td>启动应用、浏览首页</td></tr>
+        <tr><td class="k">信息类型</td><td>设备型号、操作系统版本、设备标识符</td></tr>
+        <tr><td class="k">使用目的</td><td>保障服务稳定运行、故障排查</td></tr>
+        <tr><td class="k">是否必需</td><td>是</td></tr>
+      </table>
+    </div>
+    <div class="item">
+      <h3>账号注册与登录</h3>
+      <table>
+        <tr><td class="k">收集场景</td><td>注册、登录</td></tr>
+        <tr><td class="k">信息类型</td><td>昵称、头像、联系方式</td></tr>
+        <tr><td class="k">使用目的</td><td>身份验证与账号管理</td></tr>
+        <tr><td class="k">是否必需</td><td>否，仅在主动填写时收集</td></tr>
+      </table>
+    </div>
+    <div class="item">
+      <h3>拍摄与作品管理</h3>
+      <table>
+        <tr><td class="k">收集场景</td><td>拍摄照片、编辑作品</td></tr>
+        <tr><td class="k">信息类型</td><td>照片、作品数据与相关设置</td></tr>
+        <tr><td class="k">使用目的</td><td>提供拍摄与编辑功能</td></tr>
+        <tr><td class="k">是否必需</td><td>是</td></tr>
+      </table>
+    </div>
+    <div class="item">
+      <h3>分享与导出</h3>
+      <table>
+        <tr><td class="k">收集场景</td><td>分享作品、导出/分享模板、二维码分享</td></tr>
+        <tr><td class="k">信息类型</td><td>被分享的模板内容（经服务器中转时）</td></tr>
+        <tr><td class="k">使用目的</td><td>生成分享载体并供接收方导入</td></tr>
+        <tr><td class="k">是否必需</td><td>是（二维码分享需中转时）</td></tr>
+      </table>
+    </div>
+    <div class="item">
+      <h3>扫码识别</h3>
+      <table>
+        <tr><td class="k">收集场景</td><td>扫码导入模板、扫码恢复账号</td></tr>
+        <tr><td class="k">信息类型</td><td>相机实时画面（仅本地识别，不入云）</td></tr>
+        <tr><td class="k">使用目的</td><td>识别二维码内容</td></tr>
+        <tr><td class="k">是否必需</td><td>是</td></tr>
+      </table>
+    </div>
+    <div class="item">
+      <h3>相册与文件选取</h3>
+      <table>
+        <tr><td class="k">收集场景</td><td>从相册选取照片、从设备导入模板文件</td></tr>
+        <tr><td class="k">信息类型</td><td>您主动选择的图片或模板文件</td></tr>
+        <tr><td class="k">使用目的</td><td>用于导入或编辑</td></tr>
+        <tr><td class="k">是否必需</td><td>是（用户主动选择时）</td></tr>
+      </table>
+    </div>
+
+    <h2>二、第三方 SDK 目录</h2>
+    <p>为实现以下功能，我们接入了第三方 SDK。相关 SDK 仅在您使用对应功能时收集必要信息，且均在本地处理，不收集第三方共享数据：</p>
+    <table style="margin:12px 0;">
+      <tr><td class="k">SDK 目录更新日期</td><td>2026-08-24</td></tr>
+    </table>
+
+    <div class="item">
+      <h3>相机与相册</h3>
+      <table>
+        <tr><td class="k">SDK 名称</td><td>camerawesome / image_picker（含 HarmonyOS 适配组件）</td></tr>
+        <tr><td class="k">提供方</td><td>开源组件与兼容层</td></tr>
+        <tr><td class="k">使用目的</td><td>拍摄照片、从相册选取图片</td></tr>
+        <tr><td class="k">收集的信息</td><td>仅当您主动操作时，处理图片数据于本地</td></tr>
+      </table>
+    </div>
+    <div class="item">
+      <h3>扫码识别</h3>
+      <table>
+        <tr><td class="k">SDK 名称</td><td>qr_code_scanner</td></tr>
+        <tr><td class="k">提供方</td><td>开源组件</td></tr>
+        <tr><td class="k">使用目的</td><td>扫描二维码完成模板导入或账号恢复</td></tr>
+        <tr><td class="k">收集的信息</td><td>相机画面仅在本地解析</td></tr>
+      </table>
+    </div>
+    <div class="item">
+      <h3>系统分享</h3>
+      <table>
+        <tr><td class="k">SDK 名称</td><td>share_plus</td></tr>
+        <tr><td class="k">提供方</td><td>开源组件</td></tr>
+        <tr><td class="k">使用目的</td><td>调用系统分享面板分享作品或模板</td></tr>
+        <tr><td class="k">收集的信息</td><td>不收集，分享在系统层面完成</td></tr>
+      </table>
+    </div>
+    <div class="item">
+      <h3>本地存储</h3>
+      <table>
+        <tr><td class="k">SDK 名称</td><td>sqflite（设备本地数据库）</td></tr>
+        <tr><td class="k">提供方</td><td>开源组件</td></tr>
+        <tr><td class="k">使用目的</td><td>在设备本地存储作品、模板、偏好等数据</td></tr>
+        <tr><td class="k">收集的信息</td><td>数据仅存于设备本地，不对外上传</td></tr>
+      </table>
+    </div>
+    <div class="item">
+      <h3>统计分析 SDK</h3>
+      <table>
+        <tr><td class="k">SDK 名称</td><td>基础统计服务</td></tr>
+        <tr><td class="k">提供方</td><td>本应用运营方自建</td></tr>
+        <tr><td class="k">使用目的</td><td>崩溃日志与使用统计</td></tr>
+        <tr><td class="k">收集的信息</td><td>设备型号、操作系统版本、崩溃日志</td></tr>
+      </table>
+    </div>
+    <div class="item">
+      <h3>图像处理能力</h3>
+      <table>
+        <tr><td class="k">SDK 名称</td><td>本地图像处理组件</td></tr>
+        <tr><td class="k">提供方</td><td>本应用内置组件</td></tr>
+        <tr><td class="k">使用目的</td><td>照片编辑、滤镜与模板合成</td></tr>
+        <tr><td class="k">收集的信息</td><td>不收集，均在设备本地完成</td></tr>
+      </table>
+    </div>
+
+    <footer>© 2026 如画 Lumira. 本文件为 App 合规审核用《个人信息清单与第三方 SDK 目录》HTML 版。</footer>
+  </div>
+</body>
+</html>

@@ -83,6 +83,7 @@ class RouteNames {
   static const String profileRedeem = '/profile/redeem';
   static const String pointsWallet = '/points/wallet';
   static const String pointsTransactions = '/points/transactions';
+  static const String pointsRecharge = '/points/recharge';
   static const String invite = '/invite';
 
   // === 账号保护 / 恢复 ===

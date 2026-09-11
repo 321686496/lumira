@@ -1,7 +1,4 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-import 'dart:typed_data';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,36 +11,37 @@ import '../data/profile_mock_data.dart';
 
 /// 碎片收集分享海报（暖白金线衬线风 · 3:4 竖版）
 ///
-/// 三套可选照片布局：
-/// - [FragmentPosterLayout.galleryStrip]  等高画廊带：每行照片等高、宽度随比例自适应，零留白
-/// - [FragmentPosterLayout.matGrid]       装裱衬纸：统一 3+2 网格，像博物馆装裱，照片完整露出
-/// - [FragmentPosterLayout.numberedStrip] 收藏编号版：等高画廊带 + 金色序号签，收藏册仪式感
+/// 核心视觉 = 一块「对角斜裂」的碎片拼板（5 片，已收集到用照片填实、金线描边；
+/// 未收集到用虚线 + 「待拼」空位补齐），配合情绪化文案（金句标题 + 诗意正文）
+/// 与收集进度模块。共三套版式：
+/// - [FragmentPosterLayout.editorial]  上情绪标题 / 中拼板 / 下进度横条
+/// - [FragmentPosterLayout.zen]        居中大留白 / 情绪金句 / 极简进度
+/// - [FragmentPosterLayout.darkBloom]  暗底大牌 / 拼板铺满 / 光从暗里来
 ///
-/// 海报内新增一段「成就 + 邀请」混合文案（[buildFragmentPosterNote]），
-/// 系统分享文案由 [buildFragmentShareText] 生成，共同提升用户分享欲。
+/// 分享文案由 [buildFragmentShareText] 生成。
 
-/// 可选的海报照片布局。
+/// 可选的海报版式。
 enum FragmentPosterLayout {
-  galleryStrip,
-  matGrid,
-  numberedStrip,
+  editorial,
+  zen,
+  darkBloom,
 }
 
 extension FragmentPosterLayoutMeta on FragmentPosterLayout {
   String get label {
     const map = {
-      FragmentPosterLayout.galleryStrip: '等高画廊带',
-      FragmentPosterLayout.matGrid: '装裱衬纸',
-      FragmentPosterLayout.numberedStrip: '收藏编号版',
+      FragmentPosterLayout.editorial: '上情绪 · 中拼板 · 下进度',
+      FragmentPosterLayout.zen: '居中留白 · 情绪金句',
+      FragmentPosterLayout.darkBloom: '暗底大牌 · 光从暗里来',
     };
     return map[this]!;
   }
 
   String get subtitle {
     const map = {
-      FragmentPosterLayout.galleryStrip: '每行照片等高、宽度随比例自适应，零留白',
-      FragmentPosterLayout.matGrid: '统一 3+2 网格，照片完整露出，整体最规整',
-      FragmentPosterLayout.numberedStrip: '画廊带 + 金色序号签，收藏册仪式感',
+      FragmentPosterLayout.editorial: '衬线标题 + 诗意正文清晰分层，进度用大字横条',
+      FragmentPosterLayout.zen: '大留白，情绪金句点题，进度极简聚焦',
+      FragmentPosterLayout.darkBloom: '深色画布，拼板铺展，白色衬线标题叠暗部',
     };
     return map[this]!;
   }
@@ -90,16 +88,13 @@ Future<FragmentPosterLayout?> showFragmentPosterStylePicker({
   );
 }
 
-/// 碎片海报内容 Widget（公开，供 PosterGenerator 包裹渲染）
-///
-/// 渲染暖白金线衬线风 3:4 竖版海报：细线 + 印章、品牌、衬线标题、照片区
-/// （按所选布局）、分享文案、底部进度 + 品牌语。
+/// 碎片海报内容 Widget（公开，供 PosterGenerator 包裹渲染）。
 class FragmentPosterContent extends StatefulWidget {
   const FragmentPosterContent({
     super.key,
     required this.tokens,
     required this.fragment,
-    this.layout = FragmentPosterLayout.galleryStrip,
+    this.layout = FragmentPosterLayout.editorial,
   });
 
   final ThemeTokens tokens;
@@ -111,146 +106,56 @@ class FragmentPosterContent extends StatefulWidget {
 }
 
 class _FragmentPosterContentState extends State<FragmentPosterContent> {
-  /// 已收集照片的真实宽高比（宽/高），未解析到时默认 1:1。
-  final Map<int, double> _ratios = {};
-  bool _resolving = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _resolveAll();
-  }
-
-  Future<void> _resolveAll() async {
-    final urls = widget.fragment.photoUrls;
-    final resolved = <int, double>{};
-    for (var i = 0; i < urls.length; i++) {
-      resolved[i] = await _resolveAspectRatio(urls[i]);
-    }
-    if (!mounted) return;
-    setState(() {
-      _ratios.addAll(resolved);
-      _resolving = false;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final t = widget.tokens;
     final fragment = widget.fragment;
-    final done = fragment.current >= fragment.max;
-    final slots = _buildSlots(fragment.photoUrls, fragment.max, _ratios);
+    final filled = fragment.current.clamp(0, fragment.max).toInt();
 
+    Widget body;
+    switch (widget.layout) {
+      case FragmentPosterLayout.editorial:
+        body = _Editorial(tokens: t, fragment: fragment, filled: filled);
+        break;
+      case FragmentPosterLayout.zen:
+        body = _Zen(tokens: t, fragment: fragment, filled: filled);
+        break;
+      case FragmentPosterLayout.darkBloom:
+        body = _DarkBloom(tokens: t, fragment: fragment, filled: filled);
+        break;
+    }
+
+    if (widget.layout == FragmentPosterLayout.darkBloom) {
+      // 暗底铺满，无内发丝边框
+      return SizedBox(width: 300, height: 400, child: body);
+    }
+
+    // 浅色海报：暖白→暖杏 渐变底 + 内发丝描边（复现 HTML .poster 背景 + .hairline）
+    const hairline = Color(0x57C9A96E); // rgba(201,169,110,.34)
     return Container(
       width: 300,
       height: 400,
-      color: t.surface,
-      padding: const EdgeInsets.fromLTRB(22, 18, 22, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFFDFBF7), Color(0xFFFBF5EA)],
+        ),
+      ),
+      child: Stack(
         children: [
-          // 顶部细线 + 印章
-          Row(
-            children: [
-              Expanded(
-                child: Container(height: 1, color: t.brand.withOpacity(0.35)),
-              ),
-              const SizedBox(width: 8),
-              _SealTag(tokens: t, done: done),
-            ],
-          ),
-          const SizedBox(height: 14),
-          // 品牌
-          Text(
-            'LUMIRA · 如画',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 10,
-              letterSpacing: 3,
-              fontWeight: FontWeight.w600,
-              color: t.brand,
-            ),
-          ),
-          const SizedBox(height: 8),
-          // 衬线标题
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              fragment.name,
-              maxLines: 1,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Noto Serif SC',
-                fontSize: 28,
-                fontWeight: FontWeight.w700,
-                color: t.textPrimary,
-                height: 1.1,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          // 标题短金线
-          Center(child: Container(width: 44, height: 2, color: t.brand)),
-          const SizedBox(height: 16),
-          // 照片区（按所选布局）
-          Expanded(
-            child: _resolving
-                ? Center(
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: t.brand,
-                      ),
-                    ),
-                  )
-                : _PhotosArea(
-                    layout: widget.layout,
-                    slots: slots,
-                    tokens: t,
+          Positioned.fill(child: body),
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: Padding(
+                padding: EdgeInsets.all(8),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.fromBorderSide(BorderSide(color: hairline, width: 1)),
                   ),
-          ),
-          const SizedBox(height: 12),
-          // 分享文案（增强分享欲）
-          Text(
-            buildFragmentPosterNote(fragment),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'Noto Serif SC',
-              fontSize: 11,
-              color: t.brandDeep,
-              height: 1.5,
-              letterSpacing: 0.5,
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
-          // 底部进度 + 品牌语
-          Column(
-            children: [
-              Text(
-                done
-                    ? '已集齐 ${fragment.max} / ${fragment.max}'
-                    : '已收集 ${fragment.current} / ${fragment.max}',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: t.textPrimary,
-                  letterSpacing: 1,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                '如画 LUMIRA · 记录每一帧光影',
-                style: TextStyle(
-                  fontSize: 9,
-                  color: t.textTertiary,
-                  letterSpacing: 1,
-                ),
-              ),
-            ],
           ),
         ],
       ),
@@ -258,340 +163,870 @@ class _FragmentPosterContentState extends State<FragmentPosterContent> {
   }
 }
 
-/// 依据已收集照片 + 目标数量构造槽位（不足 max 用虚线空位补齐）。
-List<_PhotoSlot> _buildSlots(
-  List<String> urls,
-  int max,
-  Map<int, double> ratios,
-) {
-  final slots = <_PhotoSlot>[];
-  for (var i = 0; i < urls.length; i++) {
-    slots.add(_PhotoSlot(url: urls[i], ratio: ratios[i] ?? 1.0));
-  }
-  while (slots.length < max) {
-    slots.add(const _PhotoSlot(ratio: 1.0));
-  }
-  return slots;
+// ============================================================================
+// 碎片拼板几何（与 visual v17 中对角斜裂 5 片完全一致）
+// ============================================================================
+
+class _V {
+  const _V(this.x, this.y);
+  final double x;
+  final double y;
 }
 
-/// 单个照片槽位。
-class _PhotoSlot {
-  const _PhotoSlot({this.url, required this.ratio});
+const int _kW = 272;
+const int _kH = 209;
+
+/// 生成带中点锯齿的折线点列（amp>0 时在每个线段中点沿法线偏移，左右交替）。
+List<_V> _jag(List<_V> pts, {double amp = 0}) {
+  if (amp <= 0) return List<_V>.of(pts);
+  final out = <_V>[pts[0]];
+  var s = 1.0;
+  for (var i = 0; i < pts.length - 1; i++) {
+    final a = pts[i], b = pts[i + 1];
+    final dx = b.x - a.x, dy = b.y - a.y;
+    final L = math.sqrt(dx * dx + dy * dy);
+    final nx = L == 0 ? 0.0 : -dy / L;
+    final ny = L == 0 ? 0.0 : dx / L;
+    out.add(_V((a.x + b.x) / 2 + nx * amp * s, (a.y + b.y) / 2 + ny * amp * s));
+    out.add(_V(b.x, b.y));
+    s = -s;
+  }
+  return out;
+}
+
+/// 生成 5 块紧密拼接（无缝隙、无重叠）的对角斜裂面。
+/// 相邻面共享同一条边（方向相反），严格对齐。
+List<List<_V>> _fragFaces() {
+  final lT = _jag(const [_V(0, 0), _V(0, 64)]);
+  final lB = _jag(const [_V(0, 64), _V(0, 209)]);
+  final tL = _jag(const [_V(0, 0), _V(88, 0), _V(176, 0)]);
+  final tR = _jag(const [_V(176, 0), _V(224, 0), _V(272, 0)]);
+  final rA = _jag(const [_V(272, 0), _V(272, 90), _V(272, 150)]);
+  final rB = _jag(const [_V(272, 150), _V(272, 209)]);
+  final bL = _jag(const [_V(0, 209), _V(38, 209), _V(76, 209)]);
+  final bM = _jag(const [_V(76, 209), _V(142, 209), _V(208, 209)]);
+  final bR = _jag(const [_V(208, 209), _V(272, 209)]);
+  final d0 = _jag(const [_V(0, 64), _V(50, 76), _V(90, 94)], amp: 2.6);
+  final d1 = _jag(const [_V(90, 94), _V(128, 108), _V(160, 120)], amp: 2.6);
+  final d2 = _jag(const [_V(160, 120), _V(188, 127), _V(220, 133)], amp: 2.4);
+  final d3 = _jag(const [_V(220, 133), _V(244, 141), _V(272, 150)], amp: 2.6);
+  final bUp = _jag(const [_V(176, 0), _V(170, 58), _V(160, 120)], amp: 2.4);
+  final bDn1 = _jag(const [_V(90, 94), _V(84, 150), _V(76, 209)], amp: 2.6);
+  final bDn2 = _jag(const [_V(220, 133), _V(214, 170), _V(208, 209)], amp: 2.4);
+
+  List<_V> rev(List<_V> a) => a.reversed.toList();
+  List<_V> join(List<List<_V>> ss) {
+    final o = <_V>[];
+    for (final s in ss) {
+      for (final p in s) {
+        final l = o.isEmpty ? null : o.last;
+        if (l == null || l.x != p.x || l.y != p.y) o.add(p);
+      }
+    }
+    final l = o.last;
+    if (l.x == o.first.x && l.y == o.first.y) o.removeLast();
+    return o;
+  }
+
+  return [
+    join([tL, bUp, rev(d1), rev(d0), rev(lT)]),
+    join([tR, rA, rev(d3), rev(d2), rev(bUp)]),
+    join([d0, bDn1, rev(bL), rev(lB)]),
+    join([d1, d2, bDn2, rev(bM), rev(bDn1)]),
+    join([d3, rB, rev(bR), rev(bDn2)]),
+  ];
+}
+
+/// 单块碎片。
+class _Face {
+  _Face({required this.index, required this.points, required this.url});
+  final int index;
+  final List<_V> points;
   final String? url;
-  final double ratio; // 宽/高
-  bool get isEmpty => url == null || url!.isEmpty;
+
+  Rect get bbox {
+    double minX = double.infinity, minY = double.infinity;
+    double maxX = -double.infinity, maxY = -double.infinity;
+    for (final p in points) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+    return Rect.fromLTRB(minX, minY, maxX, maxY);
+  }
+
+  Offset get centroid {
+    double sumX = 0, sumY = 0;
+    for (final p in points) {
+      sumX += p.x;
+      sumY += p.y;
+    }
+    return Offset(sumX / points.length, sumY / points.length);
+  }
+
+  Path buildPath(double sx, double sy) {
+    final path = Path();
+    for (var i = 0; i < points.length; i++) {
+      final p = points[i];
+      final ox = p.x * sx, oy = p.y * sy;
+      if (i == 0) {
+        path.moveTo(ox, oy);
+      } else {
+        path.lineTo(ox, oy);
+      }
+    }
+    path.close();
+    return path;
+  }
 }
 
-/// 照片区：按布局渲染。
-class _PhotosArea extends StatelessWidget {
-  const _PhotosArea({
-    required this.layout,
-    required this.slots,
-    required this.tokens,
+/// 已收集前 `filled` 片填照片，其余为空位补齐。
+List<_Face> _buildFaces(List<String> urls, int filled) {
+  final raw = _fragFaces();
+  return [
+    for (var i = 0; i < raw.length; i++)
+      _Face(index: i, points: raw[i], url: i < filled ? urls[i] : null),
+  ];
+}
+
+// ============================================================================
+// 碎片拼板组件：已收集 → ClipPath 裁照片；空位 → 虚线 + 待拼；金线描边
+// ============================================================================
+
+/// 把整个拼板按画布 contain / stretch 布局。
+class _FragmentBoard extends StatelessWidget {
+  const _FragmentBoard({
+    required this.faces,
+    required this.strokeColor,
+    required this.surfaceAlt,
+    required this.emptyTextColor,
+    this.fill = false,
+    this.decorate = false,
   });
 
-  final FragmentPosterLayout layout;
-  final List<_PhotoSlot> slots;
-  final ThemeTokens tokens;
+  final List<_Face> faces;
+  final Color strokeColor;
+  final Color surfaceAlt;
+  final Color emptyTextColor;
+
+  /// true 时拉伸填满整个可用区域，否则等比 contain 居中。
+  final bool fill;
+
+  /// true 时为拼板加金色描边 + 柔和投影（复现 HTML .boardbox 的金线 outline 与阴影）。
+  final bool decorate;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final height = constraints.maxHeight;
-        switch (layout) {
-          case FragmentPosterLayout.galleryStrip:
-            return _GalleryStrip(
-              tokens: tokens,
-              slots: slots,
-              numbered: false,
-              width: width,
-              height: height,
-            );
-          case FragmentPosterLayout.numberedStrip:
-            return _GalleryStrip(
-              tokens: tokens,
-              slots: slots,
-              numbered: true,
-              width: width,
-              height: height,
-            );
-          case FragmentPosterLayout.matGrid:
-            return _MatGrid(tokens: tokens, slots: slots, width: width, height: height);
+        final boxW = constraints.maxWidth;
+        final boxH = constraints.maxHeight;
+        double sx, sy, w, h;
+        if (fill) {
+          sx = boxW / _kW;
+          sy = boxH / _kH;
+          w = boxW;
+          h = boxH;
+        } else {
+          final s = math.min(boxW / _kW, boxH / _kH);
+          sx = s;
+          sy = s;
+          w = _kW * s;
+          h = _kH * s;
         }
+        final board = SizedBox(
+          width: w,
+          height: h,
+          child: Stack(
+            children: [
+              // 已收集碎片：ClipPath 裁照片
+              for (final face in faces)
+                if (face.url != null)
+                  Positioned(
+                    left: face.bbox.left * sx,
+                    top: face.bbox.top * sy,
+                    width: face.bbox.width * sx,
+                    height: face.bbox.height * sy,
+                    child: ClipPath(
+                      clipper: _FaceClipper(
+                        points: face.points,
+                        origin: Offset(face.bbox.left, face.bbox.top),
+                        sx: sx,
+                        sy: sy,
+                      ),
+                      child: LumiraImage(face.url!, fit: BoxFit.cover),
+                    ),
+                  ),
+              // 描边 / 空位
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _BoardOverlayPainter(
+                    faces: faces,
+                    sx: sx,
+                    sy: sy,
+                    strokeColor: strokeColor,
+                    surfaceAlt: surfaceAlt,
+                    emptyTextColor: emptyTextColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+        if (!decorate) return Center(child: board);
+        return Center(
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0x57C9A96E)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x66302414),
+                  blurRadius: 24,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: board,
+          ),
+        );
       },
     );
   }
 }
 
-/// ①/③ 等高画廊带：每行照片等高，宽度随各自宽高比自适应，零留白。
-class _GalleryStrip extends StatelessWidget {
-  const _GalleryStrip({
-    required this.tokens,
-    required this.slots,
-    required this.numbered,
-    required this.width,
-    required this.height,
+/// 让 [path] 相对裁剪框原点（框 = 所在 bbox）表达。
+class _FaceClipper extends CustomClipper<Path> {
+  _FaceClipper({required this.points, required this.origin, required this.sx, required this.sy});
+  final List<_V> points;
+  final Offset origin;
+  final double sx;
+  final double sy;
+
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    for (var i = 0; i < points.length; i++) {
+      final ox = (points[i].x - origin.dx) * sx;
+      final oy = (points[i].y - origin.dy) * sy;
+      if (i == 0) {
+        path.moveTo(ox, oy);
+      } else {
+        path.lineTo(ox, oy);
+      }
+    }
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant _FaceClipper old) =>
+      old.points != points || old.sx != sx || old.sy != sy;
+}
+
+/// 纯矢量描边 + 空位（不涉及位图，可同步绘制）。
+class _BoardOverlayPainter extends CustomPainter {
+  _BoardOverlayPainter({
+    required this.faces,
+    required this.sx,
+    required this.sy,
+    required this.strokeColor,
+    required this.surfaceAlt,
+    required this.emptyTextColor,
   });
 
-  final ThemeTokens tokens;
-  final List<_PhotoSlot> slots;
-  final bool numbered;
-  final double width;
-  final double height;
+  final List<_Face> faces;
+  final double sx;
+  final double sy;
+  final Color strokeColor;
+  final Color surfaceAlt;
+  final Color emptyTextColor;
 
-  static const double _gap = 8;
+  static const double _fontSize = 12;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final solid = Paint()
+      ..color = strokeColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4 * (sx + sy) / 2
+      ..strokeJoin = StrokeJoin.round;
+    final dashed = Paint()
+      ..color = strokeColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2 * (sx + sy) / 2
+      ..strokeJoin = StrokeJoin.round;
+
+    // 空位：先画浅表面对 + 虚线 + 「待拼」
+    for (final face in faces) {
+      if (face.url != null) continue;
+      final path = face.buildPath(sx, sy);
+      canvas.drawPath(path, Paint()..color = surfaceAlt);
+      _dashPath(canvas, path, dashed);
+      final c = Offset(face.centroid.dx * sx, face.centroid.dy * sy);
+      _drawCenteredText(canvas, c, '待拼', emptyTextColor, _fontSize * (sx + sy) / 2);
+    }
+
+    // 已收集：实线金边（盖在照片上）
+    for (final face in faces) {
+      if (face.url == null) continue;
+      canvas.drawPath(face.buildPath(sx, sy), solid);
+    }
+  }
+
+  void _drawCenteredText(Canvas canvas, Offset center, String text, Color color, double fontSize) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          fontSize: fontSize,
+          letterSpacing: 1,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
+  }
+
+  void _dashPath(Canvas canvas, Path path, Paint paint) {
+    for (final metric in path.computeMetrics()) {
+      var dist = 0.0;
+      final seg = 5 * (sx + sy) / 2;
+      final gap = 8 * (sx + sy) / 2;
+      while (dist < metric.length) {
+        canvas.drawPath(metric.extractPath(dist, dist + seg), paint);
+        dist += seg + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BoardOverlayPainter old) =>
+      old.faces != faces || old.sx != sx || old.sy != sy;
+}
+
+// ============================================================================
+// 版式 A · 上情绪 / 中拼板 / 下进度
+// ============================================================================
+
+class _Editorial extends StatelessWidget {
+  const _Editorial({required this.tokens, required this.fragment, required this.filled});
+  final ThemeTokens tokens;
+  final FragmentItem fragment;
+  final int filled;
 
   @override
   Widget build(BuildContext context) {
-    final row1 = slots.take(3).toList();
-    final row2 = slots.skip(3).take(2).toList();
-    return Align(
-      alignment: Alignment.center,
+    final t = tokens;
+    final faces = _buildFaces(fragment.photoUrls, filled);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(26, 20, 26, 16),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (row1.isNotEmpty) _stripRow(row1, 0, width, height),
-          if (row2.isNotEmpty) ...[
-            const SizedBox(height: _gap),
-            _stripRow(row2, 3, width, height),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _stripRow(
-    List<_PhotoSlot> row,
-    int startIndex,
-    double width,
-    double height,
-  ) {
-    final count = row.length;
-    final maxRowH = (height - _gap) / 2;
-    final sumRatios = row.fold<double>(0, (s, slot) => s + slot.ratio);
-    final rowGap = _gap * (count - 1);
-    final fitH = sumRatios > 0 ? (width - rowGap) / sumRatios : 0.0;
-    final rowH = (fitH > 0 && fitH < maxRowH) ? fitH : maxRowH;
-    if (rowH <= 0) return const SizedBox.shrink();
-
-    return SizedBox(
-      width: width,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          for (var i = 0; i < count; i++) ...[
-            if (i > 0) const SizedBox(width: _gap),
-            SizedBox(
-              width: rowH * row[i].ratio,
-              height: rowH,
-              child: row[i].isEmpty
-                  ? _EmptySlot(tokens: tokens, compact: true)
-                  : _PhotoFrame(
-                      tokens: tokens,
-                      url: row[i].url!,
-                      number: numbered ? (startIndex + i + 1) : null,
-                      fit: BoxFit.fill,
-                    ),
+          Row(
+            children: [
+              _BrandText(enColor: t.brandDeep, zhColor: t.textTertiary),
+              const Spacer(),
+              _SealTag(tokens: t, done: fragment.current >= fragment.max),
+            ],
+          ),
+          const SizedBox(height: 18),
+          const _Kicker(text: 'FRAGMENTS · 光影碎片集', color: Color(0xFFA9884B)),
+          const SizedBox(height: 8),
+          const _EmotionalTitle(color: Color(0xFF2A241C), gold: Color(0xFFA9884B)),
+          const SizedBox(height: 11),
+          const _Poem(
+            lines: ['天空被切开，光漏了下来。', '每一缕，都曾在某个黄昏被你留住。'],
+            color: Color(0xFF6B6257),
+            bar: Color(0xFFE4D3AF),
+            barThick: 1.5,
+          ),
+          const SizedBox(height: 18),
+          Expanded(
+            child: _FragmentBoard(
+              faces: faces,
+              strokeColor: t.brand,
+              surfaceAlt: t.surfaceAlt,
+              emptyTextColor: t.textTertiary,
+              decorate: true,
             ),
-          ],
+          ),
+          const SizedBox(height: 16),
+          _ProgressEditorial(t: t, filled: filled, max: fragment.max),
         ],
       ),
     );
   }
 }
 
-/// ② 装裱衬纸：统一 3+2 网格，照片 contain 完整露出，衬纸留白规整。
-class _MatGrid extends StatelessWidget {
-  const _MatGrid({
-    required this.tokens,
-    required this.slots,
-    required this.width,
-    required this.height,
-  });
+// ============================================================================
+// 版式 B · 居中留白 / 情绪金句 / 极简进度
+// ============================================================================
 
+class _Zen extends StatelessWidget {
+  const _Zen({required this.tokens, required this.fragment, required this.filled});
   final ThemeTokens tokens;
-  final List<_PhotoSlot> slots;
-  final double width;
-  final double height;
-
-  static const double _gap = 8;
+  final FragmentItem fragment;
+  final int filled;
 
   @override
   Widget build(BuildContext context) {
-    final row1 = slots.take(3).toList();
-    final row2 = slots.skip(3).take(2).toList();
-    final rowH = (height - _gap) / 2;
-    final row2SlotW = (width - _gap) / 2;
+    final t = tokens;
+    final faces = _buildFaces(fragment.photoUrls, filled);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(child: _BrandText(enColor: t.brandDeep, zhColor: t.textTertiary)),
+          const SizedBox(height: 18),
+          const Center(child: _Kicker(text: '光影碎片集', color: Color(0xFFA9884B))),
+          const SizedBox(height: 9),
+          const Center(child: _EmotionalTitle(color: Color(0xFF2A241C), gold: Color(0xFFA9884B))),
+          const SizedBox(height: 12),
+          Center(
+            child: Container(width: 30, height: 1.5, color: const Color(0xFFC9A96E)),
+          ),
+          const SizedBox(height: 18),
+          Expanded(
+            child: FractionallySizedBox(
+              widthFactor: 0.86,
+              child: _FragmentBoard(
+                faces: faces,
+                strokeColor: t.brand,
+                surfaceAlt: t.surfaceAlt,
+                emptyTextColor: t.textTertiary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          const Center(
+            child: _Quote(
+              text: '天空被切开，光漏了下来。每一缕，都是我和你抄下的黄昏。',
+              color: Color(0xFF2A241C),
+              gold: Color(0xFFA9884B),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _ProgressZen(t: t, filled: filled, max: fragment.max),
+          const Spacer(),
+          const SizedBox(height: 6),
+          Center(
+            child: Text(
+              '如 画 · 记 录 每 一 帧 光 影',
+              style: TextStyle(fontSize: 8, letterSpacing: 2, color: t.textTertiary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-    return Column(
-      children: [
-        Row(
-          children: [
-            for (var i = 0; i < 3; i++) ...[
-              if (i > 0) const SizedBox(width: _gap),
-              Expanded(
-                child: SizedBox(
-                  height: rowH,
-                  child: _MatSlot(tokens: tokens, slot: row1[i]),
+class _DarkBloom extends StatelessWidget {
+  const _DarkBloom({required this.tokens, required this.fragment, required this.filled});
+  final ThemeTokens tokens;
+  final FragmentItem fragment;
+  final int filled;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = tokens;
+    final faces = _buildFaces(fragment.photoUrls, filled);
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF1C1812), Color(0xFF12100C)],
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 拼板铺满
+          _FragmentBoard(
+            faces: faces,
+            fill: true,
+            strokeColor: const Color(0xFFCDB081),
+            surfaceAlt: const Color(0x3025221B),
+            emptyTextColor: const Color(0x99E4D3AF),
+          ),
+          // 光晕氛围：顶部径向泛光 + 底部线性压暗（复现 HTML .shade）
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(0, -1),
+                  radius: 1.25,
+                  colors: [Color(0x33000000), Color(0x00000000), Color(0xBD0A0805)],
+                  stops: [0.0, 0.42, 1.0],
                 ),
               ),
-            ],
-          ],
-        ),
-        const SizedBox(height: _gap),
-        Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var i = 0; i < 2; i++) ...[
-                if (i > 0) const SizedBox(width: _gap),
-                SizedBox(
-                  width: row2SlotW,
-                  height: rowH,
-                  child: _MatSlot(tokens: tokens, slot: row2[i]),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// 衬纸格：衬纸底色 + 金线边框 + 金角标；照片 contain 完整露出，空位虚线。
-class _MatSlot extends StatelessWidget {
-  const _MatSlot({required this.tokens, required this.slot});
-
-  final ThemeTokens tokens;
-  final _PhotoSlot slot;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Container(
-          color: tokens.surfaceAlt,
-          child: slot.isEmpty
-              ? _EmptySlot(tokens: tokens, compact: false)
-              : Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: LumiraImage(slot.url!, fit: BoxFit.contain),
-                ),
-        ),
-        _GoldCorners(tokens: tokens, size: 12, strokeWidth: 2),
-      ],
-    );
-  }
-}
-
-/// 画廊带照片框：金线描边 + 金角标 + 可选金色序号签，照片按比例填充不裁切。
-class _PhotoFrame extends StatelessWidget {
-  const _PhotoFrame({
-    required this.tokens,
-    required this.url,
-    required this.fit,
-    this.number,
-  });
-
-  final ThemeTokens tokens;
-  final String url;
-  final BoxFit fit;
-  final int? number;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border.all(color: tokens.brand.withOpacity(0.5), width: 1),
-          ),
-          child: LumiraImage(url, fit: fit),
-        ),
-        _GoldCorners(tokens: tokens, size: 11, strokeWidth: 2),
-        if (number != null)
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: _NumberTag(tokens: tokens, number: number!),
             ),
           ),
-      ],
-    );
-  }
-}
-
-/// 金色序号签（壹贰叁肆伍）。
-class _NumberTag extends StatelessWidget {
-  const _NumberTag({required this.tokens, required this.number});
-
-  final ThemeTokens tokens;
-  final int number;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      decoration: BoxDecoration(
-        color: tokens.brandDeep,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        _cnNumber(number),
-        style: TextStyle(
-          fontSize: 8,
-          color: tokens.textInverse,
-          letterSpacing: 1,
-        ),
-      ),
-    );
-  }
-}
-
-/// 虚线空位（待收集）。
-class _EmptySlot extends StatelessWidget {
-  const _EmptySlot({required this.tokens, required this.compact});
-
-  final ThemeTokens tokens;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _DashRectPainter(
-        color: tokens.brand.withOpacity(0.55),
-        radius: 3,
-      ),
-      child: Center(
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Padding(
-            padding: const EdgeInsets.all(4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x00000000), Color(0xB30A0805)],
+                  stops: [0.42, 1.0],
+                ),
+              ),
+            ),
+          ),
+          // 顶部品牌与印章
+          Positioned(
+            left: 24, right: 24, top: 22,
+            child: Row(
               children: [
-                Icon(Icons.add, size: compact ? 12 : 16, color: tokens.brand),
-                if (!compact) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    '待收集',
-                    style: TextStyle(
-                      fontSize: 8,
-                      color: tokens.brand,
-                      letterSpacing: 1,
+                const _BrandText(enColor: Color(0xFFE7CE9E), zhColor: Color(0x99FFFFFF)),
+                const Spacer(),
+                _SealTag(tokens: t, done: fragment.current >= fragment.max, light: true),
+              ],
+            ),
+          ),
+          // 底部文案区
+          Positioned(
+            left: 28, right: 28, bottom: 24,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _Kicker(text: '光影碎片集 · FRAGMENTS', color: Color(0xFFE7CE9E)),
+                const SizedBox(height: 9),
+                const _EmotionalTitle(color: Color(0xFFFFF8EC), gold: Color(0xFFE7CE9E)),
+                const SizedBox(height: 10),
+                const _Poem(
+                  lines: ['天空被切开，光漏了下来。每一缕，都曾在你掌心停过。'],
+                  color: Color(0xBDDDFFFF),
+                  bar: Color(0x80E7CE9E),
+                  barThick: 1.5,
+                  barHeight: 30,
+                  barOpacity: 1,
+                ),
+                const SizedBox(height: 14),
+                // 横向金色渐弱金线
+                Container(
+                  height: 1.5,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [Color(0xFFC9A96E), Color(0x00C9A96E)],
                     ),
                   ),
-                ],
+                ),
+                const SizedBox(height: 14),
+                _ProgressDark(t: t, filled: filled, max: fragment.max),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// 各版式进度模块
+// ============================================================================
+
+class _ProgressEditorial extends StatelessWidget {
+  const _ProgressEditorial({required this.t, required this.filled, required this.max});
+  final ThemeTokens t;
+  final int filled;
+  final int max;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(height: 1, color: const Color(0x57C9A96E)),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Text.rich(
+              TextSpan(children: [
+                TextSpan(
+                  text: '$filled',
+                  style: TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.w700,
+                    color: t.brandDeep,
+                    height: 1,
+                  ),
+                ),
+                TextSpan(
+                  text: ' / $max',
+                  style: TextStyle(fontSize: 12, color: t.textTertiary),
+                ),
+              ]),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _Bar(t: t, filled: filled, max: max),
+                  const SizedBox(height: 6),
+                  Text(
+                    '还差 ${max - filled} 缕 · 一起凑齐一束光',
+                    style: TextStyle(fontSize: 8.5, letterSpacing: 1, color: t.textTertiary),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
+      ],
+    );
+  }
+}
+
+class _ProgressZen extends StatelessWidget {
+  const _ProgressZen({required this.t, required this.filled, required this.max});
+  final ThemeTokens t;
+  final int filled;
+  final int max;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          '已 $filled / $max · 还差 ${(max - filled).toString().padLeft(2, '0')} 缕点亮完整',
+          style: TextStyle(fontSize: 10, letterSpacing: 2, color: t.textSecondary),
+        ),
+        const SizedBox(height: 9),
+        Center(child: SizedBox(width: 200, child: _Bar(t: t, filled: filled, max: max))),
+      ],
+    );
+  }
+}
+
+class _ProgressDark extends StatelessWidget {
+  const _ProgressDark({required this.t, required this.filled, required this.max});
+  final ThemeTokens t;
+  final int filled;
+  final int max;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text.rich(
+          TextSpan(
+            style: const TextStyle(height: 1),
+            children: [
+              TextSpan(
+                text: '$filled',
+                style: const TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFFE7CE9E),
+                ),
+              ),
+              TextSpan(
+                text: ' / $max',
+                style: const TextStyle(fontSize: 12, color: Color(0x88FFFFFF)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _Bar(t: t, filled: filled, max: max, dark: true),
+              const SizedBox(height: 7),
+              Text(
+                '还差 ${max - filled} 缕 · 一起凑齐一束光',
+                style: const TextStyle(fontSize: 8.5, letterSpacing: 1, color: Color(0x99FFFFFF)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 进度横条（max 等分，filled 或填充金色）。
+class _Bar extends StatelessWidget {
+  const _Bar({required this.t, required this.filled, required this.max, this.dark = false});
+  final ThemeTokens t;
+  final int filled;
+  final int max;
+  final bool dark;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = dark ? const Color(0x33FFFFFF) : t.brand.withOpacity(0.3);
+    return Row(
+      children: [
+        for (var i = 0; i < max; i++) ...[
+          if (i > 0) const SizedBox(width: 4),
+          Expanded(
+            child: Container(
+              height: 3,
+              decoration: BoxDecoration(
+                color: i < filled ? t.brand : base,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ============================================================================
+// 共享小组件
+// ============================================================================
+
+class _BrandText extends StatelessWidget {
+  const _BrandText({required this.enColor, required this.zhColor});
+  final Color enColor;
+  final Color zhColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text('LUMIRA',
+            style: TextStyle(
+                fontSize: 10, letterSpacing: 4, fontWeight: FontWeight.w700, color: enColor)),
+        const SizedBox(width: 7),
+        Text('如画', style: TextStyle(fontSize: 9, letterSpacing: 3, color: zhColor)),
+      ],
+    );
+  }
+}
+
+class _Kicker extends StatelessWidget {
+  const _Kicker({required this.text, required this.color});
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: TextStyle(fontSize: 9, letterSpacing: 2.5, color: color, fontWeight: FontWeight.w600),
+    );
+  }
+}
+
+/// 情绪标题「光，正一片片归位」，「一片片」金色强调。
+class _EmotionalTitle extends StatelessWidget {
+  const _EmotionalTitle({required this.color, required this.gold});
+  final Color color;
+  final Color gold;
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Text.rich(
+        TextSpan(
+          style: TextStyle(
+            fontFamily: 'Noto Serif SC',
+            fontSize: 27,
+            fontWeight: FontWeight.w700,
+            color: color,
+            height: 1.2,
+          ),
+          children: [
+            const TextSpan(text: '光，正'),
+            TextSpan(text: '一片片', style: TextStyle(color: gold)),
+            const TextSpan(text: '归位'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 诗意正文（左侧金线引导）。
+class _Poem extends StatelessWidget {
+  const _Poem({
+    required this.lines,
+    required this.color,
+    required this.bar,
+    this.barThick = 2.5,
+    this.barHeight = 34,
+    this.barOpacity = 0.55,
+  });
+  final List<String> lines;
+  final Color color;
+  final Color bar;
+  final double barThick;
+  final double barHeight;
+  final double barOpacity;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(width: barThick, height: barHeight, color: bar.withOpacity(barOpacity)),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final l in lines)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(l,
+                      style: TextStyle(fontSize: 10.5, color: color, height: 1.7, letterSpacing: .3)),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 情绪金句（双引号 + 居中，无左侧金线；用于版式 B）。
+class _Quote extends StatelessWidget {
+  const _Quote({
+    required this.text,
+    required this.color,
+    required this.gold,
+  });
+  final String text;
+  final Color color;
+  final Color gold;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Text.rich(
+        TextSpan(
+          style: const TextStyle(fontSize: 10, color: Color(0xFF2A241C), height: 1.9, letterSpacing: .5),
+          children: [
+            TextSpan(text: '“', style: TextStyle(color: gold)),
+            TextSpan(text: text, style: TextStyle(color: color)),
+            TextSpan(text: '”', style: TextStyle(color: gold)),
+          ],
+        ),
+        textAlign: TextAlign.center,
       ),
     );
   }
@@ -599,225 +1034,39 @@ class _EmptySlot extends StatelessWidget {
 
 /// 印章：集齐（金色实心）/ 收集中（金色描边）。
 class _SealTag extends StatelessWidget {
-  const _SealTag({required this.tokens, required this.done});
-
+  const _SealTag({required this.tokens, required this.done, this.light = false});
   final ThemeTokens tokens;
   final bool done;
+  final bool light;
 
   @override
   Widget build(BuildContext context) {
+    final brand = light ? const Color(0xFFE7CE9E) : tokens.brand;
+    final fg = light ? const Color(0xE63C3227) : tokens.textInverse;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: done ? tokens.brand : Colors.transparent,
-        border: Border.all(color: tokens.brand, width: 1),
+        color: done ? brand : Colors.transparent,
+        border: Border.all(color: brand, width: 1),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        done ? '集齐' : '收集中',
+        done ? '集齐' : '拼碎片',
         style: TextStyle(
           fontSize: 9,
           fontWeight: FontWeight.w600,
           letterSpacing: 1,
-          color: done ? tokens.textInverse : tokens.brand,
+          color: done ? fg : brand,
         ),
       ),
     );
   }
 }
 
-/// 金角标：左上 + 右下 L 形金色描边。
-class _GoldCorners extends StatelessWidget {
-  const _GoldCorners({
-    required this.tokens,
-    required this.size,
-    required this.strokeWidth,
-  });
+// ============================================================================
+// 选择面板
+// ============================================================================
 
-  final ThemeTokens tokens;
-  final double size;
-  final double strokeWidth;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: CustomPaint(
-        size: Size.infinite,
-        painter: _GoldCornerPainter(
-          color: tokens.brand,
-          size: size,
-          strokeWidth: strokeWidth,
-        ),
-      ),
-    );
-  }
-}
-
-class _GoldCornerPainter extends CustomPainter {
-  const _GoldCornerPainter({
-    required this.color,
-    required this.size,
-    required this.strokeWidth,
-  });
-
-  final Color color;
-  final double size;
-  final double strokeWidth;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    final s = this.size;
-    final tl = Path()
-      ..moveTo(0, s)
-      ..lineTo(0, 0)
-      ..lineTo(s, 0);
-    final br = Path()
-      ..moveTo(size.width - s, size.height)
-      ..lineTo(size.width, size.height)
-      ..lineTo(size.width, size.height - s);
-    canvas.drawPath(tl, paint);
-    canvas.drawPath(br, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _GoldCornerPainter oldDelegate) =>
-      oldDelegate.color != color ||
-      oldDelegate.size != size ||
-      oldDelegate.strokeWidth != strokeWidth;
-}
-
-/// 虚线矩形（空位边框）。
-class _DashRectPainter extends CustomPainter {
-  const _DashRectPainter({required this.color, required this.radius});
-
-  final Color color;
-  final double radius;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    final rrect = RRect.fromRectAndRadius(
-      Offset.zero & size,
-      Radius.circular(radius),
-    );
-    final path = Path()..addRRect(rrect);
-    for (final metric in path.computeMetrics()) {
-      var distance = 0.0;
-      while (distance < metric.length) {
-        canvas.drawPath(
-          metric.extractPath(distance, distance + 4),
-          paint,
-        );
-        distance += 7;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashRectPainter oldDelegate) =>
-      oldDelegate.color != color || oldDelegate.radius != radius;
-}
-
-/// 1x1 透明 PNG（图片解析失败时的兜底 provider，保证流有可监听对象）。
-final Uint8List _k1x1TransparentPng = Uint8List.fromList(const [
-  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
-  0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-  0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
-  0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x62, 0x00, 0x01, 0x00, 0x00,
-  0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
-  0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
-]);
-
-/// 中文序号（壹贰叁肆伍…），超出则回退阿拉伯数字。
-const List<String> _kCnNumbers = ['壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖', '拾'];
-
-String _cnNumber(int n) {
-  if (n >= 1 && n <= _kCnNumbers.length) return _kCnNumbers[n - 1];
-  return '$n';
-}
-
-/// 为 URL 构造 ImageProvider（data / http / assets / 本地文件）。
-ImageProvider? _providerFor(String url) {
-  if (url.startsWith('data:')) {
-    try {
-      final commaIdx = url.indexOf(',');
-      final raw = commaIdx >= 0 ? url.substring(commaIdx + 1) : url;
-      return MemoryImage(base64Decode(raw));
-    } catch (_) {
-      return null;
-    }
-  }
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    return NetworkImage(url);
-  }
-  if (url.startsWith('assets/')) {
-    return AssetImage(url);
-  }
-  try {
-    return FileImage(File(url));
-  } catch (_) {
-    return null;
-  }
-}
-
-/// 限制解码尺寸的 provider（仅用于读取宽高比，比例不受缩放影响）。
-ImageProvider _limitedProviderFor(String url) {
-  final base = _providerFor(url);
-  if (base == null) return MemoryImage(_k1x1TransparentPng);
-  if (base is MemoryImage) {
-    return ResizeImage(MemoryImage(base.bytes), width: 512);
-  }
-  if (base is NetworkImage) {
-    return ResizeImage(NetworkImage(base.url), width: 512);
-  }
-  return base;
-}
-
-/// 异步解析图片真实宽高比（宽/高），失败或超时回退 1:1。
-Future<double> _resolveAspectRatio(String url) async {
-  final provider = _limitedProviderFor(url);
-  try {
-    final stream = provider.resolve(const ImageConfiguration());
-    final completer = Completer<double>();
-    late ImageStreamListener listener;
-    listener = ImageStreamListener(
-      (info, _) {
-        stream.removeListener(listener);
-        if (!completer.isCompleted) {
-          final w = info.image.width.toDouble();
-          final h = info.image.height.toDouble();
-          completer.complete(h > 0 ? w / h : 1.0);
-        }
-        info.dispose();
-      },
-      onError: (Object error, StackTrace? stackTrace) {
-        stream.removeListener(listener);
-        if (!completer.isCompleted) completer.complete(1.0);
-      },
-    );
-    stream.addListener(listener);
-    return completer.future.timeout(
-      const Duration(seconds: 8),
-      onTimeout: () {
-        stream.removeListener(listener);
-        return 1.0;
-      },
-    );
-  } catch (_) {
-    return 1.0;
-  }
-}
-
-/// 「选择分享卡片」面板。
 class _FragmentPosterStyleSheet extends ConsumerWidget {
   const _FragmentPosterStyleSheet();
 
@@ -830,47 +1079,35 @@ class _FragmentPosterStyleSheet extends ConsumerWidget {
     final tokens = ref.watch(themeTokensProvider);
     return SingleChildScrollView(
       child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Text(
-            '选择分享卡片',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: tokens.textPrimary,
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              '选择分享海报',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: tokens.textPrimary),
             ),
           ),
-        ),
-        Text(
-          '3:4 竖版 · 暖白金线衬线风 · 照片完整露出',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 11, color: tokens.textTertiary),
-        ),
-        const SizedBox(height: 14),
-        for (final layout in FragmentPosterLayout.values) ...[
-          _StyleOption(
-            layout: layout,
-            tokens: tokens,
-            onTap: () => _pick(context, layout),
+          Text(
+            '3:4 竖版 · 碎片拼板 · 情绪文案 + 进度',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 11, color: tokens.textTertiary),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 14),
+          for (final layout in FragmentPosterLayout.values) ...[
+            _StyleOption(layout: layout, tokens: tokens, onTap: () => _pick(context, layout)),
+            const SizedBox(height: 8),
+          ],
         ],
-      ],
-    ),
-  );
+      ),
+    );
   }
 }
-class _StyleOption extends StatelessWidget {
-  const _StyleOption({
-    required this.layout,
-    required this.tokens,
-    required this.onTap,
-  });
 
+class _StyleOption extends StatelessWidget {
+  const _StyleOption({required this.layout, required this.tokens, required this.onTap});
   final FragmentPosterLayout layout;
   final ThemeTokens tokens;
   final VoidCallback onTap;
@@ -894,23 +1131,12 @@ class _StyleOption extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    layout.label,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
-                    ),
-                  ),
+                  Text(layout.label,
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w600, color: tokens.textPrimary)),
                   const SizedBox(height: 3),
-                  Text(
-                    layout.subtitle,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: tokens.textSecondary,
-                      height: 1.4,
-                    ),
-                  ),
+                  Text(layout.subtitle,
+                      style: TextStyle(fontSize: 11, color: tokens.textSecondary, height: 1.4)),
                 ],
               ),
             ),
@@ -922,10 +1148,9 @@ class _StyleOption extends StatelessWidget {
   }
 }
 
-/// 布局示意缩略图（迷你 3:4 卡片）。
+/// 版式示意缩略图。
 class _LayoutSchematic extends StatelessWidget {
   const _LayoutSchematic({required this.layout, required this.tokens});
-
   final FragmentPosterLayout layout;
   final ThemeTokens tokens;
 
@@ -933,116 +1158,47 @@ class _LayoutSchematic extends StatelessWidget {
   Widget build(BuildContext context) {
     final gold = tokens.brand;
     final goldSoft = tokens.brand.withOpacity(0.55);
-    final goldDeep = tokens.brandDeep;
     return Container(
       width: 46,
       height: 60,
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
-        color: tokens.surface,
+        color: layout == FragmentPosterLayout.darkBloom ? const Color(0xFF1D1A14) : tokens.surface,
         border: Border.all(color: goldSoft, width: 1),
       ),
-      child: Column(
-        children: [
-          // 标题短线
-          Container(height: 3, width: 18, color: gold),
-          const SizedBox(height: 4),
-          Expanded(
-            child: _schematicFor(
-              layout,
-              gold: gold,
-              goldSoft: goldSoft,
-              goldDeep: goldDeep,
-            ),
+      child: _schematic(layout, gold: gold, goldSoft: goldSoft),
+    );
+  }
+
+  Widget _schematic(FragmentPosterLayout layout,
+      {required Color gold, required Color goldSoft}) {
+    Widget bar(double h, {bool on = false}) => Container(
+          height: h,
+          decoration: BoxDecoration(
+            color: on ? gold : goldSoft.withOpacity(.45),
+            borderRadius: BorderRadius.circular(1),
           ),
-        ],
+        );
+    final board = Container(
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      decoration: BoxDecoration(
+        color: goldSoft.withOpacity(.3),
+        border: Border.all(color: goldSoft, width: .8),
       ),
     );
-  }
-
-  Widget _schematicFor(
-    FragmentPosterLayout layout, {
-    required Color gold,
-    required Color goldSoft,
-    required Color goldDeep,
-  }) {
-    switch (layout) {
-      case FragmentPosterLayout.galleryStrip:
-        return _schematicStrip(gold, goldSoft);
-      case FragmentPosterLayout.numberedStrip:
-        return _schematicStrip(gold, goldSoft,
-            numbered: true, goldDeep: goldDeep);
-      case FragmentPosterLayout.matGrid:
-        return _schematicGrid(goldSoft);
-    }
-  }
-
-  Widget _schematicStrip(Color gold, Color goldSoft,
-      {bool numbered = false, Color? goldDeep}) {
-    Widget bar(double flex, bool filled) => Container(
-          height: 7,
-          margin: const EdgeInsets.only(right: 2),
-          decoration: BoxDecoration(
-            color: filled ? goldSoft : Colors.transparent,
-            border: Border.all(color: goldSoft, width: 0.8),
-          ),
-          child: numbered && filled
-              ? Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Container(
-                    width: 4,
-                    height: 2,
-                    margin: const EdgeInsets.only(bottom: 1),
-                    color: goldDeep,
-                  ),
-                )
-              : null,
-        );
-
-    Widget row(List<double> flexes, List<bool> filled) => Row(
-          children: [
-            for (var i = 0; i < flexes.length; i++)
-              Expanded(flex: (flexes[i] * 10).round(), child: bar(flexes[i], filled[i])),
-          ],
-        );
-
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        row([1.0, 0.7, 0.5], [true, true, true]),
+        Row(children: [
+          Expanded(child: bar(3)),
+          const SizedBox(width: 4),
+          SizedBox(width: 8, child: bar(3)),
+        ]),
+        Expanded(child: board),
+        bar(2, on: true),
         const SizedBox(height: 3),
-        row([0.85, 0.6], [true, true]),
-      ],
-    );
-  }
-
-  Widget _schematicGrid(Color goldSoft) {
-    Widget cell({bool filled = false}) => Container(
-          margin: const EdgeInsets.all(1),
-          decoration: BoxDecoration(
-            color: filled ? goldSoft : Colors.transparent,
-            border: Border.all(color: goldSoft, width: 0.8),
-          ),
-        );
-    return Column(
-      children: [
-        Expanded(
-          child: Row(
-            children: [cell(filled: true), cell(), cell(filled: true)],
-          ),
-        ),
-        const SizedBox(height: 2),
-        Expanded(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SizedBox(width: 16, child: cell(filled: true)),
-              const SizedBox(width: 2),
-              SizedBox(width: 16, child: cell()),
-            ],
-          ),
-        ),
+        bar(1.5),
       ],
     );
   }
 }
-

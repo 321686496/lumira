@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>如画 LUMIRA · 方案 D3 精修（情绪文案版）</title>
+<style>
+  :root{
+    --surface:#FDFBF7; --surfaceAlt:#F2EDE2;
+    --gold:#C9A96E; --goldDeep:#B08D4F; --goldSoft:#E8CFA4;
+    --ink:#1A1A1A; --text2:#6B645C; --text3:#9B948A;
+    --line:rgba(201,169,110,.34);
+    --serif:"Noto Serif SC","Songti SC",STSong,Georgia,serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{min-height:100vh; background:linear-gradient(180deg,#EDE8DE,#E4DFD3);
+    padding:44px 20px 70px; font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif; -webkit-font-smoothing:antialiased;}
+  h1{text-align:center; font-size:18px; color:#4A4238; letter-spacing:4px; font-weight:600;}
+  .lead{text-align:center; font-size:12px; color:#8A8478; letter-spacing:1.5px; margin:10px auto 34px; line-height:1.9; max-width:640px;}
+  .lead b{color:#4A4238;}
+
+  .stage{display:flex; flex-direction:column; align-items:center; gap:28px;}
+  .scale-wrap{width:420px; height:748px; position:relative;}
+  .poster{position:absolute; left:0; top:0; width:300px; height:533.33px;
+    transform:scale(1.4); transform-origin:top left; overflow:hidden;
+    background:var(--surface); display:flex; flex-direction:column;
+    border-radius:20px; border:1px solid var(--line);
+    box-shadow:0 40px 90px -36px rgba(86,56,38,.5);}
+
+  /* 顶部装饰带 */
+  .band{flex:none; position:relative; width:100%; height:150px; overflow:hidden; background:#E9E2D6;}
+  .band img{width:100%; height:100%; object-fit:cover; display:block;}
+  .band::after{content:""; position:absolute; inset:0;
+    background:linear-gradient(180deg,rgba(8,5,2,0) 45%,rgba(253,251,247,.98));}
+  .band .brandmark{position:absolute; left:16px; top:14px; z-index:2; display:flex; align-items:baseline;}
+  .band .brandmark .en{font-family:Georgia,serif; font-size:8px; letter-spacing:3px; color:#F5EFE4; font-weight:600; text-shadow:0 1px 6px rgba(0,0,0,.25);}
+  .band .brandmark .zh{margin-left:8px; font-family:var(--serif); font-size:10px; font-weight:700; letter-spacing:4px; color:#fff; text-shadow:0 1px 6px rgba(0,0,0,.25);}
+
+  .content{flex:1; min-height:0; display:flex; flex-direction:column; padding:22px 26px 16px;}
+
+  .title .l{font-family:var(--serif); font-weight:700; color:var(--ink); line-height:1.22; letter-spacing:2px; font-size:29px;}
+  .title .l em{font-style:normal; color:var(--goldDeep);}
+
+  .cols{margin-top:16px; display:flex; gap:22px; flex:none;}
+  .left{flex:1.2; display:flex; flex-direction:column;}
+  .left .pains{margin-top:14px;}
+  .pains .p{display:flex; align-items:flex-start; gap:7px; margin-top:9px;}
+  .pains .p i{flex:none; width:5px; height:5px; border-radius:50%; background:var(--gold); margin-top:6px;}
+  .pains .p span{font-size:10px; letter-spacing:1px; color:var(--ink); line-height:1.35;}
+  .pains .p span b{font-family:var(--serif); font-weight:700; color:var(--goldDeep);}
+  .pains .p span .sub{display:block; font-size:8.5px; color:var(--text3); letter-spacing:.5px; margin-top:1px;}
+  .right{flex:1; display:flex; flex-direction:column; gap:8px; padding-left:14px; border-left:1px solid var(--line);}
+  .fcard{background:var(--surfaceAlt); border:1px solid var(--line); border-radius:9px; flex:1; display:flex; flex-direction:column; justify-content:center; padding:8px 10px;}
+  .fcard b{font-family:var(--serif); font-weight:700; letter-spacing:.5px; color:var(--ink); font-size:11px;}
+  .fcard span{font-size:7.5px; color:var(--text3); letter-spacing:.5px; line-height:1.4; margin-top:2px;}
+
+  /* ===== 留白处的情绪文案 ===== */
+  .spacer{flex:1 1 auto; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:6px 10px; position:relative;}
+  .emo{text-align:center; max-width:230px;}
+  .emo .line{width:26px; height:1px; background:var(--gold); margin:0 auto 12px;}
+  .emo .main{font-family:var(--serif); font-size:13.5px; font-weight:700; line-height:1.4; letter-spacing:.5px; color:var(--ink); white-space:nowrap;}
+  .emo .main em{font-style:normal; color:var(--goldDeep);}
+  .emo .sub{margin-top:8px; font-size:8.5px; letter-spacing:1.5px; color:var(--text3); line-height:1.7;}
+
+  .money{display:flex; align-items:center; justify-content:space-between; padding-top:12px; border-top:1px solid var(--line); flex:none;}
+  .money .cap{font-size:7px; letter-spacing:3px; color:var(--goldDeep); font-weight:600;}
+  .money .numrow{display:flex; align-items:baseline; gap:2px; margin-top:2px;}
+  .money .plus{font-family:Georgia,serif; font-size:11px; color:var(--goldDeep); font-weight:700;}
+  .money .num{font-family:Georgia,serif; font-size:24px; color:var(--goldDeep); font-weight:700;}
+  .money .unit{font-size:8.5px; color:var(--text2); letter-spacing:1px; font-weight:600;}
+  .money .r{display:flex; align-items:center; gap:8px;}
+  .money .r .c{display:flex; flex-direction:column; align-items:center; gap:2px;}
+  .money .r .c .code{font-family:Georgia,serif; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--ink);}
+  .money .r .c .hint{font-size:6.5px; letter-spacing:1.5px; color:var(--text3);}
+  .money .r .qr{width:44px; height:44px; padding:3px; background:#fff; border:1px solid var(--line); border-radius:7px;}
+  .money .r .qr img{width:100%; height:100%;}
+  .fine{margin-top:8px; flex:none; font-size:6.8px; letter-spacing:.5px; color:var(--text3); line-height:1.7; text-align:center;}
+
+  /* 文案切换器 */
+  .picker{display:flex; gap:10px; flex-wrap:wrap; justify-content:center; max-width:760px;}
+  .pick{padding:10px 14px; border-radius:10px; border:1px solid var(--line); background:#fff;
+    font-size:12px; color:#4A4238; cursor:pointer; letter-spacing:.5px; line-height:1.5; text-align:left;
+    transition:all .18s;}
+  .pick b{font-family:var(--serif); margin-right:6px; color:var(--goldDeep);}
+  .pick:hover{border-color:var(--goldDeep); box-shadow:0 6px 18px -10px rgba(176,141,79,.5);}
+  .pick.on{border-color:var(--goldDeep); background:var(--surfaceAlt); box-shadow:0 8px 22px -12px rgba(176,141,79,.6);}
+</style>
+</head>
+<body>
+  <h1>方案 D3 精修 · 留白情绪文案</h1>
+  <div class="lead">中下方留白处加入<b>情感共鸣</b>文案，给用户"想用"的情绪价值<br/>点击下方按钮切换不同文案，挑最打动你的一句</div>
+
+  <div class="stage">
+    <div class="scale-wrap">
+      <div class="poster">
+        <div class="band">
+          <div class="brandmark"><span class="en">LUMIRA</span><span class="zh">如 画</span></div>
+          <img src="https://picsum.photos/seed/lumira-d3-emofinal/600/300.jpg" alt=""/>
+        </div>
+        <div class="content">
+          <div class="title"><div class="l">随手一拍，<em>亦成作品</em></div></div>
+          <div class="cols">
+            <div class="left">
+              <div class="pains">
+                <div class="p"><i></i><span><b>调参</b>太麻烦<span class="sub">模板已调好</span></span></div>
+                <div class="p"><i></i><span><b>构图</b>不会<span class="sub">打开即好看</span></span></div>
+                <div class="p"><i></i><span><b>摆姿</b>难题<span class="sub">照着剪影</span></span></div>
+              </div>
+            </div>
+            <div class="right">
+              <div class="fcard"><b>套上模板</b><span>一键出片</span></div>
+              <div class="fcard"><b>多款风格</b><span>随手挑</span></div>
+              <div class="fcard"><b>剪影跟摆</b><span>照做就行</span></div>
+            </div>
+          </div>
+          <!-- 留白处：情绪文案 -->
+          <div class="spacer">
+            <div class="emo">
+              <div class="line"></div>
+              <div class="main">套上模板，一键就出片</div>
+              <div class="sub">不会拍，也能记录下最想留住的美好</div>
+            </div>
+          </div>
+          <div class="money">
+            <div><div class="cap">新人礼</div><div class="numrow"><span class="plus">+</span><span class="num">30</span><span class="unit">积分 双方同得</span></div></div>
+            <div class="r"><div class="c"><div class="code">K2A9XQ</div><div class="hint">长按识别加入</div></div><div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=K2A9XQ&margin=0" crossorigin="anonymous"/></div></div>
+          </div>
+          <div class="fine">积分用于解锁付费模板：双方各 +30，首次绑定邀请码并完拍一张到账</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="picker">
+      <button class="pick" data-main="套上模板，一键就出片" data-sub="不会拍，也能记录下最想留住的美好"><b>①</b>套模板一键出片</button>
+      <button class="pick" data-main="不用学、不用调，套上模板就出片" data-sub="一按快门，美好随手可留存"><b>③</b>不学不调，套模板就出片</button>
+      <button class="pick" data-main="关键时刻，套模板一键出片" data-sub="再瞬间的美好，也不怕拍不住"><b>④</b>关键一刻，一键出片不缺席</button>
+      <button class="pick" data-main="套上模板一键出片，拍照本就这么简单" data-sub="你的照片，也配被好好记录"><b>⑤</b>出片简单，你的照片值得记录</button>
+    </div>
+  </div>
+
+<script>
+  var mainEl=document.querySelector('.emo .main');
+  var subEl=document.querySelector('.emo .sub');
+  var picks=document.querySelectorAll('.pick');
+  var active=null;
+  function apply(btn){
+    if(active)active.classList.remove('on');
+    btn.classList.add('on'); active=btn;
+    mainEl.textContent=btn.getAttribute('data-main');
+    subEl.textContent=btn.getAttribute('data-sub');
+  }
+  picks.forEach(function(b){b.addEventListener('click',function(){apply(b);});});
+  // 默认随机一条（模拟导出时随机变化）
+  apply(picks[Math.floor(Math.random()*picks.length)]);
+</script>
+</body>
+</html>

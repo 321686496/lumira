@@ -464,6 +464,16 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
         LumiraToast.show(context, '模板未找到', duration: const Duration(seconds: 2));
         return;
       }
+      // 自定义模板不允许生成照片分享海报（其二维码无法定位到模板详情）。
+      if (template.source == 'custom') {
+        if (!mounted) return;
+        LumiraToast.show(
+          context,
+          '自定义模板不支持海报分享',
+          duration: const Duration(seconds: 2),
+        );
+        return;
+      }
       if (!mounted) return;
       final tokens = ref.read(themeTokensProvider);
       final shareText = buildAutoShareText(template);
