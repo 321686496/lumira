@@ -31,6 +31,7 @@ import type {
   AiProviderConfigView,
   UpdateAiConfigPayload,
   AiConfigTestResult,
+  AiConfigTestTarget,
   AiAnalyzeResult,
   AiImageResult,
   AiImageTaskId,
@@ -538,8 +539,11 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
-  testAiConfig: () =>
-    adminFetch<AiConfigTestResult>('/ai-config/test', { method: 'POST' }),
+  testAiConfig: (payload?: { targets?: AiConfigTestTarget[] }) =>
+    adminFetch<AiConfigTestResult>('/ai-config/test', {
+      method: 'POST',
+      body: JSON.stringify(payload ?? {}),
+    }),
 
   /** multipart：image 文件（示例图，可选）+ text/textDesc 文字描述（可选，至少其一）+ creationReq/poseCount。AI 识别耗时较长，超时 300s */
   aiAnalyze: (formData: FormData) =>

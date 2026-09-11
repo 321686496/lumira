@@ -2,18 +2,24 @@
 // ai-config.service 单测：textModel 存取 / 留空回退 / 连通测试分支
 // jest.mock llm-client（visionChat + textChat），DatabaseService 手工 stub
 
-import { ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { AiConfigService } from './ai-config.service';
 import { DatabaseService } from '../../database/database.service';
 import { visionChat, textChat } from './llm-client';
+import { generateImage } from './image-client';
 
 jest.mock('./llm-client', () => ({
   visionChat: jest.fn(),
   textChat: jest.fn(),
 }));
+jest.mock('./image-client', () => ({
+  generateImage: jest.fn(),
+  mapSize: jest.fn(() => '1024*1024'),
+}));
 
 const visionChatMock = visionChat as jest.MockedFunction<typeof visionChat>;
 const textChatMock = textChat as jest.MockedFunction<typeof textChat>;
+const generateImageMock = generateImage as jest.MockedFunction<typeof generateImage>;
 
 /** DB 行夹具（列名对齐 drizzle schema camelCase 映射） */
 function row(overrides: Record<string, unknown> = {}) {
@@ -73,8 +79,10 @@ describe('AiConfigService — textModel', () => {
   beforeEach(() => {
     visionChatMock.mockReset();
     textChatMock.mockReset();
+    generateImageMock.mockReset();
     visionChatMock.mockResolvedValue('ok');
     textChatMock.mockResolvedValue('ok');
+    generateImageMock.mockResolvedValue({ base64: 'aW1hZ2U=', mimeType: 'image/png' });
   });
 
   it('get() 无 textModel 列值 → textModel 空串、effectiveTextModel 回退 visionModel', async () => {
@@ -163,18 +171,54 @@ describe('AiConfigService — textModel', () => {
     await expect(service.getActiveConfig()).rejects.toThrow(ServiceUnavailableException);
   });
 
-  it('test() 无独立 textModel → visionChat 收到 vision 端点，不调 textChat，结果无 text 字段', async () => {
+  it('test() 默认测试全部目标，文本回退视觉模型，剪影回退生图端点', async () => {
     const service = new AiConfigService(readonlyDb(row()));
     const result = await service.test();
     expect(result.vision.ok).toBe(true);
+    expect(result.text?.ok).toBe(true);
+    expect(result.image?.ok).toBe(true);
+    expect(result.silhouette?.ok).toBe(true);
     expect(visionChatMock.mock.calls[0][0]).toEqual({
       provider: 'qwen',
       baseUrl: 'https://x.example',
       apiKey: 'sk-1234567890',
       model: 'qwen-vl-max',
     });
+    expect(textChatMock.mock.calls[0][0]).toEqual({
+      provider: 'qwen',
+      baseUrl: 'https://x.example',
+      apiKey: 'sk-1234567890',
+      model: 'qwen-vl-max',
+    });
+    expect(generateImageMock).toHaveBeenCalledTimes(2);
+    expect(generateImageMock.mock.calls[0][0]).toEqual({
+      provider: 'qwen',
+      baseUrl: 'https://x.example',
+      apiKey: 'sk-1234567890',
+      model: 'wanx2.1-t2i-turbo',
+    });
+    expect(generateImageMock.mock.calls[0][1]).toMatchObject({ prompt: 'connectivity test', size: '1024*1024' });
+    expect(generateImageMock.mock.calls[0][2]).toEqual({ requestTimeoutMs: 30_000 });
+    expect(generateImageMock.mock.calls[1][0]).toMatchObject({ model: 'wanx2.1-t2i-turbo' });
+  });
+
+  it('test() 指定子集 → 只执行所选目标', async () => {
+    const service = new AiConfigService(readonlyDb(row({ silhouetteModel: 'sil-x' })));
+    const result = await service.test(['silhouette']);
+    expect(visionChatMock).not.toHaveBeenCalled();
     expect(textChatMock).not.toHaveBeenCalled();
-    expect('text' in result && result.text).toBeFalsy();
+    expect(generateImageMock).toHaveBeenCalledTimes(1);
+    expect(generateImageMock.mock.calls[0][0]).toMatchObject({ model: 'sil-x' });
+    expect(Object.keys(result).filter((key) => key !== 'note')).toEqual(['silhouette']);
+  });
+
+  it.each([
+    ['空数组', []],
+    ['未知目标', ['vision', 'video'] as never],
+    ['重复目标', ['vision', 'vision'] as never],
+  ])('test() %s → 400', async (_name, targets) => {
+    const service = new AiConfigService(readonlyDb(row()));
+    await expect(service.test(targets)).rejects.toThrow(BadRequestException);
   });
 
   it('test() 有独立 textModel → 调 textChat（收到 text 端点），结果含 text', async () => {
@@ -209,6 +253,17 @@ describe('AiConfigService — textModel', () => {
     expect(result.vision.ok).toBe(true);
     expect(result.text?.ok).toBe(false);
     expect(result.text?.error).toBe('boom');
+  });
+
+  it('test() 生图失败 → image.ok=false 且其他目标不受影响', async () => {
+    generateImageMock.mockRejectedValueOnce(new Error('image boom'));
+    const service = new AiConfigService(readonlyDb(row()));
+    const result = await service.test();
+    expect(result.vision.ok).toBe(true);
+    expect(result.text?.ok).toBe(true);
+    expect(result.image?.ok).toBe(false);
+    expect(result.image?.error).toBe('image boom');
+    expect(result.silhouette?.ok).toBe(true);
   });
 });
 

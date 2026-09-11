@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { saveAiConfigAction, testAiConfigAction } from '@/actions/ai';
 import type {
   AiConfigTestResult,
+  AiConfigTestTarget,
   AiPlatformOverride,
   AiProviderConfigView,
   UpdateAiConfigPayload,
@@ -54,6 +55,14 @@ const PROVIDER_PRESETS = {
 
 type ProviderKey = keyof typeof PROVIDER_PRESETS;
 const PROVIDER_KEYS = Object.keys(PROVIDER_PRESETS) as ProviderKey[];
+
+const TEST_TARGET_OPTIONS: { value: AiConfigTestTarget; label: string }[] = [
+  { value: 'vision', label: '视觉识别' },
+  { value: 'text', label: '文本' },
+  { value: 'image', label: '生图' },
+  { value: 'silhouette', label: '剪影' },
+];
+const ALL_TEST_TARGETS = TEST_TARGET_OPTIONS.map((option) => option.value);
 
 interface FormState {
   provider: ProviderKey;
@@ -200,6 +209,7 @@ export function AiConfigForm({
     initialImagePlatform?.apiKeyMasked ?? '',
   );
   const [testResult, setTestResult] = useState<AiConfigTestResult | null>(null);
+  const [testTargets, setTestTargets] = useState<AiConfigTestTarget[]>(ALL_TEST_TARGETS);
   const [savePending, startSave] = useTransition();
   const [testPending, startTest] = useTransition();
 
@@ -334,13 +344,62 @@ export function AiConfigForm({
   const handleTest = () => {
     setTestResult(null);
     startTest(async () => {
-      const result = await testAiConfigAction();
+      const result = await testAiConfigAction({ targets: testTargets });
       if ('error' in result) {
         toast({ variant: 'destructive', title: '测试请求失败', description: result.error });
         return;
       }
       setTestResult(result);
     });
+  };
+
+  const toggleTestTarget = (target: AiConfigTestTarget, checked: boolean) => {
+    setTestTargets((current) => (
+      checked
+        ? [...new Set([...current, target])]
+        : current.filter((item) => item !== target)
+    ));
+  };
+
+  const renderTestResult = () => {
+    if (!testResult) return null;
+    const entries = TEST_TARGET_OPTIONS
+      .map((option) => ({ option, result: testResult[option.value] }))
+      .filter((entry) => Boolean(entry.result));
+    const allOk = entries.length > 0 && entries.every((entry) => entry.result?.ok);
+    return (
+      <div
+        className={cn(
+          'rounded-lg border p-4 text-sm',
+          allOk
+            ? 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
+            : 'border-destructive/50 bg-destructive/10 text-destructive',
+        )}
+      >
+        <div className="font-medium">
+          {allOk ? `已测模型连接成功（${entries.length} 项）` : '测试完成，存在失败项'}
+        </div>
+        {entries.map(({ option, result }) => (
+          <div
+            key={option.value}
+            className={cn(
+              'mt-2 flex items-center justify-between gap-2 rounded-md border p-3',
+              result?.ok
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
+                : 'border-destructive/50 bg-destructive/10 text-destructive',
+            )}
+          >
+            <span>{option.label}模型</span>
+            <span className="text-right">
+              {result?.ok
+                ? `连通 ${result.latencyMs ?? '?'}ms`
+                : (result?.error ?? '连接失败')}
+            </span>
+          </div>
+        ))}
+        <div className="mt-1 text-xs opacity-70">{testResult.note}</div>
+      </div>
+    );
   };
 
   /** 文本/生图模态区块（跟随 ↔ 独立平台切换） */
@@ -596,53 +655,44 @@ export function AiConfigForm({
           </div>
 
           {/* 按钮行 */}
-          <div className="flex items-center gap-3">
-            <Button onClick={handleSave} disabled={savePending}>
-              {savePending ? '保存中…' : '保存'}
-            </Button>
-            <Button variant="outline" onClick={handleTest} disabled={testPending}>
-              {testPending ? '测试中…' : '测试连接'}
-            </Button>
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {TEST_TARGET_OPTIONS.map((option) => (
+                <label
+                  key={option.value}
+                  className={cn(
+                    'flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm',
+                    testTargets.includes(option.value)
+                      ? 'border-primary bg-primary/5 text-foreground'
+                      : 'border-border bg-background text-muted-foreground',
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={testTargets.includes(option.value)}
+                    disabled={testPending}
+                    onChange={(event) => toggleTestTarget(option.value, event.target.checked)}
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              默认全部测试；生图与剪影会产生真实模型调用费用。
+            </p>
+            <div className="flex items-center gap-3">
+              <Button onClick={handleSave} disabled={savePending}>
+                {savePending ? '保存中…' : '保存'}
+              </Button>
+              <Button variant="outline" onClick={handleTest} disabled={testPending || testTargets.length === 0}>
+                {testPending ? '测试中…' : '测试连接'}
+              </Button>
+            </div>
           </div>
 
           {/* 测试结果 */}
-          {testResult && (
-            <div
-              className={cn(
-                'rounded-lg border p-4 text-sm',
-                testResult.vision.ok
-                  ? 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
-                  : 'border-destructive/50 bg-destructive/10 text-destructive',
-              )}
-            >
-              <div className="font-medium">
-                {testResult.vision.ok
-                  ? `视觉模型连接成功（${testResult.vision.latencyMs ?? '?'}ms）`
-                  : '视觉模型连接失败'}
-              </div>
-              {!testResult.vision.ok && testResult.vision.error && (
-                <div className="mt-1 break-all">{testResult.vision.error}</div>
-              )}
-              {testResult.text && (
-                <div
-                  className={cn(
-                    'mt-2 flex items-center justify-between gap-2 rounded-md border p-3',
-                    testResult.text.ok
-                      ? 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
-                      : 'border-destructive/50 bg-destructive/10 text-destructive',
-                  )}
-                >
-                  <span>文本模型</span>
-                  <span className="text-right">
-                    {testResult.text.ok
-                      ? `连通 ${testResult.text.latencyMs ?? '?'}ms`
-                      : (testResult.text.error ?? '连接失败')}
-                  </span>
-                </div>
-              )}
-              <div className="mt-1 text-xs opacity-70">{testResult.note}</div>
-            </div>
-          )}
+          {renderTestResult()}
         </CardContent>
       </Card>
     </>

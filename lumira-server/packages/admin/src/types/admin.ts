@@ -431,11 +431,15 @@ export interface UpdateAiConfigPayload {
   imageApiKey?: string;
 }
 
-/** POST /admin/ai-config/test 结果（最小 vision 请求连通性） */
+/** POST /admin/ai-config/test 可选目标（缺省 = 全部） */
+export type AiConfigTestTarget = 'vision' | 'text' | 'image' | 'silhouette';
+
+/** POST /admin/ai-config/test 结果（只包含请求的目标） */
 export interface AiConfigTestResult {
-  vision: { ok: boolean; latencyMs?: number; error?: string };
-  /** 配置了独立文本模型时返回 */
+  vision?: { ok: boolean; latencyMs?: number; error?: string };
   text?: { ok: boolean; latencyMs?: number; error?: string };
+  image?: { ok: boolean; latencyMs?: number; error?: string };
+  silhouette?: { ok: boolean; latencyMs?: number; error?: string };
   note: string;
 }
 

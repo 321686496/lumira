@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { UnauthenticatedError } from '@/lib/auth';
 import type {
   AiProviderConfigView,
+  AiConfigTestTarget,
   UpdateAiConfigPayload,
   AiConfigTestResult,
   AiAnalyzeResult,
@@ -41,11 +42,11 @@ export async function saveAiConfigAction(
   }
 }
 
-export async function testAiConfigAction(): Promise<
-  AiConfigTestResult | { error: string }
-> {
+export async function testAiConfigAction(
+  payload: { targets?: AiConfigTestTarget[] } = {},
+): Promise<AiConfigTestResult | { error: string }> {
   try {
-    return await api.testAiConfig();
+    return await api.testAiConfig(payload);
   } catch (e) {
     if (e instanceof UnauthenticatedError) redirect('/login');
     return { error: (e as Error).message };

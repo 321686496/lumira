@@ -95,6 +95,23 @@ describe('api client', () => {
     );
   });
 
+  it('testAiConfig posts selected targets', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ vision: { ok: true }, note: 'ok' }),
+    });
+    const { api } = await import('../api');
+    const result = await api.testAiConfig({ targets: ['vision', 'image'] });
+    expect(result).toEqual({ vision: { ok: true }, note: 'ok' });
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({ targets: ['vision', 'image'] }),
+      headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+    });
+  });
+
   it('aiGenerateImageStatus GETs the task and returns done result', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
