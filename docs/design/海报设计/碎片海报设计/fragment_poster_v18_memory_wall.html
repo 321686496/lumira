@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>如画 LUMIRA · 碎片海报 V18 · 不对称记忆墙</title>
+  <title>如画 LUMIRA · 碎片海报 V18 · 桌面碎片墙</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -21,18 +21,19 @@
     h1 { margin-top: 7px; font-size: 28px; font-weight: 700; line-height: 1.22; letter-spacing: 1px; }
     h1 em { font-style: normal; color: #A9884B; }
     .subtitle { margin-top: 7px; font-size: 9.5px; line-height: 1.65; letter-spacing: .4px; color: #5E5648; }
-    .memory-wall { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.24fr 1fr; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 16px; }
-    .memory-item { position: relative; overflow: hidden; border-radius: 5px; }
-    .slot-1 { grid-column: 1; grid-row: 1 / span 2; }
-    .slot-2 { grid-column: 2; grid-row: 1; }
-    .slot-3 { grid-column: 2; grid-row: 2; }
-    .slot-4 { grid-column: 1; grid-row: 3; }
-    .slot-5 { grid-column: 2; grid-row: 3; }
-    .memory-item img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-    .memory-item.filled::after { content: ""; position: absolute; inset: 0; border: 1px solid rgba(201, 169, 110, .42); border-radius: inherit; pointer-events: none; }
-    .number { position: absolute; top: 6px; left: 6px; z-index: 2; padding: 2px 6px; border-radius: 999px; background: rgba(253, 251, 247, .82); border: 1px solid rgba(169, 136, 75, .35); font-size: 7.5px; font-weight: 700; letter-spacing: 1px; color: #7A5E24; }
-    .memory-item.pending { display: grid; place-items: center; border: 1px dashed rgba(169, 136, 75, .68); border-radius: 5px; background: rgba(246, 241, 232, .74); color: #6B6257; }
-    .pending span { font-size: 8.5px; letter-spacing: 1.5px; }
+    .memory-wall { position: relative; isolation: isolate; flex: 1; min-height: 0; margin-top: 18px; }
+    .shard { position: absolute; transform: var(--rotate); filter: drop-shadow(0 7px 10px rgba(60, 48, 28, .15)); }
+    .shard-surface { position: absolute; inset: 0; background: linear-gradient(145deg, #D8BC85, rgba(201, 169, 110, .52)); clip-path: var(--clip); }
+    .shard-photo { position: absolute; inset: 1px; overflow: hidden; clip-path: var(--clip); background: #F6F1E8; }
+    .shard-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .slot-1 { left: -2%; top: -4%; width: 57%; height: 65%; z-index: 3; --rotate: -2.2deg; --clip: polygon(3% 8%, 97% 0, 100% 80%, 84% 100%, 0 91%); }
+    .slot-2 { right: 0; top: -3%; width: 37%; height: 32%; z-index: 2; --rotate: 2.2deg; --clip: polygon(0 14%, 89% 0, 100% 86%, 10% 100%); }
+    .slot-3 { right: -2%; top: 32%; width: 36%; height: 30%; z-index: 2; --rotate: -1.8deg; --clip: polygon(2% 10%, 95% 0, 100% 90%, 12% 100%); }
+    .slot-4 { left: 0; bottom: -3%; width: 51%; height: 29%; z-index: 3; --rotate: 1.2deg; --clip: polygon(0 16%, 91% 0, 100% 82%, 7% 100%); }
+    .slot-5 { right: 2%; bottom: -6%; width: 39%; height: 29%; z-index: 1; --rotate: 2.6deg; --clip: polygon(0 10%, 91% 0, 100% 88%, 8% 100%); }
+    .number { position: absolute; top: 8%; left: 7%; z-index: 3; padding: 2px 6px; border-radius: 999px; background: rgba(253, 251, 247, .84); border: 1px solid rgba(169, 136, 75, .38); font-size: 7.5px; font-weight: 700; letter-spacing: 1px; color: #7A5E24; transform: rotate(calc(var(--rotate) * -1)); }
+    .shard-outline { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+    .pending-label { position: absolute; inset: 0; display: grid; place-items: center; font-size: 8.5px; letter-spacing: 1.5px; color: #6B6257; transform: rotate(calc(var(--rotate) * -1)); }
     .progress { display: flex; align-items: center; gap: 13px; margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(201, 169, 110, .34); }
     .count { min-width: 58px; font-family: Georgia, serif; font-size: 29px; font-weight: 700; line-height: 1; color: #A9884B; }
     .count small { font-family: Inter, "PingFang SC", sans-serif; font-size: 11px; font-weight: 400; color: #6B6257; }
@@ -55,12 +56,30 @@
       <h1 class="serif">光，正<em>一片片</em>归位</h1>
       <p class="subtitle">每一次快门，都是被亲手留住的一缕光。</p>
     </section>
-    <section class="memory-wall" aria-label="碎片照片记忆墙">
-      <figure class="memory-item slot-1 filled"><img src="https://picsum.photos/seed/lumira-v18-a/620/720" alt="已收集的大幅光影照片"><figcaption class="number">01</figcaption></figure>
-      <figure class="memory-item slot-2 filled"><img src="https://picsum.photos/seed/lumira-v18-b/440/300" alt="已收集的光影照片"><figcaption class="number">02</figcaption></figure>
-      <div class="memory-item slot-3 pending" role="img" aria-label="待拼碎片"><span>+ 待拼</span></div>
-      <figure class="memory-item slot-4 filled"><img src="https://picsum.photos/seed/lumira-v18-c/420/280" alt="已收集的横向光影照片"><figcaption class="number">03</figcaption></figure>
-      <div class="memory-item slot-5 pending" role="img" aria-label="待拼碎片"><span>+ 待拼</span></div>
+    <section class="memory-wall" aria-label="桌面碎片照片墙">
+      <figure class="shard slot-1">
+        <div class="shard-surface" aria-hidden="true"></div>
+        <div class="shard-photo"><img src="https://picsum.photos/seed/lumira-v18-a/620/720" alt="已收集的大幅光影照片"></div>
+        <figcaption class="number">01</figcaption>
+      </figure>
+      <figure class="shard slot-2">
+        <div class="shard-surface" aria-hidden="true"></div>
+        <div class="shard-photo"><img src="https://picsum.photos/seed/lumira-v18-b/440/300" alt="已收集的光影照片"></div>
+        <figcaption class="number">02</figcaption>
+      </figure>
+      <div class="shard slot-3" role="img" aria-label="待拼碎片 1">
+        <svg class="shard-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon points="2,10 95,0 100,90 12,100" fill="rgba(246,241,232,.74)" stroke="rgba(169,136,75,.72)" stroke-width="1" stroke-dasharray="5 4" vector-effect="non-scaling-stroke" /></svg>
+        <div class="pending-label">+ 待拼</div>
+      </div>
+      <figure class="shard slot-4">
+        <div class="shard-surface" aria-hidden="true"></div>
+        <div class="shard-photo"><img src="https://picsum.photos/seed/lumira-v18-c/420/280" alt="已收集的横向光影照片"></div>
+        <figcaption class="number">03</figcaption>
+      </figure>
+      <div class="shard slot-5" role="img" aria-label="待拼碎片 2">
+        <svg class="shard-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,10 91,0 100,88 8,100" fill="rgba(246,241,232,.74)" stroke="rgba(169,136,75,.72)" stroke-width="1" stroke-dasharray="5 4" vector-effect="non-scaling-stroke" /></svg>
+        <div class="pending-label">+ 待拼</div>
+      </div>
     </section>
     <section class="progress" role="progressbar" aria-label="收集进度" aria-valuemin="0" aria-valuemax="5" aria-valuenow="3" aria-valuetext="已收集 3 / 5">
       <div class="count">3 <small>/ 5</small></div>
