@@ -24,12 +24,10 @@ import { useToast } from '@/hooks/use-toast';
 import { compressImage } from '@/lib/image-compress';
 import {
   aiAnalyzeAction,
-  aiGenerateImageStartAction,
-  aiGenerateSilhouetteStartAction,
   getAiConfigAction,
 } from '@/actions/ai';
-import { pollAiImageTask, pollAiSilhouetteTask } from '@/lib/ai-task';
-import type { TemplateCategory, AiImageStatusResult } from '@/types/admin';
+import { generateAiPoseImages, generateAiSilhouettes } from '@/lib/ai-task';
+import type { TemplateCategory } from '@/types/admin';
 import { StepCover, type CoverCandidate } from './step-cover';
 import { StepSilhouette } from './step-silhouette';
 import { Upload } from '@phosphor-icons/react/dist/csr/Upload';
@@ -37,14 +35,6 @@ import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
 import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
 import { Check } from '@phosphor-icons/react/dist/csr/Check';
 import { cn } from '@/lib/utils';
-
-/** base64 → File（生图 / 剪影结果进入 imageFiles / 姿势编辑器），供 step-cover / step-silhouette 复用 */
-export function base64ToFile(b64: string, mime: string, name: string): File {
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new File([bytes], name, { type: mime });
-}
 
 const WIZARD_STEPS = [
   { n: 1, title: '上传示例图' },
@@ -271,10 +261,6 @@ export function AiCreateWizard({
       // ② 生图作封面（异步任务式：提交 taskId 后轮询；参考图 = 示例图，纯文模式无参考图）
       stage = 'generating-image';
       setAutoState({ running: true, stage });
-      const genFd = new FormData();
-      genFd.set('meta', JSON.stringify(draftLocal));
-      if (exampleFile) genFd.set('reference', exampleFile);
-      // 生图失败统一停在 Step3 转人工：示例图保底作封面，草稿保留（纯文模式候选为空）
       const failGenerate = (err: string) => {
         setCandidates(exampleCandidate ? [exampleCandidate] : []);
         if (exampleFile) {
@@ -285,53 +271,71 @@ export function AiCreateWizard({
         goto(3);
         setAutoState({ running: false, stage, error: err });
       };
-      const genStart = await aiGenerateImageStartAction(genFd);
-      if ('error' in genStart) {
-        failGenerate(genStart.error);
+      const poseResults = await generateAiPoseImages({ draft: draftLocal, exampleFile });
+      const poseFiles = poseResults
+        .filter((result): result is { index: number; file: File } => Boolean(result.file))
+        .sort((a, b) => a.index - b.index)
+        .map((result) => result.file);
+      const poseErrors = poseResults.filter((result) => result.error);
+      if (poseFiles.length === 0) {
+        failGenerate(poseErrors[0]?.error || '姿势图生成失败');
         return;
       }
-      let genStatus: AiImageStatusResult;
-      try {
-        genStatus = await pollAiImageTask(genStart.taskId);
-      } catch (err) {
-        failGenerate((err as Error).message);
+      if (poseErrors.length > 0) {
+        const generatedCandidates = poseFiles.map((file, index) => ({
+          id: `ai-${Date.now()}-${index}`,
+          file,
+          url: URL.createObjectURL(file),
+          source: 'ai' as const,
+        }));
+        setCandidates([...generatedCandidates, ...(exampleCandidate ? [exampleCandidate] : [])]);
+        if (exampleFile) {
+          inject({ json: draftLocal, images: poseFiles, replaceImages: true });
+        } else {
+          inject({ json: draftLocal });
+        }
+        goto(3);
+        setAutoState({ running: false, stage, error: poseErrors[0]?.error || '部分姿势图生成失败' });
         return;
       }
-      const aiCover = base64ToFile(genStatus.image!, genStatus.mimeType!, `ai-cover-${Date.now()}.png`);
       setCandidates([
-        { id: `ai-${Date.now()}`, file: aiCover, url: URL.createObjectURL(aiCover), source: 'ai' },
+        ...poseFiles.map((file, index) => ({
+          id: `ai-${Date.now()}-${index}`,
+          file,
+          url: URL.createObjectURL(file),
+          source: 'ai' as const,
+        })),
         ...(exampleCandidate ? [exampleCandidate] : []),
       ]);
-      inject({ json: draftLocal, images: [aiCover], replaceImages: true });
+      inject({ json: draftLocal, images: poseFiles, replaceImages: true });
 
       // ③ 剪影（源 = 生成的封面图，线稿模式 + 自动裁剪；AI 已配置并启用时走 AI 引擎，否则本地抠图）
       stage = 'generating-silhouette';
       setAutoState({ running: true, stage });
-      const silFd = new FormData();
-      silFd.set('image', aiCover);
-      silFd.set('meta', JSON.stringify({ mode: 'sketch', crop: true, engine: aiSilhouetteAvailable ? 'ai' : 'local' }));
-      const silStart = await aiGenerateSilhouetteStartAction(silFd);
-      if (!silStart || 'error' in silStart) {
+      const silResults = await generateAiSilhouettes({
+        images: poseFiles,
+        mode: 'sketch',
+        crop: true,
+        engine: aiSilhouetteAvailable ? 'ai' : 'local',
+      });
+      const silFiles = silResults
+        .filter((result): result is { index: number; file: File } => Boolean(result.file))
+        .sort((a, b) => a.index - b.index)
+        .map((result) => result.file);
+      if (silFiles.length !== poseFiles.length) {
         goto(4);
-        setAutoState({ running: false, stage, error: silStart?.error || '剪影任务提交失败' });
+        const firstError = silResults.find((result) => result.error)?.error || '部分剪影生成失败';
+        setAutoState({ running: false, stage, error: firstError });
         return;
       }
-      let silStatus;
-      try {
-        silStatus = await pollAiSilhouetteTask(silStart.taskId);
-      } catch (err) {
-        goto(4);
-        setAutoState({ running: false, stage, error: (err as Error).message });
-        return;
-      }
-      const sil = base64ToFile(silStatus.image!, silStatus.mimeType!, `ai-silhouette-${Date.now()}.png`);
+      const sil = silFiles[0]!;
       setSilhouetteFile(sil);
       goto(5);
 
       // ④ 提交上架（由 TemplateForm 完成提交并 redirect 到模板列表）
       stage = 'submitting';
       setAutoState({ running: true, stage });
-      inject({ silhouette: sil, isActive: true, autoSubmit: true });
+      inject({ silhouettes: silFiles, isActive: true, autoSubmit: true });
     } catch (e) {
       // 意外异常（网络中断 / 框架层错误）：停在当前阶段，错误透出，不再永久卡"进行中"
       const msg = e instanceof Error ? e.message : String(e);
