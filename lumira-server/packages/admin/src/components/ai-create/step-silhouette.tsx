@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { aiGenerateSilhouetteStartAction } from '@/actions/ai';
 import { pollAiSilhouetteTask } from '@/lib/ai-task';
+import { compressImage } from '@/lib/image-compress';
 import { base64ToFile } from './wizard';
 import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
 import { cn } from '@/lib/utils';
@@ -68,19 +69,29 @@ export function StepSilhouette({
     try {
       const tasks: Array<{ index: number; taskId: string }> = [];
       for (let i = 0; i < images.length; i += 1) {
-        const fd = new FormData();
-        fd.set('image', images[i]);
-        fd.set('meta', JSON.stringify({ mode, crop, engine }));
-        const start = await aiGenerateSilhouetteStartAction(fd);
-        if (!start || 'error' in start) {
+        try {
+          const source = await compressImage(images[i], { maxDim: 640, quality: 0.6 });
+          const fd = new FormData();
+          fd.set('image', source);
+          fd.set('meta', JSON.stringify({ mode, crop, engine }));
+          const start = await aiGenerateSilhouetteStartAction(fd);
+          if (!start || 'error' in start) {
+            toast({
+              variant: 'destructive',
+              title: `第 ${i + 1} 张剪影提交失败`,
+              description: `${start?.error || '请求失败'}${tasks.length > 0 ? '；已提交的任务会继续生成' : ''}`,
+            });
+            continue;
+          }
+          tasks.push({ index: i, taskId: start.taskId });
+        } catch (err) {
           toast({
             variant: 'destructive',
             title: `第 ${i + 1} 张剪影提交失败`,
-            description: `${start?.error || '请求失败'}${tasks.length > 0 ? '；已提交的任务会继续生成' : ''}`,
+            description: err instanceof Error ? err.message : String(err),
           });
           continue;
         }
-        tasks.push({ index: i, taskId: start.taskId });
       }
 
       await Promise.all(tasks.map(async ({ index, taskId }) => {
