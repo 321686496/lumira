@@ -12,14 +12,17 @@
 //   - JPEG/WebP：转 JPEG（无损化 JPEG 无收益，统一转 JPEG 有损）
 //   - 小文件（< 256KB）原样返回，避免无意义重编码
 //   - 若压缩结果不理想，用更低质量二次压缩兜底
-export async function compressImage(
+export function compressImage(
   file: File,
   opts: { maxDim?: number; quality?: number } = {},
 ): Promise<File> {
   const { maxDim = 1024, quality = 0.8 } = opts;
-  if (file.type === 'image/svg+xml' || file.size <= 256 * 1024) return file;
+  if (file.type === 'image/svg+xml' || file.size <= 256 * 1024) {
+    return Promise.resolve(file);
+  }
 
-  try {
+  return (async () => {
+    try {
     const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
     const width = Math.max(1, Math.round(bitmap.width * scale));
@@ -52,10 +55,11 @@ export async function compressImage(
     const ext = blob.type === 'image/webp' ? 'webp' : blob.type === 'image/png' ? 'png' : 'jpg';
     const baseName = file.name.replace(/\.[^.]+$/, '');
     return new File([blob], `${baseName}.${ext}`, { type: blob.type });
-  } catch {
-    // 解码失败（如损坏文件）时回退原文件
-    return file;
-  }
+    } catch {
+      // 解码失败（如损坏文件）时回退原文件
+      return file;
+    }
+  })();
 }
 
 function canvasToBlob(

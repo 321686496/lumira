@@ -40,7 +40,7 @@ function posePrompt(pose: Record<string, unknown> | undefined, extraPrompt?: str
 }
 
 /** 并行提交每个姿势的生图任务，并分别轮询到完成；单张失败不影响其它任务。 */
-export async function generateAiPoseImages(options: {
+export function generateAiPoseImages(options: {
   draft: Record<string, unknown>;
   exampleFile?: File | null;
   extraPrompt?: string | null;
@@ -54,7 +54,7 @@ export async function generateAiPoseImages(options: {
       : [];
   const targets = poses.length > 0 ? poses : [undefined];
 
-  return Promise.all(targets.map(async (pose, index) => {
+  return (async () => Promise.all(targets.map(async (pose, index) => {
     try {
       const fd = new FormData();
       fd.set('meta', JSON.stringify(draft));
@@ -71,11 +71,11 @@ export async function generateAiPoseImages(options: {
     } catch (err) {
       return { index, error: (err as Error).message || '姿势图生成失败' };
     }
-  }));
+  })))();
 }
 
 /** 并行提交剪影任务，并分别轮询到完成；结果保持源图顺序。 */
-export async function generateAiSilhouettes(options: {
+export function generateAiSilhouettes(options: {
   images: File[];
   mode: 'sketch' | 'solid';
   crop: boolean;
@@ -86,7 +86,7 @@ export async function generateAiSilhouettes(options: {
   const generated = new Array<File | undefined>(images.length).fill(undefined);
   const publish = () => onCompleted?.(generated.filter(Boolean).length);
 
-  return Promise.all(images.map(async (image, index) => {
+  return (async () => Promise.all(images.map(async (image, index) => {
     try {
       const source = await compressImage(image, { maxDim: 640, quality: 0.6 });
       const fd = new FormData();
@@ -102,7 +102,7 @@ export async function generateAiSilhouettes(options: {
     } catch (err) {
       return { index, error: (err as Error).message || '剪影生成失败' };
     }
-  }));
+  })))();
 }
 
 export interface AiTaskPollOptions {
