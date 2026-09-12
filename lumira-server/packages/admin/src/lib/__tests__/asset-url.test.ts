@@ -11,10 +11,16 @@ describe('toAssetUrl', () => {
     );
   });
 
-  it('extracts /uploads/ path from absolute https URL', () => {
+  it('keeps absolute HTTPS assets direct to avoid proxy overhead', () => {
     expect(toAssetUrl('https://api.example.com/uploads/categories/portrait/icon.png', BACKEND)).toBe(
-      '/uploads/categories/portrait/icon.png',
+      'https://api.example.com/uploads/categories/portrait/icon.png',
     );
+  });
+
+  it('uses backend origin for HTTPS-hosted relative assets', () => {
+    expect(
+      toAssetUrl('/uploads/templates/a/cover.jpg', 'https://lumira.example.com'),
+    ).toBe('https://lumira.example.com/uploads/templates/a/cover.jpg');
   });
 
   it('keeps relative /uploads/ path unchanged', () => {
