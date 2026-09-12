@@ -44,6 +44,9 @@ class OperationBanner {
     required this.route,
     required this.condition,
     this.imageUrl,
+    this.focusX = 0.5,
+    this.focusY = 0.5,
+    this.focusZoom = 1.0,
     this.templateId,
   });
 
@@ -63,6 +66,15 @@ class OperationBanner {
   /// 运营配图 URL（可空）：非空时 App 卡片右侧 40% 区域 contain 完整显示，
   /// 为空回退品牌渐变背景（与旧行为兼容）
   final String? imageUrl;
+
+  /// 背景图水平焦点（0 = 左，1 = 右）
+  final double focusX;
+
+  /// 背景图垂直焦点（0 = 上，1 = 下）
+  final double focusY;
+
+  /// 背景图缩放倍数（1–3）
+  final double focusZoom;
 
   /// 目标模板 id（仅 route=/templates/detail 时有值）：用于拼模板详情页跳转
   final String? templateId;
@@ -123,6 +135,11 @@ const List<String> kOperationBannerRoutes = [
 
 /// 后端下发条目 → 运营位模型；字段缺失/route 越白名单/condition 无法识别 → null（丢弃）。
 /// imageUrl 可选：非 String 或空串视为无配图（回退品牌渐变背景）。
+double _clampDouble(Object? value, double min, double max, double fallback) {
+  if (value is! num) return fallback;
+  return value.toDouble().clamp(min, max);
+}
+
 OperationBanner? operationBannerFromJson(Map<String, dynamic> json) {
   final id = json['id'];
   final title = json['title'];
@@ -146,9 +163,15 @@ OperationBanner? operationBannerFromJson(Map<String, dynamic> json) {
       ? rawTemplateId
       : null;
   if (route == '/templates/detail' && templateId == null) return null;
+  final focusX = _clampDouble(json['focusX'], 0, 1, 0.5);
+  final focusY = _clampDouble(json['focusY'], 0, 1, 0.5);
+  final focusZoom = _clampDouble(json['focusZoom'], 1, 3, 1.0);
   return OperationBanner(
     id: id, title: title, subtitle: subtitle, tag: tag,
     route: route, condition: condition, imageUrl: imageUrl,
+    focusX: focusX,
+    focusY: focusY,
+    focusZoom: focusZoom,
     templateId: templateId,
   );
 }
@@ -185,6 +208,9 @@ HomeBannerItem operationBannerToItem(OperationBanner banner) {
     tag: banner.tag,
     route: route,
     cover: banner.imageUrl,
+    focusX: banner.focusX,
+    focusY: banner.focusY,
+    focusZoom: banner.focusZoom,
     type: BannerType.operation,
     bannerId: banner.id,
   );

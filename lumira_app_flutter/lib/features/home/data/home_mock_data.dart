@@ -106,6 +106,9 @@ class HomeBannerItem {
     required this.route,
     this.cover,
     this.coverData,
+    this.focusX = 0.5,
+    this.focusY = 0.5,
+    this.focusZoom = 1.0,
     this.type = BannerType.recommend,
     this.bannerId = '',
   });
@@ -121,6 +124,11 @@ class HomeBannerItem {
   final String? cover;
   /// 模板封面 base64 data URL（自定义模板场景）。
   final String? coverData;
+
+  /// 运营位背景图焦点；模板类 Banner 使用居中默认值
+  final double focusX;
+  final double focusY;
+  final double focusZoom;
 
   /// Banner 类型：运营位不打个性化标签，渲染与后续差异展示用
   final BannerType type;
