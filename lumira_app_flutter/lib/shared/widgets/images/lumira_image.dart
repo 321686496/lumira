@@ -24,6 +24,7 @@ class LumiraImage extends StatelessWidget {
     super.key,
     this.asset,
     this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
     this.width,
     this.height,
     this.borderRadius = BorderRadius.zero,
@@ -38,6 +39,7 @@ class LumiraImage extends StatelessWidget {
   final String? asset;
 
   final BoxFit fit;
+  final AlignmentGeometry alignment;
   final double? width;
   final double? height;
   final BorderRadius? borderRadius;
@@ -59,6 +61,7 @@ class LumiraImage extends StatelessWidget {
         (cw, ch) => Image.asset(
           explicitAsset,
           fit: fit,
+          alignment: alignment,
           width: width,
           height: height,
           cacheWidth: cw,
@@ -77,6 +80,7 @@ class LumiraImage extends StatelessWidget {
       return CachedNetworkImage(
         url: s,
         fit: fit,
+        alignment: alignment,
         width: width,
         height: height,
         borderRadius: borderRadius == BorderRadius.zero ? null : borderRadius,
@@ -96,6 +100,7 @@ class LumiraImage extends StatelessWidget {
         (cw, ch) => Image.memory(
           bytes,
           fit: fit,
+          alignment: alignment,
           width: width,
           height: height,
           cacheWidth: cw,
@@ -111,6 +116,7 @@ class LumiraImage extends StatelessWidget {
         (cw, ch) => Image.asset(
           s,
           fit: fit,
+          alignment: alignment,
           width: width,
           height: height,
           cacheWidth: cw,
@@ -126,6 +132,7 @@ class LumiraImage extends StatelessWidget {
       (cw, ch) => Image.file(
         File(s),
         fit: fit,
+        alignment: alignment,
         width: width,
         height: height,
         cacheWidth: cw,
@@ -231,5 +238,4 @@ class LumiraImage extends StatelessWidget {
 }
 
 /// 图片构建函数签名：接收解码目标边长（可能为 null），返回图片 widget。
-typedef ImageBuilder =
-    Widget Function(int? cacheWidth, int? cacheHeight);
+typedef ImageBuilder = Widget Function(int? cacheWidth, int? cacheHeight);

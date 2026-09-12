@@ -81,8 +81,12 @@ void main() {
 
     test('带配图的运营条目 → cover 传递 imageUrl（卡片右侧 contain 显示）', () {
       const banner = OperationBanner(
-        id: 'op_img', title: 't', subtitle: 's', tag: 'tag',
-        route: '/invite', condition: OperationCondition.nonNewUserNotInvited,
+        id: 'op_img',
+        title: 't',
+        subtitle: 's',
+        tag: 'tag',
+        route: '/invite',
+        condition: OperationCondition.nonNewUserNotInvited,
         imageUrl: 'https://lumira.iwtle.top/uploads/banners/b1/image.png',
       );
       final item = operationBannerToItem(banner);
@@ -93,8 +97,12 @@ void main() {
 
     test('route /templates/detail + templateId → 拼出模板详情跳转路由', () {
       const banner = OperationBanner(
-        id: 'op_tpl', title: 't', subtitle: 's', tag: '上新',
-        route: '/templates/detail', condition: OperationCondition.hasLockedTemplate,
+        id: 'op_tpl',
+        title: 't',
+        subtitle: 's',
+        tag: '上新',
+        route: '/templates/detail',
+        condition: OperationCondition.hasLockedTemplate,
         templateId: 'tpl_film_vintage',
       );
       final item = operationBannerToItem(banner);
@@ -105,8 +113,12 @@ void main() {
   group('operationBannerFromJson（后端下发解析）', () {
     test('合法条目解析成功', () {
       final b = operationBannerFromJson({
-        'id': 'op_invite', 'title': 't', 'subtitle': 's', 'tag': '邀请有礼',
-        'route': '/invite', 'condition': 'nonNewUserNotInvited',
+        'id': 'op_invite',
+        'title': 't',
+        'subtitle': 's',
+        'tag': '邀请有礼',
+        'route': '/invite',
+        'condition': 'nonNewUserNotInvited',
       });
       expect(b, isNotNull);
       expect(b!.id, 'op_invite');
@@ -115,17 +127,26 @@ void main() {
 
     test('携带 imageUrl → 解析配图', () {
       final b = operationBannerFromJson({
-        'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
-        'route': '/invite', 'condition': 'pointsReady',
+        'id': 'x',
+        'title': 't',
+        'subtitle': 's',
+        'tag': 'tag',
+        'route': '/invite',
+        'condition': 'pointsReady',
         'imageUrl': 'https://lumira.iwtle.top/uploads/banners/b1/image.png',
       });
-      expect(b!.imageUrl, 'https://lumira.iwtle.top/uploads/banners/b1/image.png');
+      expect(
+          b!.imageUrl, 'https://lumira.iwtle.top/uploads/banners/b1/image.png');
     });
 
     test('背景图焦点缺失时回退居中且不缩放', () {
       final b = operationBannerFromJson({
-        'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
-        'route': '/invite', 'condition': 'pointsReady',
+        'id': 'x',
+        'title': 't',
+        'subtitle': 's',
+        'tag': 'tag',
+        'route': '/invite',
+        'condition': 'pointsReady',
       });
       expect(b!.focusX, 0.5);
       expect(b.focusY, 0.5);
@@ -134,18 +155,30 @@ void main() {
 
     test('背景图焦点解析并裁剪非法/越界值', () {
       final b = operationBannerFromJson({
-        'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
-        'route': '/invite', 'condition': 'pointsReady',
-        'focusX': 1.4, 'focusY': -0.4, 'focusZoom': 4,
+        'id': 'x',
+        'title': 't',
+        'subtitle': 's',
+        'tag': 'tag',
+        'route': '/invite',
+        'condition': 'pointsReady',
+        'focusX': 1.4,
+        'focusY': -0.4,
+        'focusZoom': 4,
       });
       expect(b!.focusX, 1.0);
       expect(b.focusY, 0.0);
       expect(b.focusZoom, 3.0);
 
       final invalid = operationBannerFromJson({
-        'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
-        'route': '/invite', 'condition': 'pointsReady',
-        'focusX': 'left', 'focusY': 'bottom', 'focusZoom': null,
+        'id': 'x',
+        'title': 't',
+        'subtitle': 's',
+        'tag': 'tag',
+        'route': '/invite',
+        'condition': 'pointsReady',
+        'focusX': 'left',
+        'focusY': 'bottom',
+        'focusZoom': null,
       });
       expect(invalid!.focusX, 0.5);
       expect(invalid.focusY, 0.5);
@@ -154,10 +187,16 @@ void main() {
 
     test('operationBannerToItem 传递背景焦点元数据', () {
       const banner = OperationBanner(
-        id: 'op_focus', title: 't', subtitle: 's', tag: 'tag',
-        route: '/invite', condition: OperationCondition.pointsReady,
+        id: 'op_focus',
+        title: 't',
+        subtitle: 's',
+        tag: 'tag',
+        route: '/invite',
+        condition: OperationCondition.pointsReady,
         imageUrl: 'https://example.com/image.png',
-        focusX: 0.2, focusY: 0.8, focusZoom: 1.5,
+        focusX: 0.2,
+        focusY: 0.8,
+        focusZoom: 1.5,
       );
       final item = operationBannerToItem(banner);
       expect(item.focusX, 0.2);
@@ -167,18 +206,28 @@ void main() {
 
     test('imageUrl 空串/缺失/非字符串 → 视为无配图', () {
       final base = {
-        'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
-        'route': '/invite', 'condition': 'pointsReady',
+        'id': 'x',
+        'title': 't',
+        'subtitle': 's',
+        'tag': 'tag',
+        'route': '/invite',
+        'condition': 'pointsReady',
       };
-      expect(operationBannerFromJson({...base, 'imageUrl': ''})!.imageUrl, isNull);
+      expect(
+          operationBannerFromJson({...base, 'imageUrl': ''})!.imageUrl, isNull);
       expect(operationBannerFromJson(base)!.imageUrl, isNull);
-      expect(operationBannerFromJson({...base, 'imageUrl': 42})!.imageUrl, isNull);
+      expect(
+          operationBannerFromJson({...base, 'imageUrl': 42})!.imageUrl, isNull);
     });
 
     test('route /templates/detail 携带 templateId → 解析成功', () {
       final b = operationBannerFromJson({
-        'id': 'op_tpl', 'title': 't', 'subtitle': 's', 'tag': '上新',
-        'route': '/templates/detail', 'condition': 'hasLockedTemplate',
+        'id': 'op_tpl',
+        'title': 't',
+        'subtitle': 's',
+        'tag': '上新',
+        'route': '/templates/detail',
+        'condition': 'hasLockedTemplate',
         'templateId': 'tpl_film_vintage',
       });
       expect(b, isNotNull);
@@ -187,24 +236,42 @@ void main() {
     });
 
     test('route /templates/detail 但缺 templateId → fail-safe 丢弃', () {
-      expect(operationBannerFromJson({
-        'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
-        'route': '/templates/detail', 'condition': 'hasLockedTemplate',
-      }), isNull);
+      expect(
+          operationBannerFromJson({
+            'id': 'x',
+            'title': 't',
+            'subtitle': 's',
+            'tag': 'tag',
+            'route': '/templates/detail',
+            'condition': 'hasLockedTemplate',
+          }),
+          isNull);
     });
 
     test('route 不在白名单 → 丢弃', () {
-      expect(operationBannerFromJson({
-        'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
-        'route': '/nonexistent', 'condition': 'pointsReady',
-      }), isNull);
+      expect(
+          operationBannerFromJson({
+            'id': 'x',
+            'title': 't',
+            'subtitle': 's',
+            'tag': 'tag',
+            'route': '/nonexistent',
+            'condition': 'pointsReady',
+          }),
+          isNull);
     });
 
     test('condition 非法 → 丢弃', () {
-      expect(operationBannerFromJson({
-        'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
-        'route': '/invite', 'condition': 'whatever',
-      }), isNull);
+      expect(
+          operationBannerFromJson({
+            'id': 'x',
+            'title': 't',
+            'subtitle': 's',
+            'tag': 'tag',
+            'route': '/invite',
+            'condition': 'whatever',
+          }),
+          isNull);
     });
 
     test('字段缺失 → 丢弃', () {
@@ -215,8 +282,12 @@ void main() {
   test('matchOperationBanner 支持远端下发列表', () {
     const custom = [
       OperationBanner(
-        id: 'op_x', title: 'x', subtitle: 'x', tag: 'x',
-        route: '/invite', condition: OperationCondition.nonNewUserNotInvited,
+        id: 'op_x',
+        title: 'x',
+        subtitle: 'x',
+        tag: 'x',
+        route: '/invite',
+        condition: OperationCondition.nonNewUserNotInvited,
       ),
     ];
     final m = matchOperationBanner(

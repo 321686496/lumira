@@ -22,6 +22,7 @@ class TemplateCoverImage extends StatelessWidget {
     this.cover,
     this.coverData,
     this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
     this.fallback,
     this.errorFallback,
     this.thumbWidth,
@@ -38,6 +39,7 @@ class TemplateCoverImage extends StatelessWidget {
 
   /// 图片 fit 模式
   final BoxFit fit;
+  final AlignmentGeometry alignment;
 
   /// 无任何封面数据时的占位 widget
   final Widget? fallback;
@@ -53,6 +55,7 @@ class TemplateCoverImage extends StatelessWidget {
       return LumiraImage(
         _asDataUrl(cd),
         fit: fit,
+        alignment: alignment,
         errorWidget: errorFallback ?? _defaultError(context),
       );
     }
@@ -65,6 +68,7 @@ class TemplateCoverImage extends StatelessWidget {
       return LumiraImage(
         displayCover,
         fit: fit,
+        alignment: alignment,
         errorWidget: errorFallback ?? _defaultError(context),
       );
     }
