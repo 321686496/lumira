@@ -122,6 +122,49 @@ void main() {
       expect(b!.imageUrl, 'https://lumira.iwtle.top/uploads/banners/b1/image.png');
     });
 
+    test('背景图焦点缺失时回退居中且不缩放', () {
+      final b = operationBannerFromJson({
+        'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
+        'route': '/invite', 'condition': 'pointsReady',
+      });
+      expect(b!.focusX, 0.5);
+      expect(b.focusY, 0.5);
+      expect(b.focusZoom, 1.0);
+    });
+
+    test('背景图焦点解析并裁剪非法/越界值', () {
+      final b = operationBannerFromJson({
+        'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
+        'route': '/invite', 'condition': 'pointsReady',
+        'focusX': 1.4, 'focusY': -0.4, 'focusZoom': 4,
+      });
+      expect(b!.focusX, 1.0);
+      expect(b.focusY, 0.0);
+      expect(b.focusZoom, 3.0);
+
+      final invalid = operationBannerFromJson({
+        'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
+        'route': '/invite', 'condition': 'pointsReady',
+        'focusX': 'left', 'focusY': 'bottom', 'focusZoom': null,
+      });
+      expect(invalid!.focusX, 0.5);
+      expect(invalid.focusY, 0.5);
+      expect(invalid.focusZoom, 1.0);
+    });
+
+    test('operationBannerToItem 传递背景焦点元数据', () {
+      const banner = OperationBanner(
+        id: 'op_focus', title: 't', subtitle: 's', tag: 'tag',
+        route: '/invite', condition: OperationCondition.pointsReady,
+        imageUrl: 'https://example.com/image.png',
+        focusX: 0.2, focusY: 0.8, focusZoom: 1.5,
+      );
+      final item = operationBannerToItem(banner);
+      expect(item.focusX, 0.2);
+      expect(item.focusY, 0.8);
+      expect(item.focusZoom, 1.5);
+    });
+
     test('imageUrl 空串/缺失/非字符串 → 视为无配图', () {
       final base = {
         'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
