@@ -163,7 +163,9 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
     consistency.mode === 'loose' || (extra.length > 0 && INCONSISTENT_POSE_PROMPT_PATTERN.test(extra));
   if (isSinglePose && !allowInconsistentPose) {
     segments.push(
-      '同一套模板的连续拍摄：保持同一人物的长相、服装、发型、体型，以及场景、道具、光线和摄影风格一致；本张只改变姿势',
+      consistency.anchor === 'first'
+        ? '参考图是同一套模板的第一张姿势图：严格复用参考图中的同一人物长相、服装、发型、体型，以及场景、道具、光线和摄影风格；本张只改变姿势'
+        : '同一套模板的连续拍摄：保持同一人物的长相、服装、发型、体型，以及场景、道具、光线和摄影风格一致；本张只改变姿势',
     );
   }
   if (extra) segments.push(`额外要求：${extra}`);

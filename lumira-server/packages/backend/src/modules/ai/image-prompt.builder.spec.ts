@@ -208,4 +208,14 @@ describe('buildImagePrompt', () => {
     }, '第二个姿势换到不同场景');
     expect(explicit).not.toContain('同一套模板的连续拍摄');
   });
+
+  test('锚点参考模式：明确要求复用第一张姿势图中的人物与场景', () => {
+    const prompt = buildImagePrompt({
+      singlePose: true,
+      pose: { name: '侧身', description: '身体微侧45度' },
+      consistency: { mode: 'strict', anchor: 'first' },
+    });
+    expect(prompt).toContain('参考图是同一套模板的第一张姿势图');
+    expect(prompt).toContain('严格复用参考图中的同一人物长相');
+  });
 });
