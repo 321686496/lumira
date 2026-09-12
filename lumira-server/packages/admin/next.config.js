@@ -9,6 +9,19 @@ const nextConfig = {
       bodySizeLimit: '32mb',
     },
   },
+  async headers() {
+    return [
+      {
+        source: '/dashboard/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'private, no-store, must-revalidate',
+          },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     // 静态资源代理：后端返回 http:// 绝对 URL，HTTPS 页面直接加载会被浏览器
     // Mixed Content 阻止。这里把 /uploads/* 在服务端代理到后端（服务端到服务端
