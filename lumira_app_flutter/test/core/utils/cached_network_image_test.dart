@@ -39,7 +39,7 @@ void main() {
     await tester.pump();
     completers['b']!.complete(pngBytes);
     await tester.pumpAndSettle();
-    expect(find.byType(Image), findsOneWidget);
+    expect(find.byType(Image), findsWidgets);
 
     completers['a']!.complete(null);
     await tester.pumpAndSettle();
@@ -68,5 +68,111 @@ void main() {
     final provider = image.image;
     expect(provider, isA<ResizeImage>());
     expect((provider as ResizeImage).height, isNull);
+  });
+
+  testWidgets('reloads when a PageView page becomes visible again',
+      (tester) async {
+    final loadedUrls = <String>{};
+    Future<Uint8List?> loader(String url) {
+      loadedUrls.add(url);
+      return SynchronousFuture<Uint8List?>(pngBytes);
+    }
+
+    Widget build() => MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 150,
+              child: PageView.builder(
+                itemCount: 3,
+                itemBuilder: (_, index) => CachedNetworkImage(
+                  url: 'page-$index',
+                  loader: loader,
+                ),
+              ),
+            ),
+          ),
+        );
+
+    await tester.pumpWidget(build());
+    await tester.pumpAndSettle();
+    expect(loadedUrls, contains('page-0'));
+
+    await tester.drag(find.byType(PageView), const Offset(-400, 0));
+    await tester.pumpAndSettle();
+    expect(loadedUrls, contains('page-1'));
+
+    await tester.drag(find.byType(PageView), const Offset(400, 0));
+    await tester.pumpAndSettle();
+    expect(loadedUrls, contains('page-0'));
+    expect(find.byType(Image), findsOneWidget);
+  });
+
+  testWidgets('reloads when a ListView item becomes visible again',
+      (tester) async {
+    final loadedUrls = <String>{};
+    Future<Uint8List?> loader(String url) {
+      loadedUrls.add(url);
+      return SynchronousFuture<Uint8List?>(pngBytes);
+    }
+
+    Widget build() => MaterialApp(
+          home: Scaffold(
+            body: ListView.builder(
+              itemCount: 30,
+              itemExtent: 120,
+              itemBuilder: (_, index) => CachedNetworkImage(
+                url: 'item-$index',
+                loader: loader,
+              ),
+            ),
+          ),
+        );
+
+    await tester.pumpWidget(build());
+    await tester.pumpAndSettle();
+    expect(loadedUrls, contains('item-0'));
+
+    await tester.drag(find.byType(ListView), const Offset(0, -2000));
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, 2000));
+    await tester.pumpAndSettle();
+    expect(loadedUrls, contains('item-0'));
+  });
+
+  testWidgets('shows a pending ListView image after it returns to viewport',
+      (tester) async {
+    final completer = Completer<Uint8List?>();
+    var calls = 0;
+    Future<Uint8List?> loader(String url) {
+      calls++;
+      return completer.future;
+    }
+
+    Widget build() => MaterialApp(
+          home: Scaffold(
+            body: ListView.builder(
+              itemCount: 30,
+              itemExtent: 120,
+              itemBuilder: (_, index) => CachedNetworkImage(
+                url: 'item-$index',
+                loader: loader,
+              ),
+            ),
+          ),
+        );
+
+    await tester.pumpWidget(build());
+    await tester.pumpAndSettle();
+    expect(calls, greaterThan(0));
+
+    await tester.drag(find.byType(ListView), const Offset(0, -2000));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, 2000));
+    await tester.pumpAndSettle();
+
+    completer.complete(pngBytes);
+    await tester.pumpAndSettle();
+    expect(find.byType(Image), findsWidgets);
   });
 }
