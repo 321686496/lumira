@@ -67,21 +67,26 @@ export function StepCover({
     if (!draft) return;
     setGenerating(true);
     try {
-      const results = await generateAiPoseImages({ draft, exampleFile, extraPrompt });
+      const results = await generateAiPoseImages({
+        draft,
+        exampleFile,
+        extraPrompt,
+        onResult: (result) => {
+          if (!result.file) return;
+          const generated: CoverCandidate = {
+            id: `ai-${Date.now()}-${result.index}-${candidates.length}`,
+            file: result.file,
+            url: URL.createObjectURL(result.file),
+            source: 'ai',
+          };
+          setCandidates((prev) => [generated, ...prev]);
+        },
+      });
       const files = results
         .filter((result): result is { index: number; file: File } => Boolean(result.file))
         .sort((a, b) => a.index - b.index)
         .map((result) => result.file);
       const errors = results.filter((result) => result.error);
-      if (files.length > 0) {
-        const generated: CoverCandidate[] = files.map((file, index) => ({
-          id: `ai-${Date.now()}-${index}-${candidates.length}`,
-          file,
-          url: URL.createObjectURL(file),
-          source: 'ai',
-        }));
-        setCandidates((prev) => [...generated, ...prev]);
-      }
       errors.forEach((result) => {
         toast({
           variant: 'destructive',

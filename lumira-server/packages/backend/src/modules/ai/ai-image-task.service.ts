@@ -31,7 +31,7 @@ export interface ImageTask {
 /** 已完成/错误任务的保留时长（超过即清理，防 base64 结果占用内存） */
 const RESULT_TTL_MS = 15 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 60 * 1000;
-const DEPENDENT_CONCURRENCY = 1;
+const DEPENDENT_CONCURRENCY = 5;
 const GENERATE_RETRY_LIMIT = 3;
 
 @Injectable()

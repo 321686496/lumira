@@ -33,17 +33,22 @@ export function generateAiPoseImages(options: {
   draft: Record<string, unknown>;
   exampleFile?: File | null;
   extraPrompt?: string | null;
+  onResult?: (result: AiTaskFileResult) => void;
 }): Promise<AiTaskFileResult[]> {
-  const { draft, exampleFile, extraPrompt } = options;
+  const { draft, exampleFile, extraPrompt, onResult } = options;
   const pollOne = async (index: number, taskId: string): Promise<AiTaskFileResult> => {
     try {
       const result = await pollAiImageTask(taskId);
-      return {
+      const taskResult = {
         index,
         file: base64ToFile(result.image!, result.mimeType!, `ai-pose-${Date.now()}-${index}.png`),
       };
+      onResult?.(taskResult);
+      return taskResult;
     } catch (err) {
-      return { index, error: (err as Error).message || '姿势图生成失败' };
+      const taskResult = { index, error: (err as Error).message || '姿势图生成失败' };
+      onResult?.(taskResult);
+      return taskResult;
     }
   };
 
