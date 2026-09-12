@@ -464,6 +464,11 @@ export interface AiImageTaskId {
   taskId: string;
 }
 
+/** 提交批量姿势任务 → 立即返回全部 taskId，后端控制首图锚点依赖 */
+export interface AiImageBatchTaskId {
+  tasks: Array<{ index: number; taskId: string }>;
+}
+
 /** 查询生图任务状态（done 带 image/mimeType，error 带 error） */
 export interface AiImageStatusResult {
   taskId: string;

@@ -34,6 +34,7 @@ import type {
   AiConfigTestTarget,
   AiAnalyzeResult,
   AiImageResult,
+  AiImageBatchTaskId,
   AiImageTaskId,
   AiImageStatusResult,
   AiSilhouetteTaskId,
@@ -410,6 +411,12 @@ export const api = {
       body: JSON.stringify({ delta, reason }),
     }),
 
+  deleteDevice: (deviceId: string, loginKey: string) =>
+    adminFetch<{ success: boolean }>(`/devices/${encodeURIComponent(deviceId)}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ loginKey }),
+    }),
+
   // ===== 反馈管理 =====
   listFeedbacks: (params: { page?: number; pageSize?: number; type?: string; status?: string } = {}) => {
     const search = new URLSearchParams();
@@ -560,6 +567,13 @@ export const api = {
   /** 提交生图任务（multipart meta + reference 可选 + extraPrompt 附加提示词可选）→ 立即返回 taskId */
   aiGenerateImageStart: (formData: FormData) =>
     adminFetch<AiImageTaskId>('/templates/ai-generate-image', {
+      method: 'POST',
+      body: formData,
+    }, AI_ENDPOINT_TIMEOUT_MS),
+
+  /** 批量姿势：一次提交，后端先生成首张锚点再启动其余任务 */
+  aiGenerateImageBatchStart: (formData: FormData) =>
+    adminFetch<AiImageBatchTaskId>('/templates/ai-generate-image/batch', {
       method: 'POST',
       body: formData,
     }, AI_ENDPOINT_TIMEOUT_MS),

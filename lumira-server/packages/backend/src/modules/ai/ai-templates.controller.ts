@@ -42,6 +42,15 @@ export class AiTemplatesController {
     return this.aiImageTaskService.submit(reference, meta, extraPrompt);
   }
 
+  /**
+   * 批量姿势图：一次提交全部任务；首张完成后由后端使用锚点结果启动剩余任务。
+   */
+  @Post('ai-generate-image/batch')
+  async generateImageBatch(@Req() req: FastifyRequest) {
+    const { meta, reference, extraPrompt } = await parseAiMultipart(req);
+    return this.aiImageTaskService.submitBatch(reference, meta, extraPrompt);
+  }
+
   /** 查询生图任务状态（done 带 image/mimeType，error 带 error；任务不存在则 404） */
   @Get('ai-generate-image/tasks/:taskId')
   async getImageTask(@Param('taskId') taskId: string) {
