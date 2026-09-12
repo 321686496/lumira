@@ -35,7 +35,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** 并行提交每个姿势的生图任务，并分别轮询到完成；单张失败不影响其它任务。 */
+/** 生成姿势图：1 张直接生成；多张先生成首张锚点图，其余并行参考锚点图。 */
 export function generateAiPoseImages(options: {
   draft: Record<string, unknown>;
   exampleFile?: File | null;
@@ -50,16 +50,23 @@ export function generateAiPoseImages(options: {
       : [];
   const targets = poses.length > 0 ? poses : [undefined];
 
-  return (async () => Promise.all(targets.map(async (pose, index) => {
+  const generateOne = async (
+    pose: Record<string, unknown> | undefined,
+    index: number,
+    referenceFile: File | null | undefined,
+    useAnchor = false,
+  ): Promise<AiTaskFileResult> => {
     try {
       const fd = new FormData();
       fd.set('meta', JSON.stringify({
         ...draft,
         pose,
         singlePose: true,
-        consistency: { mode: 'strict' },
+        consistency: useAnchor
+          ? { mode: 'strict', anchor: 'first' }
+          : { mode: 'strict' },
       }));
-      if (exampleFile) fd.set('reference', exampleFile);
+      if (referenceFile) fd.set('reference', referenceFile);
       const extra = typeof extraPrompt === 'string' ? extraPrompt.trim() : '';
       if (extra) fd.set('extraPrompt', extra);
       const start = await aiGenerateImageStartAction(fd);
@@ -72,7 +79,30 @@ export function generateAiPoseImages(options: {
     } catch (err) {
       return { index, error: (err as Error).message || '姿势图生成失败' };
     }
-  })))();
+  };
+
+  return (async () => {
+    if (targets.length <= 1) {
+      return [await generateOne(targets[0], 0, exampleFile)];
+    }
+
+    const anchor = await generateOne(targets[0], 0, exampleFile);
+    if (!anchor.file) {
+      return targets.map((_, index) => ({
+        index,
+        error: index === 0
+          ? anchor.error || '首张锚点姿势图生成失败'
+          : '首张锚点姿势图生成失败，已停止后续生成',
+      }));
+    }
+
+    return [
+      anchor,
+      ...(await Promise.all(targets.slice(1).map((pose, offset) =>
+        generateOne(pose, offset + 1, anchor.file, true),
+      ))),
+    ];
+  })();
 }
 
 /** 并行提交剪影任务，并分别轮询到完成；结果保持源图顺序。 */
