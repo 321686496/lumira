@@ -915,10 +915,10 @@ export function CategoryManager({
               <FileUpload
                 label="分类图标（可选）"
                 accept="image/*"
-                maxSize={5 * 1024 * 1024}
+                maxSize={10 * 1024 * 1024}
                 value={iconFile}
                 onChange={setIconFile}
-                hint="建议 5MB 以内的 png/svg/jpg；一二级分类的图标会作为封面展示，为空时使用默认占位。"
+                hint="建议 10MB 以内的 png/svg/jpg；一二级分类的图标会作为封面展示，为空时使用默认占位。"
                 previewUrl={
                   editingKey
                     ? toAssetUrl(editingCat?.iconUrl, backendUrl) || undefined

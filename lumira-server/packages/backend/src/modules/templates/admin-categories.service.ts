@@ -18,6 +18,8 @@ import type { UploadFile } from './admin-templates.service';
 
 /** 最大层级（四级：type/majorStyle/subStyle/method） */
 const MAX_LEVEL = 4;
+/** 分类封面上传上限：10MB */
+const MAX_CATEGORY_IMAGE_BYTES = 10 * 1024 * 1024;
 
 @Injectable()
 export class AdminCategoriesService {
@@ -65,6 +67,9 @@ export class AdminCategoriesService {
     const now = Math.floor(Date.now() / 1000);
 
     const parentKey = meta.parentKey && meta.parentKey.trim() !== '' ? meta.parentKey.trim() : null;
+    if (icon && icon.buffer.byteLength > MAX_CATEGORY_IMAGE_BYTES) {
+      throw new BadRequestException('分类封面大小不能超过 10MB');
+    }
 
     // 推算 level
     let level = 1;
@@ -133,6 +138,9 @@ export class AdminCategoriesService {
     const now = Math.floor(Date.now() / 1000);
 
     const existing = await this.getByKeyAndParent(key, parentKey);
+    if (icon && icon.buffer.byteLength > MAX_CATEGORY_IMAGE_BYTES) {
+      throw new BadRequestException('分类封面大小不能超过 10MB');
+    }
 
     // 处理图标
     let iconUrl = existing.iconUrl;
