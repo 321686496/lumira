@@ -125,6 +125,10 @@ ${DRAFT_JSON_EXAMPLE}
 - meta.name 具体化（场景+主体+风格+角度，12~30 字），禁止只写风格名；
 - meta.shortDesc 是情绪化文案，≤20 字，不是长描述的缩写；
 - pose 数组数量规则见用户消息；用户未要求时输出 1 个姿势；
+- meta.shortDesc / meta.description / composition.description 只描述整体氛围、光线、场景与风格，
+  不得包含「N张」「N个姿势」「连拍」「多宫格」「不同姿势」等数量或多图指令；
+- pose 数组中的每个 description 必须是单张单人可独立生成的姿势，
+  不要把多个姿势合并到同一个 description 里；
 - 未知枚举字段直接省略，不要编造；
 - meta.classification 从分类树逐级选择，非人像题材允许 style/method 留空；
 - 相机参数是「复现该风格的建议参数」，给出合理估算值；

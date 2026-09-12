@@ -31,14 +31,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function posePrompt(pose: Record<string, unknown> | undefined, extraPrompt?: string | null): string {
-  const name = typeof pose?.name === 'string' ? pose.name.trim() : '';
-  const description = typeof pose?.description === 'string' ? pose.description.trim() : '';
-  const poseParts = [name, description].filter(Boolean);
-  const extra = typeof extraPrompt === 'string' ? extraPrompt.trim() : '';
-  return [...poseParts.map((part) => `姿势要求：${part}`), extra].filter(Boolean).join('；');
-}
-
 /** 并行提交每个姿势的生图任务，并分别轮询到完成；单张失败不影响其它任务。 */
 export function generateAiPoseImages(options: {
   draft: Record<string, unknown>;
@@ -57,10 +49,10 @@ export function generateAiPoseImages(options: {
   return (async () => Promise.all(targets.map(async (pose, index) => {
     try {
       const fd = new FormData();
-      fd.set('meta', JSON.stringify(draft));
+      fd.set('meta', JSON.stringify({ ...draft, pose, singlePose: true }));
       if (exampleFile) fd.set('reference', exampleFile);
-      const prompt = posePrompt(pose, extraPrompt);
-      if (prompt) fd.set('extraPrompt', prompt);
+      const extra = typeof extraPrompt === 'string' ? extraPrompt.trim() : '';
+      if (extra) fd.set('extraPrompt', extra);
       const start = await aiGenerateImageStartAction(fd);
       if ('error' in start) throw new Error(start.error);
       const result = await pollAiImageTask(start.taskId);
