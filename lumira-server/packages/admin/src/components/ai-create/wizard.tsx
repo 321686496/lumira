@@ -257,6 +257,30 @@ export function AiCreateWizard({
             source: 'example',
           }
         : null;
+      const generatedPoseFiles = new Map<number, File>();
+      const appendGeneratedPose = (result: { index: number; file?: File }) => {
+        if (!result.file) return;
+        generatedPoseFiles.set(result.index, result.file);
+        const sortedFiles = [...generatedPoseFiles.entries()]
+          .sort(([a], [b]) => a - b)
+          .map(([, file]) => file);
+        const generatedCandidates: CoverCandidate[] = sortedFiles.map((file) => ({
+          id: `ai-${Date.now()}-${file.name}`,
+          file,
+          url: URL.createObjectURL(file),
+          source: 'ai',
+        }));
+        setCandidates([
+          ...generatedCandidates,
+          ...(exampleCandidate ? [exampleCandidate] : []),
+        ]);
+      };
+      const promoteExampleCandidate = () => {
+        setCandidates((prev) => [
+          ...(exampleCandidate ? [exampleCandidate] : []),
+          ...prev.filter((item) => item.source === 'ai'),
+        ]);
+      };
 
       // ② 生图作封面（异步任务式：提交 taskId 后轮询；参考图 = 示例图，纯文模式无参考图）
       stage = 'generating-image';
@@ -271,7 +295,11 @@ export function AiCreateWizard({
         goto(3);
         setAutoState({ running: false, stage, error: err });
       };
-      const poseResults = await generateAiPoseImages({ draft: draftLocal, exampleFile });
+      const poseResults = await generateAiPoseImages({
+        draft: draftLocal,
+        exampleFile,
+        onResult: appendGeneratedPose,
+      });
       const poseFiles = poseResults
         .filter((result): result is { index: number; file: File } => Boolean(result.file))
         .sort((a, b) => a.index - b.index)
@@ -282,13 +310,7 @@ export function AiCreateWizard({
         return;
       }
       if (poseErrors.length > 0) {
-        const generatedCandidates = poseFiles.map((file, index) => ({
-          id: `ai-${Date.now()}-${index}`,
-          file,
-          url: URL.createObjectURL(file),
-          source: 'ai' as const,
-        }));
-        setCandidates([...generatedCandidates, ...(exampleCandidate ? [exampleCandidate] : [])]);
+        promoteExampleCandidate();
         if (exampleFile) {
           inject({ json: draftLocal, images: poseFiles, replaceImages: true });
         } else {
@@ -298,15 +320,7 @@ export function AiCreateWizard({
         setAutoState({ running: false, stage, error: poseErrors[0]?.error || '部分姿势图生成失败' });
         return;
       }
-      setCandidates([
-        ...poseFiles.map((file, index) => ({
-          id: `ai-${Date.now()}-${index}`,
-          file,
-          url: URL.createObjectURL(file),
-          source: 'ai' as const,
-        })),
-        ...(exampleCandidate ? [exampleCandidate] : []),
-      ]);
+      promoteExampleCandidate();
       inject({ json: draftLocal, images: poseFiles, replaceImages: true });
 
       // ③ 剪影（源 = 生成的封面图，线稿模式 + 自动裁剪；AI 已配置并启用时走 AI 引擎，否则本地抠图）
