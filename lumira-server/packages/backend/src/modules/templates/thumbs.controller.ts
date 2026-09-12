@@ -31,4 +31,28 @@ export class ThumbsController {
       return reply.code(404).type('text/plain').send('not found');
     }
   }
+
+  /**
+   * ????????GET /api/v1/thumbs/templates/:templateId/:filename?w=800
+   * ??????Banner ??????? WebP??????????? /uploads ???
+   */
+  @Get('templates/:templateId/:filename')
+  async templateImage(
+    @Param('templateId') templateId: string,
+    @Param('filename') filename: string,
+    @Query('w') w: string,
+    @Res() reply: FastifyReply,
+  ) {
+    try {
+      const { data, type } = await this.thumbs.templateImage(
+        templateId,
+        filename,
+        w,
+      );
+      reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+      return reply.type(type).send(data);
+    } catch {
+      return reply.code(404).type('text/plain').send('not found');
+    }
+  }
 }

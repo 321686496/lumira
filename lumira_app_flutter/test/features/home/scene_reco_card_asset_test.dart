@@ -73,7 +73,11 @@ void main() {
     await tester.pump();
     final images = tester.widgetList<Image>(find.byType(Image)).toList();
     expect(images, isNotEmpty);
-    expect(images.first.image, isA<MemoryImage>());
+    expect(images.first.image, isA<ResizeImage>());
+    expect(
+      (images.first.image as ResizeImage).imageProvider,
+      isA<MemoryImage>(),
+    );
   });
 }
 

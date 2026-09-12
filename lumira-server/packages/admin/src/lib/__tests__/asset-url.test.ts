@@ -1,6 +1,6 @@
 // src/lib/__tests__/asset-url.test.ts
 import { describe, it, expect } from 'vitest';
-import { toAssetUrl } from '../asset-url';
+import { toAssetUrl, toCategoryThumbUrl, toTemplateThumbUrl } from '../asset-url';
 
 const BACKEND = 'http://localhost:3000';
 
@@ -35,5 +35,33 @@ describe('toAssetUrl', () => {
     expect(toAssetUrl(null, BACKEND)).toBeNull();
     expect(toAssetUrl(undefined, BACKEND)).toBeNull();
     expect(toAssetUrl('', BACKEND)).toBeNull();
+  });
+});
+
+describe('thumbnail URLs', () => {
+  it('loads template thumbnails directly from an HTTPS backend', () => {
+    expect(
+      toTemplateThumbUrl(
+        'https://lumira.example.com/uploads/templates/srv_a/image_0.png',
+        'https://lumira.example.com',
+        640,
+      ),
+    ).toBe('https://lumira.example.com/api/v1/thumbs/templates/srv_a/image_0.png?w=640');
+  });
+
+  it('uses the same-origin proxy for an HTTP backend', () => {
+    expect(
+      toTemplateThumbUrl('http://localhost:3000/uploads/templates/srv_a/cover.jpg', BACKEND),
+    ).toBe('/api/v1/thumbs/templates/srv_a/cover.jpg?w=480');
+  });
+
+  it('builds category thumbnail URLs', () => {
+    expect(
+      toCategoryThumbUrl(
+        'https://lumira.example.com/uploads/categories/portrait/icon.png',
+        'https://lumira.example.com',
+        280,
+      ),
+    ).toBe('https://lumira.example.com/api/v1/thumbs/categories/portrait?w=280');
   });
 });

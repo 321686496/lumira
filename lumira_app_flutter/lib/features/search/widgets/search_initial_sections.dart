@@ -336,6 +336,7 @@ class _RecommendCard extends StatelessWidget {
                         cover: item.cover,
                         coverData: item.coverData,
                         fit: BoxFit.cover,
+                        thumbWidth: 640,
                         fallback: _placeholder(item, tokens),
                         errorFallback: _placeholder(item, tokens),
                       )

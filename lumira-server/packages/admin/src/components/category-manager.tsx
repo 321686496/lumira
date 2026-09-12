@@ -36,7 +36,7 @@ import {
   createCategory, updateCategory, deleteCategory, toggleCategoryActive,
 } from '@/actions/categories';
 import { buildCategoryTree } from '@/lib/category-tree';
-import { toAssetUrl } from '@/lib/asset-url';
+import { toAssetUrl, toCategoryThumbUrl } from '@/lib/asset-url';
 import type { TemplateCategory, TemplateCategoryTreeNode } from '@/types/admin';
 
 interface FlatRow {
@@ -549,7 +549,7 @@ export function CategoryManager({
             ) : (
               filteredRows.map((row) => {
                 const { node: c, depth, hasChildren, guides } = row;
-                const icon = toAssetUrl(c.iconUrl, backendUrl);
+                const icon = toCategoryThumbUrl(c.iconUrl, backendUrl, 160);
                 const isCollapsed = collapsedKeys.has(c.key);
                 const levelBadge = LEVEL_BADGE[c.level as 1 | 2 | 3 | 4];
                 const dot = LEVEL_DOT[c.level as 2 | 3 | 4];
@@ -596,6 +596,8 @@ export function CategoryManager({
                               <img
                                 src={icon}
                                 alt={c.name}
+                                loading="lazy"
+                                decoding="async"
                                 className="h-full w-full object-cover"
                               />
                             ) : (

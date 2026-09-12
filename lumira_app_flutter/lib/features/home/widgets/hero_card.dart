@@ -303,6 +303,7 @@ class _HeroCardState extends ConsumerState<HeroCard> {
                 cover: inspiration.recommendedTemplateCover,
                 coverData: inspiration.recommendedTemplateCoverData,
                 fit: BoxFit.cover,
+                thumbWidth: 480,
                 fallback: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(

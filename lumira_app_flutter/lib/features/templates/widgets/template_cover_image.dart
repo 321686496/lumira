@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/utils/image_cache.dart';
 import '../../../shared/widgets/images/lumira_image.dart';
 import '../services/template_image_store.dart';
 
@@ -23,6 +24,7 @@ class TemplateCoverImage extends StatelessWidget {
     this.fit = BoxFit.cover,
     this.fallback,
     this.errorFallback,
+    this.thumbWidth,
   });
 
   /// 内置模板 assets 路径或远程模板 http URL（可能为空字符串）
@@ -30,6 +32,9 @@ class TemplateCoverImage extends StatelessWidget {
 
   /// 自定义模板 base64 data URL（如 `data:image/jpeg;base64,xxx`）
   final String? coverData;
+
+  /// Optional backend thumbnail width. Detail pages can leave this null.
+  final int? thumbWidth;
 
   /// 图片 fit 模式
   final BoxFit fit;
@@ -55,8 +60,10 @@ class TemplateCoverImage extends StatelessWidget {
     // 2. cover 字段（LumiraImage 自动识别 data:/assets//http/本地文件）
     final c = cover;
     if (c != null && c.isNotEmpty) {
+      final displayCover =
+          thumbWidth == null ? c : templateThumbUrl(c, w: thumbWidth!);
       return LumiraImage(
-        c,
+        displayCover,
         fit: fit,
         errorWidget: errorFallback ?? _defaultError(context),
       );
