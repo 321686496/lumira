@@ -288,6 +288,7 @@ class _KitCard extends ConsumerWidget {
                         cover: cover.cover,
                         coverData: cover.coverData,
                         fit: BoxFit.cover,
+                        thumbWidth: 480,
                         fallback: _CoverPlaceholder(tokens: tokens),
                         errorFallback: _CoverPlaceholder(tokens: tokens),
                       )

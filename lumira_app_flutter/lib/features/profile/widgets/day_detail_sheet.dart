@@ -74,7 +74,8 @@ class _DayDetailSheet extends ConsumerWidget {
                   const Spacer(),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: Icon(Icons.close, size: 20, color: tokens.textTertiary),
+                    icon:
+                        Icon(Icons.close, size: 20, color: tokens.textTertiary),
                   ),
                 ],
               ),
@@ -199,7 +200,8 @@ class _DayDetailBody extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Row(
                   children: [
-                    Icon(Icons.check_circle_outline, size: 15, color: tokens.success),
+                    Icon(Icons.check_circle_outline,
+                        size: 15, color: tokens.success),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -268,7 +270,7 @@ class _PhotoThumb extends StatelessWidget {
 
   Widget _image(String thumb) {
     if (thumb.startsWith('http://') || thumb.startsWith('https://')) {
-      return Image.network(thumb, fit: BoxFit.cover);
+      return LumiraImage(thumb, fit: BoxFit.cover, errorWidget: _placeholder());
     }
     if (thumb.startsWith('data:')) {
       return LumiraImage(thumb, fit: BoxFit.cover, errorWidget: _placeholder());

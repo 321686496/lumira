@@ -18,6 +18,38 @@ String categoryThumbUrl(String iconUrl, String key, {int w = 600}) {
   return '${AppConfig.baseUrl}/thumbs/categories/$key?w=$w';
 }
 
+/// Rewrite stored template image URLs to a backend WebP variant.
+String templateThumbUrl(
+  String url, {
+  String? baseUrl,
+  int w = 800,
+}) {
+  if (url.isEmpty ||
+      url.contains('/api/v1/thumbs/templates/') ||
+      !url.contains('/uploads/templates/')) {
+    return url;
+  }
+
+  const marker = '/uploads/templates/';
+  final relative = url.substring(url.indexOf(marker) + marker.length);
+  final cleanPath = relative.split('?').first.split('#').first;
+  final parts = cleanPath.split('/').where((part) => part.isNotEmpty).toList();
+  if (parts.length != 2) return url;
+  final templateId = parts[0];
+  final filename = parts[1];
+  if (!RegExp(r'^[a-z0-9][a-z0-9_-]*$', caseSensitive: false)
+      .hasMatch(templateId)) {
+    return url;
+  }
+  if (!RegExp(r'^[a-z0-9][a-z0-9._-]*$', caseSensitive: false)
+      .hasMatch(filename)) {
+    return url;
+  }
+
+  final base = (baseUrl ?? AppConfig.baseUrl).replaceAll(RegExp(r'/+$'), '');
+  return '$base/thumbs/templates/$templateId/$filename?w=$w';
+}
+
 /// 轻量级网络图片缓存
 ///
 /// 使用 dio 下载 + 本地文件缓存，解决 Image.network 重复下载、加载慢的问题。
@@ -130,7 +162,8 @@ class ImageCacheUtil {
     _memoryCache[url] = bytes;
     _memoryOrder.add(url);
     _memoryTotalBytes += size;
-    while (_memoryTotalBytes > _maxMemoryTotalBytes && _memoryOrder.isNotEmpty) {
+    while (
+        _memoryTotalBytes > _maxMemoryTotalBytes && _memoryOrder.isNotEmpty) {
       final oldest = _memoryOrder.removeAt(0);
       final removed = _memoryCache.remove(oldest);
       if (removed != null) _memoryTotalBytes -= removed.length;
@@ -307,6 +340,7 @@ class CachedNetworkImage extends StatefulWidget {
     super.key,
     required this.url,
     this.fallbackUrl,
+    this.loader,
     this.fit = BoxFit.cover,
     this.width,
     this.height,
@@ -323,6 +357,8 @@ class CachedNetworkImage extends StatefulWidget {
   /// 主 URL 加载失败时的回退地址（如缩略图失败回退原图）。
   /// 与 [url] 相同或为空时忽略。
   final String? fallbackUrl;
+
+  final Future<Uint8List?> Function(String url)? loader;
 
   final BoxFit fit;
 
@@ -353,6 +389,7 @@ class _CachedNetworkImageState extends State<CachedNetworkImage> {
   Uint8List? _bytes;
   bool _loading = true;
   bool _failed = false;
+  int _requestId = 0;
 
   /// 实际承载滚动的 ScrollPosition（见 [_findEffectivePosition]）。
   ScrollPosition? _pos;
@@ -511,12 +548,16 @@ class _CachedNetworkImageState extends State<CachedNetworkImage> {
       return;
     }
 
-    var bytes = await ImageCacheUtil.getImageBytes(widget.url);
+    final requestId = ++_requestId;
+    final loadBytes = widget.loader ?? ImageCacheUtil.getImageBytes;
+    var bytes = await loadBytes(widget.url);
+    if (!mounted || requestId != _requestId) return;
 
     // 主 URL 失败且存在回退地址时，尝试回退原图。
     final fb = widget.fallbackUrl;
     if (bytes == null && fb != null && fb != widget.url && fb.isNotEmpty) {
-      bytes = await ImageCacheUtil.getImageBytes(fb);
+      bytes = await loadBytes(fb);
+      if (!mounted || requestId != _requestId) return;
     }
 
     if (!mounted) return;
@@ -537,12 +578,10 @@ class _CachedNetworkImageState extends State<CachedNetworkImage> {
         final dpr = MediaQuery.of(context).devicePixelRatio;
         final mw = constraints.maxWidth;
         final mh = constraints.maxHeight;
-        final wPx = (mw.isFinite && mw > 0)
-            ? (mw * dpr).round().clamp(1, 4096)
-            : null;
-        final hPx = (mh.isFinite && mh > 0)
-            ? (mh * dpr).round().clamp(1, 4096)
-            : null;
+        final wPx =
+            (mw.isFinite && mw > 0) ? (mw * dpr).round().clamp(1, 4096) : null;
+        final hPx =
+            (mh.isFinite && mh > 0) ? (mh * dpr).round().clamp(1, 4096) : null;
 
         int? cw = widget.cacheWidth;
         int? ch = widget.cacheHeight;
@@ -569,10 +608,12 @@ class _CachedNetworkImageState extends State<CachedNetworkImage> {
             ch = hPx;
           }
           if (cw == null && ch == null) cw = cappedScreen;
-        } else if (cw == null) {
-          cw = wPx ?? cappedScreen;
-        } else {
-          ch = hPx ?? cappedScreen;
+        } else if (cw != null && ch != null) {
+          if (cw >= ch) {
+            ch = null;
+          } else {
+            cw = null;
+          }
         }
 
         Widget image = Image.memory(

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../templates/data/remote_templates_providers.dart';
@@ -39,8 +40,7 @@ class PointTransactionTile extends StatelessWidget {
 
   /// 是否为「解锁付费模板」类流水（积分解锁 / 免费解锁扣次），refId 即模板 id
   bool get _isTemplateSpend =>
-      (tx.source == 'exchange_template' ||
-          tx.source == 'free_unlock_spend') &&
+      (tx.source == 'exchange_template' || tx.source == 'free_unlock_spend') &&
       tx.refId != null &&
       tx.refId!.isNotEmpty;
 
@@ -65,9 +65,8 @@ class PointTransactionTile extends StatelessWidget {
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: tx.delta >= 0
-                    ? tokens.successSubtle
-                    : tokens.dangerSubtle,
+                color:
+                    tx.delta >= 0 ? tokens.successSubtle : tokens.dangerSubtle,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
@@ -92,16 +91,15 @@ class PointTransactionTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     _formatTime(tx.createdAt),
-                    style: TextStyle(
-                        fontSize: 11, color: tokens.textTertiary),
+                    style: TextStyle(fontSize: 11, color: tokens.textTertiary),
                   ),
                   // 支出流水：标明「花在哪」（无需解析模板，静态说明；模板实体详见详情弹层）
                   if (_isTemplateSpend) ...[
                     const SizedBox(height: 2),
                     Text(
                       '用于解锁付费模板 ›',
-                      style: TextStyle(
-                          fontSize: 11, color: tokens.textSecondary),
+                      style:
+                          TextStyle(fontSize: 11, color: tokens.textSecondary),
                     ),
                   ],
                 ],
@@ -146,8 +144,7 @@ class PointTransactionDetailSheet extends ConsumerWidget {
   final PointTransaction tx;
 
   bool get _isTemplateSpend =>
-      (tx.source == 'exchange_template' ||
-          tx.source == 'free_unlock_spend') &&
+      (tx.source == 'exchange_template' || tx.source == 'free_unlock_spend') &&
       tx.refId != null &&
       tx.refId!.isNotEmpty;
 
@@ -192,8 +189,11 @@ class PointTransactionDetailSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
     final isEarn = tx.delta > 0;
-    final deltaColor =
-        tx.delta > 0 ? tokens.success : tx.delta < 0 ? tokens.danger : tokens.textSecondary;
+    final deltaColor = tx.delta > 0
+        ? tokens.success
+        : tx.delta < 0
+            ? tokens.danger
+            : tokens.textSecondary;
 
     return SingleChildScrollView(
       child: Column(
@@ -233,8 +233,8 @@ class PointTransactionDetailSheet extends ConsumerWidget {
                     const SizedBox(height: 4),
                     Text(
                       _detailText,
-                      style: TextStyle(
-                          fontSize: 13, color: tokens.textSecondary),
+                      style:
+                          TextStyle(fontSize: 13, color: tokens.textSecondary),
                     ),
                   ],
                 ),
@@ -251,7 +251,8 @@ class PointTransactionDetailSheet extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
           // 信息明细
-          _InfoRow(tokens: tokens, label: '时间', value: _formatTime(tx.createdAt)),
+          _InfoRow(
+              tokens: tokens, label: '时间', value: _formatTime(tx.createdAt)),
           const SizedBox(height: 10),
           _InfoRow(
             tokens: tokens,
@@ -397,8 +398,7 @@ class _SpentTemplateCard extends ConsumerWidget {
             Expanded(
               child: Text(
                 '模板详情加载失败',
-                style: TextStyle(
-                    fontSize: 13, color: tokens.textSecondary),
+                style: TextStyle(fontSize: 13, color: tokens.textSecondary),
               ),
             ),
           ],
@@ -413,8 +413,7 @@ class _SpentTemplateCard extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     '该模板已下架或不存在',
-                    style: TextStyle(
-                        fontSize: 13, color: tokens.textSecondary),
+                    style: TextStyle(fontSize: 13, color: tokens.textSecondary),
                   ),
                 ),
               ],
@@ -428,13 +427,12 @@ class _SpentTemplateCard extends ConsumerWidget {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: detail.cover != null
-                      ? Image.network(
+                      ? LumiraImage(
                           detail.cover!,
                           width: 48,
                           height: 48,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _PlaceholderImage(
-                              tokens: tokens),
+                          errorWidget: _PlaceholderImage(tokens: tokens),
                         )
                       : _PlaceholderImage(tokens: tokens),
                 ),
@@ -456,8 +454,8 @@ class _SpentTemplateCard extends ConsumerWidget {
                       const SizedBox(height: 4),
                       Text(
                         detail.price > 0 ? '付费模板 · ${detail.price} 积分' : '免费模板',
-                        style: TextStyle(
-                            fontSize: 12, color: tokens.textTertiary),
+                        style:
+                            TextStyle(fontSize: 12, color: tokens.textTertiary),
                       ),
                     ],
                   ),

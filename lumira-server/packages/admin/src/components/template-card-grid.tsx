@@ -17,7 +17,7 @@ import { Trash } from '@phosphor-icons/react/dist/csr/Trash';
 import { Plus } from '@phosphor-icons/react/dist/csr/Plus';
 import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
 import { formatUnixTime } from '@/lib/utils';
-import { toAssetUrl } from '@/lib/asset-url';
+import { toTemplateThumbUrl } from '@/lib/asset-url';
 import { useToast } from '@/hooks/use-toast';
 import { toggleTemplateActive, deleteTemplate } from '@/actions/templates';
 import type { AdminTemplateListItem, TemplateCategory } from '@/types/admin';
@@ -217,7 +217,7 @@ export function TemplateCardGrid({
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
           {filtered.map((t) => {
-          const cover = toAssetUrl(t.coverUrl, backendUrl);
+          const cover = toTemplateThumbUrl(t.coverUrl, backendUrl, 480);
           const toggling = !!pendingMap[t.id];
           const u = usage[t.id];
             return (
@@ -235,6 +235,8 @@ export function TemplateCardGrid({
                     <img
                       src={cover}
                       alt={t.name}
+                      loading="lazy"
+                      decoding="async"
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
                   ) : (

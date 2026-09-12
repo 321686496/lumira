@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/utils/image_cache.dart';
 import 'template_cover_image.dart';
 
 /// 模板封面默认展示比例（加载中/未知比例兜底，≈ 3:4）。
@@ -43,7 +44,7 @@ ImageProvider? buildCoverProvider(String? cover, String? coverData) {
   }
   if (c.startsWith('assets/')) return AssetImage(c);
   if (c.startsWith('http://') || c.startsWith('https://')) {
-    return NetworkImage(c);
+    return NetworkImage(templateThumbUrl(c, w: 200));
   }
   return FileImage(File(c));
 }
@@ -76,6 +77,7 @@ class AdaptiveCoverImage extends StatefulWidget {
     this.fallback,
     this.errorFallback,
     this.overlay = const <Widget>[],
+    this.thumbWidth = 800,
   });
 
   final String? cover;
@@ -84,6 +86,9 @@ class AdaptiveCoverImage extends StatefulWidget {
   final Widget? fallback;
   final Widget? errorFallback;
   final List<Widget> overlay;
+
+  /// Backend thumbnail width used for list and card rendering.
+  final int thumbWidth;
 
   @override
   State<AdaptiveCoverImage> createState() => _AdaptiveCoverImageState();
@@ -193,6 +198,7 @@ class _AdaptiveCoverImageState extends State<AdaptiveCoverImage> {
             fit: widget.fit,
             fallback: widget.fallback,
             errorFallback: widget.errorFallback,
+            thumbWidth: widget.thumbWidth,
           ),
           ...widget.overlay,
         ],

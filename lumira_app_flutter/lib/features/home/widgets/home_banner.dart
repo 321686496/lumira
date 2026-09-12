@@ -373,6 +373,7 @@ class _BannerCard extends StatelessWidget {
                 coverData: banner.coverData,
                 fit: BoxFit.cover,
                 fallback: _buildGradientBackground(),
+                thumbWidth: 1080,
               ),
               Container(
                 decoration: BoxDecoration(
@@ -510,6 +511,7 @@ class _BannerCard extends StatelessWidget {
                 coverData: banner.coverData,
                 fit: BoxFit.cover,
                 fallback: const SizedBox.shrink(),
+                thumbWidth: 480,
               ),
             ),
           ),
@@ -518,6 +520,7 @@ class _BannerCard extends StatelessWidget {
             coverData: banner.coverData,
             fit: BoxFit.contain,
             fallback: const SizedBox.shrink(),
+            thumbWidth: 480,
           ),
         ],
       ),

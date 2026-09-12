@@ -27,7 +27,7 @@ import { X } from '@phosphor-icons/react/dist/csr/X';
 import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
 import { useToast } from '@/hooks/use-toast';
 import { saveBanner, removeBanner, setBannerActive, uploadBannerImage } from '@/actions/banners';
-import { toAssetUrl } from '@/lib/asset-url';
+import { toAssetUrl, toTemplateThumbUrl } from '@/lib/asset-url';
 import type { AdminTemplateListItem, BannerAdminItem, BannerPayload } from '@/types/admin';
 
 const ROUTE_OPTIONS = [
@@ -555,7 +555,7 @@ export function BannerManager({
                   )}
                   {templates.map((t) => {
                     const selected = form.templateId === t.id;
-                    const cover = toAssetUrl(t.coverUrl, '') ?? '';
+                    const cover = toTemplateThumbUrl(t.coverUrl, '', 320) ?? '';
                     return (
                       <button
                         key={t.id}
@@ -580,6 +580,8 @@ export function BannerManager({
                           <img
                             src={cover}
                             alt=""
+                            loading="lazy"
+                            decoding="async"
                             className="aspect-[4/3] w-full object-cover"
                           />
                         ) : (
