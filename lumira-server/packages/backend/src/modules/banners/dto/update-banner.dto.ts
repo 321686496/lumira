@@ -1,7 +1,8 @@
 // lumira-server/packages/backend/src/modules/banners/dto/update-banner.dto.ts
 // PATCH /admin/banners/:id 的 DTO，所有字段可选（Partial），id 不可改
 import {
-  IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength,
+  IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min,
+  MaxLength,
 } from 'class-validator';
 import { OPERATION_BANNER_CONDITIONS, OPERATION_BANNER_ROUTES } from '../operation-banner.rules';
 
@@ -39,6 +40,24 @@ export class UpdateBannerDto {
   @IsString()
   @MaxLength(512)
   imageUrl?: string | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  focusX?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  focusY?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(3)
+  focusZoom?: number;
 
   @IsOptional()
   @IsIn(OPERATION_BANNER_CONDITIONS)

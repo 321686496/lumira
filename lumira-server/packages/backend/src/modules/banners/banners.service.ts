@@ -23,6 +23,11 @@ const BANNER_IMAGE_MIME_EXT: Record<string, string> = {
 };
 const BANNER_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
 
+const clampFocus = (value: number | undefined, min: number, max: number, fallback: number) => {
+  if (typeof value !== 'number' || Number.isNaN(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+};
+
 @Injectable()
 export class BannersService {
   constructor(
@@ -58,6 +63,9 @@ export class BannersService {
         templateId: r.templateId,
         // 配图完整 URL（空串 = 无配图，App 回退品牌渐变背景）
         imageUrl: buildAssetUrl(r.imageUrl),
+        focusX: r.focusX ?? 0.5,
+        focusY: r.focusY ?? 0.5,
+        focusZoom: r.focusZoom ?? 1,
         condition: r.condition,
       })),
     };
@@ -92,6 +100,9 @@ export class BannersService {
       route: dto.route,
       templateId: dto.templateId ?? null,
       imageUrl: dto.imageUrl || null,
+      focusX: clampFocus(dto.focusX, 0, 1, 0.5),
+      focusY: clampFocus(dto.focusY, 0, 1, 0.5),
+      focusZoom: clampFocus(dto.focusZoom, 1, 3, 1),
       condition: dto.condition,
       isActive: dto.isActive === false ? 0 : 1,
       sortOrder: dto.sortOrder ?? 0,
@@ -113,6 +124,9 @@ export class BannersService {
     if ('templateId' in dto) patch.templateId = dto.templateId || null;
     // imageUrl：null/空串清除配图，其余原样存（storageKey 或完整 URL）
     if (dto.imageUrl !== undefined) patch.imageUrl = dto.imageUrl || null;
+    if (dto.focusX !== undefined) patch.focusX = clampFocus(dto.focusX, 0, 1, 0.5);
+    if (dto.focusY !== undefined) patch.focusY = clampFocus(dto.focusY, 0, 1, 0.5);
+    if (dto.focusZoom !== undefined) patch.focusZoom = clampFocus(dto.focusZoom, 1, 3, 1);
     if (dto.condition !== undefined) patch.condition = dto.condition;
     if (dto.isActive !== undefined) patch.isActive = dto.isActive ? 1 : 0;
     if (dto.sortOrder !== undefined) patch.sortOrder = dto.sortOrder;
