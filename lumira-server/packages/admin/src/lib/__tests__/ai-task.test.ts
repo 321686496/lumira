@@ -44,4 +44,18 @@ describe('pollAiImageTask', () => {
       new AiTaskPollError('生成超时，请稍后重试'),
     );
   });
+
+  it('状态请求未完成时不并发发起下一次查询', async () => {
+    statusMock
+      .mockImplementationOnce(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return { taskId: 't', status: 'running' };
+      })
+      .mockResolvedValueOnce({ taskId: 't', status: 'done', image: 'aGVsbG8=', mimeType: 'image/png' });
+
+    const polling = pollAiImageTask('t', { intervalMs: 5, timeoutMs: 1000 });
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(statusMock).toHaveBeenCalledTimes(1);
+    await expect(polling).resolves.toMatchObject({ status: 'done' });
+  });
 });

@@ -276,10 +276,10 @@ export default function PhonePreview(props: PhonePreviewProps) {
   return (
     <div className={cn('flex flex-col items-center', className)}>
       <IphoneFrame width={240}>
-        <div className="absolute inset-0 flex items-center justify-center bg-black">
+        <div className="absolute inset-0 flex items-center justify-center bg-neutral-500">
           <div
             ref={areaRef}
-            className="relative overflow-hidden bg-black"
+            className="relative overflow-hidden bg-neutral-500"
             style={{ width: '100%', aspectRatio: String(ratio) }}
           >
             {/* 封面 + 后期效果（Canvas） */}

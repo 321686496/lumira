@@ -14,6 +14,10 @@ export class AiTaskPollError extends Error {}
 const DEFAULT_INTERVAL_MS = 2000;
 const DEFAULT_TIMEOUT_MS = 180_000;
 
+function sleep(intervalMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, intervalMs));
+}
+
 export interface AiTaskFileResult {
   index: number;
   file?: File;
@@ -49,7 +53,12 @@ export function generateAiPoseImages(options: {
   return (async () => Promise.all(targets.map(async (pose, index) => {
     try {
       const fd = new FormData();
-      fd.set('meta', JSON.stringify({ ...draft, pose, singlePose: true }));
+      fd.set('meta', JSON.stringify({
+        ...draft,
+        pose,
+        singlePose: true,
+        consistency: { mode: 'strict' },
+      }));
       if (exampleFile) fd.set('reference', exampleFile);
       const extra = typeof extraPrompt === 'string' ? extraPrompt.trim() : '';
       if (extra) fd.set('extraPrompt', extra);
@@ -116,45 +125,17 @@ export function pollAiImageTask(
   const { intervalMs = DEFAULT_INTERVAL_MS, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
   const deadline = Date.now() + timeoutMs;
 
-  return new Promise<AiImageStatusResult>((resolve, reject) => {
-    let timer: ReturnType<typeof setInterval> | null = null;
-    const cleanup = () => {
-      if (timer) clearInterval(timer);
-    };
-
-    const fail = (message: string) => {
-      cleanup();
-      reject(new AiTaskPollError(message));
-    };
-
-    const tick = async () => {
-      if (Date.now() >= deadline) {
-        fail('生成超时，请稍后重试');
-        return;
-      }
+  return (async () => {
+    while (Date.now() < deadline) {
       const res = await aiGenerateImageStatusAction(taskId);
-      if ('error' in res) {
-        fail(res.error || '查询生图任务失败');
-        return;
-      }
-      if (res.status === 'done') {
-        cleanup();
-        resolve(res);
-        return;
-      }
-      if (res.status === 'error') {
-        fail(res.error || '生图失败，请重试');
-        return;
-      }
+      if ('error' in res) throw new AiTaskPollError(res.error || '查询生图任务失败');
+      if (res.status === 'done') return res;
+      if (res.status === 'error') throw new AiTaskPollError(res.error || '生图失败，请重试');
       onTick?.(res.status);
-    };
-
-    // 立即首查，随后按间隔轮询
-    timer = setInterval(() => {
-      tick().catch((err) => fail((err as Error).message));
-    }, intervalMs);
-    void tick().catch((err) => fail((err as Error).message));
-  });
+      await sleep(intervalMs);
+    }
+    throw new AiTaskPollError('生成超时，请稍后重试');
+  })();
 }
 
 /** 轮询剪影异步任务直到完成，避免同步请求被网关 504 掐断。 */
@@ -166,40 +147,17 @@ export function pollAiSilhouetteTask(
   const { intervalMs = DEFAULT_INTERVAL_MS, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
   const deadline = Date.now() + timeoutMs;
 
-  return new Promise<AiSilhouetteStatusResult>((resolve, reject) => {
-    let timer: ReturnType<typeof setInterval> | null = null;
-    const cleanup = () => {
-      if (timer) clearInterval(timer);
-    };
-    const fail = (message: string) => {
-      cleanup();
-      reject(new AiTaskPollError(message));
-    };
-    const tick = async () => {
-      if (Date.now() >= deadline) {
-        fail('剪影生成超时，请稍后重试');
-        return;
-      }
+  return (async () => {
+    while (Date.now() < deadline) {
       const res = await aiGenerateSilhouetteStatusAction(taskId);
       if (!res || 'error' in res) {
-        fail((res as { error?: string } | undefined)?.error || '查询剪影任务失败');
-        return;
+        throw new AiTaskPollError((res as { error?: string } | undefined)?.error || '查询剪影任务失败');
       }
-      if (res.status === 'done') {
-        cleanup();
-        resolve(res);
-        return;
-      }
-      if (res.status === 'error') {
-        fail(res.error || '剪影生成失败，请重试');
-        return;
-      }
+      if (res.status === 'done') return res;
+      if (res.status === 'error') throw new AiTaskPollError(res.error || '剪影生成失败，请重试');
       onTick?.(res.status);
-    };
-
-    timer = setInterval(() => {
-      tick().catch((err) => fail((err as Error).message));
-    }, intervalMs);
-    void tick().catch((err) => fail((err as Error).message));
-  });
+      await sleep(intervalMs);
+    }
+    throw new AiTaskPollError('剪影生成超时，请稍后重试');
+  })();
 }

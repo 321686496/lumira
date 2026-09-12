@@ -186,4 +186,26 @@ describe('buildImagePrompt', () => {
     expect(prompt).toContain('不要合并多个姿势，不要生成连拍、多宫格或姿势对比图');
     expect(prompt).not.toContain('三个不同姿势');
   });
+
+  test('单姿势模式默认保持人物与场景一致性，除非用户明确要求不一致', () => {
+    const prompt = buildImagePrompt({
+      singlePose: true,
+      pose: { name: '侧身', description: '身体微侧45度' },
+    });
+    expect(prompt).toContain('同一套模板的连续拍摄');
+    expect(prompt).toContain('保持同一人物的长相、服装、发型、体型');
+
+    const loose = buildImagePrompt({
+      singlePose: true,
+      pose: { name: '侧身', description: '身体微侧45度' },
+      consistency: { mode: 'loose' },
+    });
+    expect(loose).not.toContain('同一套模板的连续拍摄');
+
+    const explicit = buildImagePrompt({
+      singlePose: true,
+      pose: { name: '侧身', description: '身体微侧45度' },
+    }, '第二个姿势换到不同场景');
+    expect(explicit).not.toContain('同一套模板的连续拍摄');
+  });
 });
