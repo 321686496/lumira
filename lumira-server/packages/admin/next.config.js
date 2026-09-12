@@ -3,10 +3,9 @@ const nextConfig = {
   transpilePackages: ['@lumira/shared'],
   experimental: {
     typedRoutes: false,
-    // Server Actions 请求体上限：模板提交含多文件（封面 8MB + 剪影 8MB + .pptpl ≤25MB），
-    // 默认 1MB 会在 Next.js 层拦截导致 413
+    // Vercel Serverless 请求体硬限制约 4.5MB；图片必须在浏览器端压缩。
     serverActions: {
-      bodySizeLimit: '32mb',
+      bodySizeLimit: '4mb',
     },
   },
   async headers() {

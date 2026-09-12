@@ -872,17 +872,28 @@ export default function TemplateForm({
       return;
     }
 
+    // 提交前统一压缩，避免多个 base64/文件叠加超过 Vercel 4.5MB 平台硬限制。
+    const submissionImages = await Promise.all(
+      imageFiles.map((f) => compressImage(f, { maxDim: 1080, quality: 0.75, maxBytes: 320 * 1024 })),
+    );
+
     // 各姿势新上传的剪影文件转为 data URL 内嵌进 poses（后端仅对 poses[0] 落盘文件）
     const imageDataUrls = new Array<string | undefined>(poses.length);
-    const firstSilhouetteFile =
-      poses[0]?.silhouetteType === 'image' ? poses[0].silhouetteFile : null;
+    const silhouetteFiles = new Array<File | undefined>(poses.length);
     await Promise.all(
       poses.map(async (p, i) => {
         if (p.silhouetteType === 'image' && p.silhouetteFile) {
-          imageDataUrls[i] = await fileToDataUrl(p.silhouetteFile);
+          const compressed = await compressImage(p.silhouetteFile, {
+            maxDim: 768,
+            quality: 0.75,
+            maxBytes: 192 * 1024,
+          });
+          silhouetteFiles[i] = compressed;
+          if (i > 0) imageDataUrls[i] = await fileToDataUrl(compressed);
         }
       }),
     );
+    const firstSilhouetteFile = silhouetteFiles[0];
 
     const posesPayload: Record<string, unknown>[] = poses.map((p, i) => ({
       ...(p.name ? { name: p.name } : {}),
@@ -1006,9 +1017,9 @@ export default function TemplateForm({
     const fd = new FormData();
     fd.set('meta', JSON.stringify(meta));
     // 首图同时作为 cover（后端单图兼容）
-    if (imageFiles.length > 0) fd.set('cover', imageFiles[0]);
+    if (submissionImages.length > 0) fd.set('cover', submissionImages[0]);
     // 多效果图：多个同名字段 images
-    imageFiles.forEach((f) => fd.append('images', f));
+    submissionImages.forEach((f) => fd.append('images', f));
     // 首个姿势的剪影文件走单 silhouette 字段（后端注入 poses[0]）
     if (firstSilhouetteFile) {
       fd.set('silhouette', firstSilhouetteFile);
