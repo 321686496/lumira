@@ -70,6 +70,15 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
   const sceneGuide = isPlainObject(draft.sceneGuide) ? draft.sceneGuide : {};
   const postProcess = isPlainObject(draft.postProcess) ? draft.postProcess : {};
   const classification = isPlainObject(meta.classification) ? meta.classification : {};
+  const isSinglePose = draft.singlePose === true;
+  const rawPose = Array.isArray(draft.pose)
+    ? (isPlainObject(draft.pose[0]) ? draft.pose[0] : undefined)
+    : isPlainObject(draft.pose)
+      ? draft.pose
+      : undefined;
+  const poseName = isSinglePose && rawPose ? toStr(rawPose.name) : undefined;
+  const poseDescription = isSinglePose && rawPose ? toStr(rawPose.description) : undefined;
+  const posePhrase = [poseName, poseDescription].filter(Boolean).join('：');
 
   // 主体类型：classification.type → meta.category 兜底，均未命中内置映射则跳过
   const subject =
@@ -98,7 +107,7 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
   if (tags.length > 0) segments.push(`风格${tags.join('、')}`);
 
   // ③ 构图描述
-  const compDescription = toStr(composition.description);
+  const compDescription = !isSinglePose ? toStr(composition.description) : undefined;
   if (compDescription !== undefined) segments.push(compDescription);
 
   // ④ 光线：最佳时段 + 方向（如「午后4-6点的侧逆光」）
@@ -129,11 +138,20 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
 
   // ⑦ 氛围：shortDesc 优先，缺失时回退 description
   const shortDesc = toStr(meta.shortDesc);
-  const description = toStr(meta.description);
+  const description = !isSinglePose ? toStr(meta.description) : undefined;
   if (shortDesc !== undefined) {
     segments.push(`传递「${shortDesc}」的情绪`);
   } else if (description !== undefined) {
     segments.push(description);
+  }
+
+  if (isSinglePose) {
+    segments.push(
+      posePhrase
+        ? `画面中只有一个人物，只呈现姿势${posePhrase}`
+        : '画面中只有一个人物，只呈现一个姿势',
+    );
+    segments.push('不要合并多个姿势，不要生成连拍、多宫格或姿势对比图');
   }
 
   // ⑧ 额外要求：用户显式补充的附加提示词（Step3 输入），置于末尾权重最高

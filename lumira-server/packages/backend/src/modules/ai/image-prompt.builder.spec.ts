@@ -162,4 +162,28 @@ describe('buildImagePrompt', () => {
       expect(prompt).not.toContain('额外要求');
     }
   });
+
+  test('单姿势模式：使用选中 pose，忽略全局数量/多姿势描述', () => {
+    const base = fullDraft();
+    const draft = {
+      ...base,
+      ...fullDraft(),
+      singlePose: true,
+      pose: { name: '侧身回眸', description: '身体微侧45度，下巴略抬' },
+      meta: {
+        ...base.meta,
+        description: '生成三个不同姿势的氛围感自拍',
+      },
+      composition: {
+        ...base.composition,
+        description: '三个不同姿势的氛围感自拍',
+      },
+    };
+    const prompt = buildImagePrompt(draft);
+    expect(prompt).toContain('侧身回眸');
+    expect(prompt).toContain('身体微侧45度');
+    expect(prompt).toContain('画面中只有一个人物');
+    expect(prompt).toContain('不要合并多个姿势，不要生成连拍、多宫格或姿势对比图');
+    expect(prompt).not.toContain('三个不同姿势');
+  });
 });
