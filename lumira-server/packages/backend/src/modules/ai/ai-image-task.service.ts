@@ -31,6 +31,8 @@ export interface ImageTask {
 /** 已完成/错误任务的保留时长（超过即清理，防 base64 结果占用内存） */
 const RESULT_TTL_MS = 15 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 60 * 1000;
+const DEPENDENT_CONCURRENCY = 1;
+const GENERATE_RETRY_LIMIT = 3;
 
 @Injectable()
 export class AiImageTaskService implements OnModuleDestroy {
@@ -156,7 +158,7 @@ export class AiImageTaskService implements OnModuleDestroy {
     if (!task) return;
     task.status = 'running';
     try {
-      const r = await this.aiGenerateImageService.generate(reference, metaJson, extraPrompt);
+      const r = await this.generateWithRetry(reference, metaJson, extraPrompt);
       task.status = 'done';
       task.result = { image: r.base64, mimeType: r.mimeType };
       void this.startDependents(id);
@@ -167,25 +169,59 @@ export class AiImageTaskService implements OnModuleDestroy {
     }
   }
 
+  private async generateWithRetry(
+    reference: UploadFile | undefined,
+    metaJson: string | null,
+    extraPrompt?: string | null,
+  ): Promise<{ base64: string; mimeType: string }> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= GENERATE_RETRY_LIMIT; attempt += 1) {
+      try {
+        return await this.aiGenerateImageService.generate(reference, metaJson, extraPrompt);
+      } catch (err) {
+        lastError = err;
+        const message = (err as Error)?.message || '';
+        const retryable = /HTTP 429|HTTP 5\d\d|超时|无法连接/.test(message);
+        if (!retryable || attempt >= GENERATE_RETRY_LIMIT) break;
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error('生图失败，请重试');
+  }
+
   private startDependents(taskId: string): void {
     const anchor = this.tasks.get(taskId);
     const dependents = anchor?.batch?.dependents ?? [];
-    for (const dependentId of dependents) {
-      const dependent = this.tasks.get(dependentId);
-      const batch = dependent?.batch;
-      if (!dependent || !batch) continue;
-      if (!anchor?.result) {
+    if (!anchor?.result) {
+      for (const dependentId of dependents) {
+        const dependent = this.tasks.get(dependentId);
+        if (!dependent) continue;
         dependent.status = 'error';
         dependent.error = '首张锚点姿势图生成失败';
-        continue;
       }
-      const reference: UploadFile = {
-        buffer: Buffer.from(anchor.result.image, 'base64'),
-        filename: 'anchor.png',
-        mimetype: anchor.result.mimeType,
-      };
-      void this.run(dependentId, reference, batch.metaJson, batch.extraPrompt);
+      return;
     }
+
+    const queue = [...dependents];
+    const workers = Array.from(
+      { length: Math.min(DEPENDENT_CONCURRENCY, queue.length) },
+      async () => {
+        for (;;) {
+          const dependentId = queue.shift();
+          if (!dependentId) return;
+          const dependent = this.tasks.get(dependentId);
+          const batch = dependent?.batch;
+          if (!dependent || !batch) continue;
+          const reference: UploadFile = {
+            buffer: Buffer.from(anchor.result!.image, 'base64'),
+            filename: 'anchor.png',
+            mimetype: anchor.result!.mimeType,
+          };
+          await this.run(dependentId, reference, batch.metaJson, batch.extraPrompt);
+        }
+      },
+    );
+    void Promise.all(workers).catch(() => undefined);
   }
 
   private failDependents(taskId: string, error: string): void {
