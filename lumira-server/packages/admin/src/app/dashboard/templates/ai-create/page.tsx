@@ -12,6 +12,7 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000';
  * + 60s 轮询）与剪影 ONNX CPU 推理，默认时长（10~15s）会被掐断 → 前端永久"生成中"。
  */
 export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
 
 export default async function AiCreatePage() {
   let categories;
