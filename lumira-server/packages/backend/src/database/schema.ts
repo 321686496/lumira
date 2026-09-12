@@ -1,7 +1,7 @@
 // lumira-server/packages/backend/src/database/schema.ts
 
 import { sql } from 'drizzle-orm';
-import { mysqlTable, text, int, bigint, longtext, uniqueIndex, varchar, index } from 'drizzle-orm/mysql-core';
+import { mysqlTable, text, int, bigint, double, longtext, uniqueIndex, varchar, index } from 'drizzle-orm/mysql-core';
 
 export const devices = mysqlTable('devices', {
   deviceId: text('device_id').primaryKey(),
@@ -325,6 +325,9 @@ export const operationBanners = mysqlTable('operation_banners', {
   templateId: varchar('template_id', { length: 64 }),
   // 运营位配图（可空）：DB 存相对 storageKey，返回 App 时经 buildAssetUrl 拼公网 URL
   imageUrl: varchar('image_url', { length: 512 }),
+  focusX: double('focus_x'),
+  focusY: double('focus_y'),
+  focusZoom: double('focus_zoom'),
   condition: varchar('condition', { length: 64 }).notNull(),
   isActive: int('is_active').notNull().default(1),
   sortOrder: int('sort_order').notNull().default(0),

@@ -69,6 +69,7 @@ describe('BannersService', () => {
     expect(res.banners).toEqual([{
       id: 'op_invite', title: 'T', subtitle: 'S', tag: '邀请有礼',
       route: '/invite', imageUrl: '', condition: 'nonNewUserNotInvited',
+      focusX: 0.5, focusY: 0.5, focusZoom: 1,
     }]);
     expect(redis.setJson).toHaveBeenCalledWith('lumira:cache:bannerList', expect.anything(), 60);
   });
@@ -133,6 +134,57 @@ describe('BannersService', () => {
     const { service, updateSet } = buildService({ selectRows: [ROW] });
     await service.update('op_invite', { imageUrl: '' });
     expect(updateSet.mock.calls[0][0].imageUrl).toBeNull();
+  });
+
+
+  it('create 落库 Banner 焦点并裁剪越界值', async () => {
+    const { service, insertValues } = buildService();
+    await service.create({
+      ...CREATE_DTO,
+      imageUrl: '/uploads/banners/b1/image.png',
+      focusX: 1.4,
+      focusY: -0.4,
+      focusZoom: 4,
+    });
+    expect(insertValues.mock.calls[0][0]).toMatchObject({
+      focusX: 1,
+      focusY: 0,
+      focusZoom: 3,
+    });
+  });
+
+  it('create 未传焦点时使用居中默认值', async () => {
+    const { service, insertValues } = buildService();
+    await service.create(CREATE_DTO);
+    expect(insertValues.mock.calls[0][0]).toMatchObject({
+      focusX: 0.5,
+      focusY: 0.5,
+      focusZoom: 1,
+    });
+  });
+
+  it('update 可 patch 焦点字段', async () => {
+    const { service, updateSet } = buildService({ selectRows: [ROW] });
+    await service.update('op_invite', { focusX: 0.25, focusY: 0.75, focusZoom: 1.5 });
+    expect(updateSet.mock.calls[0][0]).toMatchObject({
+      focusX: 0.25,
+      focusY: 0.75,
+      focusZoom: 1.5,
+    });
+  });
+
+  it('listForApp 返回焦点并在缺失时使用默认值', async () => {
+    const { service } = buildService({ selectRows: [ROW] });
+    const res = await service.listForApp();
+    expect(res.banners[0]).toMatchObject({ focusX: 0.5, focusY: 0.5, focusZoom: 1 });
+
+    const focused = await new BannersService(
+      { getDb: () => ({ select: () => chainable([{ ...ROW, focusX: 0.2, focusY: 0.8, focusZoom: 2 }]) }) } as unknown as DatabaseService,
+      { getJson: async () => null, setJson: async () => undefined, delByPattern: async () => undefined } as unknown as RedisService,
+      {} as unknown as StorageAdapter,
+      {} as unknown as ImageCompressionService,
+    ).listForApp();
+    expect(focused.banners[0]).toMatchObject({ focusX: 0.2, focusY: 0.8, focusZoom: 2 });
   });
 
   it('uploadImage 校验格式白名单，非法 mime 抛 BadRequest', async () => {

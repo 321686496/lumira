@@ -1,4 +1,4 @@
-import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min, Matches, MaxLength } from 'class-validator';
 import { OPERATION_BANNER_CONDITIONS, OPERATION_BANNER_ROUTES } from '../operation-banner.rules';
 
 export class CreateBannerDto {
@@ -37,6 +37,27 @@ export class CreateBannerDto {
   @IsString()
   @MaxLength(512)
   imageUrl?: string | null;
+
+  /** 背景图水平焦点：0 左，1 右；默认/非法值归一化为 0.5 */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  focusX?: number;
+
+  /** 背景图垂直焦点：0 上，1 下；默认/非法值归一化为 0.5 */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  focusY?: number;
+
+  /** 背景图缩放：1 原图 cover，3 最大放大 */
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(3)
+  focusZoom?: number;
 
   @IsIn(OPERATION_BANNER_CONDITIONS)
   condition!: string;
