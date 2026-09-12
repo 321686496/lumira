@@ -1,5 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { eq, count, desc, asc, sql } from 'drizzle-orm';
+import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { and, eq, count, desc, asc, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { PointsService } from '../points/points.service';
 import {
@@ -12,8 +15,14 @@ import {
   redemptionCodeBatches,
   redemptionCodes,
   redemptionRecords,
+  ownedTemplates,
   questionnaireRecords,
   templates,
+  feedbacks,
+  accountOtp,
+  usageEvents,
+  dailySignInRecords,
+  pointEarnEvents,
 } from '../../database/schema';
 
 function parseArr(raw: string | null): string[] {
@@ -23,6 +32,31 @@ function parseArr(raw: string | null): string[] {
     return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
   } catch {
     return [];
+  }
+}
+
+function safeUploadPath(uploadRoot: string, segments: string[]): string | null {
+  const target = path.resolve(uploadRoot, ...segments);
+  const normalizedRoot = `${path.resolve(uploadRoot)}${path.sep}`;
+  return target.startsWith(normalizedRoot) ? target : null;
+}
+
+function removeUploadDirs(uploadRoot: string, directories: string[][]): void {
+  for (const segments of directories) {
+    const target = safeUploadPath(uploadRoot, segments);
+    if (!target) continue;
+    fs.rmSync(target, { recursive: true, force: true });
+  }
+}
+
+function verifyLoginKey(input: string): void {
+  const expected = process.env.ADMIN_TOKEN || 'dev-admin-token';
+  const expectedBuffer = Buffer.from(expected, 'utf8');
+  const inputBuffer = Buffer.from(input, 'utf8');
+  const matches = inputBuffer.length === expectedBuffer.length
+    && crypto.timingSafeEqual(inputBuffer, expectedBuffer);
+  if (!matches) {
+    throw new UnauthorizedException('登录 key 无效');
   }
 }
 
@@ -434,5 +468,71 @@ export class AdminService {
       null,
     );
     return { success: true, balance: newBalance };
+  }
+
+  async deleteDevice(deviceId: string, loginKey: string) {
+    verifyLoginKey(loginKey);
+    const db = this.dbService.getDb();
+    const existing = await db
+      .select({ deviceId: devices.deviceId })
+      .from(devices)
+      .where(eq(devices.deviceId, deviceId))
+      .limit(1);
+
+    if (existing.length === 0) {
+      throw new NotFoundException('设备不存在');
+    }
+
+    const uploadRoot = path.resolve(process.env.UPLOAD_DIR || './data/uploads');
+    const uploadDirs: string[][] = [['users', deviceId]];
+    const feedbackRows = await db
+      .select({ id: feedbacks.id })
+      .from(feedbacks)
+      .where(eq(feedbacks.deviceId, deviceId));
+    uploadDirs.push(...feedbackRows.map((row) => ['feedback', row.id]));
+
+    await db.transaction(async (tx) => {
+      const redemptionUsage = await tx
+        .select({
+          batchId: redemptionCodeBatches.batchId,
+          code: redemptionCodes.code,
+          usedCount: count(),
+        })
+        .from(redemptionRecords)
+        .innerJoin(redemptionCodes, eq(redemptionRecords.code, redemptionCodes.code))
+        .innerJoin(redemptionCodeBatches, eq(redemptionCodes.batchId, redemptionCodeBatches.batchId))
+        .where(eq(redemptionRecords.deviceId, deviceId))
+        .groupBy(redemptionCodeBatches.batchId, redemptionCodes.code);
+
+      for (const usage of redemptionUsage) {
+        await tx
+          .update(redemptionCodes)
+          .set({ usedCount: sql`GREATEST(${redemptionCodes.usedCount} - ${Number(usage.usedCount)}, 0)` })
+          .where(eq(redemptionCodes.code, usage.code));
+        await tx
+          .update(redemptionCodeBatches)
+          .set({ totalUsed: sql`GREATEST(${redemptionCodeBatches.totalUsed} - ${Number(usage.usedCount)}, 0)` })
+          .where(eq(redemptionCodeBatches.batchId, usage.batchId));
+      }
+
+      await tx.delete(userProfiles).where(eq(userProfiles.deviceId, deviceId));
+      await tx.delete(inviteRecords).where(eq(inviteRecords.inviterDeviceId, deviceId));
+      await tx.delete(inviteRecords).where(eq(inviteRecords.inviteeDeviceId, deviceId));
+      await tx.delete(rewardUnlocks).where(eq(rewardUnlocks.deviceId, deviceId));
+      await tx.delete(redemptionRecords).where(eq(redemptionRecords.deviceId, deviceId));
+      await tx.delete(questionnaireRecords).where(eq(questionnaireRecords.deviceId, deviceId));
+      await tx.delete(userPoints).where(eq(userPoints.deviceId, deviceId));
+      await tx.delete(pointTransactions).where(eq(pointTransactions.deviceId, deviceId));
+      await tx.delete(ownedTemplates).where(eq(ownedTemplates.deviceId, deviceId));
+      await tx.delete(dailySignInRecords).where(eq(dailySignInRecords.deviceId, deviceId));
+      await tx.delete(pointEarnEvents).where(eq(pointEarnEvents.deviceId, deviceId));
+      await tx.delete(feedbacks).where(eq(feedbacks.deviceId, deviceId));
+      await tx.delete(accountOtp).where(eq(accountOtp.deviceId, deviceId));
+      await tx.delete(usageEvents).where(eq(usageEvents.deviceId, deviceId));
+      await tx.delete(devices).where(eq(devices.deviceId, deviceId));
+    });
+
+    removeUploadDirs(uploadRoot, uploadDirs);
+    return { success: true as const };
   }
 }

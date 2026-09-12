@@ -19,6 +19,7 @@ import {
 } from '@/lib/profile-labels';
 import { ArrowLeft } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 import type { DeviceRecord } from '@/types/admin';
+import { DeleteAccountCard } from '@/components/delete-account-card';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000';
 
@@ -142,6 +143,8 @@ export default async function DeviceProfilePage({
           ))}
         </CardContent>
       </Card>
+
+      <DeleteAccountCard deviceId={deviceId} username={rec.username} />
     </div>
   );
 }
