@@ -1,10 +1,11 @@
 // lumira-server/packages/backend/src/modules/admin/admin.controller.ts
 
-import { Controller, Get, Post, Patch, Body, Param, Query, ParseIntPipe, UseGuards, NotFoundException } from '@nestjs/common';
+import { Controller, Delete, Get, Post, Patch, Body, Param, Query, ParseIntPipe, UseGuards, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { CreateBatchDto } from './dto/create-batch.dto';
 import { ToggleBatchDto } from './dto/toggle-batch.dto';
 import { GrantPointsDto } from './dto/grant-points.dto';
+import { DeleteDeviceDto } from './dto/delete-device.dto';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
 
 @Controller('admin')
@@ -124,5 +125,13 @@ export class AdminController {
     @Body() dto: GrantPointsDto,
   ) {
     return this.adminService.grantPoints(deviceId, dto.delta, dto.reason);
+  }
+
+  @Delete('devices/:deviceId')
+  async deleteDevice(
+    @Param('deviceId') deviceId: string,
+    @Body() dto: DeleteDeviceDto,
+  ) {
+    return this.adminService.deleteDevice(deviceId, dto.loginKey);
   }
 }
