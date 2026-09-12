@@ -6,7 +6,6 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { eq, asc } from 'drizzle-orm';
 import * as fs from 'fs';
 import * as path from 'path';
-import Jimp from 'jimp';
 import sharp from 'sharp';
 import { DatabaseService } from '../../database/database.service';
 import { templateCategories } from '../../database/schema';
@@ -71,12 +70,14 @@ export class ThumbsService {
     const src = await this.findIconFile(key);
     if (!src) throw new NotFoundException('category icon not found');
 
-    // 用纯 JS 的 jimp 缩放（无原生依赖，Docker/CI 零额外安装风险）。
-    // 若原图格式 jimp 不支持（如 webp），捕获异常后回退返回原图。
+    // 与模板缩略图一致使用 sharp，确保 WebP 源图也能正常生成 JPEG 缩略图。
+    // 若图片解码失败，回退返回原图。
     try {
-      const img = await Jimp.read(src);
-      img.resize(width, Jimp.AUTO).quality(JPEG_QUALITY);
-      const buf = await img.getBufferAsync(Jimp.MIME_JPEG);
+      const buf = await sharp(src, { failOn: 'error' })
+        .rotate()
+        .resize({ width, withoutEnlargement: true })
+        .jpeg({ quality: JPEG_QUALITY })
+        .toBuffer();
       try {
         fs.mkdirSync(thumbDir, { recursive: true });
         fs.writeFileSync(thumbFile, buf);
@@ -91,7 +92,7 @@ export class ThumbsService {
 
   /**
    * 预生成某分类的多个宽度缩略图（写链路调用，把生成成本从读请求挪到上传时）。
-   * jimp 不支持的源格式（如 webp）静默跳过，读链路懒生成兜底。
+   * 若源图解码失败，静默跳过，读链路懒生成兑底。
    */
   async templateImage(
     templateId: string,
@@ -143,9 +144,11 @@ export class ThumbsService {
     for (const w of widths) {
       try {
         const width = this.clampWidth(w);
-        const img = await Jimp.read(src);
-        img.resize(width, Jimp.AUTO).quality(JPEG_QUALITY);
-        const buf = await img.getBufferAsync(Jimp.MIME_JPEG);
+        const buf = await sharp(src, { failOn: 'error' })
+          .rotate()
+          .resize({ width, withoutEnlargement: true })
+          .jpeg({ quality: JPEG_QUALITY })
+          .toBuffer();
         fs.mkdirSync(thumbDir, { recursive: true });
         fs.writeFileSync(path.join(thumbDir, `w${width}.jpg`), buf);
       } catch {
