@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,9 @@ interface FormState {
   route: string;
   condition: string;
   imageUrl: string;
+  focusX: number;
+  focusY: number;
+  focusZoom: number;
   templateId: string;
   sortOrder: number;
   isActive: boolean;
@@ -72,6 +76,9 @@ const EMPTY_FORM: FormState = {
   route: '/invite',
   condition: 'nonNewUserNotInvited',
   imageUrl: '',
+  focusX: 0.5,
+  focusY: 0.5,
+  focusZoom: 1,
   templateId: '',
   sortOrder: 0,
   isActive: true,
@@ -137,6 +144,9 @@ export function BannerManager({
       route: b.route,
       condition: b.condition,
       imageUrl: b.imageUrl || '',
+      focusX: b.focusX ?? 0.5,
+      focusY: b.focusY ?? 0.5,
+      focusZoom: b.focusZoom ?? 1,
       templateId: b.templateId || '',
       sortOrder: b.sortOrder,
       isActive: b.isActive === 1,
@@ -216,6 +226,9 @@ export function BannerManager({
       templateId: form.route === '/templates/detail' ? (form.templateId || '') : '',
       // 空串 = 清除配图；未改动时为后端原值，原样传回
       imageUrl: form.imageUrl,
+      focusX: form.focusX,
+      focusY: form.focusY,
+      focusZoom: form.focusZoom,
       sortOrder: Number(form.sortOrder) || 0,
       isActive: form.isActive,
     };
@@ -411,6 +424,10 @@ export function BannerManager({
           {/* App 效果实时预览：7:3 卡片版式 + 配图 contain 完整显示 */}
           <BannerCardPreview
             imageUrl={localObjectUrl || toAssetUrl(form.imageUrl, '')}
+            focusX={form.focusX}
+            focusY={form.focusY}
+            focusZoom={form.focusZoom}
+            onFocusChange={(x, y) => setForm((prev) => ({ ...prev, focusX: x, focusY: y }))}
             tag={form.tag}
             title={form.title}
             subtitle={form.subtitle}
@@ -500,6 +517,28 @@ export function BannerManager({
                 )}
                 <span className="text-xs text-muted-foreground">jpg / png / webp，≤ 2MB</span>
               </div>
+              {form.imageUrl && (
+                <div className="space-y-2 rounded-xl border bg-muted/20 p-3">
+                  <Label>可视区域</Label>
+                  <p className="text-xs text-muted-foreground">
+                    在预览中点击或拖动调整焦点；缩放越大，越适合突出局部主体。
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <span className="w-6 text-xs text-muted-foreground">1x</span>
+                    <input
+                      type="range"
+                      min={1}
+                      max={3}
+                      step={0.05}
+                      value={form.focusZoom}
+                      onChange={(e) => setForm((prev) => ({ ...prev, focusZoom: Number(e.target.value) }))}
+                      className="h-1 flex-1 accent-foreground"
+                      aria-label="背景图缩放"
+                    />
+                    <span className="w-8 text-right font-mono text-xs">{form.focusZoom.toFixed(2)}x</span>
+                  </div>
+                </div>
+              )}
               <p className="text-xs text-muted-foreground">
                 配图在 App 卡片右侧 40% 区域以 contain 方式完整显示（不裁切），两侧留白用同图模糊填充；不上传则展示品牌渐变背景。
               </p>
@@ -698,11 +737,19 @@ export function BannerManager({
  */
 function BannerCardPreview({
   imageUrl,
+  focusX,
+  focusY,
+  focusZoom,
+  onFocusChange,
   tag,
   title,
   subtitle,
 }: {
   imageUrl: string | null;
+  focusX: number;
+  focusY: number;
+  focusZoom: number;
+  onFocusChange: (focusX: number, focusY: number) => void;
   tag: string;
   title: string;
   subtitle: string;
@@ -710,11 +757,22 @@ function BannerCardPreview({
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const hasImage = Boolean(imageUrl);
 
+  const setFocusFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    onFocusChange(
+      Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
+      Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
+    );
+  };
   return (
     <div className="space-y-1.5">
       <div
-        className="relative w-full select-none overflow-hidden rounded-2xl shadow-md"
-        style={{ aspectRatio: '7 / 3' }}
+        className="relative w-full cursor-crosshair select-none overflow-hidden rounded-2xl shadow-md"
+        style={{ aspectRatio: '7 / 3', touchAction: 'none' }}
+        onPointerDown={setFocusFromPointer}
+        onPointerMove={(event) => {
+          if (event.buttons === 1) setFocusFromPointer(event);
+        }}
       >
         {/* 背景渐变（App 端为用户主题色板，此处为代表色） */}
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-700 via-indigo-500 to-violet-400" />
@@ -727,8 +785,34 @@ function BannerCardPreview({
           </>
         )}
 
-        {/* 文案区（左侧 60%） */}
-        <div className="absolute inset-y-0 left-0 flex w-[60%] flex-col justify-center gap-1.5 px-5">
+        {/* 配图：全幅背景，焦点和缩放由运营人员校准 */}
+        {hasImage && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imageUrl ?? ''}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 h-full w-full object-cover"
+              style={{
+                objectPosition: `${focusX * 100}% ${focusY * 100}%`,
+                transform: `scale(${focusZoom})`,
+                transformOrigin: `${focusX * 100}% ${focusY * 100}%`,
+              }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/35 to-black/15" />
+            <div
+              className="absolute h-4 w-4 rounded-full border-2 border-white bg-white/30 shadow-lg"
+              style={{
+                left: `calc(${focusX * 100}% - 8px)`,
+                top: `calc(${focusY * 100}% - 8px)`,
+              }}
+            />
+          </>
+        )}
+
+        {/* 文案区（全幅叠图） */}
+        <div className="absolute inset-y-0 left-0 flex w-full flex-col justify-center gap-1.5 px-5">
           {tag && (
             <span className="w-fit rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold leading-4 text-white">
               {tag}
@@ -742,28 +826,6 @@ function BannerCardPreview({
           </p>
         </div>
 
-        {/* 配图区（右侧 40%）：同图模糊填充 + contain 完整显示 */}
-        {hasImage && (
-          <div className="absolute inset-y-0 right-0 w-[40%] overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={imageUrl ?? ''}
-              alt=""
-              aria-hidden
-              className="absolute inset-0 h-full w-full scale-125 object-cover opacity-60 blur-xl"
-            />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={imageUrl ?? ''}
-              alt="Banner 配图预览"
-              className="absolute inset-0 h-full w-full object-contain"
-              onLoad={(e) => {
-                const img = e.currentTarget;
-                setNatural({ w: img.naturalWidth, h: img.naturalHeight });
-              }}
-            />
-          </div>
-        )}
 
         {/* 右下角箭头圆钮 */}
         <div className="absolute bottom-4 right-4 flex h-7 w-7 items-center justify-center rounded-full bg-white/20">
@@ -774,8 +836,8 @@ function BannerCardPreview({
       <p className="text-xs text-muted-foreground">
         {hasImage
           ? natural
-            ? `原图 ${natural.w} × ${natural.h}（${(natural.w / natural.h).toFixed(2)}:1）· App 卡片 7:3 · 右侧 contain 完整显示不裁切`
-            : 'App 卡片 7:3 · 右侧 contain 完整显示不裁切'
+? `原图 ${natural.w} × ${natural.h}（${(natural.w / natural.h).toFixed(2)}:1）· App 卡片 7:3 · 全幅背景 cover`
+            : 'App 卡片 7:3 · 全幅背景 cover'
           : '未上传配图：App 端展示品牌渐变背景（实际颜色随用户主题变化）'}
       </p>
     </div>

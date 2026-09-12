@@ -360,6 +360,11 @@ export interface BannerAdminItem {
   templateId?: string;
   /** 配图完整 URL（空串 = 无配图） */
   imageUrl: string;
+  /** 背景图焦点：0-1，缺失时 App 居中 */
+  focusX?: number;
+  focusY?: number;
+  /** 背景图缩放：1-3，缺失时 App 使用 1 */
+  focusZoom?: number;
   condition: string;
   isActive: number;
   sortOrder: number;
@@ -378,6 +383,9 @@ export interface BannerPayload {
   templateId?: string;
   /** 配图 URL：空串清除配图 */
   imageUrl?: string;
+  focusX?: number;
+  focusY?: number;
+  focusZoom?: number;
   condition?: string;
   isActive?: boolean;
   sortOrder?: number;
