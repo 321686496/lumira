@@ -1,8 +1,5 @@
 // 生图异步任务轮询工具（step-cover 手动生成 + wizard 全自动 复用）。
 // 后端提交返回 taskId 后，这里以固定间隔轮询状态直到 done/error/超时，避免同步长请求撑爆 Vercel serverless。
-
-'use client';
-
 import { aiGenerateImageBatchStartAction, aiGenerateImageStatusAction, aiGenerateSilhouetteStatusAction } from '@/actions/ai';
 import { aiGenerateSilhouetteStartAction } from '@/actions/ai';
 import type { AiImageStatusResult, AiSilhouetteStatusResult } from '@/types/admin';
