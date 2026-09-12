@@ -328,7 +328,7 @@ describe('normalizeDraft', () => {
     const joined = warnings.join('\n');
 
     // exposureCompensation 夹取到 3 + warning
-    expect(draft.camera.exposureCompensation).toBe(3);
+    expect((draft.camera as { exposureCompensation: number }).exposureCompensation).toBe(3);
     expect(joined).toContain('camera.exposureCompensation');
     expect(joined).toContain('[-3, 3]');
 

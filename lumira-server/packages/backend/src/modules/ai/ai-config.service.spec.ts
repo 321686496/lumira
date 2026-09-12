@@ -174,7 +174,7 @@ describe('AiConfigService — textModel', () => {
   it('test() 默认测试全部目标，文本回退视觉模型，剪影回退生图端点', async () => {
     const service = new AiConfigService(readonlyDb(row()));
     const result = await service.test();
-    expect(result.vision.ok).toBe(true);
+    expect(result.vision?.ok).toBe(true);
     expect(result.text?.ok).toBe(true);
     expect(result.image?.ok).toBe(true);
     expect(result.silhouette?.ok).toBe(true);
@@ -250,7 +250,7 @@ describe('AiConfigService — textModel', () => {
     textChatMock.mockRejectedValue(new Error('boom'));
     const service = new AiConfigService(readonlyDb(row({ textModel: 'qwen-plus' })));
     const result = await service.test();
-    expect(result.vision.ok).toBe(true);
+    expect(result.vision?.ok).toBe(true);
     expect(result.text?.ok).toBe(false);
     expect(result.text?.error).toBe('boom');
   });
@@ -259,7 +259,7 @@ describe('AiConfigService — textModel', () => {
     generateImageMock.mockRejectedValueOnce(new Error('image boom'));
     const service = new AiConfigService(readonlyDb(row()));
     const result = await service.test();
-    expect(result.vision.ok).toBe(true);
+    expect(result.vision?.ok).toBe(true);
     expect(result.text?.ok).toBe(true);
     expect(result.image?.ok).toBe(false);
     expect(result.image?.error).toBe('image boom');
