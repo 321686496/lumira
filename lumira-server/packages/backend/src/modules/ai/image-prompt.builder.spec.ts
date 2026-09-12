@@ -164,7 +164,10 @@ describe('buildImagePrompt', () => {
   });
 
   test('单姿势模式：使用选中 pose，忽略全局数量/多姿势描述', () => {
-    const base = fullDraft();
+    const base = fullDraft() as Record<string, unknown> & {
+      meta: Record<string, unknown>;
+      composition: Record<string, unknown>;
+    };
     const draft = {
       ...base,
       ...fullDraft(),
