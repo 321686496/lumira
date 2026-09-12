@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm, Controller, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -390,7 +390,7 @@ export default function TemplateForm({
   /** 表单容器 ref：校验失败时滚回表单（用户可能停留在向导说明区） */
   const formContainerRef = React.useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>(() => {
     if (templateId && initial?.images) {
@@ -1014,14 +1014,30 @@ export default function TemplateForm({
       fd.set('silhouette', firstSilhouetteFile);
     }
 
-    startTransition(async () => {
+    setIsPending(true);
+    try {
       const result = isEdit
         ? await updateTemplate(templateId as string, fd)
         : await createTemplate(fd);
       if (result?.error) {
         setError(result.error);
+        toast({
+          variant: 'destructive',
+          title: isEdit ? '保存修改失败' : '创建模板失败',
+          description: result.error,
+        });
       }
-    });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
+      toast({
+        variant: 'destructive',
+        title: isEdit ? '保存修改失败' : '创建模板失败',
+        description: message,
+      });
+    } finally {
+      setIsPending(false);
+    }
   };
 
   /**
@@ -1083,7 +1099,10 @@ export default function TemplateForm({
         : p)));
     }
     if (typeof aiInjection.isActive === 'boolean') setValue('isActive', aiInjection.isActive);
-    if (aiInjection.autoSubmit) submitRef.current?.();
+    if (aiInjection.autoSubmit) {
+      const timer = setTimeout(() => submitRef.current?.(), 0);
+      return () => clearTimeout(timer);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiInjection?.stamp]);
 

@@ -34,6 +34,8 @@ const GRAIN_STRONG_THRESHOLD = 30;
 /** 空草稿（无任何可用字段）兜底 prompt */
 const FALLBACK_PROMPT = '一张 3:4 竖构图的人像摄影作品，自然光线，柔和氛围，画面干净通透';
 
+const INCONSISTENT_POSE_PROMPT_PATTERN = /(不同场景|不同人物|不同造型|不同风格|不需要保持一致|可以不一致|允许不一致)/;
+
 // ===== 基础工具（与 normalize.ts 同款口径，模块私有） =====
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -71,6 +73,7 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
   const postProcess = isPlainObject(draft.postProcess) ? draft.postProcess : {};
   const classification = isPlainObject(meta.classification) ? meta.classification : {};
   const isSinglePose = draft.singlePose === true;
+  const consistency = isPlainObject(draft.consistency) ? draft.consistency : {};
   const rawPose = Array.isArray(draft.pose)
     ? (isPlainObject(draft.pose[0]) ? draft.pose[0] : undefined)
     : isPlainObject(draft.pose)
@@ -156,6 +159,13 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
 
   // ⑧ 额外要求：用户显式补充的附加提示词（Step3 输入），置于末尾权重最高
   const extra = typeof extraPrompt === 'string' ? extraPrompt.trim() : '';
+  const allowInconsistentPose =
+    consistency.mode === 'loose' || (extra.length > 0 && INCONSISTENT_POSE_PROMPT_PATTERN.test(extra));
+  if (isSinglePose && !allowInconsistentPose) {
+    segments.push(
+      '同一套模板的连续拍摄：保持同一人物的长相、服装、发型、体型，以及场景、道具、光线和摄影风格一致；本张只改变姿势',
+    );
+  }
   if (extra) segments.push(`额外要求：${extra}`);
 
   if (segments.length === 0) return FALLBACK_PROMPT;
