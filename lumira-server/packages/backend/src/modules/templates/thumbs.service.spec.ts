@@ -44,4 +44,41 @@ describe('ThumbsService template variants', () => {
       service.templateImage('srv_test', '../other/image_0.png', '220'),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('generates and caches category thumbnails from a webp source', async () => {
+    const sourceDir = path.join(uploadDir, 'categories', 'cat_test');
+    fs.mkdirSync(sourceDir, { recursive: true });
+    await sharp({
+      create: { width: 300, height: 200, channels: 3, background: 'blue' },
+    })
+      .webp()
+      .toFile(path.join(sourceDir, 'icon.webp'));
+
+    const dbService = {
+      getDb: () => ({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              orderBy: () => ({
+                limit: async () => [
+                  { iconUrl: '/uploads/categories/cat_test/icon.webp' },
+                ],
+              }),
+            }),
+          }),
+        }),
+      }),
+    };
+    service = new ThumbsService(dbService as never);
+
+    const first = await service.categoryIcon('cat_test', 200);
+    expect(first.type).toBe('image/jpeg');
+    expect((await sharp(first.data).metadata()).width).toBe(200);
+    expect(
+      fs.existsSync(path.join(uploadDir, 'thumbs', 'categories', 'cat_test', 'w200.jpg')),
+    ).toBe(true);
+
+    const second = await service.categoryIcon('cat_test', 200);
+    expect(second.data.equals(first.data)).toBe(true);
+  });
 });
