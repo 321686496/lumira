@@ -28,7 +28,7 @@ describe('AiImageTaskService', () => {
   });
 
   async function waitStatus(id: string, status: string): Promise<void> {
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 500; i++) {
       if (service.get(id)?.status === status) return;
       await new Promise((r) => setTimeout(r, 2));
     }
@@ -107,5 +107,19 @@ describe('AiImageTaskService', () => {
     expect(service.get(tasks[0].taskId)?.error).toBe('生图失败');
     expect(service.get(tasks[1].taskId)?.error).toContain('锚点');
     expect(service.get(tasks[2].taskId)?.error).toContain('锚点');
+  });
+
+  it('批量姿势任务：限流等瞬时失败自动重试', async () => {
+    getActiveConfigMock.mockResolvedValue({} as never);
+    generateMock
+      .mockResolvedValueOnce({ base64: 'YW5jaG9y', mimeType: 'image/png' })
+      .mockRejectedValueOnce(new Error('AI 上游错误（HTTP 429）：rate limited'))
+      .mockResolvedValue({ base64: 'cG9zZQ==', mimeType: 'image/png' });
+    const draft = { pose: [{ index: 0 }, { index: 1 }] };
+
+    const { tasks } = await service.submitBatch(undefined, JSON.stringify(draft));
+
+    await Promise.all(tasks.map(({ taskId }) => waitStatus(taskId, 'done')));
+    expect(generateMock).toHaveBeenCalledTimes(3);
   });
 });
