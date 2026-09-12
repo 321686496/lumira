@@ -3,7 +3,7 @@
 // 后台执行生图；前端轮询状态。任务存在内存 Map（单容器、结果瞬态；重启丢失由前端针对
 // "任务不存在" 给出可重试提示）。仅生图改异步，识别/剪影保持同步。
 
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { BadRequestException, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { nanoid } from 'nanoid';
 import { UploadFile } from '../templates/admin-templates.service';
 import { AiConfigService } from './ai-config.service';
@@ -15,6 +15,13 @@ export interface ImageTask {
   id: string;
   status: ImageTaskStatus;
   createdAt: number;
+  /** 批量姿势任务依赖信息；单任务为空 */
+  batch?: {
+    metaJson: string;
+    extraPrompt?: string | null;
+    dependencyTaskId?: string;
+    dependents?: string[];
+  };
   /** 仅 done 时存在 */
   result?: { image: string; mimeType: string };
   /** 仅 error 时存在 */
@@ -63,6 +70,81 @@ export class AiImageTaskService implements OnModuleDestroy {
     return { taskId: id };
   }
 
+  /**
+   * 批量姿势任务：先提交首张锚点，锚点完成后由后端用内存中的锚点图启动剩余任务，
+   * 避免浏览器把已生成图片经 Server Action 回传造成的中断。
+   */
+  async submitBatch(
+    reference: UploadFile | undefined,
+    metaJson: string | null,
+    extraPrompt?: string | null,
+  ): Promise<{ tasks: Array<{ index: number; taskId: string }> }> {
+    await this.aiConfigService.getActiveConfig();
+
+    let draft: Record<string, unknown> = {};
+    if (metaJson) {
+      try {
+        draft = JSON.parse(metaJson);
+      } catch {
+        throw new BadRequestException('meta 不是合法的 JSON，请检查草稿数据');
+      }
+    }
+    if (!draft || typeof draft !== 'object' || Array.isArray(draft)) {
+      throw new BadRequestException('meta 不是合法的模板草稿');
+    }
+
+    const rawPose = draft.pose;
+    const poses = Array.isArray(rawPose)
+      ? rawPose.filter((pose): pose is Record<string, unknown> => (
+          typeof pose === 'object' && pose !== null && !Array.isArray(pose)
+        ))
+      : rawPose && typeof rawPose === 'object' && !Array.isArray(rawPose)
+        ? [rawPose]
+        : [];
+    const targets = poses.length > 0 ? poses : [undefined];
+
+    if (targets.length <= 1) {
+      const taskMeta = targets[0] === undefined
+        ? metaJson
+        : JSON.stringify({ ...draft, pose: targets[0], singlePose: true, consistency: { mode: 'strict' } });
+      const { taskId } = await this.submit(reference, taskMeta, extraPrompt);
+      return { tasks: [{ index: 0, taskId }] };
+    }
+
+    const taskIds: string[] = [];
+    targets.forEach((_, index) => {
+      const id = `img_${nanoid(16)}`;
+      this.tasks.set(id, { id, status: 'pending', createdAt: Date.now() });
+      taskIds.push(id);
+    });
+
+    targets.forEach((pose, index) => {
+      const task = this.tasks.get(taskIds[index]!);
+      if (!task) return;
+      task.batch = {
+        metaJson: JSON.stringify({
+          ...draft,
+          pose,
+          singlePose: true,
+          consistency: index === 0
+            ? { mode: 'strict' }
+            : { mode: 'strict', anchor: 'first' },
+        }),
+        extraPrompt,
+        dependencyTaskId: index === 0 ? undefined : taskIds[0],
+        dependents: index === 0 ? taskIds.slice(1) : undefined,
+      };
+    });
+
+    const anchor = this.tasks.get(taskIds[0]!);
+    if (!anchor?.batch) throw new Error('批量姿势任务初始化失败');
+    void this.run(taskIds[0]!, reference, anchor.batch.metaJson, anchor.batch.extraPrompt);
+
+    return {
+      tasks: taskIds.map((taskId, index) => ({ index, taskId })),
+    };
+  }
+
   /** 后台执行（复用 AiGenerateImageService.generate，内部已有各类超时兜底，不会无限挂起） */
   private async run(
     id: string,
@@ -77,9 +159,43 @@ export class AiImageTaskService implements OnModuleDestroy {
       const r = await this.aiGenerateImageService.generate(reference, metaJson, extraPrompt);
       task.status = 'done';
       task.result = { image: r.base64, mimeType: r.mimeType };
+      void this.startDependents(id);
     } catch (err) {
       task.status = 'error';
       task.error = (err as Error)?.message || '生图失败，请重试';
+      this.failDependents(id, task.error);
+    }
+  }
+
+  private startDependents(taskId: string): void {
+    const anchor = this.tasks.get(taskId);
+    const dependents = anchor?.batch?.dependents ?? [];
+    for (const dependentId of dependents) {
+      const dependent = this.tasks.get(dependentId);
+      const batch = dependent?.batch;
+      if (!dependent || !batch) continue;
+      if (!anchor?.result) {
+        dependent.status = 'error';
+        dependent.error = '首张锚点姿势图生成失败';
+        continue;
+      }
+      const reference: UploadFile = {
+        buffer: Buffer.from(anchor.result.image, 'base64'),
+        filename: 'anchor.png',
+        mimetype: anchor.result.mimeType,
+      };
+      void this.run(dependentId, reference, batch.metaJson, batch.extraPrompt);
+    }
+  }
+
+  private failDependents(taskId: string, error: string): void {
+    const anchor = this.tasks.get(taskId);
+    const dependents = anchor?.batch?.dependents ?? [];
+    for (const dependentId of dependents) {
+      const dependent = this.tasks.get(dependentId);
+      if (!dependent || dependent.status === 'done') continue;
+      dependent.status = 'error';
+      dependent.error = '首张锚点姿势图生成失败，已停止后续生成';
     }
   }
 

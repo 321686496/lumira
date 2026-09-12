@@ -14,6 +14,7 @@ import type {
   AiConfigTestResult,
   AiAnalyzeResult,
   AiImageResult,
+  AiImageBatchTaskId,
   AiImageTaskId,
   AiImageStatusResult,
   AiSilhouetteTaskId,
@@ -73,6 +74,18 @@ export async function aiGenerateImageStartAction(
 ): Promise<AiImageTaskId | { error: string }> {
   try {
     return await api.aiGenerateImageStart(formData);
+  } catch (e) {
+    if (e instanceof UnauthenticatedError) redirect('/login');
+    return { error: (e as Error).message };
+  }
+}
+
+/** 批量提交姿势生图任务：后端先生成首张锚点，再启动其余任务 */
+export async function aiGenerateImageBatchStartAction(
+  formData: FormData,
+): Promise<AiImageBatchTaskId | { error: string }> {
+  try {
+    return await api.aiGenerateImageBatchStart(formData);
   } catch (e) {
     if (e instanceof UnauthenticatedError) redirect('/login');
     return { error: (e as Error).message };

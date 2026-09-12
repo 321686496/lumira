@@ -6,6 +6,7 @@ import { ServiceUnavailableException } from '@nestjs/common';
 import { AiImageTaskService } from './ai-image-task.service';
 import { AiGenerateImageService } from './ai-generate-image.service';
 import { AiConfigService } from './ai-config.service';
+import type { UploadFile } from '../templates/admin-templates.service';
 
 describe('AiImageTaskService', () => {
   let service: AiImageTaskService;
@@ -68,5 +69,43 @@ describe('AiImageTaskService', () => {
 
   it('get 不存在的 taskId 返回 null', () => {
     expect(service.get('img_nope')).toBeNull();
+  });
+
+  it('批量姿势任务：首张完成后用锚点结果启动剩余任务', async () => {
+    getActiveConfigMock.mockResolvedValue({} as never);
+    generateMock.mockImplementation(async (_reference, metaJson: string) => {
+      const meta = JSON.parse(metaJson);
+      if (meta.consistency?.anchor !== 'first') {
+        return { base64: 'YW5jaG9y', mimeType: 'image/png' };
+      }
+      return { base64: 'cG9zZQ==', mimeType: 'image/png' };
+    });
+    const draft = { pose: [{ index: 0 }, { index: 1 }, { index: 2 }] };
+
+    const { tasks } = await service.submitBatch(undefined, JSON.stringify(draft));
+
+    expect(tasks).toHaveLength(3);
+    await Promise.all(tasks.map(({ taskId }) => waitStatus(taskId, 'done')));
+    expect(generateMock).toHaveBeenCalledTimes(3);
+
+    const calls = generateMock.mock.calls as Array<[UploadFile | undefined, string]>;
+    const anchorBuffer = calls[1][0]?.buffer;
+    expect(anchorBuffer?.toString('base64')).toBe('YW5jaG9y');
+    expect(calls[1][0]?.buffer.equals(anchorBuffer!)).toBe(true);
+    expect(calls[2][0]?.buffer.equals(anchorBuffer!)).toBe(true);
+  });
+
+  it('批量姿势任务：首张锚点失败时停止剩余任务', async () => {
+    getActiveConfigMock.mockResolvedValue({} as never);
+    generateMock.mockRejectedValue(new Error('生图失败'));
+    const draft = { pose: [{ index: 0 }, { index: 1 }, { index: 2 }] };
+
+    const { tasks } = await service.submitBatch(undefined, JSON.stringify(draft));
+
+    await Promise.all(tasks.map(({ taskId }) => waitStatus(taskId, 'error')));
+    expect(generateMock).toHaveBeenCalledTimes(1);
+    expect(service.get(tasks[0].taskId)?.error).toBe('生图失败');
+    expect(service.get(tasks[1].taskId)?.error).toContain('锚点');
+    expect(service.get(tasks[2].taskId)?.error).toContain('锚点');
   });
 });
