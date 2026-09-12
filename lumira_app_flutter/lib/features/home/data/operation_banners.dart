@@ -146,7 +146,11 @@ OperationBanner? operationBannerFromJson(Map<String, dynamic> json) {
   final subtitle = json['subtitle'];
   final tag = json['tag'];
   final route = json['route'];
-  if (id is! String || title is! String || subtitle is! String || tag is! String || route is! String) {
+  if (id is! String ||
+      title is! String ||
+      subtitle is! String ||
+      tag is! String ||
+      route is! String) {
     return null;
   }
   if (!kOperationBannerRoutes.contains(route)) return null;
@@ -167,8 +171,13 @@ OperationBanner? operationBannerFromJson(Map<String, dynamic> json) {
   final focusY = _clampDouble(json['focusY'], 0, 1, 0.5);
   final focusZoom = _clampDouble(json['focusZoom'], 1, 3, 1.0);
   return OperationBanner(
-    id: id, title: title, subtitle: subtitle, tag: tag,
-    route: route, condition: condition, imageUrl: imageUrl,
+    id: id,
+    title: title,
+    subtitle: subtitle,
+    tag: tag,
+    route: route,
+    condition: condition,
+    imageUrl: imageUrl,
     focusX: focusX,
     focusY: focusY,
     focusZoom: focusZoom,
@@ -197,9 +206,10 @@ OperationBanner? matchOperationBanner({
 /// 传递：非空时卡片右侧 40% 区域 contain 完整显示，空时品牌渐变背景。
 HomeBannerItem operationBannerToItem(OperationBanner banner) {
   // route=/templates/detail 且携带目标模板 id 时，拼出模板详情页完整跳转路由
-  final route = (banner.route == '/templates/detail' && banner.templateId != null)
-      ? '/templates/detail?templateId=${banner.templateId}'
-      : banner.route;
+  final route =
+      (banner.route == '/templates/detail' && banner.templateId != null)
+          ? '/templates/detail?templateId=${banner.templateId}'
+          : banner.route;
   return HomeBannerItem(
     id: banner.id,
     title: banner.title,

@@ -341,6 +341,7 @@ class CachedNetworkImage extends StatefulWidget {
     this.fallbackUrl,
     this.loader,
     this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
     this.width,
     this.height,
     this.cacheWidth,
@@ -360,6 +361,7 @@ class CachedNetworkImage extends StatefulWidget {
   final Future<Uint8List?> Function(String url)? loader;
 
   final BoxFit fit;
+  final AlignmentGeometry alignment;
 
   /// 展示尺寸（非必填，未传时由父布局约束决定）
   final double? width;
@@ -494,6 +496,7 @@ class _CachedNetworkImageState extends State<CachedNetworkImage> {
         Widget image = Image.memory(
           _bytes!,
           fit: widget.fit,
+          alignment: widget.alignment,
           width: widget.width,
           height: widget.height,
           cacheWidth: cw,

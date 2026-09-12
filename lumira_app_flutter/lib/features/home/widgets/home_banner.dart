@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -112,9 +111,7 @@ class _HomeBannerState extends ConsumerState<HomeBanner>
     _bannerCount = count;
     final old = _controller;
     _current = (count * _kRepeat) ~/ 2;
-    _controller = count > 0
-        ? PageController(initialPage: _current)
-        : null;
+    _controller = count > 0 ? PageController(initialPage: _current) : null;
     old?.dispose();
     _restartTimer(count);
   }
@@ -209,8 +206,9 @@ class _HomeBannerState extends ConsumerState<HomeBanner>
         return _buildCarousel(banners, tokens);
       },
       data: (banners) {
-        final list =
-            banners.isEmpty ? <HomeBannerItem>[HomeMockData.banners.first] : banners;
+        final list = banners.isEmpty
+            ? <HomeBannerItem>[HomeMockData.banners.first]
+            : banners;
         _initController(list.length);
         return _buildCarousel(list, tokens);
       },
@@ -320,7 +318,8 @@ class _LoadingPlaceholder extends StatelessWidget {
 }
 
 class _BannerCard extends StatelessWidget {
-  const _BannerCard({required this.banner, required this.tokens, required this.onTap});
+  const _BannerCard(
+      {required this.banner, required this.tokens, required this.onTap});
   final HomeBannerItem banner;
   final ThemeTokens tokens;
   final VoidCallback onTap;
@@ -331,6 +330,10 @@ class _BannerCard extends StatelessWidget {
     // 运营位配图：右侧 40% 区域 contain 完整显示（不裁切），底层同图模糊填充；
     // 模板类封面仍走全幅 cover + 暗色遮罩
     final opImage = banner.type == BannerType.operation && hasCover;
+    final focusAlignment = Alignment(
+      (banner.focusX * 2 - 1).clamp(-1.0, 1.0),
+      (banner.focusY * 2 - 1).clamp(-1.0, 1.0),
+    );
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -351,20 +354,33 @@ class _BannerCard extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (opImage) ...[
-              // 运营位配图：渐变打底 + 左文右图（3:2 分栏）
-              _buildGradientBackground(),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: _buildTextColumn(),
-                    ),
+              Transform.scale(
+                scale: banner.focusZoom,
+                alignment: focusAlignment,
+                child: TemplateCoverImage(
+                  cover: banner.cover,
+                  coverData: banner.coverData,
+                  fit: BoxFit.cover,
+                  alignment: focusAlignment,
+                  fallback: _buildGradientBackground(),
+                  thumbWidth: 1080,
+                ),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.25),
+                      Colors.black.withOpacity(0.55),
+                    ],
                   ),
-                  Expanded(flex: 2, child: _buildOperationImage()),
-                ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: _buildTextColumn(),
               ),
             ] else if (hasCover) ...[
               // 模板类封面：全幅 cover + 暗色遮罩保证文字可读
@@ -496,37 +512,6 @@ class _BannerCard extends StatelessWidget {
   }
 
   /// 运营配图区（卡片右侧 40%）：
-  /// 底层同图 cover + 模糊铺底（填充 contain 两侧留白），上层 contain 完整显示不裁切
-  Widget _buildOperationImage() {
-    return ClipRect(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-            child: Transform.scale(
-              scale: 1.3,
-              child: TemplateCoverImage(
-                cover: banner.cover,
-                coverData: banner.coverData,
-                fit: BoxFit.cover,
-                fallback: const SizedBox.shrink(),
-                thumbWidth: 480,
-              ),
-            ),
-          ),
-          TemplateCoverImage(
-            cover: banner.cover,
-            coverData: banner.coverData,
-            fit: BoxFit.contain,
-            fallback: const SizedBox.shrink(),
-            thumbWidth: 480,
-          ),
-        ],
-      ),
-    );
-  }
-
   /// 品牌渐变背景（无封面图时使用）
   Widget _buildGradientBackground() {
     return Container(
