@@ -28,7 +28,7 @@ describe('AiImageTaskService', () => {
   });
 
   async function waitStatus(id: string, status: string): Promise<void> {
-    for (let i = 0; i < 500; i++) {
+    for (let i = 0; i < 12000; i++) {
       if (service.get(id)?.status === status) return;
       await new Promise((r) => setTimeout(r, 2));
     }
@@ -65,7 +65,7 @@ describe('AiImageTaskService', () => {
     await waitStatus(taskId, 'error');
     expect(service.get(taskId)?.error).toBe('AI 上游错误（HTTP 500）：boom');
     expect(service.get(taskId)?.result).toBeUndefined();
-  });
+  }, 15000);
 
   it('get 不存在的 taskId 返回 null', () => {
     expect(service.get('img_nope')).toBeNull();

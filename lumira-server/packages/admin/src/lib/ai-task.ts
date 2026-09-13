@@ -9,7 +9,7 @@ import { compressImage } from '@/lib/image-compress';
 export class AiTaskPollError extends Error {}
 
 const DEFAULT_INTERVAL_MS = 2000;
-const DEFAULT_TIMEOUT_MS = 180_000;
+const DEFAULT_TIMEOUT_MS = 600_000;
 
 function sleep(intervalMs: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, intervalMs));
