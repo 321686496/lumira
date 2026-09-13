@@ -17,6 +17,10 @@ const nextConfig = {
             key: 'Cache-Control',
             value: 'private, no-store, must-revalidate',
           },
+          {
+            key: 'Clear-Site-Data',
+            value: '"cache"',
+          },
         ],
       },
     ];
