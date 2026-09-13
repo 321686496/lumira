@@ -69,6 +69,8 @@ export function AiCreateWizard({
   const [maxStep, setMaxStep] = useState(1);
   const [exampleFile, setExampleFile] = useState<File | null>(null);
   const [exampleUrl, setExampleUrl] = useState<string | null>(null);
+  const [poseReferenceFile, setPoseReferenceFile] = useState<File | null>(null);
+  const [poseReferenceUrl, setPoseReferenceUrl] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
   /** 模板表单当前实际效果图列表；剪影必须以此为准，避免继续使用已废弃的 Step3 候选缓存 */
@@ -142,6 +144,8 @@ export function AiCreateWizard({
     setInjection(null);
     setFormActivated(false);
     setAutoState(null);
+    setPoseReferenceFile(null);
+    setPoseReferenceUrl(null);
     setStep(1);
     setMaxStep(1);
   };
@@ -297,7 +301,7 @@ export function AiCreateWizard({
       };
       const poseResults = await generateAiPoseImages({
         draft: draftLocal,
-        exampleFile,
+        referenceFile: poseReferenceFile ?? exampleFile,
         onResult: appendGeneratedPose,
       });
       const poseFiles = poseResults
@@ -610,6 +614,12 @@ export function AiCreateWizard({
         {step === 3 && (
           <StepCover
             exampleFile={exampleFile}
+            referenceFile={poseReferenceFile}
+            referenceUrl={poseReferenceUrl}
+            onReferenceChange={(file, url) => {
+              setPoseReferenceFile(file);
+              setPoseReferenceUrl(url);
+            }}
             draft={draft}
             candidates={candidates}
             setCandidates={setCandidates}
