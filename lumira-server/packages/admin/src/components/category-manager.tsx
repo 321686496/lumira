@@ -36,6 +36,7 @@ import {
   createCategory, updateCategory, deleteCategory, toggleCategoryActive,
 } from '@/actions/categories';
 import { buildCategoryTree } from '@/lib/category-tree';
+import { compressImage } from '@/lib/image-compress';
 import { toAssetUrl, toCategoryThumbUrl } from '@/lib/asset-url';
 import type { TemplateCategory, TemplateCategoryTreeNode } from '@/types/admin';
 
@@ -49,6 +50,8 @@ interface FlatRow {
 
 /** 树的最大递归深度（三级分类 + 余量）。超过即截断，防止异常数据导致栈溢出。 */
 const MAX_TREE_DEPTH = 8;
+
+const CATEGORY_ICON_UPLOAD_BYTES = 3 * 1024 * 1024;
 
 /** 将树扁平化为带缩进层级的行，跳过折叠节点的子级，并计算树形连接线信息。 */
 function flattenTree(
@@ -213,6 +216,24 @@ export function CategoryManager({
   const [deletePending, startDeleteTransition] = useTransition();
   const [reorderKey, setReorderKey] = useState<string | null>(null);
   const [reorderPending, startReorderTransition] = useTransition();
+
+  const handleIconFile = async (file: File | null) => {
+    if (!file) {
+      setIconFile(null);
+      return;
+    }
+
+    try {
+      const compressed = await compressImage(file, {
+        maxDim: 1440,
+        quality: 0.88,
+        maxBytes: CATEGORY_ICON_UPLOAD_BYTES,
+      });
+      setIconFile(compressed);
+    } catch {
+      setIconFile(file);
+    }
+  };
 
   // 打开新建对话框
   const openCreate = () => {
@@ -917,8 +938,8 @@ export function CategoryManager({
                 accept="image/*"
                 maxSize={10 * 1024 * 1024}
                 value={iconFile}
-                onChange={setIconFile}
-                hint="建议 10MB 以内的 png/svg/jpg；一二级分类的图标会作为封面展示，为空时使用默认占位。"
+                onChange={handleIconFile}
+                hint="支持 10MB 以内的 jpg/png/webp；上传前会自动压缩到约 3MB。SVG 和一二级分类的封面会保持矢量。"
                 previewUrl={
                   editingKey
                     ? toAssetUrl(editingCat?.iconUrl, backendUrl) || undefined
