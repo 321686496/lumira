@@ -32,7 +32,7 @@ export interface ImageTask {
 const RESULT_TTL_MS = 15 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 60 * 1000;
 const DEPENDENT_CONCURRENCY = 5;
-const GENERATE_RETRY_LIMIT = 3;
+const GENERATE_RETRY_LIMIT = 4;
 
 @Injectable()
 export class AiImageTaskService implements OnModuleDestroy {
@@ -183,7 +183,7 @@ export class AiImageTaskService implements OnModuleDestroy {
         const message = (err as Error)?.message || '';
         const retryable = /HTTP 429|HTTP 5\d\d|超时|无法连接/.test(message);
         if (!retryable || attempt >= GENERATE_RETRY_LIMIT) break;
-        await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+        await new Promise((resolve) => setTimeout(resolve, attempt * attempt * 1000));
       }
     }
     throw lastError instanceof Error ? lastError : new Error('生图失败，请重试');
