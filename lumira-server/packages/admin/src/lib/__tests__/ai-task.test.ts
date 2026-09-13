@@ -100,7 +100,25 @@ describe('generateAiPoseImages', () => {
     const meta = JSON.parse(formData?.get('meta') as string);
     expect(meta.pose).toHaveLength(3);
     expect(meta.consistency).toEqual({ mode: 'strict' });
+    expect(formData?.get('reference')).toBeNull();
     expect(results.map((result) => result.index)).toEqual([0, 1, 2]);
+  });
+
+  it('提交指定姿势参考图时传给后端', async () => {
+    const draft = { pose: [{ index: 0 }] };
+    batchStartMock.mockResolvedValue({ tasks: [{ index: 0, taskId: 'task-0' }] });
+    statusMock.mockResolvedValue({
+      taskId: 'task-0',
+      status: 'done' as const,
+      image: 'aGVsbG8=',
+      mimeType: 'image/png',
+    });
+    const reference = new File(['reference'], 'pose.png', { type: 'image/png' });
+
+    await generateAiPoseImages({ draft, referenceFile: reference });
+
+    const formData = batchStartMock.mock.calls[0]?.[0];
+    expect(formData?.get('reference')).toBe(reference);
   });
 
   it('批量提交失败时抛出错误并停止轮询', async () => {

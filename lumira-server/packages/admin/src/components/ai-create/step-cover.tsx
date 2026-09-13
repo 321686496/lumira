@@ -4,10 +4,11 @@
 'use client';
 
 import type { Dispatch, SetStateAction } from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { generateAiPoseImages } from '@/lib/ai-task';
@@ -17,6 +18,7 @@ import { ArrowLeft } from '@phosphor-icons/react/dist/csr/ArrowLeft';
 import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
 import { X } from '@phosphor-icons/react/dist/csr/X';
 import { cn } from '@/lib/utils';
+import { compressImage } from '@/lib/image-compress';
 
 export interface CoverCandidate {
   id: string;
@@ -27,6 +29,9 @@ export interface CoverCandidate {
 
 export function StepCover({
   exampleFile,
+  referenceFile,
+  referenceUrl,
+  onReferenceChange,
   draft,
   candidates,
   setCandidates,
@@ -34,6 +39,9 @@ export function StepCover({
   onApply,
 }: {
   exampleFile: File | null;
+  referenceFile: File | null;
+  referenceUrl: string | null;
+  onReferenceChange: (file: File | null, url: string | null) => void;
   draft: Record<string, unknown> | null;
   candidates: CoverCandidate[];
   setCandidates: Dispatch<SetStateAction<CoverCandidate[]>>;
@@ -44,6 +52,7 @@ export function StepCover({
   const [generating, setGenerating] = useState(false);
   /** 附加提示词：拼接到后端合成 prompt 末尾（用户对封面图的额外要求，权重最高） */
   const [extraPrompt, setExtraPrompt] = useState('');
+  const referenceInputRef = useRef<HTMLInputElement>(null);
 
   const disabled = busy || generating;
 
@@ -69,7 +78,7 @@ export function StepCover({
     try {
       const results = await generateAiPoseImages({
         draft,
-        exampleFile,
+        referenceFile: referenceFile ?? exampleFile,
         extraPrompt,
         onResult: (result) => {
           if (!result.file) return;
@@ -143,6 +152,70 @@ export function StepCover({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="ai-pose-reference">姿势参考图（可选）</Label>
+          <p className="text-xs text-muted-foreground">
+            可上传一张姿势参考图，或点击候选图「设为参考」。生成时第一张会以它为基准，后续姿势自动用第一张结果保持人物与场景一致。
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={disabled}
+              onClick={() => referenceInputRef.current?.click()}
+            >
+              <ImageSquare size={14} className="mr-1" />
+              选择参考图
+            </Button>
+            {referenceFile && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={disabled}
+                onClick={() => {
+                  onReferenceChange(null, null);
+                  if (referenceInputRef.current) referenceInputRef.current.value = '';
+                }}
+              >
+                清除参考
+              </Button>
+            )}
+            {referenceUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={referenceUrl}
+                alt="姿势参考图"
+                className="h-20 w-16 rounded-md border object-cover"
+              />
+            )}
+          </div>
+          <Input
+            id="ai-pose-reference"
+            ref={referenceInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            disabled={busy}
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              if (!file) return;
+              if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+                toast({ variant: 'destructive', title: '格式不支持', description: '参考图仅支持 jpg / png / webp' });
+                return;
+              }
+              const compressed = await compressImage(file, {
+                maxDim: 1280,
+                quality: 0.8,
+                maxBytes: 512 * 1024,
+              });
+              onReferenceChange(compressed, URL.createObjectURL(compressed));
+              if (event.target) event.target.value = '';
+            }}
+          />
+        </div>
+
         <div className="flex flex-wrap gap-3">
           <Button variant="outline" size="sm" disabled={!exampleFile || disabled} onClick={rollExampleToTop}>
             <ImageSquare size={14} className="mr-1" /> 用示例图（置顶）
@@ -210,6 +283,14 @@ export function StepCover({
                     </button>
                   </div>
                   <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      className="rounded px-1 text-[10px] text-muted-foreground hover:text-primary disabled:opacity-30"
+                      disabled={disabled}
+                      onClick={() => onReferenceChange(c.file, c.url)}
+                    >
+                      设为参考
+                    </button>
                     {i !== 0 && (
                       <button
                         type="button"

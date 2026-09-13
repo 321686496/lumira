@@ -31,11 +31,11 @@ function base64ToFile(b64: string, mime: string, name: string): File {
 /** 生成姿势图：后端批量编排；多张先生成首张锚点图，其余并行参考锚点图。 */
 export function generateAiPoseImages(options: {
   draft: Record<string, unknown>;
-  exampleFile?: File | null;
+  referenceFile?: File | null;
   extraPrompt?: string | null;
   onResult?: (result: AiTaskFileResult) => void;
 }): Promise<AiTaskFileResult[]> {
-  const { draft, exampleFile, extraPrompt, onResult } = options;
+  const { draft, referenceFile, extraPrompt, onResult } = options;
   const pollOne = async (index: number, taskId: string): Promise<AiTaskFileResult> => {
     try {
       const result = await pollAiImageTask(taskId);
@@ -58,7 +58,7 @@ export function generateAiPoseImages(options: {
       ...draft,
       consistency: { mode: 'strict' },
     }));
-    if (exampleFile) fd.set('reference', exampleFile);
+    if (referenceFile) fd.set('reference', referenceFile);
     const extra = typeof extraPrompt === 'string' ? extraPrompt.trim() : '';
     if (extra) fd.set('extraPrompt', extra);
 
