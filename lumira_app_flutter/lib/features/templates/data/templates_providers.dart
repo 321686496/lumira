@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../recommend/template_ranking.dart';
+import '../recommend/daily_recommendator.dart';
 import '../data/templates_mock_data.dart';
 import '../data/templates_browse_mock_data.dart';
 import '../widgets/template_grid.dart';
@@ -143,13 +144,28 @@ final recommendedBuiltinTemplatesProvider =
       portrait[e.key] = e.value.score;
     }
 
-    // 热度：use_shoot*2 + open_detail
+    // 热度：全站累计 use_shoot*2 + open_detail
     final usageDao = await ref.watch(usageDaoProvider.future);
     final counts =
         await usageDao.countMap('template', base.map((t) => t.id).toList());
+
+    // 近 30 天本机信号（时效软化，缓解老模板霸榜）
+    final sinceMs = DateTime.now()
+        .subtract(const Duration(days: 30))
+        .millisecondsSinceEpoch;
+    final recent = await usageDao.recentPopularity(
+        'template', base.map((t) => t.id).toList(), sinceMs);
+
+    const alpha = 0.5; // 全站累计 : 近30天本机 = 50 : 50
     final popularity = <String, int>{
       for (final t in base)
-        t.id: ((counts[t.id]?.useShoot ?? 0) * 2 + (counts[t.id]?.openDetail ?? 0)),
+        t.id: ((((counts[t.id]?.useShoot ?? 0) * 2 +
+                        (counts[t.id]?.openDetail ?? 0)) *
+                    alpha) +
+                (((recent[t.id]?.useShoot ?? 0) * 2 +
+                        (recent[t.id]?.openDetail ?? 0)) *
+                    (1 - alpha)))
+            .round(),
     };
 
     final ctx = RankingContext(
@@ -158,7 +174,17 @@ final recommendedBuiltinTemplatesProvider =
       nowMs: DateTime.now().millisecondsSinceEpoch,
     );
     final scores = TemplateRanking().scoreAll(base, ctx);
-    return TemplateRanking().mixExplore(scores);
+    final mixed = TemplateRanking().mixExplore(scores);
+    final daily = const DailyRecommendator().build(
+      mixed.map((t) => t.id).toList(),
+      DateTime.now(),
+      cap: 10,
+    );
+    final byId = {for (final t in mixed) t.id: t};
+    return [
+      for (final d in daily)
+        if (byId[d.templateId] != null) byId[d.templateId]!,
+    ];
   } catch (e) {
     debugPrint('[recommend] today recommend ranking failed (silent fallback): $e');
     return base;
