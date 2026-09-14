@@ -8,6 +8,8 @@ class QuestionnaireAnswers {
   final String? gender;
   final String? source;
   final List<String> favoriteCategories;
+  /// 在大类下选择的二级风格偏好（仅本地，不上报后端）。
+  final List<String> favoriteStyles;
   final List<String> painPoints;
   final String? skillLevel;
   final List<String> expectations;
@@ -18,6 +20,7 @@ class QuestionnaireAnswers {
     this.gender,
     this.source,
     required this.favoriteCategories,
+    this.favoriteStyles = const [],
     required this.painPoints,
     this.skillLevel,
     required this.expectations,
@@ -30,6 +33,7 @@ class QuestionnaireAnswers {
         gender: null,
         source: null,
         favoriteCategories: [],
+        favoriteStyles: [],
         painPoints: [],
         skillLevel: null,
         expectations: [],
@@ -43,6 +47,8 @@ class QuestionnaireAnswers {
       source: json['source'] as String?,
       favoriteCategories:
           (json['favorite_categories'] as List<dynamic>?)?.cast<String>() ?? [],
+      favoriteStyles:
+          (json['favorite_styles'] as List<dynamic>?)?.cast<String>() ?? [],
       painPoints: (json['pain_points'] as List<dynamic>?)?.cast<String>() ?? [],
       skillLevel: json['skill_level'] as String?,
       expectations:
@@ -57,6 +63,7 @@ class QuestionnaireAnswers {
         'gender': gender,
         'source': source,
         'favorite_categories': favoriteCategories,
+        'favorite_styles': favoriteStyles,
         'pain_points': painPoints,
         'skill_level': skillLevel,
         'expectations': expectations,

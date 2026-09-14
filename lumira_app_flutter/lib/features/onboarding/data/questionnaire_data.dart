@@ -1,5 +1,5 @@
 /// 问卷题型
-enum QuestionType { single, multi }
+enum QuestionType { single, multi, hierarchical }
 
 /// 问卷选项
 class QuestionOption {
@@ -64,6 +64,14 @@ const List<QuestionDef> kQuestionnaireQuestions = [
       QuestionOption('macro', '微距'),
       QuestionOption('still-life', '静物'),
     ],
+  ),
+  QuestionDef(
+    id: 'favorite_styles',
+    title: '在这些大类下，你更偏好哪种风格？',
+    subtitle: '可多选，随上面勾选的大类动态展示',
+    type: QuestionType.hierarchical,
+    // 选项非静态：由 favorite_categories 已选大类级联生成（L2 风格）
+    options: [],
   ),
   QuestionDef(
     id: 'pain_points',

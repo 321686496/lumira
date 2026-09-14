@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -35,15 +36,41 @@ class _QuestionnairePageState extends ConsumerState<QuestionnairePage> {
     for (final q in kQuestionnaireQuestions) q.id: <String>{}
   };
   bool _submitting = false;
+  /// 分级题的二级风格分组缓存（按已选大类签名失效重取）
+  String _lastStyleSig = '';
+  Future<List<StyleSection>>? _styleFuture;
 
   bool get _isLast => _currentStep == kQuestionnaireQuestions.length - 1;
 
   QuestionDef get _currentQuestion => kQuestionnaireQuestions[_currentStep];
 
-  void _toggleOption(String key) {
+  /// favorite_categories 题的类名映射，用于分级题的区段标题
+  List<QuestionOption> get _categoryOptions => kQuestionnaireQuestions
+      .firstWhere((q) => q.id == 'favorite_categories',
+          orElse: () => const QuestionDef(id: '', title: '', type: QuestionType.multi, options: []))
+      .options;
+
+  Future<void> _toggleOption(String key) async {
+    final currentId = _currentQuestion.id;
+    final selected = _answers[currentId]!;
+    final isSingle = _currentQuestion.type == QuestionType.single;
+    // 取消「大类」时，一并清掉其下已选的二级风格
+    final isUncheckCategory =
+        currentId == 'favorite_categories' && selected.contains(key);
+    if (isUncheckCategory) {
+      try {
+        final dao = await ref.read(templatesDaoProvider.future);
+        final styles = await dao.getStylesForType(key);
+        final styleKeys = styles.map((s) => s.key).toSet();
+        _answers['favorite_styles']!
+            .removeWhere((styleKey) => styleKeys.contains(styleKey));
+      } catch (_) {
+        // 读取失败则只移除大类本身，风格保留
+      }
+    }
+    if (!mounted) return;
     setState(() {
-      final selected = _answers[_currentQuestion.id]!;
-      if (_currentQuestion.type == QuestionType.single) {
+      if (isSingle) {
         selected
           ..clear()
           ..add(key);
@@ -56,11 +83,42 @@ class _QuestionnairePageState extends ConsumerState<QuestionnairePage> {
       }
     });
     // 单选题：选中后自动进入下一题（带延迟）
-    if (_currentQuestion.type == QuestionType.single) {
+    if (isSingle) {
       Future.delayed(const Duration(milliseconds: 200), () {
         if (mounted) _next();
       });
     }
+  }
+
+  /// 已选大类的签名，用于判断是否需要重取风格分组
+  String _styleSig() {
+    final cats = (_answers['favorite_categories'] ?? <String>{}).toList()..sort();
+    return cats.join(',');
+  }
+
+  /// 异步构建「大类 → 二级风格」分组
+  Future<List<StyleSection>> _buildStyleSections() async {
+    final cats = (_answers['favorite_categories'] ?? <String>{}).toList();
+    final sections = <StyleSection>[];
+    if (cats.isEmpty) return sections;
+    final labelOf = {for (final o in _categoryOptions) o.key: o.label};
+    try {
+      final dao = await ref.read(templatesDaoProvider.future);
+      for (final c in cats) {
+        final styles =
+            (await dao.getStylesForType(c)).where((s) => s.isActive).toList();
+        if (styles.isEmpty) continue;
+        sections.add(StyleSection(
+          labelOf[c] ?? c,
+          styles
+              .map((s) => QuestionOption(s.key, s.name))
+              .toList(growable: false),
+        ));
+      }
+    } catch (_) {
+      // 分类数据未就绪时给出空分组，页面显示提示而非崩溃
+    }
+    return sections;
   }
 
   void _next() {
@@ -93,6 +151,7 @@ class _QuestionnairePageState extends ConsumerState<QuestionnairePage> {
           ? null
           : _answers['source']?.first,
       favoriteCategories: _answers['favorite_categories']?.toList() ?? [],
+      favoriteStyles: _answers['favorite_styles']?.toList() ?? [],
       painPoints: _answers['pain_points']?.toList() ?? [],
       skillLevel: _answers['skill_level']?.isEmpty == true
           ? null
@@ -190,12 +249,7 @@ class _QuestionnairePageState extends ConsumerState<QuestionnairePage> {
               Expanded(
                 child: FadeUp(
                   key: ValueKey(_currentStep),
-                  child: QuestionStep(
-                    question: _currentQuestion,
-                    selectedKeys: _answers[_currentQuestion.id]!,
-                    onToggle: _toggleOption,
-                    tokens: tokens,
-                  ),
+                  child: _buildQuestionStep(tokens),
                 ),
               ),
               _buildBottomBar(tokens),
@@ -206,8 +260,36 @@ class _QuestionnairePageState extends ConsumerState<QuestionnairePage> {
     );
   }
 
+  Widget _buildQuestionStep(ThemeTokens tokens) {
+    if (_currentQuestion.type != QuestionType.hierarchical) {
+      return QuestionStep(
+        question: _currentQuestion,
+        selectedKeys: _answers[_currentQuestion.id]!,
+        onToggle: _toggleOption,
+        tokens: tokens,
+      );
+    }
+    // 分级题：二级风格分组需异步从分类树读取，用 Future 缓存避免重复查询
+    final sig = _styleSig();
+    if (sig != _lastStyleSig) {
+      _lastStyleSig = sig;
+      _styleFuture = _buildStyleSections();
+    }
+    return FutureBuilder<List<StyleSection>>(
+      future: _styleFuture,
+      builder: (context, snap) => QuestionStep(
+        question: _currentQuestion,
+        selectedKeys: _answers[_currentQuestion.id]!,
+        onToggle: _toggleOption,
+        tokens: tokens,
+        styleSections: snap.data,
+      ),
+    );
+  }
+
   Widget _buildBottomBar(ThemeTokens tokens) {
-    final isMulti = _currentQuestion.type == QuestionType.multi;
+    final isMulti = _currentQuestion.type == QuestionType.multi ||
+        _currentQuestion.type == QuestionType.hierarchical;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Row(

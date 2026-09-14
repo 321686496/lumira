@@ -23,6 +23,13 @@ class QuestionnaireSyncService {
   final QuestionnaireDao _dao;
   final ApiClient _apiClient;
 
+  /// 上报后端的答案（本地新增的 favorite_styles 不上报，仅本地用于推荐）
+  Map<String, dynamic> _remoteAnswers(QuestionnaireAnswers answers) {
+    final json = answers.toJson()
+      ..remove('favorite_styles');
+    return json;
+  }
+
   /// 提交问卷答案
   ///
   /// 1. 本地落库（立即生效，推荐可用）
@@ -38,7 +45,7 @@ class QuestionnaireSyncService {
       await _apiClient.post(
         '/questionnaire/submit',
         body: {
-          'answers': answers.toJson(),
+          'answers': _remoteAnswers(answers),
           'submittedAt': now,
         },
         fromJson: (json) => json,
@@ -66,7 +73,7 @@ class QuestionnaireSyncService {
       await _apiClient.post(
         '/questionnaire/submit',
         body: {
-          'answers': answers.toJson(),
+          'answers': _remoteAnswers(answers),
           'submittedAt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
         },
         fromJson: (json) => json,
