@@ -65,6 +65,11 @@ class Tables {
   static const String colShortDesc = 'short_desc';
   static const String colAmbienceJson = 'ambience_json';
 
+  // === custom_templates 扩展列（v58 迁移新增，模板适用性别） ===
+  // gender 列存取值：unisex（通用，默认）| male（男）| female（女）
+  // 常量命名避开 user_profile 段的 colGender（值同为 'gender'）
+  static const String colTemplateGender = 'gender';
+
   // === template_categories 表（v13 迁移新增，分类管理） ===
   static const String templateCategories = 'template_categories';
   static const String colIconUrl = 'icon_url';

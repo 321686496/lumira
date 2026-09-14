@@ -8,6 +8,7 @@ const PhotoTemplate darkIndoorPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'dark_indoor_portrait',
     name: '暗调室内半身人像',
+    gender: TemplateGender.female,
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',

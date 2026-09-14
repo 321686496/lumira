@@ -18,6 +18,7 @@ import '../data/builtin_category_icons.dart';
 import '../data/remote_templates_providers.dart';
 import '../data/templates_browse_mock_data.dart';
 import '../data/templates_providers.dart';
+import '../../capture/domain/photo_template.dart';
 import '../services/template_mapper.dart';
 import '../widgets/adaptive_cover_image.dart';
 import '../widgets/ambience_badges.dart';
@@ -55,6 +56,8 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
   bool _showCustom = false;
   bool _showFavorites = false;
   PriceFilter _priceFilter = PriceFilter.all;
+  /// 性别筛选：null=全部；male/female 时额外包含 unisex（通用）模板。
+  TemplateGender? _genderFilter;
   /// 当前分类的完整路径 segments（根→叶），如 ['food','overhead']。
   ///
   /// 从「一级→二级」独立页进入时，category 参数携带完整父级链路（如
@@ -187,6 +190,14 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
     } else if (_priceFilter == PriceFilter.paid) {
       filtered = filtered.where((t) => t.price > 0).toList();
     }
+    // 性别筛选：male/female 时额外包含 unisex（通用）模板
+    final g = _genderFilter;
+    if (g != null) {
+      filtered = filtered
+          .where((t) =>
+              t.gender == g || t.gender == TemplateGender.unisex)
+          .toList();
+    }
 
     // 收藏过滤：仅保留已收藏模板（与分类、价格、我的 toggle 取交集）
     if (_showFavorites) {
@@ -234,6 +245,10 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
 
   void _onPriceFilter(PriceFilter value) {
     setState(() => _priceFilter = value);
+  }
+
+  void _onGenderFilter(TemplateGender? value) {
+    setState(() => _genderFilter = value);
   }
 
   void _goEditor() {
@@ -414,9 +429,11 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
                                     selectedMethod: _selectedMethod,
                                     showCustom: _showCustom,
                                     priceFilter: _priceFilter,
+                                    genderFilter: _genderFilter,
                                     onLayerSelect: _onLayerSelect,
                                     onToggleCustom: _toggleCustom,
                                     onPriceFilter: _onPriceFilter,
+                                    onGenderFilter: _onGenderFilter,
                                     showFavorites: _showFavorites,
                                     onToggleFavorites: _toggleFavorites,
                                   ),
@@ -590,8 +607,10 @@ class _FilterSection extends StatelessWidget {
     required this.showFavorites,
     required this.onToggleFavorites,
     required this.priceFilter,
+    this.genderFilter,
     required this.onLayerSelect,
     required this.onPriceFilter,
+    this.onGenderFilter,
   });
 
   final ThemeTokens tokens;
@@ -607,11 +626,14 @@ class _FilterSection extends StatelessWidget {
   final bool showCustom;
   /// 价格筛选：全部 / 免费 / 付费
   final PriceFilter priceFilter;
+  /// 性别筛选：null=全部；male/female 时额外包含 unisex（通用）模板。
+  final TemplateGender? genderFilter;
   final void Function(int layer, String? value) onLayerSelect;
   final void Function(bool) onToggleCustom;
   final bool showFavorites;
   final void Function(bool) onToggleFavorites;
   final void Function(PriceFilter) onPriceFilter;
+  final void Function(TemplateGender?)? onGenderFilter;
 
   @override
   Widget build(BuildContext context) {
@@ -654,6 +676,13 @@ class _FilterSection extends StatelessWidget {
               tokens: tokens,
               filter: priceFilter,
               onSelect: onPriceFilter,
+            ),
+            const SizedBox(height: 12),
+            // 性别筛选行（男性 / 女性 / 通用；选择男/女时同样纳含通用模板）
+            _GenderFilterRow(
+              tokens: tokens,
+              filter: genderFilter,
+              onSelect: onGenderFilter,
             ),
             const SizedBox(height: 12),
             // "收藏" + "我的" toggle：过滤已收藏 / 用户自定义模板
@@ -712,6 +741,44 @@ class _PriceFilterRow extends StatelessWidget {
                     : '付费',
             active: filter == f,
             onTap: () => onSelect(f),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ],
+    );
+  }
+}
+
+/// 性别筛选行（全部 / 男 / 女；选择男/女时额外纳含通用 unisex 模板）
+class _GenderFilterRow extends StatelessWidget {
+  const _GenderFilterRow({
+    required this.tokens,
+    required this.filter,
+    required this.onSelect,
+  });
+
+  final ThemeTokens tokens;
+  final TemplateGender? filter;
+  final void Function(TemplateGender?)? onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final select = onSelect;
+    return Row(
+      children: [
+        _PricePill(
+          tokens: tokens,
+          label: '全部',
+          active: filter == null,
+          onTap: () => select?.call(null),
+        ),
+        const SizedBox(width: 8),
+        for (final g in [TemplateGender.male, TemplateGender.female]) ...[
+          _PricePill(
+            tokens: tokens,
+            label: g == TemplateGender.male ? '男' : '女',
+            active: filter == g,
+            onTap: () => select?.call(g),
           ),
           const SizedBox(width: 8),
         ],
@@ -1136,6 +1203,13 @@ class _TplCard extends StatelessWidget {
                     child: _PremiumBadge(
                         tokens: tokens, price: template.price),
                   ),
+                // 性别角标（右上方）：男/女；通用 unisex 不展示。
+                if (template.gender != TemplateGender.unisex)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: _GenderBadge(tokens: tokens, gender: template.gender),
+                  ),
                 // 已拍照片数：叠在封面右下角（半透明深色 pill），
                 // 避免占用下方信息行横向空间，导致季节/天气等氛围标签换行变纵向。
                 if (usageCount > 0)
@@ -1297,6 +1371,35 @@ class _PremiumBadge extends StatelessWidget {
           fontSize: 10,
           fontWeight: FontWeight.w600,
           color: Colors.white,
+        ),
+      ),
+    );
+  }
+}
+
+/// 性别角标（男 / 女），叠在封面右上角；通用 unisex 不渲染。
+class _GenderBadge extends StatelessWidget {
+  const _GenderBadge({required this.tokens, required this.gender});
+  final ThemeTokens tokens;
+  final TemplateGender gender;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = gender == TemplateGender.male ? '男' : '女';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        // 叠在照片上，使用半透明 surface + 细描边（跨风格通用）
+        color: tokens.surface.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(9999),
+        border: Border.all(color: tokens.brand.withOpacity(0.5), width: 0.6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: tokens.brandText,
         ),
       ),
     );
@@ -1802,6 +1905,7 @@ AllTemplateItem _recordToItem(TemplateRecord r, {required bool isCustom}) {
     shortDesc: r.shortDesc,
     description: r.description,
     ambience: TemplateMapper.ambienceFromJson(r.ambienceJson),
+    gender: TemplateGender.from(r.gender),
   );
 }
 

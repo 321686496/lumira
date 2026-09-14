@@ -1,6 +1,9 @@
 // lumira-server/packages/shared/src/types/template.ts
 // 后台动态模板上传功能共享类型定义（spec 2026-08-05 第 2.4 节）
 
+/** 模板适用性别：'unisex'（通用）| 'male'（男）| 'female'（女）。默认 unisex。 */
+export type TemplateGender = 'unisex' | 'male' | 'female';
+
 // ===== 分类 =====
 
 export interface TemplateCategory {
@@ -96,6 +99,8 @@ export interface RemoteTemplateMeta {
   ambience: TemplateAmbience;
   /** 短简介（≤10字） */
   shortDesc: string;
+  /** 适用性别：'unisex'（通用）| 'male'（男）| 'female'（女） */
+  gender: TemplateGender;
   sortOrder: number;
   /** 模板发布时间（epoch 秒，详情页展示用；对应 templates.created_at） */
   createdAt: number;

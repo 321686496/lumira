@@ -5,7 +5,7 @@ import { TemplatesService } from './templates.service';
 import { ExchangeTemplateDto } from './dto/exchange-template.dto';
 import { DeviceAuthGuard } from '../../common/guards/device-auth.guard';
 import { DeviceId } from '../../common/decorators';
-import type { TemplateSearchSort } from '@lumira/shared';
+import type { TemplateSearchSort, TemplateGender } from '@lumira/shared';
 
 @Controller('templates')
 @UseGuards(DeviceAuthGuard)
@@ -20,12 +20,16 @@ export class TemplatesController {
     @Query('since') since?: string,
     @Query('category') category?: string,
     @Query('subtree') subtree?: string,
+    @Query('gender') gender?: string,
   ) {
     const sinceNum = since !== undefined ? parseInt(since, 10) : undefined;
     // subtree：逗号分隔的子树 key 集合（含自身及所有后代 key），
     // 匹配「该分类族内所有后代挂的模板」——模板任一 classification 字段命中集合即算
     const subtreeKeys = subtree ? subtree.split(',').map((k) => k.trim()).filter(Boolean) : undefined;
-    return this.templatesService.listRemoteTemplates(sinceNum, category, subtreeKeys);
+    // 模板适用性别：'male' | 'female'（未传或非法值不过滤）
+    const genderFilter: TemplateGender | undefined =
+      gender === 'male' || gender === 'female' ? gender : undefined;
+    return this.templatesService.listRemoteTemplates(sinceNum, category, subtreeKeys, genderFilter);
   }
 
   @Get('owned')

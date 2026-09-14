@@ -8,6 +8,7 @@ const PhotoTemplate morandiMinimalPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'morandi_minimal_portrait',
     name: '莫兰迪极简半身人像',
+    gender: TemplateGender.female,
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',

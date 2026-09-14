@@ -95,6 +95,47 @@ class PhotoTemplate {
       camera, sceneGuide, postProcess);
 }
 
+/// 模板适用性别。
+enum TemplateGender {
+  /// 通用（男女皆适用，默认）
+  unisex,
+  /// 男
+  male,
+  /// 女
+  female;
+
+  /// 解析字符串回枚举，非法/空值回退到 [unisex]。
+  static TemplateGender from(String? raw) {
+    if (raw == 'male') return TemplateGender.male;
+    if (raw == 'female') return TemplateGender.female;
+    return TemplateGender.unisex;
+  }
+
+  /// 序列化为后端/数据库字符串。
+  String get value {
+    switch (this) {
+      case TemplateGender.male:
+        return 'male';
+      case TemplateGender.female:
+        return 'female';
+      case TemplateGender.unisex:
+        return 'unisex';
+    }
+  }
+
+  /// 中文展示名。
+  String get label {
+    switch (this) {
+      case TemplateGender.male:
+        return '男性';
+      case TemplateGender.female:
+        return '女性';
+      case TemplateGender.unisex:
+        return '通用';
+    }
+  }
+}
+
 class TemplateMeta {
   final String id;
   final String name;
@@ -120,6 +161,9 @@ class TemplateMeta {
   /// 模板来源：'builtin'（系统内置）| 'custom'（用户自定义）| 'remote'（后端动态）。
   /// 用于 UI 区分「我的」自定义模板与后端同步模板（如拍摄页模板条角标）。
   final String source;
+
+  /// 适用性别：unisex（通用，默认）| male（男）| female（女）。
+  final TemplateGender gender;
 
   // 为保证 const 内置模板仍可用 `TemplateMeta(cover: ...)` 构造（无数内置模板与测试
   // 以 const 方式构建本类），cover/coverData 由 [_cover]/[_coverData] 承载（兼容存储），
@@ -158,6 +202,7 @@ class TemplateMeta {
     this.updatedAt = 0,
     this.createdAt = 0,
     this.source = 'builtin',
+    this.gender = TemplateGender.unisex,
   })  : _cover = cover,
         _coverData = coverData,
         _images = images;
@@ -180,6 +225,7 @@ class TemplateMeta {
     int? updatedAt,
     int? createdAt,
     String? source,
+    TemplateGender? gender,
   }) =>
       TemplateMeta(
         id: id ?? this.id,
@@ -205,6 +251,7 @@ class TemplateMeta {
         updatedAt: updatedAt ?? this.updatedAt,
         createdAt: createdAt ?? this.createdAt,
         source: source ?? this.source,
+        gender: gender ?? this.gender,
       );
 
   @override
@@ -227,13 +274,14 @@ class TemplateMeta {
           ambience == other.ambience &&
           updatedAt == other.updatedAt &&
           createdAt == other.createdAt &&
-          source == other.source;
+          source == other.source &&
+          gender == other.gender;
 
   @override
   int get hashCode => Object.hash(id, name, author, version, category, classification,
       Object.hashAll(tags), Object.hashAll(tagIds), price,
       Object.hashAll(images.map((e) => e.hashCode)), description, referenceSource,
-      shortDesc, ambience, updatedAt, createdAt, source);
+      shortDesc, ambience, updatedAt, createdAt, source, gender);
 }
 
 /// 模板分类。

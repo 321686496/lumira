@@ -8,6 +8,7 @@ const PhotoTemplate chineseClassicalPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'chinese_classical_portrait',
     name: '中式古典全身人像',
+    gender: TemplateGender.female,
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',

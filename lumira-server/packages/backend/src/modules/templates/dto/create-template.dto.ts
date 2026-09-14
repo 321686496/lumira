@@ -3,7 +3,7 @@
 // 注意：multipart 不走 NestJS @Body() 自动校验，service 中需手动 plainToInstance + validate
 
 import {
-  IsString, IsOptional, IsInt, IsArray, IsBoolean, Min, MaxLength, MinLength,
+  IsString, IsOptional, IsInt, IsArray, IsBoolean, Min, MaxLength, MinLength, IsIn,
 } from 'class-validator';
 
 export class CreateTemplateDto {
@@ -40,6 +40,11 @@ export class CreateTemplateDto {
   @IsString()
   @MaxLength(20)
   shortDesc?: string;
+
+  @IsOptional()
+  @IsIn(['unisex', 'male', 'female'])
+  /** 适用性别：'unisex'（通用）| 'male'（男）| 'female'（女），默认 unisex */
+  gender?: 'unisex' | 'male' | 'female';
 
   @IsOptional()
   ambience?: {
