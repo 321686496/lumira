@@ -226,6 +226,8 @@ export interface AdminTemplateListItem {
   sortOrder: number;
   createdAt: number;
   updatedAt: number;
+  /** 适用性别（spec 2026-09-14）：'unisex'（通用）| 'male'（男）| 'female'（女） */
+  gender?: string;
 }
 
 export interface AdminTemplateListResponse {
@@ -273,6 +275,7 @@ export interface CreateTemplateRequest {
   classification?: { type: string; majorStyle: string; style: string; subStyle?: string; method?: string };
   ambience?: TemplateAmbience;
   shortDesc?: string;
+  gender?: 'unisex' | 'male' | 'female';
   sortOrder?: number;
   isActive?: boolean;
   composition?: Record<string, unknown>;

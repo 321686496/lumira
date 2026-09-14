@@ -77,6 +77,7 @@ export class AdminTemplatesService {
       coverUrl: templates.coverUrl,
       isActive: templates.isActive,
       sortOrder: templates.sortOrder,
+      gender: templates.gender,
       createdAt: templates.createdAt,
       updatedAt: templates.updatedAt,
     })
@@ -99,6 +100,7 @@ export class AdminTemplatesService {
         coverUrl: r.coverUrl,
         isActive: r.isActive === 1,
         sortOrder: r.sortOrder,
+        gender: r.gender ?? 'unisex',
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
       })),
