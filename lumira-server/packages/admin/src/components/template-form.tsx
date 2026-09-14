@@ -31,6 +31,8 @@ import type { AdminTemplateDetail, TemplateCategory } from '@/types/admin';
 const OVERLAY_TYPES = ['rule_of_thirds', 'golden_ratio', 'diagonal', 'grid', 'leading_lines', 'center', 'none'] as const;
 const ASPECT_RATIOS = ['fullscreen', '3:4', '4:3', '16:9', '1:1', '9:16'] as const;
 const SILHOUETTE_TYPES = ['builtin', 'image', 'svg'] as const;
+/** 模板适用性别：'unisex'（通用，默认）| 'male'（男）| 'female'（女） */
+const GENDER_OPTIONS = ['unisex', 'male', 'female'] as const;
 const ISO_MODES = ['auto', 'manual'] as const;
 const WHITE_BALANCES = ['daylight', 'cloudy', 'shade', 'tungsten', 'fluorescent', 'custom'] as const;
 const FLASH_MODES = ['off', 'on', 'auto', 'torch'] as const;
@@ -191,6 +193,7 @@ const schema = z.object({
   price: z.coerce.number().int().min(0, '价格不能为负'),
   description: z.string().optional().default(''),
   shortDesc: z.string().max(20, '短简介最多 20 字').optional().default(''),
+  gender: z.enum(GENDER_OPTIONS).default('unisex'),
   ambienceSeasons: z.array(z.string()).optional().default([]),
   ambienceWeathers: z.array(z.string()).optional().default([]),
   ambienceTimeTones: z.array(z.string()).optional().default([]),
@@ -474,6 +477,7 @@ export default function TemplateForm({
         price: 0,
         description: '',
         shortDesc: '',
+        gender: 'unisex',
         ambienceSeasons: [],
         ambienceWeathers: [],
         ambienceTimeTones: [],
@@ -554,6 +558,7 @@ export default function TemplateForm({
       price: initial.price,
       description: initial.description ?? '',
       shortDesc: initial.shortDesc ?? '',
+      gender: (initial.gender as FormValues['gender']) ?? 'unisex',
       ambienceSeasons: initial.ambience?.seasons ?? [],
       ambienceWeathers: initial.ambience?.weathers ?? [],
       ambienceTimeTones: initial.ambience?.timeTones ?? [],
@@ -922,6 +927,7 @@ export default function TemplateForm({
       price: data.price,
       description: data.description ?? '',
       shortDesc: (data.shortDesc ?? '').trim(),
+      gender: data.gender,
       ambience: {
         seasons: data.ambienceSeasons ?? [],
         weathers: data.ambienceWeathers ?? [],
@@ -1355,6 +1361,22 @@ export default function TemplateForm({
                 <Label htmlFor="price">价格（积分，0=免费）</Label>
                 <Input id="price" type="number" min={0} {...register('price')} />
                 {errors.price && <p className="text-sm text-destructive">{errors.price.message}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label>适用性别</Label>
+                <Select
+                  value={watch('gender')}
+                  onValueChange={(v) => setValue('gender', v as FormValues['gender'])}
+                >
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unisex">通用</SelectItem>
+                    <SelectItem value="male">男</SelectItem>
+                    <SelectItem value="female">女</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">通用模板在筛选男/女时也会展示。</p>
               </div>
 
               <div className="space-y-2">
