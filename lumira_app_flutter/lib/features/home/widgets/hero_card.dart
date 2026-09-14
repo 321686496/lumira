@@ -99,12 +99,12 @@ class _HeroCardState extends ConsumerState<HeroCard> {
               : (isGlass ? ThemeTokens.glassFill(tokens) : null),
           gradient: isNeumorphic || isGlass
               ? null
-              : const LinearGradient(
+              : LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Color(0xFFFDF6EC),
-                    Color(0xFFF5E6CC),
+                    tokens.surface,
+                    tokens.surfaceAlt,
                   ],
                 ),
           border: isGlass
@@ -112,15 +112,7 @@ class _HeroCardState extends ConsumerState<HeroCard> {
               : null,
           boxShadow: isNeumorphic
               ? tokens.shadowConvex
-              : (isGlass
-                  ? const [
-                      BoxShadow(
-                        color: Color(0x1F000000),
-                        offset: Offset(0, 6),
-                        blurRadius: 20,
-                      ),
-                    ]
-                  : null),
+              : (isGlass ? tokens.shadowFloat : null),
         ),
         child: inspirationAsync.when(
           // skipLoadingOnReload：定时 invalidate 触发的重载沿用旧数据，避免每分钟闪 loading 骨架。
@@ -179,7 +171,18 @@ class _HeroCardState extends ConsumerState<HeroCard> {
                     height: 1.3,
                   ),
                 ),
-                const SizedBox(height: 8), // 16rpx → 8dp
+                const SizedBox(height: 4),
+                Text(
+                  inspiration.dateText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: tokens.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 8),
                 // 描述
                 Text(
                   inspiration.description,
@@ -265,6 +268,31 @@ class _HeroCardState extends ConsumerState<HeroCard> {
                     ),
                   );
                 }),
+                if (inspiration.weatherText.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.location_on_outlined,
+                        size: 14,
+                        color: tokens.textTertiary,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          inspiration.weatherText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: tokens.textTertiary,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

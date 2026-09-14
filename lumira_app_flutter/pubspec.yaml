@@ -197,6 +197,7 @@ flutter:
     - assets/shaders/skin_smooth.frag
     - assets/shaders/preview_beauty.frag
     - assets/shaders/edit_detail_effects.frag
+    - assets/shaders/edit_smooth_sharpen.frag
 
   assets:
     - assets/images/

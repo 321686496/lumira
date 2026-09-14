@@ -177,7 +177,6 @@ class _ShaderCanvasState extends State<_ShaderCanvas> {
         strength: widget.strength,
         program: prog,
       ),
-      child: RawImage(image: widget.image, fit: BoxFit.contain),
     );
   }
 }

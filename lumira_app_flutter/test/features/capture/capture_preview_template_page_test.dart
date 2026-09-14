@@ -220,7 +220,7 @@ void main() {
       await settleOrPump(tester, UIStyle.neumorphic);
 
       expect(find.byType(CaptureNav), findsOneWidget);
-      expect(find.byType(ParamPanel), findsOneWidget);
+      expect(find.byType(ParamPanel), findsNothing);
       expect(find.byType(CaptureBottomBar), findsOneWidget);
       // 底部工具栏出现（模板/场景/参数/滤镜）
       expect(find.text('参数'), findsOneWidget);
@@ -388,8 +388,6 @@ void main() {
         expect(find.text('模板拍摄'), findsOneWidget,
             reason: 'theme=${combo.theme}, style=${combo.style}');
         expect(find.text('同步到编辑器'), findsOneWidget,
-            reason: 'theme=${combo.theme}, style=${combo.style}');
-        expect(find.byType(ParamPanel), findsOneWidget,
             reason: 'theme=${combo.theme}, style=${combo.style}');
         await tester.pumpWidget(const SizedBox.shrink());
       }

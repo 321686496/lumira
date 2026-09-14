@@ -76,9 +76,16 @@ final inviteRepositoryProvider = FutureProvider<InviteRepository>((ref) async {
 /// 旧契约的邀请统计 Provider（供 ProfileInvitePage 使用）
 ///
 /// 包装 [inviteRepositoryProvider]，调用 `stats()` 获取 [InviteStats]。
-final inviteStatsProvider = FutureProvider<InviteStats>((ref) async {
+/// 使用 autoDispose：避免老用户的邀请页长时间持有旧成功邀请数。
+final inviteStatsProvider =
+    FutureProvider.autoDispose<InviteStats>((ref) async {
   final repo = await ref.watch(inviteRepositoryProvider.future);
   return repo.stats();
+});
+
+final myInviteCodeProvider = FutureProvider<String>((ref) async {
+  final repo = await ref.watch(inviteRepositoryProvider.future);
+  return (await repo.generate()).code;
 });
 
 /// 积分体系下的邀请统计（新契约）

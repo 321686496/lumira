@@ -86,12 +86,12 @@ class _TipCardState extends ConsumerState<TipCard> {
                 : (isGlass ? ThemeTokens.glassFill(tokens) : null),
             gradient: isNeumorphic || isGlass
                 ? null
-                : const LinearGradient(
+                : LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Color(0xFFFFFBF5),
-                      Color(0xFFFDF6EC),
+                      tokens.surface,
+                      tokens.surfaceAlt,
                     ],
                   ),
             border: isGlass
@@ -107,15 +107,7 @@ class _TipCardState extends ConsumerState<TipCard> {
                       )),
             boxShadow: isNeumorphic
                 ? tokens.shadowConvex
-                : (isGlass
-                    ? const [
-                        BoxShadow(
-                          color: Color(0x1F000000),
-                          offset: Offset(0, 6),
-                          blurRadius: 20,
-                        ),
-                      ]
-                    : null),
+                : (isGlass ? tokens.shadowFloat : null),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

@@ -10,6 +10,7 @@ import Photos
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
     registerPhotoSaverChannel()
+    registerSystemShareChannel()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -74,4 +75,56 @@ import Photos
       }
     }
   }
+
+  private func registerSystemShareChannel() {
+    guard let registrar = registrar(forPlugin: "LumiraSystemShare") else { return }
+    let channel = FlutterMethodChannel(
+      name: "lumira/system_share",
+      binaryMessenger: registrar.messenger()
+    )
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "shareFiles":
+        guard let args = call.arguments as? [String: Any],
+              let paths = args["paths"] as? [String], !paths.isEmpty else {
+          result(["success": false, "error": "empty paths"])
+          return
+        }
+        let items: [Any] = paths.map { URL(fileURLWithPath: $0) }
+        presentSystemShare(items: items, result: result)
+      case "shareText":
+        guard let args = call.arguments as? [String: Any],
+              let text = args["text"] as? String, !text.isEmpty else {
+          result(["success": false, "error": "empty text"])
+          return
+        }
+        presentSystemShare(items: [text], result: result)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+}
+
+private func presentSystemShare(items: [Any], result: @escaping FlutterResult) {
+  guard let scene = UIApplication.shared.connectedScenes
+    .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+        let rootViewController = scene.windows.first(where: { $0.isKeyWindow })?
+    .rootViewController else {
+    result(["success": false, "error": "no key window"])
+    return
+  }
+
+  var presenter = rootViewController
+  while let presentedViewController = presenter.presentedViewController {
+    presenter = presentedViewController
+  }
+
+  let activityController = UIActivityViewController(
+    activityItems: items,
+    applicationActivities: nil
+  )
+  activityController.popoverPresentationController?.sourceView = presenter.view
+  presenter.present(activityController, animated: true)
+  result(["success": true])
 }

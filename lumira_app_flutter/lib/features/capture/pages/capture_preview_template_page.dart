@@ -19,7 +19,6 @@ import '../widgets/capture_bottom_controls.dart';
 import '../widgets/capture_nav.dart';
 import '../widgets/delay_timer_button.dart';
 import '../widgets/level_indicator.dart';
-import '../widgets/param_panel.dart';
 import '../widgets/param_pill_bar.dart';
 import '../widgets/shutter_feedback.dart';
 
@@ -65,6 +64,9 @@ class _CapturePreviewTemplatePageState
 
   /// 快门白闪触发版本号
   int _shutterTrigger = 0;
+
+  /// 参数面板展开时底部控制区的实时高度，用于取景器让位。
+  double _bottomControlsHeight = 0;
 
   /// 取景器 RepaintBoundary key（facing 变化时重建以切换传感器）
   GlobalKey? _viewfinderCaptureKey;
@@ -265,6 +267,8 @@ class _CapturePreviewTemplatePageState
     final isFullscreen = ref.watch(CaptureState.isFullscreenProvider);
     final isTrialMode = ref.watch(CaptureState.trialModeProvider);
     final facing = ref.watch(CaptureState.cameraFacingProvider);
+    final paramPanelExpanded =
+        ref.watch(CaptureState.panelExpandedProvider);
 
     // 监听闪光灯模式变化，同步相机引擎（对齐拍摄页）
     ref.listen<CaptureFlashMode>(CaptureState.flashModeProvider, (prev, next) {
@@ -300,9 +304,16 @@ class _CapturePreviewTemplatePageState
         fit: StackFit.expand,
         children: [
           // 1. 取景器（含补光悬浮模式）
-          _PreviewViewfinderArea(
-            onZoomChanged: _onZoomChanged,
-            rawCaptureKey: _viewfinderCaptureKey,
+          AnimatedPadding(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            padding: EdgeInsets.only(
+              bottom: paramPanelExpanded ? _bottomControlsHeight : 0,
+            ),
+            child: _PreviewViewfinderArea(
+              onZoomChanged: _onZoomChanged,
+              rawCaptureKey: _viewfinderCaptureKey,
+            ),
           ),
 
           // 2. 导航胶囊（返回即同步写回）
@@ -359,11 +370,12 @@ class _CapturePreviewTemplatePageState
               // 预览页不产生成片缩略图（角标缩略图为空，点击无操作）
               onThumbnailTap: () {},
               rawCaptureKey: _viewfinderCaptureKey,
+              onHeightChanged: (size) {
+                if (_bottomControlsHeight == size.height) return;
+                setState(() => _bottomControlsHeight = size.height);
+              },
             ),
           ),
-
-          // 5.5 参数面板（底部滑入）
-          const ParamPanel(),
 
           // 6. 水平仪
           const LevelIndicator(),
@@ -427,7 +439,10 @@ class _DoneFloatingButton extends ConsumerWidget {
 /// 取景器区域：按用户选定的比例约束相机预览（对齐 capture_page._ViewfinderArea）。
 /// 补光开启 + 前摄时切换为悬浮取景器（对齐 _FloatingViewfinder）。
 class _PreviewViewfinderArea extends ConsumerWidget {
-  const _PreviewViewfinderArea({required this.onZoomChanged, this.rawCaptureKey});
+  const _PreviewViewfinderArea({
+    required this.onZoomChanged,
+    this.rawCaptureKey,
+  });
 
   final ValueChanged<double> onZoomChanged;
   final GlobalKey? rawCaptureKey;
@@ -437,54 +452,62 @@ class _PreviewViewfinderArea extends ConsumerWidget {
     final ratioId = ref.watch(CaptureState.aspectRatioProvider);
     final facing = ref.watch(CaptureState.cameraFacingProvider);
     final fillLightEnabled = ref.watch(CaptureState.fillLightEnabledProvider);
-    final screenSize = MediaQuery.of(context).size;
-    final isPortrait = screenSize.height >= screenSize.width;
-    final screenRatio = screenSize.width / screenSize.height;
-    final targetRatio =
-        CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
-    final isFullscreen = ratioId == 'fullscreen';
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenSize = Size(
+          constraints.maxWidth,
+          constraints.maxHeight,
+        );
+        final isPortrait = screenSize.height >= screenSize.width;
+        final screenRatio = screenSize.width / screenSize.height;
+        final targetRatio =
+            CaptureState.computeTargetRatio(ratioId, isPortrait) ??
+                screenRatio;
+        final isFullscreen = ratioId == 'fullscreen';
 
-    // 补光悬浮模式：仅前置 + 补光开启时激活
-    final isFloating = fillLightEnabled && facing == 'front';
+        // 补光悬浮模式：仅前置 + 补光开启时激活
+        final isFloating = fillLightEnabled && facing == 'front';
 
-    if (!isFloating) {
-      double vfW, vfH;
-      if (isFullscreen) {
-        vfW = screenSize.width;
-        vfH = screenSize.height;
-      } else {
-        if (screenRatio > targetRatio) {
-          vfH = screenSize.height;
-          vfW = vfH * targetRatio;
-        } else {
-          vfW = screenSize.width;
-          vfH = vfW / targetRatio;
-        }
-      }
-      return Container(
-        color: Colors.black,
-        child: Center(
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-            width: vfW,
-            height: vfH,
-            child: CameraPreview(
-              key: ValueKey('camera_preview_preview_$facing'),
-              onZoomChanged: onZoomChanged,
-              previewFit: CameraPreviewFit.cover,
-              rawCaptureKey: rawCaptureKey,
+        if (!isFloating) {
+          double vfW, vfH;
+          if (isFullscreen) {
+            vfW = screenSize.width;
+            vfH = screenSize.height;
+          } else {
+            if (screenRatio > targetRatio) {
+              vfH = screenSize.height;
+              vfW = vfH * targetRatio;
+            } else {
+              vfW = screenSize.width;
+              vfH = vfW / targetRatio;
+            }
+          }
+          return Container(
+            color: Colors.black,
+            child: Center(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                width: vfW,
+                height: vfH,
+                child: CameraPreview(
+                  key: ValueKey('camera_preview_preview_$facing'),
+                  onZoomChanged: onZoomChanged,
+                  previewFit: CameraPreviewFit.cover,
+                  rawCaptureKey: rawCaptureKey,
+                ),
+              ),
             ),
-          ),
-        ),
-      );
-    }
+          );
+        }
 
-    // 补光悬浮模式：取景器缩小为可拖动窗口，背景显示补光色
-    return _PreviewFloatingViewfinder(
-      onZoomChanged: onZoomChanged,
-      rawCaptureKey: rawCaptureKey,
-      screenSize: screenSize,
+        // 补光悬浮模式：取景器缩小为可拖动窗口，背景显示补光色
+        return _PreviewFloatingViewfinder(
+          onZoomChanged: onZoomChanged,
+          rawCaptureKey: rawCaptureKey,
+          screenSize: screenSize,
+        );
+      },
     );
   }
 }

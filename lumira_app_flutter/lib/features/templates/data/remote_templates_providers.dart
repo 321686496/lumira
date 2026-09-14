@@ -17,10 +17,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_client.dart';
+import '../../../core/network/api_error.dart';
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/db/seeders/builtin_data_seeder.dart';
-import '../../../core/network/api_client.dart';
 import '../../../core/utils/image_cache.dart';
 import '../../capture/domain/photo_template.dart';
 import '../services/template_mapper.dart';
@@ -202,7 +203,29 @@ final templateDetailProvider =
   // 2. 慢路径：DAO 查找（含 custom / remote 缓存）
   final dao = await ref.watch(templatesDaoProvider.future);
   final record = await dao.getById(id);
-  if (record == null) return null;
+
+  if (record == null) {
+    try {
+      final repo = await ref.watch(remoteTemplatesRepositoryProvider.future);
+      final detail = await repo.fetchDetail(id);
+      await dao.upsert(TemplateMapper.detailToRecord(detail));
+      final refreshed = await dao.getById(id);
+      if (refreshed != null) {
+        return TemplatesBrowseMockData.fromPhotoTemplate(
+          TemplateMapper.toPhotoTemplate(refreshed),
+          fillLight: _fillLightFromRecord(refreshed),
+        );
+      }
+      final detailRecord = TemplateMapper.detailToRecord(detail);
+      return TemplatesBrowseMockData.fromPhotoTemplate(
+        TemplateMapper.toPhotoTemplate(detailRecord),
+        fillLight: _fillLightFromRecord(detailRecord),
+      );
+    } on ApiException catch (error) {
+      if (error.kind == ApiErrorKind.notFound) return null;
+      rethrow;
+    }
+  }
 
   // 3. remote 模板：每次进入详情页都尝试拉取后端最新完整内容，
   //    保证后台修改模板后 App 重新进入能看到更新；网络失败时降级本地缓存。

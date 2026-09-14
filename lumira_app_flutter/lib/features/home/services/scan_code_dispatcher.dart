@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
+import '../../invite/data/invite_repository.dart';
 import '../../../shared/widgets/lumira/lumira.dart' as lumira;
 import '../../templates/services/template_share_code.dart';
 import '../../templates/services/template_share_service.dart';
@@ -52,7 +53,8 @@ class ScanCodeDispatcher {
   ScanCodeDispatcher._();
 
   /// 邀请码字母表：与后端 `invite-code.generator.ts` 一致（排除易混淆 O/0/I/1）。
-  static final RegExp _inviteRe = RegExp(r'^[A-HJ-NP-Z2-9]{6}$', caseSensitive: false);
+  static final RegExp _inviteRe =
+      RegExp(r'^[A-HJ-NP-Z2-9]{6}$', caseSensitive: false);
 
   static ScanCodeResult classify(String raw) {
     final text = raw.trim();
@@ -62,18 +64,23 @@ class ScanCodeDispatcher {
 
     // 1. 模板分享码
     if (text.startsWith('LUMIRA-')) {
-      return ScanCodeResult(ScanCodeType.templateShareCode, text, payload: text);
+      return ScanCodeResult(ScanCodeType.templateShareCode, text,
+          payload: text);
     }
 
     // 2. 模板离线链接
-    if (text.contains('lumira://tpl') || text.contains('https://lumira.app/tpl')) {
-      return ScanCodeResult(ScanCodeType.templateOfflineLink, text, payload: text);
+    if (text.contains('lumira://tpl') ||
+        text.contains('https://lumira.app/tpl')) {
+      return ScanCodeResult(ScanCodeType.templateOfflineLink, text,
+          payload: text);
     }
 
     // 3. 模板在线 token
-    if (text.contains('lumira://imp') || text.contains('https://lumira.app/imp')) {
+    if (text.contains('lumira://imp') ||
+        text.contains('https://lumira.app/imp')) {
       final token = TemplateShareService.parseTokenFromScannedText(text);
-      return ScanCodeResult(ScanCodeType.templateOnlineToken, text, payload: token);
+      return ScanCodeResult(ScanCodeType.templateOnlineToken, text,
+          payload: token);
     }
 
     // 4. 恢复码
@@ -139,7 +146,8 @@ class ScanCodeDispatcher {
   /// - 离线模板链接（模板/照片分享海报）：优先跳转到对应模板详情；无法定位到
   ///   详情（如自定义模板）时回退到导入（[templateOfflineLink]）。
   /// - 分享码 / 在线 token：复用 [TemplateImportSheet.importScannedText] 导入。
-  /// - 恢复码 / 邀请码：跳转对应页面并预填，由用户确认后触发（不直接执行，避免误操作）。
+  /// - 恢复码：跳转对应页面并预填。
+  /// - 邀请码：校验非自己码且未绑定后跳转预填，由用户确认后再绑定。
   /// - 未知：Toast 提示。
   static Future<void> execute(
     BuildContext context,
@@ -179,6 +187,13 @@ class ScanCodeDispatcher {
         ));
         break;
       case ScanCodeType.inviteCode:
+        final blockReason = await inviteScanBlockReason(ref, result.payload);
+        // ignore: use_build_context_synchronously
+        if (!context.mounted) return;
+        if (blockReason != null) {
+          lumira.LumiraToast.show(context, blockReason);
+          break;
+        }
         GoRouter.of(context).push(RouteNames.build(
           RouteNames.profileInvite,
           {RouteNames.paramInviteCode: result.payload ?? ''},
@@ -187,6 +202,30 @@ class ScanCodeDispatcher {
       case ScanCodeType.unknown:
         lumira.LumiraToast.show(context, '无法识别的码');
         break;
+    }
+  }
+
+  /// 扫到邀请码后检查是否应拦截跳转：自己的码或本机已绑定时不进入预填页。
+  ///
+  /// 状态接口失败时返回 `null`，保持原有跳转行为，由绑定接口做最终校验。
+  static Future<String?> inviteScanBlockReason(
+    WidgetRef ref,
+    String? scannedCode,
+  ) async {
+    final code = scannedCode?.trim().toUpperCase();
+    if (code == null || code.isEmpty) return null;
+
+    try {
+      final stats = await ref.read(inviteStatsProvider.future);
+      if ((stats.myInviteCode ?? '').toUpperCase() == code) {
+        return '这是你的邀请码，不能绑定自己';
+      }
+      if (stats.myInviter != null) {
+        return '已绑定邀请码，无需再次绑定';
+      }
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 }

@@ -155,7 +155,7 @@ class PreviewEditToolbar extends StatelessWidget {
           onChanged: _updatePostFromFull,
           tokens: tokens,
         );
-        height = 160;
+        height = 108;
         break;
       case PreviewEditTool.detail:
         panel = PostProcessDetailTab(
@@ -163,7 +163,7 @@ class PreviewEditToolbar extends StatelessWidget {
           onChanged: _updatePostFromFull,
           tokens: tokens,
         );
-        height = 160;
+        height = 108;
         break;
       case PreviewEditTool.filter:
         panel = FilterTab(
@@ -172,7 +172,7 @@ class PreviewEditToolbar extends StatelessWidget {
           previewImagePath: previewImagePath,
           tokens: tokens,
         );
-        height = 264;
+        height = 132;
         break;
       case PreviewEditTool.crop:
         panel = CropTab(
@@ -183,7 +183,7 @@ class PreviewEditToolbar extends StatelessWidget {
           tokens: tokens,
           previewImagePath: previewImagePath,
         );
-        height = 328;
+        height = 204;
         break;
     }
     return SizedBox(height: height, child: panel);

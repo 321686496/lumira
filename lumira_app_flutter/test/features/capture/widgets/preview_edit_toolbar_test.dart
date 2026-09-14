@@ -106,6 +106,36 @@ void main() {
     expect(find.text('磨皮'), findsOneWidget);
   });
 
+  testWidgets('dragging sharpen slider emits sharpen delta with baked value',
+      (tester) async {
+    PostProcess? capturedDelta;
+    await tester.pumpWidget(wrapWidget(
+      activeTool: null,
+      bakedPostProcess: const PostProcess(
+        color: PostProcessColor(),
+        sharpen: 20,
+      ),
+      onToolChanged: (_) {},
+      onPostProcessChanged: (p) => capturedDelta = p,
+      onTransformChanged: (_) {},
+    ));
+    await tester.tap(find.text('细节'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('锐化').last);
+    await tester.pumpAndSettle();
+
+    final trackFinder = find.byWidgetPredicate(
+      (w) => w is GestureDetector && w.onPanStart != null,
+    );
+    final detector = tester.widget<GestureDetector>(trackFinder);
+    final trackWidth = tester.getSize(trackFinder).width;
+    detector.onPanStart!(
+      DragStartDetails(localPosition: Offset(trackWidth, 0)),
+    );
+    expect(capturedDelta, isNotNull);
+    expect(capturedDelta!.sharpen, 80);
+  });
+
   testWidgets('crop tool shows rotation/flip/straighten and rotate callback fires',
       (tester) async {
     TransformParams? captured;

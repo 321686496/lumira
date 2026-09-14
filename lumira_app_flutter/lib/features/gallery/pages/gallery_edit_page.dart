@@ -1004,13 +1004,15 @@ class _CanvasArea extends StatelessWidget {
     // 解码未就绪/失败时 DetailEffectsLayer 自动回退到 lumiraImage()。
     final detailEffects = DetailEffectsParams.fromPostProcess(appliedPost);
     final bool isNetworkUrl = url.startsWith('http');
-    Widget imageWidget = !isComparing && detailEffects.hasAnyEffect && !isNetworkUrl
-        ? DetailEffectsLayer(
-            url: url,
-            effects: detailEffects,
-            fallback: lumiraImage,
-          )
-        : lumiraImage();
+    Widget imageWidget =
+        !isComparing && detailEffects.hasAnyEffect && !isNetworkUrl
+            ? DetailEffectsLayer(
+                url: url,
+                effects: detailEffects,
+                fallback: lumiraImage,
+                key: ValueKey(url),
+              )
+            : lumiraImage();
 
     if (!appliedTransform.isIdentity) {
       imageWidget = RotatedBox(

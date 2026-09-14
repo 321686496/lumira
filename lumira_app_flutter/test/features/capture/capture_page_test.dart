@@ -387,8 +387,8 @@ void main() {
     await pumpWithPermission(tester);
 
     expect(find.byType(ParamPillBar), findsOneWidget);
-    // 默认抽屉收起，TemplateStrip 不渲染；展开后才会渲染
-    expect(find.byType(ParamPanel), findsOneWidget);
+    // 参数面板已并入底部抽屉；默认 activeTool=null 时不渲染
+    expect(find.byType(ParamPanel), findsNothing);
     // FilterPicker 仅在 activeTool == 'filter' 时由 _AnimatedToolDrawer 渲染，
     // 默认 activeTool=null，故不在 widget tree 中
     expect(find.byType(FilterPicker), findsNothing);

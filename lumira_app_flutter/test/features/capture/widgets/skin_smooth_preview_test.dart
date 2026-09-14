@@ -43,4 +43,15 @@ void main() {
           'shader 编译产物 asset key 应为 assets/shaders/edit_detail_effects.frag（缺失会导致编辑页细节参数无实时预览）',
     );
   });
+
+  test('edit_smooth_sharpen.frag 可从带 assets/ 前缀的 asset key 加载', () async {
+    final program = await loadFragmentProgramFromCandidates(
+      const [
+        'assets/shaders/edit_smooth_sharpen.frag',
+        'shaders/edit_smooth_sharpen.frag',
+      ],
+    );
+    expect(program, isNotNull,
+        reason: '轻量锐化/磨皮 shader asset key 应为 assets/shaders/edit_smooth_sharpen.frag');
+  });
 }

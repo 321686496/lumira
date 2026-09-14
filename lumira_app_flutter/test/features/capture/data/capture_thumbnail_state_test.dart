@@ -1,6 +1,4 @@
 // test/features/capture/data/capture_thumbnail_state_test.dart
-import 'dart:typed_data';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumira_app_flutter/features/capture/data/capture_thumbnail_state.dart';
 
@@ -20,12 +18,14 @@ void main() {
     expect(notifier.state.captureSeq, 2);
   });
 
-  test('setQuickResult transitions to preview', () {
+  test('interim result does not render before final', () {
     final notifier = CaptureThumbnailNotifier();
     notifier.startCapture();
-    notifier.setQuickResult(Uint8List.fromList([1, 2, 3]));
-    expect(notifier.state.status, CaptureThumbnailStatus.preview);
-    expect(notifier.state.quickBytes, isNotNull);
+    notifier.setInterimResult('/path/interim.jpg');
+    notifier.setInterimResult('/path/raw.jpg');
+    expect(notifier.state.status, CaptureThumbnailStatus.processing);
+    expect(notifier.state.interimPath, '/path/raw.jpg');
+    expect(notifier.state.quickBytes, isNull);
   });
 
   test('setFinalResult transitions to final', () {

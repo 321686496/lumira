@@ -592,25 +592,26 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     PostProcess postProcess,
     TransformParams transform,
   ) {
-    final bool isNetworkUrl = photoUrl.startsWith('http');
-
-    Widget buildImage() => isNetworkUrl
-        ? CachedNetworkImage(
-            url: photoUrl,
-            fit: BoxFit.contain,
-            errorWidget: const Center(
-              child:
-                  Icon(Icons.broken_image, color: Colors.white38, size: 64),
-            ),
-          )
+    Widget buildImage() {
+      final targetIsNetwork = photoUrl.startsWith('http');
+      return targetIsNetwork
+          ? CachedNetworkImage(
+              url: photoUrl,
+              fit: BoxFit.contain,
+              errorWidget: const Center(
+                child:
+                    Icon(Icons.broken_image, color: Colors.white38, size: 64),
+              ),
+            )
         : Image.file(
             File(photoUrl),
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => const Center(
-              child:
-                  Icon(Icons.broken_image, color: Colors.white38, size: 64),
-            ),
-          );
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Center(
+                child:
+                    Icon(Icons.broken_image, color: Colors.white38, size: 64),
+              ),
+            );
+    }
 
     if (photoUrl.isEmpty) {
       return const Center(
@@ -631,13 +632,16 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     // 且本地文件（非 http）→ 底层图片切为 GPU shader 细节效果层（磨皮也统一由该层
     // 处理，不再单独走 SmoothImageLayer）。解码未就绪/失败时自动回退到 buildImage()。
     final detailEffects = DetailEffectsParams.fromPostProcess(postProcess);
+    final sourceIsLocalFile =
+        photoUrl.isNotEmpty && !photoUrl.startsWith('http');
     final useDetailFx =
-        !isComparing && detailEffects.hasAnyEffect && !isNetworkUrl;
+        !isComparing && detailEffects.hasAnyEffect && sourceIsLocalFile;
     final Widget baseImage = useDetailFx
         ? DetailEffectsLayer(
             url: photoUrl,
             effects: detailEffects,
-            fallback: buildImage,
+            fallback: () => buildImage(),
+            key: ValueKey(photoUrl),
           )
         : buildImage();
 
@@ -1186,7 +1190,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     }
   }
 
-  /// 删除当前照片：确认后删除数据库记录与本地文件，并返回上一页。
+  /// 删除当前照片：确认后删除数据库记录与本地文件，并切换到下一张剩余照片。
   Future<void> _onDelete() async {
     if (_isSaving) return;
     final tokens = ref.read(appThemeProvider).tokens;
@@ -1226,10 +1230,62 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     try {
       // 删除数据库记录（有记录时）
       final pid = _currentPhotoId ?? widget.photoId;
+      var shouldExit = true;
       if (pid != null) {
         final dao = await ref.read(galleryDaoProvider.future);
         await dao.delete(pid);
+        _upgradeSub?.close();
+        _upgradeSub = null;
+        final removedIndex =
+            _historyPhotos.indexWhere((record) => record.id == pid);
+        final remaining = List<GalleryItemRecord>.from(_historyPhotos)
+          ..removeWhere((record) => record.id == pid);
+        if (remaining.isNotEmpty) {
+          final nextIndex =
+              removedIndex < 0 ? 0 : removedIndex.clamp(0, remaining.length - 1);
+          final nextPhoto = remaining[nextIndex];
+          final nextLastPhotoPath = nextPhoto.filePath;
+          if (nextLastPhotoPath != null && nextLastPhotoPath.isNotEmpty) {
+            ref
+                .read(captureThumbnailProvider.notifier)
+                .setFinalResult(nextLastPhotoPath, nextPhoto.id);
+          } else {
+            ref.read(captureThumbnailProvider.notifier).reset();
+          }
+          ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
+              nextLastPhotoPath;
+          setState(() {
+            _historyPhotos = remaining;
+            _currentIndex = nextIndex;
+            _isPendingFinal = false;
+            _interimUrl = null;
+            _isCropMode = false;
+            _activeTool = null;
+          });
+          _applyPhotoFromHistory(nextPhoto);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            if (_pageController.hasClients) {
+              _pageController.jumpToPage(nextIndex);
+            }
+          });
+          shouldExit = false;
+        } else {
+          setState(() {
+            _historyPhotos = remaining;
+            _currentIndex = 0;
+            _isPendingFinal = false;
+            _interimUrl = null;
+            _isCropMode = false;
+            _activeTool = null;
+          });
+          ref.read(captureThumbnailProvider.notifier).reset();
+          ref.read(CaptureState.lastPhotoPathProvider.notifier).state = null;
+        }
         ref.invalidate(galleryDaoProvider);
+      }
+      if (pid == null) {
+        ref.read(CaptureState.lastPhotoPathProvider.notifier).state = null;
       }
       // 删除本地结果/原图文件（忽略失败，避免阻塞删除流程）
       for (final p in [_photoUrl, _originalPath]) {
@@ -1246,7 +1302,9 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         '已删除',
         duration: const Duration(milliseconds: 1000),
       );
-      _back();
+      if (shouldExit) {
+        _back();
+      }
     } catch (e) {
       debugPrint('[delete] 删除照片失败: $e');
       if (!mounted) return;
