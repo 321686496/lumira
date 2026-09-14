@@ -33,7 +33,17 @@ class OperationUserInputs {
   final bool? hasLockedTemplate;
 }
 
-/// 首页运营 Banner 条目：指向真实功能，条件满足才参与 slot 0。
+/// 运营 Banner 条目类型
+enum OperationBannerKind {
+  /// 条件触达运营位（参与 slot 0 匹配，跳 App 内路由）
+  operation,
+
+  /// 活动/广告曝光（按 position 归位展示，点击跳浏览器外部 URL）
+  ad,
+}
+
+/// 首页运营 Banner 条目：指向真实功能，条件满足才参与 slot 0；
+/// kind=ad 为广告位，按 [position] 归位，点击跳 [externalUrl]。
 /// 远端下发（`operationBannerFromJson`）或本地静态目录皆可构造。
 class OperationBanner {
   const OperationBanner({
@@ -43,6 +53,9 @@ class OperationBanner {
     required this.tag,
     required this.route,
     required this.condition,
+    this.kind = OperationBannerKind.operation,
+    this.position,
+    this.externalUrl,
     this.imageUrl,
     this.focusX = 0.5,
     this.focusY = 0.5,
@@ -57,11 +70,21 @@ class OperationBanner {
   /// 如「邀请有礼」「积分乐园」「上新」
   final String tag;
 
-  /// 真实路由：/invite、/points/wallet、/templates/unlock、/templates/detail
+  /// 真实路由：/invite、/points/wallet、/templates/unlock、/templates/detail；
+  /// kind=ad 时仅为占位（跳转以 [externalUrl] 为准）
   final String route;
 
   /// 展示条件
   final OperationCondition condition;
+
+  /// 条目类型：operation=条件触达运营位 / ad=广告曝光
+  final OperationBannerKind kind;
+
+  /// 广告绝对槽位下标（0 起）；null = 放最后
+  final int? position;
+
+  /// 广告点击跳转的外部 URL（kind=ad 时非空）
+  final String? externalUrl;
 
   /// 运营配图 URL（可空）：非空时 App 卡片右侧 40% 区域 contain 完整显示，
   /// 为空回退品牌渐变背景（与旧行为兼容）
@@ -153,12 +176,22 @@ OperationBanner? operationBannerFromJson(Map<String, dynamic> json) {
       route is! String) {
     return null;
   }
-  if (!kOperationBannerRoutes.contains(route)) return null;
-  OperationCondition? condition;
-  for (final c in OperationCondition.values) {
-    if (c.name == json['condition']) condition = c;
+  final kind = json['kind'] == 'ad'
+      ? OperationBannerKind.ad
+      : OperationBannerKind.operation;
+  if (kind == OperationBannerKind.operation) {
+    if (!kOperationBannerRoutes.contains(route)) return null;
+    OperationCondition? condition;
+    for (final c in OperationCondition.values) {
+      if (c.name == json['condition']) condition = c;
+    }
+    if (condition == null) return null;
   }
-  if (condition == null) return null;
+  if (kind == OperationBannerKind.ad) {
+    // 广告：以 externalUrl 为准跳浏览器；无外部 URL 整条丢弃（fail-safe）
+    final rawExternal = json['externalUrl'];
+    if (rawExternal is! String || rawExternal.isEmpty) return null;
+  }
   final rawImage = json['imageUrl'];
   final imageUrl = rawImage is String && rawImage.isNotEmpty ? rawImage : null;
   // 目标模板 id：route=/templates/detail 时必须携带非空值，否则 fail-safe 丢弃
@@ -170,19 +203,31 @@ OperationBanner? operationBannerFromJson(Map<String, dynamic> json) {
   final focusX = _clampDouble(json['focusX'], 0, 1, 0.5);
   final focusY = _clampDouble(json['focusY'], 0, 1, 0.5);
   final focusZoom = _clampDouble(json['focusZoom'], 1, 3, 1.0);
+  final rawPosition = json['position'];
+  final position = rawPosition is num ? rawPosition.toInt() : null;
+  final externalUrl =
+      _clampExternalUrl(json['externalUrl']);
   return OperationBanner(
     id: id,
     title: title,
     subtitle: subtitle,
     tag: tag,
     route: route,
-    condition: condition,
+    condition: OperationCondition.hasLockedTemplate,
+    kind: kind,
+    position: position,
+    externalUrl: externalUrl,
     imageUrl: imageUrl,
     focusX: focusX,
     focusY: focusY,
     focusZoom: focusZoom,
     templateId: templateId,
   );
+}
+
+String? _clampExternalUrl(Object? value) {
+  if (value is! String || value.isEmpty) return null;
+  return value;
 }
 
 /// 按目录顺序取第一条满足条件的运营条目；无则返回 null（slot 0 让位个性化）。
@@ -217,6 +262,7 @@ HomeBannerItem operationBannerToItem(OperationBanner banner) {
     imageSeed: 'banner-op-${banner.id}',
     tag: banner.tag,
     route: route,
+    externalUrl: banner.externalUrl,
     cover: banner.imageUrl,
     focusX: banner.focusX,
     focusY: banner.focusY,

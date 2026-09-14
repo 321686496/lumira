@@ -109,6 +109,7 @@ class HomeBannerItem {
     required this.imageSeed,
     required this.tag,
     required this.route,
+    this.externalUrl,
     this.cover,
     this.coverData,
     this.focusX = 0.5,
@@ -123,8 +124,11 @@ class HomeBannerItem {
   final String imageSeed;
   final String tag;
 
-  /// 点击跳转路由（带查询参数）
+  /// 点击跳转路由（带查询参数）；[externalUrl] 非空时优先生效跳浏览器
   final String route;
+
+  /// 广告/外链跳转 URL（可选）：非空时点击用系统浏览器打开，忽略 [route]
+  final String? externalUrl;
 
   /// 模板封面（assets 路径或 http URL），用于模板类 banner 背景图。
   /// 非空时与 [coverData] 一起传给 TemplateCoverImage 渲染背景。

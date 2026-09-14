@@ -1,4 +1,4 @@
-import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min, Matches, MaxLength } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min, Matches, MaxLength, ValidateIf } from 'class-validator';
 import { OPERATION_BANNER_CONDITIONS, OPERATION_BANNER_ROUTES } from '../operation-banner.rules';
 
 export class CreateBannerDto {
@@ -23,8 +23,15 @@ export class CreateBannerDto {
   @MaxLength(32)
   tag!: string;
 
+  /** 运营位 route 仅对 operation 类型校验白名单；ad 跳外部 URL，route 不受限（可省略） */
+  @ValidateIf((o: CreateBannerDto) => o.kind !== 'ad')
   @IsIn(OPERATION_BANNER_ROUTES)
-  route!: string;
+  route?: string;
+
+  /** 条目类型：operation=条件触达运营位 / ad=活动广告曝光（默认 operation） */
+  @IsOptional()
+  @IsIn(['operation', 'ad'])
+  kind?: string;
 
   /** 目标模板 id（可空）：route 为 /templates/detail 时必填 */
   @IsOptional()
@@ -59,8 +66,22 @@ export class CreateBannerDto {
   @Max(3)
   focusZoom?: number;
 
+  /** 条件仅对 operation 类型必填；ad 不参与条件匹配 */
+  @ValidateIf((o: CreateBannerDto) => o.kind !== 'ad')
   @IsIn(OPERATION_BANNER_CONDITIONS)
   condition!: string;
+
+  /** 广告点击跳转的外部 URL（kind=ad 时必填） */
+  @ValidateIf((o: CreateBannerDto) => o.kind === 'ad')
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(512)
+  externalUrl?: string;
+
+  /** 广告位绝对槽位下标（0 起）；缺省/越界 = 放最后一个槽位 */
+  @IsOptional()
+  @IsInt()
+  position?: number;
 
   @IsOptional()
   @IsBoolean()

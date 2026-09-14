@@ -369,6 +369,12 @@ export interface BannerAdminItem {
   /** 背景图缩放：1-3，缺失时 App 使用 1 */
   focusZoom?: number;
   condition: string;
+  /** 条目类型：operation=条件触达运营位 / ad=活动广告曝光 */
+  kind: string;
+  /** 广告位绝对槽位下标（0 起）；null=放最后 */
+  position?: number | null;
+  /** 广告点击跳转的外部 URL（kind=ad 时必填） */
+  externalUrl?: string | null;
   isActive: number;
   sortOrder: number;
   createdAt: number;
@@ -390,6 +396,12 @@ export interface BannerPayload {
   focusY?: number;
   focusZoom?: number;
   condition?: string;
+  /** 条目类型：operation / ad */
+  kind?: string;
+  /** 广告位绝对槽位下标（0 起）；留空/越界=放最后 */
+  position?: number | null;
+  /** 广告点击跳转的外部 URL（kind=ad 时必填） */
+  externalUrl?: string | null;
   isActive?: boolean;
   sortOrder?: number;
 }

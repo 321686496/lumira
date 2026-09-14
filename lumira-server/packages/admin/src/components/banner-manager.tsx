@@ -59,6 +59,9 @@ interface FormState {
   tag: string;
   route: string;
   condition: string;
+  kind: string;
+  externalUrl: string;
+  position: string;
   imageUrl: string;
   focusX: number;
   focusY: number;
@@ -75,6 +78,9 @@ const EMPTY_FORM: FormState = {
   tag: '',
   route: '/invite',
   condition: 'nonNewUserNotInvited',
+  kind: 'operation',
+  externalUrl: '',
+  position: '',
   imageUrl: '',
   focusX: 0.5,
   focusY: 0.5,
@@ -143,6 +149,9 @@ export function BannerManager({
       tag: b.tag,
       route: b.route,
       condition: b.condition,
+      kind: b.kind || 'operation',
+      externalUrl: b.externalUrl || '',
+      position: b.position != null ? String(b.position) : '',
       imageUrl: b.imageUrl || '',
       focusX: b.focusX ?? 0.5,
       focusY: b.focusY ?? 0.5,
@@ -211,6 +220,10 @@ export function BannerManager({
       setError('请填写角标文案');
       return;
     }
+    if (form.kind === 'ad' && !(form.externalUrl || '').trim()) {
+      setError('广告类型请填写外部跳转 URL');
+      return;
+    }
     if (form.route === '/templates/detail' && !form.templateId) {
       setError('选择「指定模板详情」后请在下方面板中选择一个目标模板');
       return;
@@ -222,6 +235,11 @@ export function BannerManager({
       tag: form.tag.trim(),
       route: form.route,
       condition: form.condition,
+      kind: form.kind,
+      // 广告外部跳转 URL（kind=ad 时必填）
+      externalUrl: (form.externalUrl || '').trim() || null,
+      // 广告位绝对槽位下标；留空 = 放最后（null）
+      position: form.position.trim() === '' ? null : Math.max(0, Math.floor(Number(form.position))),
       // route 为模板详情时下发模板 id，其余清空
       templateId: form.route === '/templates/detail' ? (form.templateId || '') : '',
       // 空串 = 清除配图；未改动时为后端原值，原样传回
@@ -353,8 +371,11 @@ export function BannerManager({
                     </div>
                   </TableCell>
                   <TableCell>
+                  <div className="flex flex-wrap items-center gap-1">
                     <Badge variant="outline">{b.tag}</Badge>
-                  </TableCell>
+                    {b.kind === 'ad' && <Badge variant="secondary">广告</Badge>}
+                  </div>
+                </TableCell>
                   <TableCell className="max-w-[200px]">
                     <code className="block truncate font-mono text-xs text-muted-foreground" title={b.route}>
                       {b.route}
@@ -544,12 +565,58 @@ export function BannerManager({
               </p>
             </div>
 
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label>种类</Label>
+                <Select
+                  value={form.kind}
+                  onValueChange={(v) => setForm({ ...form, kind: v })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="operation">运营位</SelectItem>
+                    <SelectItem value="ad">广告</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bnr-position">广告槽位（留空=最后）</Label>
+                <Input
+                  id="bnr-position"
+                  type="number"
+                  min={0}
+                  value={form.position}
+                  onChange={(e) => setForm({ ...form, position: e.target.value })}
+                  placeholder="如：4"
+                  disabled={form.kind !== 'ad'}
+                />
+              </div>
+            </div>
+
+            {form.kind === 'ad' && (
+              <div className="space-y-2">
+                <Label htmlFor="bnr-ext-url">外部跳转 URL *</Label>
+                <Input
+                  id="bnr-ext-url"
+                  value={form.externalUrl}
+                  onChange={(e) => setForm({ ...form, externalUrl: e.target.value })}
+                  placeholder="如：https://example.com/campaign"
+                  maxLength={512}
+                  className="font-mono"
+                />
+                <p className="text-xs text-muted-foreground">
+                  点击该广告后会在 App 内调起系统浏览器打开此链接（不跳 App 内路由）；仅启用中的广告会在首页展示。
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>跳转路由 *</Label>
                 <Select
                   value={form.route}
                   onValueChange={(v) => setForm({ ...form, route: v })}
+                  disabled={form.kind === 'ad'}
                 >
                   <SelectTrigger><SelectValue placeholder="选择路由" /></SelectTrigger>
                   <SelectContent>

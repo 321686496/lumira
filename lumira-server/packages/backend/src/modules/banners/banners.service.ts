@@ -67,6 +67,9 @@ export class BannersService {
         focusY: r.focusY ?? 0.5,
         focusZoom: r.focusZoom ?? 1,
         condition: r.condition,
+        kind: r.kind,
+        position: r.position ?? null,
+        externalUrl: r.externalUrl ?? null,
       })),
     };
     await this.redisService.setJson(LIST_CACHE_KEY, result, LIST_CACHE_TTL);
@@ -92,20 +95,25 @@ export class BannersService {
       if (existing.length > 0) throw new ConflictException(`Banner id already exists: ${id}`);
     }
     const now = Math.floor(Date.now() / 1000);
+    const kind = dto.kind ?? 'operation';
+    // condition 列 NOT NULL：ad 不参与条件匹配，存入占位值 hasLockedTemplate
     await db.insert(operationBanners).values({
       id,
       title: dto.title,
       subtitle: dto.subtitle,
       tag: dto.tag,
-      route: dto.route,
+      route: dto.route ?? '',
       templateId: dto.templateId ?? null,
       imageUrl: dto.imageUrl || null,
       focusX: clampFocus(dto.focusX, 0, 1, 0.5),
       focusY: clampFocus(dto.focusY, 0, 1, 0.5),
       focusZoom: clampFocus(dto.focusZoom, 1, 3, 1),
-      condition: dto.condition,
+      condition: dto.condition ?? 'hasLockedTemplate',
+      kind,
       isActive: dto.isActive === false ? 0 : 1,
       sortOrder: dto.sortOrder ?? 0,
+      position: dto.position ?? null,
+      externalUrl: dto.externalUrl || null,
       createdAt: now,
       updatedAt: now,
     });
@@ -128,8 +136,12 @@ export class BannersService {
     if (dto.focusY !== undefined) patch.focusY = clampFocus(dto.focusY, 0, 1, 0.5);
     if (dto.focusZoom !== undefined) patch.focusZoom = clampFocus(dto.focusZoom, 1, 3, 1);
     if (dto.condition !== undefined) patch.condition = dto.condition;
+    if (dto.kind !== undefined) patch.kind = dto.kind;
     if (dto.isActive !== undefined) patch.isActive = dto.isActive ? 1 : 0;
     if (dto.sortOrder !== undefined) patch.sortOrder = dto.sortOrder;
+    if (dto.position !== undefined) patch.position = dto.position || null;
+    // externalUrl：null/空串清除，其余原样存
+    if (dto.externalUrl !== undefined) patch.externalUrl = dto.externalUrl || null;
     await db.update(operationBanners).set(patch).where(eq(operationBanners.id, id));
     await this.invalidateListCache();
     return (await this.getById(id))!;
