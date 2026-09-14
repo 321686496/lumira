@@ -15,6 +15,7 @@ import '../recommend/template_ranking.dart';
 import '../recommend/daily_recommendator.dart';
 import '../data/templates_mock_data.dart';
 import '../data/templates_browse_mock_data.dart';
+import 'remote_templates_providers.dart';
 import '../widgets/recommendation_card.dart';
 import '../widgets/template_grid.dart';
 
@@ -132,6 +133,13 @@ final hotAndNewTemplatesProvider = FutureProvider<List<TemplateRecord>>((ref) as
 /// 候选池 = 内置推荐位 ∪ 全部远程模板（后台实时下发，纳入推荐以提供活水）。
 final recommendedBuiltinTemplatesProvider =
     FutureProvider<List<TemplateRecord>>((ref) async {
+  // 先等线上模板同步完成，再读取候选池并排序，避免"先用不含远程模板的本地池
+  // 算出一批初始卡片、线上更新后再整批刷新"的闪烁。网络失败时静默降级本地候选池
+  // （保留离线可用性）；后续同步成功会因 watch 依赖自动重算。
+  try {
+    await ref.watch(remoteTemplatesSyncProvider.future);
+  } catch (_) {}
+
   final dao = await ref.watch(templatesDaoProvider.future);
   final base = await dao.getRecommendedCandidatePool();
   if (base.isEmpty) return const [];
