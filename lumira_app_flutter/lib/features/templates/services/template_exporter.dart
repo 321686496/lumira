@@ -34,6 +34,7 @@ class TemplateExporter {
         'author': record.author,
         'version': record.version,
         'category': record.category,
+        'gender': record.gender,
         'classification': Map<String, dynamic>.from(record.classification),
         'tags': List<String>.from(record.tags),
         'tagIds': List<String>.from(record.tagIds),
@@ -66,6 +67,7 @@ class TemplateExporter {
         'id': record.id,
         'name': record.name,
         'category': record.category,
+        'gender': record.gender,
         'tags': List<String>.from(record.tags),
       },
       'camera': {

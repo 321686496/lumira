@@ -44,6 +44,28 @@ void main() {
       final code = TemplateShareCode.buildShareCode(record);
       expect(code, 'LUMIRA-still_life-电影_夜景');
     });
+
+    test('非通用（女）模板生成 v2 分享码携带性别', () {
+      final record = _makeRecord().copyWith(gender: 'female');
+      final code = TemplateShareCode.buildShareCode(record);
+      expect(code, 'LUMIRA-v2-portrait-female-测试模板');
+    });
+
+    test('非通用（男）模板生成 v2 分享码携带性别', () {
+      final record = _makeRecord().copyWith(gender: 'male');
+      final code = TemplateShareCode.buildShareCode(record);
+      expect(code, 'LUMIRA-v2-portrait-male-测试模板');
+    });
+
+    test('v2 分享码经 parseCode 往返保留性别', () {
+      final record = _makeRecord().copyWith(gender: 'female');
+      final code = TemplateShareCode.buildShareCode(record);
+      final parsed = TemplateShareCode.parseCode(code);
+      expect(parsed, isNotNull);
+      expect(parsed!['category'], 'portrait');
+      expect(parsed['gender'], 'female');
+      expect(parsed['name'], '测试模板');
+    });
   });
 
   group('TemplateShareCode.buildShareLink / parseLink 往返', () {
@@ -57,6 +79,7 @@ void main() {
       expect(parsed!['name'], '测试模板');
       expect(parsed['meta'], isA<Map>());
       expect(parsed['format'], 'lumira');
+      expect((parsed['meta'] as Map)['gender'], 'unisex');
     });
 
     test('完整 .pptpl 链接可被 parseLink 解析', () {
@@ -94,6 +117,18 @@ void main() {
     test('非法分类回退 still-life', () {
       final parsed = TemplateShareCode.parseCode('LUMIRA-unknown-模板A');
       expect(parsed!['category'], 'still-life');
+    });
+
+    test('v2 男性分享码解析出 gender=male', () {
+      final parsed = TemplateShareCode.parseCode('LUMIRA-v2-portrait-male-模板A');
+      expect(parsed!['category'], 'portrait');
+      expect(parsed['gender'], 'male');
+      expect(parsed['name'], '模板A');
+    });
+
+    test('旧格式分享码无 gender 字段', () {
+      final parsed = TemplateShareCode.parseCode('LUMIRA-portrait-模板A');
+      expect(parsed!['gender'], isNull);
     });
 
     test('非 LUMIRA 前缀返回 null', () {
