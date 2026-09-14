@@ -151,19 +151,49 @@ class RecommendationService {
     }
 
     // === slot 1：新用户引导/问卷（前置判断）或最近常拍分类 ===
+    // 统一读取问卷（含性别 + 二级风格偏好）；老用户可从未答或已拍模板推断风格。
+    final questionnaire = await _questionnaireDao.getAnswers();
+    final userGender = questionnaire?.gender;
+    // 偏好风格集合：问卷二级风格 ∪ 老用户最常拍模板的二级风格（含目录缺失时回退）
+    final preferredStyles = <String>{...?questionnaire?.favoriteStyles};
+    if (!isNewUser) {
+      try {
+        final templateCounts = await _galleryDao.countByTemplate();
+        if (templateCounts.isNotEmpty) {
+          final topEntry =
+              templateCounts.entries.reduce((a, b) => a.value >= b.value ? a : b);
+          final topTpl = await _templatesDao.getById(topEntry.key);
+          final s = topTpl == null ? null : _secondaryStyleOf(topTpl);
+          if (s != null) preferredStyles.add(s);
+        }
+      } catch (e) {
+        debugPrint('[recommend] infer preferred style failed (silent fallback): $e');
+      }
+    }
+
     if (isNewUser) {
       // 优先读问卷偏好，推用户首选分类的推荐模板
-      final questionnaire = await _questionnaireDao.getAnswers();
       final favCats = questionnaire?.favoriteCategories ?? [];
       HomeBannerItem? questionnaireBanner;
       if (favCats.isNotEmpty) {
         final topCat = favCats.first;
-        final tpls = await _templatesDao.getBuiltin(
+        var tpls = await _templatesDao.getBuiltin(
           category: topCat,
           isRecommended: true,
         );
-        if (tpls.isNotEmpty) {
-          final tpl = tpls.first;
+        // 二级风格细分：问卷在"大类下勾选的风格"进行过滤（无偏好不收敛）
+        if (preferredStyles.isNotEmpty) {
+          final styleFiltered = tpls
+              .where((t) => preferredStyles.contains(_secondaryStyleOf(t)))
+              .toList();
+          if (styleFiltered.isNotEmpty) tpls = styleFiltered;
+        }
+        final candidates = _rankCandidates(tpls, usedTemplateIds);
+        // 性别软偏好：同性别 + 通用模板优先（未知性别不分组），匹配组空回退全池
+        final tpl = _pickGenderPreferred(
+          candidates, userGender, popularity, interestById,
+        );
+        if (tpl != null) {
           usedTemplateIds.add(tpl.id);
           usedCategories.add(topCat);
           final label = _categoryLabelMap[topCat] ?? '推荐';
@@ -195,23 +225,33 @@ class RecommendationService {
         usedSceneIds.add('preset_cafe');
       }
     } else {
-      // 老用户：基于最近拍摄分类
+      // 老用户：基于最近拍摄分类，细分到偏好二级风格 + 性别匹配
       final topCategory = _pickTopCategory(categoryCounts);
       TemplateRecord? slot1Tpl;
       var slot1Tag = '为你精选'; // 冷启动 fallback 标签
       if (topCategory != null) {
-        // 去重：排除已占用模板 + 最近用过模板
-        final tpls = await _templatesDao.getBuiltin(
+        var tpls = await _templatesDao.getBuiltin(
           category: topCategory,
           isRecommended: true,
         );
+        // 二级风格细分：优先推荐与用户偏好风格一致的模板（无偏好不收敛）
+        if (preferredStyles.isNotEmpty) {
+          final styleFiltered = tpls
+              .where((t) => preferredStyles.contains(_secondaryStyleOf(t)))
+              .toList();
+          if (styleFiltered.isNotEmpty) tpls = styleFiltered;
+        }
+        // 去重：排除已占用模板 + 最近用过模板
         final candidates = _rankCandidates(
           tpls,
           usedTemplateIds,
           recentlyUsed: recentlyUsed,
         );
         if (candidates.isNotEmpty) {
-          slot1Tpl = _pickBest(candidates, popularity, interestById);
+          // 性别软偏好：同性别 + 通用模板优先
+          slot1Tpl = _pickGenderPreferred(
+            candidates, userGender, popularity, interestById,
+          );
           slot1Tag = '常拍分类';
           usedCategories.add(topCategory);
         }
@@ -477,6 +517,36 @@ class RecommendationService {
       }
     }
     return best;
+  }
+
+  /// 模板的「二级风格 key」：人像取 majorStyle，其余取 style。
+  /// 与分类树 L2（人像大风格/非人像风格）保持一致。
+  String? _secondaryStyleOf(TemplateRecord t) {
+    final cls = t.classification;
+    final major = cls['majorStyle'] as String?;
+    if (major != null && major.isNotEmpty) return major;
+    return cls['style'] as String?;
+  }
+
+  /// 性别「软偏好」选择：同性别 + 通用(unisex) 模板优先；
+  /// 用户性别未知/不便透露时不分组；匹配组为空时回退全池，保证不空槽。
+  TemplateRecord? _pickGenderPreferred(
+    List<TemplateRecord> candidates,
+    String? userGender,
+    Map<String, int> popularity,
+    Map<String, double> interestById,
+  ) {
+    if (candidates.isEmpty) return null;
+    if (userGender == null ||
+        userGender.isEmpty ||
+        userGender == 'prefer_not') {
+      return _pickBest(candidates, popularity, interestById);
+    }
+    final matched = candidates
+        .where((t) => t.gender == 'unisex' || t.gender == userGender)
+        .toList();
+    return _pickBest(matched, popularity, interestById) ??
+        _pickBest(candidates, popularity, interestById);
   }
 
   /// 从系统推荐列表中取未占用、且“(热度*0.5 + 个人兴趣*0.5) 混合分”最大的模板；
