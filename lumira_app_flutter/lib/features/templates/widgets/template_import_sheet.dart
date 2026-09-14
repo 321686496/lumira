@@ -427,6 +427,8 @@ class TemplateImportSheet extends ConsumerWidget {
     try {
       final name = parsed['name'] as String;
       final category = parsed['category'] as String;
+      // v2 分享码携带明确适用性别；null 则沿用分类默认模板的性别
+      final gender = parsed['gender'] as String?;
       final now = DateTime.now().millisecondsSinceEpoch;
 
       // 从内置模板取该 category 首个模板的参数作为默认值
@@ -448,6 +450,8 @@ class TemplateImportSheet extends ConsumerWidget {
         cover: '',
         isBuiltin: false,
         isRecommended: false,
+        // 分享码携带性别时覆盖默认；gender 为 null 时 copyWith 保持 defaultTpl 的性别
+        gender: gender,
       );
 
       final dao = await ref.read(templatesDaoProvider.future);

@@ -13,10 +13,18 @@ import 'template_exporter.dart';
 class TemplateShareCode {
   TemplateShareCode._();
 
-  /// 构建分享码：`LUMIRA-{category}-{name}`
+  /// 构建分享码：`LUMIRA-{category}-{name}`（通用 unisex）
+  /// 或 `LUMIRA-v2-{category}-{gender}-{name}`（男/女模板，携带适用性别）。
+  ///
+  /// 为保持与既有已发布分享码兼容：仅非通用（male/female）模板才用 v2 格式
+  /// 携带 gender，通用模板沿用旧格式（老分享码与新装 App 均按旧格式解析）。
   static String buildShareCode(TemplateRecord record) {
     final category = _sanitizeSegment(record.category);
     final name = _sanitizeSegment(record.name);
+    if (record.gender == 'male' || record.gender == 'female') {
+      final g = _sanitizeSegment(record.gender);
+      return 'LUMIRA-v2-$category-$g-$name';
+    }
     return 'LUMIRA-$category-$name';
   }
 
@@ -95,12 +103,32 @@ class TemplateShareCode {
     }
   }
 
-  /// 解析分享码（LUMIRA-分类-名称）
+  /// 解析分享码（LUMIRA-分类-名称 或 LUMIRA-v2-分类-性别-名称）。
+  ///
+  /// 返回参数含可选 `gender`（可为 null）：v2 格式携带明确性别；旧格式无性别信息
+  /// 返回 null，由调用方沿用该分类默认模板的性别。
   static Map<String, dynamic>? parseCode(String code) {
     if (!code.startsWith('LUMIRA-')) return null;
 
     final parts = code.split('-');
     if (parts.length < 3) return null;
+
+    // v2：LUMIRA-v2-{category}-{gender}-{name}
+    if (parts[1] == 'v2') {
+      if (parts.length < 5) return null;
+      final category = normalizeCategory(parts[2].toLowerCase());
+      final gender = (parts[3] == 'male' || parts[3] == 'female')
+          ? parts[3]
+          : 'unisex';
+      final name = parts.sublist(4).join('-');
+      return {
+        'name': name,
+        'category': category,
+        'gender': gender,
+        'tags': <String>['导入'],
+        'coverSeed': 'qr-$code',
+      };
+    }
 
     final category = normalizeCategory(parts[1].toLowerCase());
     final name = parts.sublist(2).join('-');
