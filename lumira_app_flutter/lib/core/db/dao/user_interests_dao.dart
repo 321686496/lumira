@@ -1,7 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../tables.dart';
 
-/// 用户兴趣画像记录（scope=category|major_style|style，key=对应维度）
+/// 用户兴趣画像记录（scope=category|style|sub_style|method|major_style（旧兼容），key=对应维度）
 class UserInterest {
   final String scope;
   final String key;
