@@ -2337,6 +2337,19 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
             }),
           ),
           const SizedBox(height: 14),
+          // 适用性别（必选，默认通用）：可选 通用 / 男 / 女
+          _FieldLabel(tokens: tokens, text: '适用性别'),
+          _FieldDropdown(
+            tokens: tokens,
+            value: form.meta.gender,
+            options: const [
+              EditorOption('unisex', '通用'),
+              EditorOption('male', '男'),
+              EditorOption('female', '女'),
+            ],
+            onChanged: (v) => onChange(() => form.meta.gender = v),
+          ),
+          const SizedBox(height: 14),
           // Task6: 短简介（≤20 字）
           _FieldLabel(tokens: tokens, text: '短简介'),
           _FieldInput(

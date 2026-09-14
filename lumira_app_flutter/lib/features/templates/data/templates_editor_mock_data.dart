@@ -67,6 +67,7 @@ class EditorFormMeta {
     this.id = '',
     this.name = '',
     this.category = 'portrait',
+    this.gender = 'unisex',
     this.tags = const [],
     this.description = '',
     this.referenceSource = '',
@@ -85,6 +86,8 @@ class EditorFormMeta {
   String id;
   String name;
   String category; // 'portrait' / 'landscape' / 'food' / 'street' / 'night' / 'macro' / 'still-life'
+  /// 适用性别：'unisex'（通用）/ 'male'（男）/ 'female'（女）。
+  String gender;
   List<String> tags;
   String description;
   String referenceSource;
@@ -126,6 +129,7 @@ class EditorFormMeta {
         id: id,
         name: name,
         category: category,
+        gender: gender,
         tags: List<String>.from(tags),
         description: description,
         referenceSource: referenceSource,

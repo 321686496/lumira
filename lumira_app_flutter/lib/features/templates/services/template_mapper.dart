@@ -314,7 +314,7 @@ class TemplateMapper {
       description: form.meta.description,
       referenceSource: form.meta.referenceSource,
       shortDesc: form.meta.shortDesc,
-      gender: 'unisex',
+      gender: form.meta.gender,
       ambienceJson: TemplateMapper.ambienceToJson(
         form.meta.ambience ?? const RemoteTemplateAmbienceDto()),
       composition: compositionJson,
@@ -391,6 +391,7 @@ class TemplateMapper {
                 : null
             : null,
         shortDesc: r.shortDesc,
+        gender: r.gender,
         ambience: TemplateMapper.ambienceFromJson(r.ambienceJson),
         images: (r.images == null)
             ? (r.coverData?.isNotEmpty == true
