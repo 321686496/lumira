@@ -14,6 +14,7 @@ import '../../../features/points/data/points_repository.dart';
 import '../../../features/gallery/data/gallery_models.dart';
 import '../../../features/usage/usage_providers.dart';
 import '../../../core/theme/theme_controller.dart';
+import '../../capture/domain/photo_template.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/safe_share.dart';
 import '../../../shared/services/poster_generator.dart';
@@ -1266,10 +1267,40 @@ class _TitleAndTags extends ConsumerWidget {
               spacing: 6,
               runSpacing: 6,
               children: [
+                if (template.gender != TemplateGender.unisex)
+                  _GenderLabel(tokens: tokens, gender: template.gender),
                 for (final tag in template.tags) TagChip(label: tag, kind: TagChipKind.system),
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 模板适用性别标签（男 / 女；通用 unisex 不展示）。
+class _GenderLabel extends StatelessWidget {
+  const _GenderLabel({required this.tokens, required this.gender});
+
+  final ThemeTokens tokens;
+  final TemplateGender gender;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = gender == TemplateGender.male ? '男' : '女';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: tokens.brandSubtle,
+        borderRadius: BorderRadius.circular(9999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: tokens.brandText,
         ),
       ),
     );

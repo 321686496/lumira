@@ -25,6 +25,8 @@ class TemplateRecord {
   final String description;
   final String referenceSource;
   final String shortDesc;
+  /// 适用性别（v58 新增）：'unisex'|'male'|'female'，缺省 'unisex'。
+  final String gender;
   final String ambienceJson;
   final Map<String, dynamic> composition;
   /// pose 载体（Phase 1 兼容两种形态）：
@@ -61,6 +63,7 @@ class TemplateRecord {
     required this.description,
     required this.referenceSource,
     this.shortDesc = '',
+    this.gender = 'unisex',
     this.ambienceJson = '{}',
     required this.composition,
     required this.pose,
@@ -95,6 +98,7 @@ class TemplateRecord {
       Tables.colDescription: description,
       Tables.colReferenceSource: referenceSource,
       Tables.colShortDesc: shortDesc,
+      Tables.colTemplateGender: gender,
       Tables.colAmbienceJson: ambienceJson,
       Tables.colCompositionJson: jsonEncode(composition),
       Tables.colPoseJson: jsonEncode(pose),
@@ -126,6 +130,7 @@ class TemplateRecord {
       description: (row[Tables.colDescription] as String?) ?? '',
       referenceSource: (row[Tables.colReferenceSource] as String?) ?? '',
       shortDesc: (row[Tables.colShortDesc] as String?) ?? '',
+      gender: (row[Tables.colTemplateGender] as String?) ?? 'unisex',
       ambienceJson: (row[Tables.colAmbienceJson] as String?) ?? '{}',
       composition: _decodeJsonMap(row[Tables.colCompositionJson]),
       pose: _decodeJsonAny(row[Tables.colPoseJson]),
@@ -160,6 +165,7 @@ class TemplateRecord {
     String? description,
     String? referenceSource,
     String? shortDesc,
+    String? gender,
     String? ambienceJson,
     Map<String, dynamic>? composition,
     dynamic pose,
@@ -188,6 +194,7 @@ class TemplateRecord {
       description: description ?? this.description,
       referenceSource: referenceSource ?? this.referenceSource,
       shortDesc: shortDesc ?? this.shortDesc,
+      gender: gender ?? this.gender,
       ambienceJson: ambienceJson ?? this.ambienceJson,
       composition: composition ?? this.composition,
       pose: pose ?? this.pose,

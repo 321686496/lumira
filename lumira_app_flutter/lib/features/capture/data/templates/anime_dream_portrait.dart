@@ -8,6 +8,7 @@ const PhotoTemplate animeDreamPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'anime_dream_portrait',
     name: '草地蓝天跳跃少女｜清新日系人像模板',
+    gender: TemplateGender.female,
     author: 'Lumira',
     version: '1.0.0',
     category: 'portrait',

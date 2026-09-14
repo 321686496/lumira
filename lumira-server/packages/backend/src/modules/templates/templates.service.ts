@@ -19,6 +19,7 @@ import type {
   TemplateClassification,
   TemplateSearchSort,
   TemplateSearchResponse,
+  TemplateGender,
 } from '@lumira/shared';
 
 @Injectable()
@@ -370,10 +371,11 @@ export class TemplatesService {
     since?: number,
     category?: string,
     subtreeKeys?: string[],
+    gender?: TemplateGender,
   ): Promise<RemoteTemplateListResponse> {
     // 缓存 key 按筛选维度（category × subtree）分 key，不含 since 时间戳 → 键数量从"无界"收敛为"有限组合数"；
     // 命中后 since 在内存过滤（缓存存的是整份筛选结果）。subtreeKeys 先 sort() 消除客户端顺序不稳定导致的 key 漂移。
-    const scopeKey = `${category ?? ''}:${subtreeKeys ? [...subtreeKeys].sort().join('|') : ''}`;
+    const scopeKey = `${category ?? ''}:${subtreeKeys ? [...subtreeKeys].sort().join('|') : ''}:${gender ?? ''}`;
     const key = `lumira:cache:templateList:list:${scopeKey}`;
     const result = await this.redisService.getJson<RemoteTemplateListResponse>(key);
     if (result !== null) {
@@ -390,6 +392,13 @@ export class TemplatesService {
     // 未命中：构建整份筛选列表（条件不含 since），并计算
     //   serverUpdatedAt = 源列表 max(updatedAt)（不代表 since 过滤后的子集，保证增量拉取不漏数据）
     const conditions = [eq(templates.isActive, 1)];
+    if (gender) {
+      // 通用(unisex)与指定性别均需命中「通用」模板：用户选"男/女"时应同时看到通用模板。
+      // 因此 `gender = ?` 用 IN 匹配指定值或 'unisex'，其余情况（gender 未传）不过滤。
+      conditions.push(
+        inArray(templates.gender, [gender, 'unisex' as TemplateGender]),
+      );
+    }
     if (subtreeKeys && subtreeKeys.length > 0) {
       // 子树集合匹配：任一 classification 字段命中集合即算（含 category 直接命中）
       const keyList = sql.join(subtreeKeys.map((k) => sql`${k}`), sql`, `) as SQL;
@@ -470,6 +479,7 @@ const TEMPLATE_META_SELECT = {
   ambienceJson: templates.ambienceJson,
   imagesJson: templates.imagesJson,
   shortDesc: templates.shortDesc,
+  gender: templates.gender,
   sortOrder: templates.sortOrder,
   createdAt: templates.createdAt,
   updatedAt: templates.updatedAt,
@@ -503,6 +513,7 @@ export function rowToMeta(row: TemplateMetaRow): RemoteTemplateMeta {
     classification: safeParseClassification(row.classificationJson),
     ambience: parseAmbience(row.ambienceJson),
     shortDesc: row.shortDesc ?? '',
+    gender: normalizeGender(row.gender),
     sortOrder: row.sortOrder,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -588,6 +599,11 @@ function safeParseStringArray(json: string): string[] {
   } catch {
     return [];
   }
+}
+
+/** 归一化模板适用性别，非法/空值回退到 'unisex'。 */
+function normalizeGender(value: unknown): TemplateGender {
+  return value === 'male' || value === 'female' ? value : 'unisex';
 }
 
 function safeParseClassification(json: string): TemplateClassification {

@@ -8,6 +8,7 @@ const PhotoTemplate foodiePortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'foodie_portrait',
     name: '美食人像半身',
+    gender: TemplateGender.female,
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',

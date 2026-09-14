@@ -7,6 +7,7 @@ const PhotoTemplate creamHealingPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'cream_healing_portrait',
     name: '奶油暖调半身人像',
+    gender: TemplateGender.female,
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',

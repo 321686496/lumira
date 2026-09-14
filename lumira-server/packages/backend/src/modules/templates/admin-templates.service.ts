@@ -305,6 +305,7 @@ export class AdminTemplatesService {
       postProcessJson: JSON.stringify(postProcess),
       ambienceJson: JSON.stringify(sanitizeAmbience(meta.ambience)),
       shortDesc: meta.shortDesc ?? '',
+      gender: meta.gender ?? 'unisex',
       createdAt: now,
       updatedAt: now,
     });
@@ -516,6 +517,7 @@ export class AdminTemplatesService {
     updateData.postProcessJson = JSON.stringify(postProcess);
     if (meta.ambience !== undefined) updateData.ambienceJson = JSON.stringify(sanitizeAmbience(meta.ambience));
     if (meta.shortDesc !== undefined) updateData.shortDesc = meta.shortDesc;
+    if (meta.gender !== undefined) updateData.gender = meta.gender;
 
     await db.update(templates).set(updateData).where(eq(templates.id, id));
 

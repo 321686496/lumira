@@ -25,6 +25,8 @@ class RemoteTemplateMetaDto {
   final String description;
   final String shortDesc;
   final String referenceSource;
+  /// 适用性别（原始字符串）：'unisex'|'male'|'female'，缺省为 'unisex'。
+  final String gender;
   final List<String> tags;
   final List<String> tagIds;
   final RemoteTemplateClassificationDto classification;
@@ -46,6 +48,7 @@ class RemoteTemplateMetaDto {
     required this.description,
     this.shortDesc = '',
     required this.referenceSource,
+    this.gender = 'unisex',
     required this.tags,
     required this.tagIds,
     required this.classification,
@@ -68,6 +71,7 @@ class RemoteTemplateMetaDto {
       description: j['description'] as String? ?? '',
       shortDesc: j['shortDesc'] as String? ?? '',
       referenceSource: j['referenceSource'] as String? ?? '',
+      gender: j['gender'] as String? ?? 'unisex',
       tags: (j['tags'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
@@ -275,6 +279,8 @@ class RemoteTemplateDetailDto {
   final String description;
   final String shortDesc;
   final String referenceSource;
+  /// 适用性别（原始字符串）：'unisex'|'male'|'female'，缺省为 'unisex'。
+  final String gender;
   final List<String> tags;
   final List<String> tagIds;
   final RemoteTemplateClassificationDto classification;
@@ -306,6 +312,7 @@ class RemoteTemplateDetailDto {
     required this.description,
     this.shortDesc = '',
     required this.referenceSource,
+    this.gender = 'unisex',
     required this.tags,
     required this.tagIds,
     required this.classification,
@@ -343,6 +350,7 @@ class RemoteTemplateDetailDto {
       description: meta.description,
       shortDesc: meta.shortDesc,
       referenceSource: meta.referenceSource,
+      gender: meta.gender,
       tags: meta.tags,
       tagIds: meta.tagIds,
       classification: meta.classification,

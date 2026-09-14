@@ -33,7 +33,7 @@ import 'dao/templates_drafts_dao.dart';
 import '../../features/templates/recommend/user_interests.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 57;
+const int _kDbVersion = 58;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -346,6 +346,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colSource} TEXT NOT NULL DEFAULT 'builtin',
       ${Tables.colShortDesc} TEXT NOT NULL DEFAULT '',
       ${Tables.colAmbienceJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colTemplateGender} TEXT NOT NULL DEFAULT 'unisex',
       ${Tables.colCreatedAt} INTEGER NOT NULL,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
@@ -1659,6 +1660,20 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       );
     } catch (e) {
       debugPrint('v57 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 58) {
+    try {
+      // v58: custom_templates 新增 gender 列（模板适用性别：unisex/male/female）
+      await _addColumnIfNotExists(
+        db,
+        Tables.customTemplates,
+        Tables.colTemplateGender,
+        "TEXT NOT NULL DEFAULT 'unisex'",
+      );
+    } catch (e) {
+      debugPrint('v58 migration failed (silent fallback): $e');
     }
   }
 }

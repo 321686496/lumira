@@ -8,6 +8,7 @@ const PhotoTemplate purpleDuskPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'purple_dusk_portrait',
     name: '紫色黄昏半身人像',
+    gender: TemplateGender.female,
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',

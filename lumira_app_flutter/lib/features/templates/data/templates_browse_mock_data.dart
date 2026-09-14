@@ -228,6 +228,7 @@ class TemplateDetail {
     this.shortDesc = '',
     this.description = '',
     this.ambience,
+    this.gender = TemplateGender.unisex,
     this.updatedAt = 0,
     this.createdAt = 0,
   });
@@ -242,6 +243,8 @@ class TemplateDetail {
   final String description;
   /// 季节/天气/时段氛围元数据（详情展示用，来自后端 ambience）。
   final RemoteTemplateAmbienceDto? ambience;
+  /// 适用性别（spec 2026-09-14）：'unisex'（通用）/ 'male'（男）/ 'female'（女）。
+  final TemplateGender gender;
   /// 后端更新时间戳（毫秒，详情展示用）。
   final int updatedAt;
   /// 模板发布时间戳（毫秒，详情展示用；内置/旧模板为 0 时详情页隐藏）。
@@ -480,6 +483,7 @@ class AllTemplateItem {
     this.shortDesc = '',
     this.description = '',
     this.ambience,
+    this.gender = TemplateGender.unisex,
   });
   final String id;
   final String name;
@@ -496,6 +500,9 @@ class AllTemplateItem {
   final String description;
   /// 氛围元数据（chips 展示用）。
   final RemoteTemplateAmbienceDto? ambience;
+
+  /// 适用性别（spec 2026-09-14）：'unisex'（通用）/ 'male'（男）/ 'female'（女）。
+  final TemplateGender gender;
 
   /// 内置模板 assets 路径或远程模板 http URL（可能为空）
   final String? cover;
@@ -1686,6 +1693,7 @@ class TemplatesBrowseMockData {
       shortDesc: tpl.meta.shortDesc,
       description: tpl.meta.description,
       ambience: tpl.meta.ambience,
+      gender: tpl.meta.gender,
       updatedAt: tpl.meta.updatedAt,
       createdAt: tpl.meta.createdAt,
       majorStyle: cls.majorStyle.isNotEmpty

@@ -8,6 +8,7 @@ const PhotoTemplate softPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'soft_portrait',
     name: '窗边柔光人像',
+    gender: TemplateGender.female,
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',

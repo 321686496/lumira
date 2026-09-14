@@ -8,6 +8,7 @@ const PhotoTemplate japaneseFreshPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'japanese_fresh_portrait',
     name: '日系清新回眸人像',
+    gender: TemplateGender.female,
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',

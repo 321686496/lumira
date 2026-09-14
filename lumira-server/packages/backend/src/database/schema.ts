@@ -1,4 +1,4 @@
-// lumira-server/packages/backend/src/database/schema.ts
+﻿// lumira-server/packages/backend/src/database/schema.ts
 
 import { sql } from 'drizzle-orm';
 import { mysqlTable, text, int, bigint, double, longtext, uniqueIndex, varchar, index } from 'drizzle-orm/mysql-core';
@@ -212,6 +212,8 @@ export const templates = mysqlTable('templates', {
   ambienceJson: longtext('ambience_json').notNull().default('{}'),
   // 短简介（≤10字，banner/模板卡片展示用）
   shortDesc: text('short_desc').notNull().default(''),
+  // 适用性别（spec 2026-09-14）：'unisex'|'male'|'female'，默认 unisex
+  gender: text('gender').notNull().default('unisex'),
   createdAt: int('created_at').notNull(),
   updatedAt: int('updated_at').notNull(),
 });

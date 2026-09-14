@@ -8,6 +8,7 @@ const PhotoTemplate frenchLazyPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'french_lazy_portrait',
     name: '法式慵懒半身人像',
+    gender: TemplateGender.female,
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',

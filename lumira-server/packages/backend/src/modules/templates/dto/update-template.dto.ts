@@ -4,7 +4,7 @@
 // 注意：未引入 @nestjs/mapped-types 依赖，故手写所有可选字段
 
 import {
-  IsString, IsOptional, IsInt, IsArray, IsBoolean, Min, MaxLength, MinLength,
+  IsString, IsOptional, IsInt, IsArray, IsBoolean, Min, MaxLength, MinLength, IsIn,
 } from 'class-validator';
 
 export class UpdateTemplateDto {
@@ -44,6 +44,11 @@ export class UpdateTemplateDto {
   @IsString()
   @MaxLength(20)
   shortDesc?: string;
+
+  @IsOptional()
+  @IsIn(['unisex', 'male', 'female'])
+  /** 适用性别：'unisex'（通用）| 'male'（男）| 'female'（女） */
+  gender?: 'unisex' | 'male' | 'female';
 
   @IsOptional()
   ambience?: {

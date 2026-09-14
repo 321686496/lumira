@@ -8,6 +8,7 @@ const PhotoTemplate blueNightPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'blue_night_portrait',
     name: '蓝色之夜七分身人像',
+    gender: TemplateGender.female,
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
