@@ -351,7 +351,7 @@ class _HeroSection extends ConsumerWidget {
     // Forced fix: 用 recommendedBuiltinTemplatesProvider 替代 templatesDaoProvider + FutureBuilder，
     // 缓存查询结果避免每次 build 反复进入 loading 状态导致 SizedBox(244) 持续显示 loading 圈。
     // loading/error/空数据时不渲染 SizedBox(244)，避免标题下方出现大空白。
-    final asyncList = ref.watch(recommendedBuiltinTemplatesProvider);
+    final asyncList = ref.watch(todayRecommendationItemsProvider);
     // 已拍照片数（Hero 卡右下角角标，与模板库卡片一致）
     final usageCounts = ref.watch(templateUsageCountsProvider).valueOrNull ?? const <String, int>{};
     return FadeUp(
@@ -387,7 +387,7 @@ class _HeroSection extends ConsumerWidget {
                     itemCount: list.length,
                     separatorBuilder: (_, __) => const SizedBox(width: 10), // gap 20rpx → 10dp
                     itemBuilder: (_, index) {
-                      final rec = templateRecordToRecommendation(list[index]);
+                      final rec = list[index];
                       return RecommendationCard(
                         recommendation: rec,
                         usageCount: usageCounts[rec.id] ?? 0,

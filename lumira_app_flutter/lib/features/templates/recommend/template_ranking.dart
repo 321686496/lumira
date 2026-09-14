@@ -87,6 +87,14 @@ class TemplateRanking {
     return wCategory * c + relevant;
   }
 
+  /// 画像命中阈值：interest 得分超过该值即视为「画像推荐」（用于展示来源/理由）。
+  static const double kMatchThreshold = 0.35;
+
+  /// 判断模板是否为画像命中（仅展示用，不影响排序）。
+  bool isProfileMatch(TemplateRecord t, RankingContext ctx) {
+    return interestFor(t, ctx) >= kMatchThreshold;
+  }
+
   /// 打分全量候选（含归一化与问卷/近期展示加减分）
   List<TemplateScore> scoreAll(List<TemplateRecord> templates, RankingContext ctx) {
     if (templates.isEmpty) return const [];
