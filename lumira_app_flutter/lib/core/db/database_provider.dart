@@ -33,7 +33,7 @@ import 'dao/templates_drafts_dao.dart';
 import '../../features/templates/recommend/user_interests.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 58;
+const int _kDbVersion = 59;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -1674,6 +1674,18 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       );
     } catch (e) {
       debugPrint('v58 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 59) {
+    try {
+      // v59: 回填内置模板的 gender 字段。
+      // v58 仅新增 gender 列（默认 'unisex'），已有安装的内置女模板行 gender 仍为
+      // unisex，导致模板卡片/列表性别角标不显示、性别筛选匹配不到 female 模板；
+      // 与既有模板字段迁移一致，重新种子化内置模板以从 TemplateRegistry 回填正确性别。
+      await BuiltinDataSeeder.reseedBuiltinTemplates(db);
+    } catch (e) {
+      debugPrint('v59 migration failed (silent fallback): $e');
     }
   }
 }
