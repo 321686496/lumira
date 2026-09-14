@@ -13,6 +13,9 @@ enum SearchPriceFilter { all, free, paid }
 /// 模板照片比例筛选候选（对应 composition['aspectRatio']）。
 const List<String> kTemplateAspectRatios = ['1:1', '3:4', '4:3', '9:16', '16:9'];
 
+/// 模板适用性别筛选候选（null=全部）。
+const List<String> kTemplateGenderOptions = ['male', 'female'];
+
 /// 搜索筛选状态。
 /// 字段刻意用 String（category/sceneStyle/academyTopic/academyLevel 都是 key/枚举名），
 /// 使本文件不依赖任何业务模型，保持 shared 层解耦。
@@ -26,6 +29,7 @@ class SearchFilters {
   SearchPriceFilter price; // template 专用
   bool ownedOnly; // template 专用：仅我拥有的
   String? ratio; // template 专用：照片比例（kTemplateAspectRatios 之一，null=全部）
+  String? gender; // template 专用：适用性别（'male'|'female'，null=全部）
   Set<int> userTagIds; // 通用：用户标签 AND
 
   SearchFilters({
@@ -38,6 +42,7 @@ class SearchFilters {
     this.price = SearchPriceFilter.all,
     this.ownedOnly = false,
     this.ratio,
+    this.gender,
     Set<int>? userTagIds,
   }) : userTagIds = userTagIds ?? <int>{};
 
@@ -51,6 +56,7 @@ class SearchFilters {
     SearchPriceFilter? price,
     bool? ownedOnly,
     String? Function()? ratio,
+    String? Function()? gender,
     Set<int>? userTagIds,
   }) {
     return SearchFilters(
@@ -64,6 +70,7 @@ class SearchFilters {
       price: price ?? this.price,
       ownedOnly: ownedOnly ?? this.ownedOnly,
       ratio: ratio != null ? ratio() : this.ratio,
+      gender: gender != null ? gender() : this.gender,
       userTagIds: userTagIds ?? this.userTagIds,
     );
   }
@@ -81,5 +88,6 @@ class SearchFilters {
       price != SearchPriceFilter.all ||
       ownedOnly ||
       ratio != null ||
+      gender != null ||
       userTagIds.isNotEmpty;
 }

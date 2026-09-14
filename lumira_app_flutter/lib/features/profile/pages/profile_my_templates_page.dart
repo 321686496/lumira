@@ -14,6 +14,7 @@ import '../../../shared/widgets/effects/recessed_surface.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/data/capture_state.dart';
+import '../../capture/domain/photo_template.dart';
 import '../../templates/services/template_exporter.dart';
 import '../../templates/services/template_image_store.dart';
 import '../../templates/widgets/adaptive_cover_image.dart';
@@ -52,6 +53,7 @@ CustomTemplate _recordToCustomTemplate(TemplateRecord r) {
     shutterSpeed: (r.camera['shutterSpeed'] as String?) ?? '1/125',
     usageCount: 0,
     isFavorite: false,
+    gender: TemplateGender.from(r.gender),
   );
 }
 
@@ -875,6 +877,27 @@ class _TplCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                // 适用性别徽标：叠在封面右上角（非通用才展示）
+                if (t.gender != TemplateGender.unisex)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: tokens.brand.withOpacity(0.85),
+                        borderRadius: BorderRadius.circular(9999),
+                      ),
+                      child: Text(
+                        t.gender == TemplateGender.male ? '男' : '女',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
             Padding(

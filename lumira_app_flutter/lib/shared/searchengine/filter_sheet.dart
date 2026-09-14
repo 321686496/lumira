@@ -109,6 +109,7 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
                     _section(tokens, '模板 · 价格', _priceItems()),
                     _section(tokens, '模板 · 来源', _sourceItems()),
                     _section(tokens, '模板 · 比例', _ratioItems()),
+                    _section(tokens, '模板 · 性别', _genderItems()),
                     _section(tokens, '场景 · 分类', _sceneCategoryItems()),
                     _section(tokens, '场景 · 风格', _sceneStyleItems()),
                     _section(tokens, '美学院 · 主题', _topicItems()),
@@ -121,6 +122,7 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
                       _section(tokens, '价格', _priceItems()),
                       _section(tokens, '来源', _sourceItems()),
                       _section(tokens, '比例', _ratioItems()),
+                      _section(tokens, '性别', _genderItems()),
                     ],
                     if (widget.scope == SearchScope.scene) ...[
                       _section(tokens, '分类', _sceneCategoryItems()),
@@ -308,6 +310,22 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
           label: r,
           active: _draft.ratio == r,
           onTap: () => setState(() => _draft = _draft.copyWith(ratio: () => r)),
+        ),
+    ];
+  }
+
+  List<Widget> _genderItems() {
+    return [
+      LumiraFilterChip(
+        label: '全部',
+        active: _draft.gender == null,
+        onTap: () => setState(() => _draft = _draft.copyWith(gender: () => null)),
+      ),
+      for (final g in kTemplateGenderOptions)
+        LumiraFilterChip(
+          label: g == 'female' ? '女' : '男',
+          active: _draft.gender == g,
+          onTap: () => setState(() => _draft = _draft.copyWith(gender: () => g)),
         ),
     ];
   }

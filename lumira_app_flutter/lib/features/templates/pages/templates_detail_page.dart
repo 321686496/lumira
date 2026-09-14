@@ -1267,8 +1267,7 @@ class _TitleAndTags extends ConsumerWidget {
               spacing: 6,
               runSpacing: 6,
               children: [
-                if (template.gender != TemplateGender.unisex)
-                  _GenderLabel(tokens: tokens, gender: template.gender),
+                _GenderLabel(tokens: tokens, gender: template.gender),
                 for (final tag in template.tags) TagChip(label: tag, kind: TagChipKind.system),
               ],
             ),
@@ -1279,7 +1278,7 @@ class _TitleAndTags extends ConsumerWidget {
   }
 }
 
-/// 模板适用性别标签（男 / 女；通用 unisex 不展示）。
+/// 模板适用性别标签（男 / 女 / 通用，始终展示）。
 class _GenderLabel extends StatelessWidget {
   const _GenderLabel({required this.tokens, required this.gender});
 
@@ -1288,7 +1287,14 @@ class _GenderLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = gender == TemplateGender.male ? '男' : '女';
+    final String label;
+    if (gender == TemplateGender.male) {
+      label = '男生适用';
+    } else if (gender == TemplateGender.female) {
+      label = '女生适用';
+    } else {
+      label = '通用';
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
