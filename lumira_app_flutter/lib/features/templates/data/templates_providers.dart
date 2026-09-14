@@ -15,6 +15,7 @@ import '../recommend/template_ranking.dart';
 import '../recommend/daily_recommendator.dart';
 import '../data/templates_mock_data.dart';
 import '../data/templates_browse_mock_data.dart';
+import '../widgets/recommendation_card.dart';
 import '../widgets/template_grid.dart';
 
 /// 各模板在本机已拍摄的照片数（模板卡片「已拍 N 张」角标）。
@@ -225,4 +226,72 @@ final favoriteTemplatesProvider =
     items.add(templateGridItemFromRecord(r, isCustom: r.source == 'custom'));
   }
   return items;
+});
+
+/// 「今日为你推荐」展示项：在 recommendedBuiltinTemplatesProvider 基础上，
+/// 为画像命中项生成"匹配你常拍的【…】"四级理由与同分类角标；未命中项保留短简介 + 系统精选。
+final todayRecommendationItemsProvider =
+    FutureProvider.autoDispose<List<TemplateRecommendation>>((ref) async {
+  final ranked = await ref.watch(recommendedBuiltinTemplatesProvider.future);
+  if (ranked.isEmpty) return const [];
+
+  // 画像（用于命中判定，复用与 ranking provider 相同的读取方式）
+  final interestsDao = await ref.watch(userInterestsDaoProvider.future);
+  final portrait = <String, double>{};
+  for (final e in (await interestsDao.getAll()).entries) {
+    portrait[e.key] = e.value.score;
+  }
+  final ctx = RankingContext(
+    portrait: portrait,
+    nowMs: DateTime.now().millisecondsSinceEpoch,
+  );
+  final ranker = TemplateRanking();
+
+  // 分类中文名表（L2-L4），按父级路径精确解析（同名 L3 拍法如 normal 挂在多个父级下）
+  final dao = await ref.watch(templatesDaoProvider.future);
+  final categories = await dao.getCategories(activeOnly: false);
+  final byKey = <String, List<TemplateCategoryRecord>>{};
+  for (final c in categories) {
+    byKey.putIfAbsent(c.key, () => []).add(c);
+  }
+  String nameOf(String key, String? parentKey) {
+    final list = byKey[key] ?? const <TemplateCategoryRecord>[];
+    if (list.isEmpty) return key;
+    if (parentKey == null) return list.first.name;
+    final byParent = list.where((c) => c.parentKey == parentKey);
+    return (byParent.isNotEmpty ? byParent.first : list.first).name;
+  }
+
+  final out = <TemplateRecommendation>[];
+  for (final r in ranked) {
+    final base = templateRecordToRecommendation(r);
+    if (!ranker.isProfileMatch(r, ctx)) {
+      out.add(base);
+      continue;
+    }
+    final cls = r.classification;
+    final maj = cls['majorStyle'] is String ? cls['majorStyle'] as String : '';
+    final sub = cls['subStyle'] is String ? cls['subStyle'] as String : '';
+    final method = cls['method'] is String ? cls['method'] as String : '';
+    final seg = <String>[
+      TemplatesBrowseMockData.categoryLabel(r.category),
+      if (maj.isNotEmpty) nameOf(maj, r.category),
+      if (sub.isNotEmpty) nameOf(sub, maj.isEmpty ? null : maj),
+      if (method.isNotEmpty) nameOf(method, maj.isEmpty ? null : maj),
+    ];
+    out.add(TemplateRecommendation(
+      id: base.id,
+      name: base.name,
+      reason: '匹配你常拍的【${seg.join(' · ')}】',
+      source: TemplateSource.categoryMatch,
+      imageSeed: base.imageSeed,
+      category: base.category,
+      cover: base.cover,
+      coverData: base.coverData,
+      price: base.price,
+      isCustom: base.isCustom,
+      ambience: base.ambience,
+    ));
+  }
+  return out;
 });
