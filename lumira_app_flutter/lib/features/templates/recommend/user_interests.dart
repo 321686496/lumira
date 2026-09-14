@@ -14,6 +14,8 @@ class InterestService {
   static const String scopeCategory = 'category';
   static const String scopeMajorStyle = 'major_style';
   static const String scopeStyle = 'style';
+  static const String scopeSubStyle = 'sub_style';
+  static const String scopeMethod = 'method';
 
   final InterestDao _dao;
   final TemplatesDao _templatesDao;
@@ -38,17 +40,31 @@ class InterestService {
     return base + weight;
   }
 
-  /// 记录一次正反馈，按模板分类把 weight 写入 category/majorStyle/style 三维。
+  /// 记录一次正反馈，按模板分类把 weight 写入四级画像
+  /// （category/style/subStyle/method；人像 L2 取 majorStyle，非人像取 style）。
   Future<void> recordSignal(String templateId, double weight) async {
     try {
       final now = DateTime.now().millisecondsSinceEpoch;
       final tpl = await _resolveTemplate(templateId);
       if (tpl == null) return;
       await _bump(scopeCategory, tpl.category, weight, now);
-      final maj = tpl.classification['majorStyle'];
-      if (maj is String) await _bump(scopeMajorStyle, maj, weight, now);
-      final sty = tpl.classification['style'];
-      if (sty is String) await _bump(scopeStyle, sty, weight, now);
+
+      final cls = tpl.classification;
+      final maj = cls['majorStyle'];
+      final sty = cls['style'];
+      final l2 = (maj is String && maj.isNotEmpty)
+          ? maj
+          : (sty is String ? sty : '');
+      if (l2.isNotEmpty) await _bump(scopeStyle, l2, weight, now);
+
+      final sub = cls['subStyle'];
+      if (sub is String && sub.isNotEmpty) {
+        await _bump(scopeSubStyle, sub, weight, now);
+      }
+      final method = cls['method'];
+      if (method is String && method.isNotEmpty) {
+        await _bump(scopeMethod, method, weight, now);
+      }
     } catch (e) {
       debugPrint('[interest] recordSignal failed (silent): $e');
     }
