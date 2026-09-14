@@ -53,13 +53,7 @@ class SceneRecoCard extends ConsumerWidget {
                   ? null
                   : Border.all(color: tokens.divider, width: 1)), // 2rpx → 1dp
           boxShadow: isGlass
-              ? const [
-                  BoxShadow(
-                    color: Color(0x1F000000),
-                    offset: Offset(0, 6),
-                    blurRadius: 20,
-                  ),
-                ]
+              ? tokens.shadowFloat
               : (isNeumorphic ? tokens.shadowConvex : null),
         ),
         child: ClipRRect(
@@ -86,7 +80,7 @@ class SceneRecoCard extends ConsumerWidget {
                         decoration: BoxDecoration(
                           color: scene.badgeBrand
                               ? tokens.brand
-                              : const Color(0x991A1A1A), // rgba(26,26,26,0.6)
+                              : Colors.black.withOpacity(0.6),
                           borderRadius: BorderRadius.circular(1000),
                         ),
                         child: Text(

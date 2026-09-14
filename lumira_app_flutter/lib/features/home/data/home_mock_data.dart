@@ -33,6 +33,7 @@ class SceneReco {
   final String badgeText;
   final bool badgeBrand;
   final int photoCount;
+
   /// 真实封面：`data:image/` base64、http(s)、本地文件路径；空串表示无封面
   final String coverUrl;
 }
@@ -46,6 +47,7 @@ class RecentShot {
     required this.imageSeed,
     required this.createdAt,
     this.isFavorite = false,
+    this.photoId,
     this.templateId,
     this.sceneId,
     this.imageFilePath,
@@ -63,7 +65,10 @@ class RecentShot {
   /// 是否已收藏（卡片右下角展示真实收藏状态）
   final bool isFavorite;
 
-  /// 模板 / 场景 ID（用于"再拍一次"直达对应拍摄流程，可为空则不可复用）
+  /// 真实照片 ID，用于首页最近拍摄直达详情
+  final String? photoId;
+
+  /// 模板 / 场景 ID（用于“再拍一次”直达对应拍摄流程，可为空则不可复用）
   final String? templateId;
   final String? sceneId;
 
@@ -117,11 +122,14 @@ class HomeBannerItem {
   final String subtitle;
   final String imageSeed;
   final String tag;
+
   /// 点击跳转路由（带查询参数）
   final String route;
+
   /// 模板封面（assets 路径或 http URL），用于模板类 banner 背景图。
   /// 非空时与 [coverData] 一起传给 TemplateCoverImage 渲染背景。
   final String? cover;
+
   /// 模板封面 base64 data URL（自定义模板场景）。
   final String? coverData;
 

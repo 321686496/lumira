@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -16,6 +17,7 @@ import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/scenes/pages/scenes_page.dart';
+import 'package:lumira_app_flutter/features/scenes/scenes_sync_service.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
@@ -36,10 +38,20 @@ void main() {
   ProviderContainer? seedContainer;
 
   setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    const MethodChannel('plugins.flutter.io/path_provider')
+        .setMockMethodCallHandler((call) async {
+      if (call.method == 'getApplicationDocumentsDirectory' ||
+          call.method == 'getTemporaryDirectory') {
+        return Directory.systemTemp.createTempSync('lumira_test').path;
+      }
+      return null;
+    });
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
     // 确保使用全新的 DB 文件并种入种子场景数据
-    final dbDir = await getDatabasesPath();
+    final dbDir = Directory.systemTemp.createTempSync('lumira_scenes_test').path;
+    await databaseFactory.setDatabasesPath(dbDir);
     final dbPath = p.join(dbDir, 'lumira.db');
     try {
       await databaseFactory.deleteDatabase(dbPath);
@@ -122,6 +134,11 @@ void main() {
         databaseProvider.overrideWith((ref) async => sharedDb),
         // 直接覆盖 scenesDaoProvider，避免 FutureProvider 异步解析时序问题
         scenesDaoProvider.overrideWith((ref) async => ScenesDao(sharedDb)),
+        scenesSyncServiceProvider.overrideWith((ref) async => ScenesSyncService(
+              await ref.watch(scenesDaoProvider.future),
+              await ref.watch(usageDaoProvider.future),
+              _NoopScenesNetwork(),
+            )),
       ],
       child: MaterialApp.router(routerConfig: goRouter),
     );
@@ -265,6 +282,30 @@ void main() {
       expect(find.text('室内空间'), findsOneWidget);
       // 场景名不再显示
       expect(find.text('黄昏剪影'), findsNothing);
+    });
+
+    testWidgets('system back from category returns to overview', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(
+          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic,
+              initialLocation: RouteNames.home));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      await tester.runAsync(() async {
+        final homeContext = tester.element(find.text('HOME_PAGE'));
+        GoRouter.of(homeContext).push(RouteNames.scenes);
+      });
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      await tester.tap(find.text('光线氛围'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      expect(find.widgetWithText(LumiraNav, '光线氛围'), findsOneWidget);
+
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      await navigator.maybePop();
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.widgetWithText(LumiraNav, '场景库'), findsOneWidget);
     });
   });
 
@@ -494,5 +535,12 @@ class _StubPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(body: Center(child: Text(text)));
+  }
+}
+
+class _NoopScenesNetwork implements ScenesNetwork {
+  @override
+  Future<Map<String, dynamic>> fetchScenes() async {
+    return const <String, dynamic>{};
   }
 }

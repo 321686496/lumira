@@ -31,8 +31,10 @@ enum _ParamTool { ev, wb, flash, color, detail, composition, scene }
 /// 白平衡应用逻辑（预设→色温联动、OHOS 隐藏色温滑块、iOS 残差拉取）
 /// 与旧版一致，仅迁移位置。
 class ParamPanel extends ConsumerStatefulWidget {
-  const ParamPanel({super.key});
+  const ParamPanel({super.key, this.bottomInset = 0});
 
+  /// 贴底浮层时传入安全区高度；作为底部抽屉嵌入时保持 0。
+  final double bottomInset;
   @override
   ConsumerState<ParamPanel> createState() => _ParamPanelState();
 }
@@ -45,6 +47,7 @@ class _ParamPanelState extends ConsumerState<ParamPanel> {
 
   void _close() {
     ref.read(CaptureState.panelExpandedProvider.notifier).state = false;
+    ref.read(CaptureState.activeToolProvider.notifier).state = null;
   }
 
   void _toggleTool(_ParamTool tool) {
@@ -81,69 +84,45 @@ class _ParamPanelState extends ConsumerState<ParamPanel> {
     );
     final hasTemplate =
         ref.watch(CaptureState.editableTemplateProvider) != null;
-    final bottomInset = MediaQuery.of(context).viewPadding.bottom;
+    if (!expanded) return const SizedBox.shrink();
 
-    return Stack(
-      children: [
-        // 点击面板外取景器区域关闭整栏（面板本体在其上层，不受影响）
-        if (expanded)
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: _close,
-              child: const SizedBox.expand(),
-            ),
+    // 面板可作为 CaptureBottomBar 抽屉渲染，也可由拍摄页作为贴底浮层渲染。
+    return _panelShell(
+      bottomInset: widget.bottomInset,
+      visual: visual,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _HandleRow(
+            hasTemplate: hasTemplate,
+            visual: visual,
+            onReset: _reset,
+            onClose: _close,
           ),
-        // 面板本体：底部贴边 + AnimatedSlide 进出（高度由内容自然撑开，
-        // 控件区用 AnimatedSize 滑出，避免固定高容器在动画期溢出）
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: AnimatedSlide(
+          _ToolbarRow(
+            activeTool: _activeTool,
+            visual: visual,
+            onToolTap: _toggleTool,
+          ),
+          AnimatedSize(
             duration: const Duration(milliseconds: 260),
             curve: Curves.easeOutCubic,
-            offset: expanded ? Offset.zero : const Offset(0, 1.2),
-            child: _panelShell(
-              bottomInset: bottomInset,
-              visual: visual,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _HandleRow(
-                    hasTemplate: hasTemplate,
-                    visual: visual,
-                    onReset: _reset,
-                    onClose: _close,
+            alignment: Alignment.topCenter,
+            child: _activeTool == null
+                ? const SizedBox.shrink()
+                : SizedBox(
+                    height: _controlH,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      child: KeyedSubtree(
+                        key: ValueKey(_activeTool),
+                        child: _buildControl(visual),
+                      ),
+                    ),
                   ),
-                  _ToolbarRow(
-                    activeTool: _activeTool,
-                    visual: visual,
-                    onToolTap: _toggleTool,
-                  ),
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 260),
-                    curve: Curves.easeOutCubic,
-                    alignment: Alignment.topCenter,
-                    child: _activeTool == null
-                        ? const SizedBox.shrink()
-                        : SizedBox(
-                            height: _controlH,
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 180),
-                              child: KeyedSubtree(
-                                key: ValueKey(_activeTool),
-                                child: _buildControl(visual),
-                              ),
-                            ),
-                          ),
-                  ),
-                ],
-              ),
-            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -187,9 +166,8 @@ class _ParamPanelState extends ConsumerState<ParamPanel> {
     final accent = visual.accent;
     // theme 模式下内部滑块/调节条传主题色板（浅色可读）；
     // immersive 传 null 走组件内置暗色回退
-    final isTheme =
-        ref.watch(CaptureState.captureAppearanceProvider) ==
-            CaptureAppearance.theme;
+    final isTheme = ref.watch(CaptureState.captureAppearanceProvider) ==
+        CaptureAppearance.theme;
     final adjustTokens = isTheme ? ref.watch(themeTokensProvider) : null;
     switch (_activeTool!) {
       case _ParamTool.ev:
@@ -260,8 +238,7 @@ class _HandleRow extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color:
-                  hasTemplate ? accent.withOpacity(0.15) : visual.fillSubtle,
+              color: hasTemplate ? accent.withOpacity(0.15) : visual.fillSubtle,
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
@@ -681,12 +658,10 @@ class _SceneControl extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text('当前为自由模式，无场景指南',
-                style:
-                    TextStyle(color: visual.foregroundMuted, fontSize: 12)),
+                style: TextStyle(color: visual.foregroundMuted, fontSize: 12)),
             const SizedBox(height: 4),
             Text('选择场景预设或套用模板后可查看',
-                style:
-                    TextStyle(color: visual.foregroundMuted, fontSize: 10)),
+                style: TextStyle(color: visual.foregroundMuted, fontSize: 10)),
           ],
         ),
       );
@@ -711,9 +686,7 @@ class _SceneControl extends ConsumerWidget {
                   child: Text(
                     row.value.isEmpty ? '—' : row.value,
                     style: TextStyle(
-                        color: visual.foreground,
-                        fontSize: 11,
-                        height: 1.4),
+                        color: visual.foreground, fontSize: 11, height: 1.4),
                   ),
                 ),
               ],
@@ -761,8 +734,7 @@ class _ChoicePillRow extends StatelessWidget {
             onTap: () => onSelected(item.value),
             behavior: HitTestBehavior.opaque,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: item.value == selected
                     ? accent.withOpacity(0.18)

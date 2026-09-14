@@ -226,9 +226,15 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
 
-    return Scaffold(
-      backgroundColor: tokens.canvas,
-      body: Stack(
+    return WillPopScope(
+      onWillPop: () async {
+        if (_isOverview) return true;
+        _back();
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: tokens.canvas,
+        body: Stack(
         children: [
           const Positioned.fill(child: GlassBackground()),
           SafeArea(
@@ -270,7 +276,8 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
           ),
         ],
       ),
-      floatingActionButton: _Fab(onTap: _goCreate),
+        floatingActionButton: _Fab(onTap: _goCreate),
+      ),
     );
   }
 }

@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/database_provider.dart';
+import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/network/api_client.dart';
 import '../../gallery/providers/gallery_diary_providers.dart' as gallery;
 import '../../profile/providers/growth_providers.dart';
@@ -138,6 +139,7 @@ final homeRecentShotsProvider =
       createdAt: DateTime.fromMillisecondsSinceEpoch(p.createdAt),
       // 真实收藏状态：卡片右下角展示
       isFavorite: p.isFavorite,
+      photoId: p.id,
       // 复用来源：供"再拍一次"直达对应模板/场景拍摄
       templateId: p.templateId,
       sceneId: p.sceneId,
@@ -188,6 +190,39 @@ final homeSceneRecosProvider =
   );
   final result = await service.build();
   return result;
+});
+
+/// 首页模板快捷流 Provider
+/// 优先取最近真实拍摄过的模板；没有拍摄历史时返回推荐候选池，
+/// 但通过偏移取数避免与发现页「今日为你推荐」完全一致。
+final homeRecentTemplateStripProvider =
+    FutureProvider<List<TemplateRecord>>((ref) async {
+  final galleryDao = await ref.watch(galleryDaoProvider.future);
+  final templatesDao = await ref.watch(templatesDaoProvider.future);
+
+  final recentPhotos = await galleryDao.getRecent(limit: 30);
+  final orderedIds = <String>[];
+  final seenIds = <String>{};
+  for (final photo in recentPhotos) {
+    final templateId = photo.templateId;
+    if (templateId == null ||
+        templateId.isEmpty ||
+        !seenIds.add(templateId)) {
+      continue;
+    }
+    orderedIds.add(templateId);
+  }
+
+  final records = <TemplateRecord>[];
+  for (final id in orderedIds) {
+    final record = await templatesDao.getById(id);
+    if (record != null) records.add(record);
+  }
+  if (records.isNotEmpty) return records.take(6).toList();
+
+  final fallback = await templatesDao.getRecommendedCandidatePool();
+  if (fallback.length <= 6) return fallback;
+  return fallback.skip(2).take(6).toList();
 });
 
 /// 首页今日灵感 Provider

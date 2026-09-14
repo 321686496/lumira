@@ -113,6 +113,16 @@ Future<ui.FragmentProgram?> _loadDetailProgram() =>
       ],
     );
 
+Future<ui.FragmentProgram?>? _coreProgramFuture;
+
+Future<ui.FragmentProgram?> _loadCoreDetailProgram() =>
+    _coreProgramFuture ??= loadFragmentProgramFromCandidates(
+      const [
+        'assets/shaders/edit_smooth_sharpen.frag',
+        'shaders/edit_smooth_sharpen.frag',
+      ],
+    );
+
 /// 编辑页细节效果实时预览层：单 pass fragment shader 完成
 /// 拉腿(几何) → 锐化 → 颗粒 → 磨皮 → 暗角，数值语义与四端成片管线统一
 ///（见 edit_detail_effects.frag 头注释）。
@@ -148,12 +158,14 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
   ui.Image? _image;
   String? _decodingUrl;
   ui.FragmentProgram? _program;
+  ui.FragmentProgram? _coreProgram;
 
   @override
   void initState() {
     super.initState();
     _decode();
     _loadProgram();
+    _loadCoreProgram();
   }
 
   @override
@@ -182,6 +194,9 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
     if (!mounted || _decodingUrl != targetUrl) {
       next?.dispose();
       return;
+    }
+    if (next == null) {
+      debugPrint('[detail-effects] source decode failed: $targetUrl');
     }
     setState(() => _image = next);
   }
@@ -242,17 +257,40 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
     try {
       prog = await _loadDetailProgram();
     } catch (_) {
+      debugPrint('[detail-effects] detail shader load failed');
       prog = null;
+    }
+    if (prog == null) {
+      debugPrint('[detail-effects] detail shader unavailable');
     }
     if (!mounted) return;
     setState(() => _program = prog);
   }
 
+  Future<void> _loadCoreProgram() async {
+    ui.FragmentProgram? prog;
+    try {
+      prog = await _loadCoreDetailProgram();
+    } catch (e) {
+      debugPrint('[detail-effects] core shader load failed: $e');
+      prog = null;
+    }
+    if (prog == null) {
+      debugPrint('[detail-effects] core shader unavailable');
+    }
+    if (!mounted) return;
+    setState(() => _coreProgram = prog);
+  }
+
   @override
   Widget build(BuildContext context) {
     final img = _image;
+    final coreOnly = widget.effects.vignette == 0 &&
+        widget.effects.grain == 0 &&
+        widget.effects.legStretch == 0;
     final prog = _program;
-    if (img == null || prog == null) {
+    final activeProgram = coreOnly ? (_coreProgram ?? prog) : prog;
+    if (img == null || activeProgram == null) {
       // 未就绪 / 解码失败 / shader 加载失败 → 原图片路径。
       return widget.fallback();
     }
@@ -263,11 +301,23 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
           img.width.toDouble(),
           img.height.toDouble(),
         ),
-        child: FutureBuilder<ui.Image>(
+          child: coreOnly
+              ? CustomPaint(
+                  painter: CoreDetailEffectsPainter(
+                    image: img,
+                    effects: widget.effects,
+                    program: activeProgram,
+                  ),
+                )
+              : FutureBuilder<ui.Image>(
           future: loadGrainNoiseTile(),
           builder: (context, snapshot) {
             final noise = snapshot.data;
             if (noise == null) {
+              if (snapshot.hasError) {
+                debugPrint(
+                    '[detail-effects] noise tile failed: ${snapshot.error}');
+              }
               return widget.fallback();
             }
             // 注意：CustomPaint 的 painter 绘制在 child **之下**（SDK
@@ -276,14 +326,14 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
             // 原图会完全遮盖 shader 输出（细节参数调整不可见）；拉腿比例变化
             // 时 child 上下留边，shader 以重影形式露出（2026-09-10 修复）。
             // 尺寸由 AspectRatio 的 tight 约束给定，无需 child 提供布局。
-            return CustomPaint(
-              painter: DetailEffectsPainter(
-                image: img,
-                noise: noise,
-                effects: widget.effects,
-                program: prog,
-              ),
-            );
+                    return CustomPaint(
+                      painter: DetailEffectsPainter(
+                        image: img,
+                        noise: noise,
+                        effects: widget.effects,
+                        program: activeProgram,
+                      ),
+                    );
           },
         ),
       ),
@@ -327,7 +377,8 @@ class DetailEffectsPainter extends CustomPainter {
         ..setImageSampler(0, image)
         ..setImageSampler(1, noise);
       canvas.drawRect(Offset.zero & size, Paint()..shader = shader);
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[detail-effects] detail shader paint failed: $e\n$st');
       _fallback(canvas, size);
     }
   }
@@ -352,4 +403,48 @@ class DetailEffectsPainter extends CustomPainter {
       oldDelegate.effects.vignette != effects.vignette ||
       oldDelegate.effects.grain != effects.grain ||
       oldDelegate.effects.legStretch != effects.legStretch;
+}
+
+class CoreDetailEffectsPainter extends CustomPainter {
+  CoreDetailEffectsPainter({
+    required this.image,
+    required this.effects,
+    required this.program,
+  });
+
+  final ui.Image image;
+  final DetailEffectsParams effects;
+  final ui.FragmentProgram program;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    try {
+      final shader = program.fragmentShader()
+        ..setFloat(0, size.width)
+        ..setFloat(1, size.height)
+        ..setFloat(2, image.width.toDouble())
+        ..setFloat(3, image.height.toDouble())
+        ..setFloat(
+            4, (effects.sharpen / 100.0 * 6.0).clamp(-6.0, 6.0).toDouble())
+        ..setFloat(
+            5, (effects.smoothStrength / 100.0).clamp(0.0, 1.0).toDouble())
+        ..setImageSampler(0, image);
+      canvas.drawRect(Offset.zero & size, Paint()..shader = shader);
+    } catch (e, st) {
+      debugPrint('[detail-effects] core shader paint failed: $e\n$st');
+      canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        Offset.zero & size,
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CoreDetailEffectsPainter oldDelegate) =>
+      oldDelegate.image != image ||
+      oldDelegate.program != program ||
+      oldDelegate.effects.sharpen != effects.sharpen ||
+      oldDelegate.effects.smoothStrength != effects.smoothStrength;
 }

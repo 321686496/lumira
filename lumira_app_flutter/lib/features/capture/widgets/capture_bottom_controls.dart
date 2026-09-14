@@ -2,16 +2,16 @@
 // from capture_page.dart so the template preview page can reuse the exact
 // same layout/controls as the real capture screen.
 // ignore_for_file: use_key_in_widget_constructors
-import 'dart:io';
-
 import 'dart:math' as math;
+
+import 'dart:async';
+
+import 'package:flutter/rendering.dart' as rendering;
 
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
-
 import '../../../core/theme/capture_appearance.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -19,16 +19,58 @@ import '../../../shared/widgets/lumira/_internal/lumira_theme_resolver.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/capture_state.dart';
 import '../data/custom_fill_light_colors.dart';
+import '../data/recent_fill_light_colors.dart';
 import '../domain/photo_template.dart';
 import 'capture_button.dart';
 import 'capture_thumbnail.dart';
 import 'filter_picker.dart';
+import 'param_panel.dart';
 import 'scene_preset_strip.dart';
 import 'template_drawer_panel.dart';
 import 'template_strip.dart';
 
 /// 相机权限状态（由 capture_page.dart 迁移至此，供 CameraPermissionGuide 与拍摄页共用）。
 enum CameraPermissionStatus { unknown, granted, denied, permanentlyDenied }
+
+/// 上报自身最终布局尺寸，供取景器在面板动画期间同步让位。
+class _SizeReportingWidget extends SingleChildRenderObjectWidget {
+  const _SizeReportingWidget({
+    required this.onSizeChanged,
+    super.child,
+  });
+
+  final ValueChanged<Size>? onSizeChanged;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return _RenderSizeReporting(onSizeChanged);
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _RenderSizeReporting renderObject,
+  ) {
+    renderObject.onSizeChanged = onSizeChanged;
+  }
+}
+
+class _RenderSizeReporting extends rendering.RenderProxyBox {
+  _RenderSizeReporting(this.onSizeChanged);
+
+  ValueChanged<Size>? onSizeChanged;
+  Size? _lastReportedSize;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    final currentSize = size;
+    if (_lastReportedSize == currentSize || onSizeChanged == null) return;
+    final callback = onSizeChanged!;
+    _lastReportedSize = currentSize;
+    scheduleMicrotask(() => callback(currentSize));
+  }
+}
 
 /// 底部控制区：缩放Tab栏 + 工具栏 + 抽屉 + 拍摄按钮行
 /// 修复 Bug 10：全屏模式下隐藏工具栏与抽屉，保留拍摄按钮、缩略图、切换摄像头
@@ -44,6 +86,8 @@ class CaptureBottomBar extends ConsumerWidget {
     required this.onThumbnailTap,
     this.rawCaptureKey,
     this.thumbnailKey,
+    this.onHeightChanged,
+    this.paramPanelOverlay = false,
   });
 
   final bool isFullscreen;
@@ -54,6 +98,10 @@ class CaptureBottomBar extends ConsumerWidget {
   final VoidCallback onThumbnailTap;
   final GlobalKey? rawCaptureKey;
   final GlobalKey? thumbnailKey;
+  final ValueChanged<Size>? onHeightChanged;
+
+  /// true 时参数面板由页面渲染为贴底浮层，抽屉不再重复占位。
+  final bool paramPanelOverlay;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -78,36 +126,42 @@ class CaptureBottomBar extends ConsumerWidget {
               stops: const [0.0, 0.4, 0.7, 1.0],
             ),
           );
-    return Container(
-      decoration: decoration,
-      child: Padding(
-        padding: EdgeInsets.only(bottom: bottomPadding),
-        // clipBehavior: Clip.none 允许缩放轮盘向上溢出到取景器区域
-        // （此 OHOS fork 的 Column 不透传 clipBehavior，改用 Flex 显式指定）
-        child: Flex(
-          direction: Axis.vertical,
-          mainAxisSize: MainAxisSize.min,
-          clipBehavior: Clip.none,
-          children: [
-            // 缩放Tab栏（全屏 / 试用模式隐藏）
-            if (!isFullscreen && !isTrialMode)
-              ZoomBar(onChanged: onZoomChanged),
+    return _SizeReportingWidget(
+      onSizeChanged: onHeightChanged,
+      child: Container(
+        decoration: decoration,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: bottomPadding),
+          // clipBehavior: Clip.none 允许缩放轮盘向上溢出到取景器区域
+          // （此 OHOS fork 的 Column 不透传 clipBehavior，改用 Flex 显式指定）
+          child: Flex(
+            direction: Axis.vertical,
+            mainAxisSize: MainAxisSize.min,
+            clipBehavior: Clip.none,
+            children: [
+              // 缩放Tab栏（全屏 / 试用模式隐藏）
+              if (!isFullscreen && !isTrialMode)
+                ZoomBar(onChanged: onZoomChanged),
 
-            // 工具栏 + 抽屉（全屏 / 试用模式隐藏）
-            if (!isFullscreen && !isTrialMode) ...[
-              const CaptureToolbar(),
-              AnimatedToolDrawer(rawCaptureKey: rawCaptureKey),
+              // 工具栏 + 抽屉（全屏 / 试用模式隐藏）
+              if (!isFullscreen && !isTrialMode) ...[
+                const CaptureToolbar(),
+                AnimatedToolDrawer(
+                  rawCaptureKey: rawCaptureKey,
+                  showParamPanel: !paramPanelOverlay,
+                ),
+              ],
+
+              // 拍摄按钮行（试用模式下快门替换为锁定态，不响应拍照）
+              CaptureButtonRow(
+                onCapture: onCapture,
+                onSwitchCamera: onSwitchCamera,
+                onThumbnailTap: onThumbnailTap,
+                thumbnailKey: thumbnailKey,
+                locked: isTrialMode,
+              ),
             ],
-
-            // 拍摄按钮行（试用模式下快门替换为锁定态，不响应拍照）
-            CaptureButtonRow(
-              onCapture: onCapture,
-              onSwitchCamera: onSwitchCamera,
-              onThumbnailTap: onThumbnailTap,
-              thumbnailKey: thumbnailKey,
-              locked: isTrialMode,
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -191,6 +245,10 @@ class CaptureToolbar extends ConsumerWidget {
       }
       return;
     }
+    // 离开参数工具时同步收起参数面板，避免取景器继续保留让位高度
+    if (ref.read(CaptureState.panelExpandedProvider)) {
+      ref.read(CaptureState.panelExpandedProvider.notifier).state = false;
+    }
     // 补光 tab：仅切换控制面板开合，不关闭补光灯本身
     // 补光灯的关闭由用户在面板中点击已选中的预设色来完成
     // 其他 tab：toggle 行为
@@ -256,9 +314,14 @@ class ToolButton extends StatelessWidget {
 /// 工具栏下方的抽屉：根据 activeToolProvider 渲染对应内容
 /// 高度根据内容自适应（child 自然撑开），收起时高度 0（AnimatedSize 动画）
 class AnimatedToolDrawer extends ConsumerWidget {
-  const AnimatedToolDrawer({this.rawCaptureKey});
+  const AnimatedToolDrawer({
+    super.key,
+    this.rawCaptureKey,
+    this.showParamPanel = true,
+  });
 
   final GlobalKey? rawCaptureKey;
+  final bool showParamPanel;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -294,8 +357,7 @@ class AnimatedToolDrawer extends ConsumerWidget {
     switch (toolId) {
       case 'templates':
         // 「显示更多」展开为 60% 高度 + 搜索框的大面板，否则显示前 10 个模板条
-        final expanded =
-            ref.watch(CaptureState.templateDrawerExpandedProvider);
+        final expanded = ref.watch(CaptureState.templateDrawerExpandedProvider);
         if (expanded) return const TemplateDrawerPanel();
         return TemplateStrip(
           onShowMore: () => ref
@@ -305,8 +367,8 @@ class AnimatedToolDrawer extends ConsumerWidget {
       case 'scenes':
         return const ScenePresetStrip();
       case 'params':
-        // 参数面板由 ParamPanel（底部滑入）处理，抽屉不显示额外内容
-        return const SizedBox.shrink();
+        // 参数面板与其它工具共用底部抽屉位置，由工具栏把内容顶上去
+        return showParamPanel ? const ParamPanel() : const SizedBox.shrink();
       case 'filter':
         return const FilterPicker();
       case 'fillLight':
@@ -321,7 +383,7 @@ class AnimatedToolDrawer extends ConsumerWidget {
 class CaptureFillLightPanel extends ConsumerWidget {
   const CaptureFillLightPanel();
 
-  static const _presets = [
+  static const fillLightPresets = [
     FillLightPreset('暖白', Color(0xFFFFE5B4), 0.6),
     FillLightPreset('冷白', Color(0xFFE0F0FF), 0.6),
     FillLightPreset('黄金', Color(0xFFFFB347), 0.7),
@@ -330,13 +392,18 @@ class CaptureFillLightPanel extends ConsumerWidget {
     FillLightPreset('紫', Color(0xFFD8BFD8), 0.5),
   ];
 
+  static const _presets = fillLightPresets;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final enabled = ref.watch(CaptureState.fillLightEnabledProvider);
     final color = ref.watch(CaptureState.fillLightColorProvider);
     final intensity = ref.watch(CaptureState.fillLightIntensityProvider);
-    final viewfinderScale = ref.watch(CaptureState.fillLightViewfinderScaleProvider);
+    final viewfinderScale =
+        ref.watch(CaptureState.fillLightViewfinderScaleProvider);
     final ringExpanded = ref.watch(_ringExpandedProvider);
+    final recentColors = ref.watch(recentFillLightColorsProvider);
+    final savedColors = ref.watch(customFillLightColorsProvider);
     // 补光面板视觉：immersive=暗色面板 / theme=当前风格面板底
     final visual = LumiraThemeResolver.captureOverlayVisual(
       tokens: ref.watch(themeTokensProvider),
@@ -356,7 +423,10 @@ class CaptureFillLightPanel extends ConsumerWidget {
             children: [
               Text(
                 '补光',
-                style: TextStyle(color: visual.foreground, fontSize: 13, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                    color: visual.foreground,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -368,30 +438,35 @@ class CaptureFillLightPanel extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 8),
-          // 预设色行：选中的预设色移到第一位
+          // 补光色主行：当前生效色 → 最近使用 → 用户保存 → 系统预设
           SizedBox(
             height: 44,
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
-                ..._orderedPresets(enabled, color).map((p) {
+                ...buildRowPresets(
+                  systemPresets: _presets,
+                  recentColors: recentColors,
+                  savedColors: savedColors,
+                  activeColor: enabled ? color : null,
+                ).map((p) {
                   final isSelected = enabled && _colorMatches(color, p.color);
-                  return PresetColorDot(
-                    preset: p,
-                    selected: isSelected,
-                    visual: visual,
-                    onTap: () {
-                      if (isSelected) {
-                        // 已选中 → 关闭补光，恢复取景器原状
-                        _turnOffFillLight(ref);
-                      } else {
-                        // 未选中 → 切换补光色，保留当前亮度（不重置）
-                        ref.read(CaptureState.fillLightEnabledProvider.notifier).state = true;
-                        ref.read(CaptureState.fillLightColorProvider.notifier).state = p.color;
-                        ref.read(_ringExpandedProvider.notifier).state = false;
-                      }
-                    },
-                  );
+                  return p.isSaved
+                      ? SavedColorDot(
+                          name: p.label,
+                          color: p.color,
+                          selected: isSelected,
+                          visual: visual,
+                          onTap: () => _selectColor(ref, p, isSelected),
+                          onLongPress: () =>
+                              _showSavedColorActions(ref, p.label, p.color),
+                        )
+                      : PresetColorDot(
+                          preset: p,
+                          selected: isSelected,
+                          visual: visual,
+                          onTap: () => _selectColor(ref, p, isSelected),
+                        );
                 }),
                 // 自定义按钮
                 ActionDot(
@@ -400,8 +475,11 @@ class CaptureFillLightPanel extends ConsumerWidget {
                   selected: ringExpanded,
                   visual: visual,
                   onTap: () {
-                    ref.read(CaptureState.fillLightEnabledProvider.notifier).state = true;
-                    ref.read(_ringExpandedProvider.notifier).state = !ringExpanded;
+                    ref
+                        .read(CaptureState.fillLightEnabledProvider.notifier)
+                        .state = true;
+                    ref.read(_ringExpandedProvider.notifier).state =
+                        !ringExpanded;
                   },
                 ),
               ],
@@ -420,16 +498,18 @@ class CaptureFillLightPanel extends ConsumerWidget {
                   divisions: 28,
                   onChanged: enabled
                       ? (v) {
-                          ref.read(CaptureState.fillLightIntensityProvider.notifier)
+                          ref
+                              .read(CaptureState
+                                  .fillLightIntensityProvider.notifier)
                               .state = v;
                           // 调试（Bug：亮度到一定值后补光色反而变暗）：
                           // 与 _FloatingViewfinder 里 bgFull 完全相同的算法，逐帧输出供真机比对。
                           if (kDebugMode) {
-                            final c = ref.read(
-                                CaptureState.fillLightColorProvider);
+                            final c =
+                                ref.read(CaptureState.fillLightColorProvider);
                             final b = v > 1.0
-                                ? Color.lerp(c, Colors.white,
-                                    (v - 1.0).clamp(0.0, 0.5))
+                                ? Color.lerp(
+                                    c, Colors.white, (v - 1.0).clamp(0.0, 0.5))
                                 : c.withOpacity(v.clamp(0.0, 1.0));
                             debugPrint(
                                 '[fillLight] intensity=$v color=#${c.value.toRadixString(16).padLeft(8, '0')} bgFull=${b?.value.toRadixString(16).padLeft(8, '0')}');
@@ -442,7 +522,8 @@ class CaptureFillLightPanel extends ConsumerWidget {
                 width: 42,
                 child: Text(
                   '${(intensity * 100).round()}%',
-                  style: TextStyle(color: visual.foregroundSecondary, fontSize: 11),
+                  style: TextStyle(
+                      color: visual.foregroundSecondary, fontSize: 11),
                   textAlign: TextAlign.right,
                 ),
               ),
@@ -459,7 +540,10 @@ class CaptureFillLightPanel extends ConsumerWidget {
                   max: 1.0,
                   divisions: 14,
                   onChanged: enabled
-                      ? (v) => ref.read(CaptureState.fillLightViewfinderScaleProvider.notifier).state = v
+                      ? (v) => ref
+                          .read(CaptureState
+                              .fillLightViewfinderScaleProvider.notifier)
+                          .state = v
                       : (double _) {},
                 ),
               ),
@@ -467,7 +551,8 @@ class CaptureFillLightPanel extends ConsumerWidget {
                 width: 36,
                 child: Text(
                   '${(viewfinderScale * 100).round()}%',
-                  style: TextStyle(color: visual.foregroundSecondary, fontSize: 11),
+                  style: TextStyle(
+                      color: visual.foregroundSecondary, fontSize: 11),
                   textAlign: TextAlign.right,
                 ),
               ),
@@ -480,17 +565,15 @@ class CaptureFillLightPanel extends ConsumerWidget {
               child: Center(
                 child: SquareColorPicker(
                   onColorChanged: (c) {
-                    ref.read(CaptureState.fillLightColorProvider.notifier).state = c;
+                    ref
+                        .read(CaptureState.fillLightColorProvider.notifier)
+                        .state = c;
                   },
                 ),
               ),
             ),
             // 保存颜色行（合并系统预设与用户保存颜色）
             SaveColorsRow(
-              onPick: (c) {
-                ref.read(CaptureState.fillLightEnabledProvider.notifier).state = true;
-                ref.read(CaptureState.fillLightColorProvider.notifier).state = c;
-              },
               onAdd: (name, c) {
                 ref.read(customFillLightColorsProvider.notifier).add(name, c);
               },
@@ -503,32 +586,142 @@ class CaptureFillLightPanel extends ConsumerWidget {
 
   bool _colorMatches(Color a, Color b) => a.value == b.value;
 
-  /// 将当前选中的预设色移到列表第一位（未启用、未选中或已在第一位时保持原顺序）。
-  List<FillLightPreset> _orderedPresets(bool enabled, Color color) {
-    if (!enabled) return _presets;
-    final index = _presets.indexWhere((p) => _colorMatches(color, p.color));
-    if (index <= 0) return _presets;
-    final result = [..._presets];
-    final item = result.removeAt(index);
-    result.insert(0, item);
-    return result;
+  void _selectColor(WidgetRef ref, FillLightPreset preset, bool isSelected) {
+    if (isSelected) {
+      _turnOffFillLight(ref);
+      return;
+    }
+    ref.read(CaptureState.fillLightEnabledProvider.notifier).state = true;
+    ref.read(CaptureState.fillLightColorProvider.notifier).state = preset.color;
+    ref.read(_ringExpandedProvider.notifier).state = false;
+  }
+
+  void _showSavedColorActions(WidgetRef ref, String name, Color color) {
+    showLumiraBottomSheet(
+      context: ref.context,
+      builder: (context) => _SavedColorActionSheet(
+        name: name,
+        color: color,
+        onRename: () {
+          Navigator.pop(context);
+          _showRenameDialog(ref, name);
+        },
+        onChangeColor: () {
+          Navigator.pop(context);
+          _selectColor(
+            ref,
+            FillLightPreset(name, color, 0.6, isSaved: true),
+            false,
+          );
+          ref.read(_ringExpandedProvider.notifier).state = true;
+        },
+        onDelete: () {
+          Navigator.pop(context);
+          ref.read(customFillLightColorsProvider.notifier).remove(name);
+        },
+      ),
+    );
+  }
+
+  void _showRenameDialog(WidgetRef ref, String oldName) {
+    final controller = TextEditingController(text: oldName);
+    showLumiraDialog(
+      context: ref.context,
+      builder: (context) => LumiraAlertDialog(
+        title: const Text('修改名称'),
+        content: LumiraTextField(
+          controller: controller,
+          hintText: '输入新名称',
+        ),
+        actions: [
+          LumiraButton(
+            variant: ButtonVariant.ghost,
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          LumiraButton(
+            variant: ButtonVariant.primary,
+            onPressed: () {
+              final newName = controller.text.trim();
+              if (newName.isNotEmpty && newName != oldName) {
+                ref
+                    .read(customFillLightColorsProvider.notifier)
+                    .update(oldName, newName: newName);
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// 关闭补光并重置悬浮取景器到初始状态（位置、大小）
   void _turnOffFillLight(WidgetRef ref) {
     ref.read(CaptureState.fillLightEnabledProvider.notifier).state = false;
-    ref.read(CaptureState.fillLightViewfinderScaleProvider.notifier).state = 0.5;
+    ref.read(CaptureState.fillLightViewfinderScaleProvider.notifier).state =
+        0.5;
     ref.read(CaptureState.fillLightViewfinderOffsetProvider.notifier).state =
         Offset.zero;
     ref.read(_ringExpandedProvider.notifier).state = false;
   }
+
+  static String fillLightColorLabel(Color color) {
+    final rgb = color.value & 0xFFFFFF;
+    return '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
+  }
+
+  static List<FillLightPreset> buildRowPresets({
+    required List<FillLightPreset> systemPresets,
+    required List<Color> recentColors,
+    required List<CustomFillLightColor> savedColors,
+    required Color? activeColor,
+  }) {
+    bool isSaved(Color color) =>
+        savedColors.any((item) => item.color.value == color.value);
+    bool isSystem(Color color) =>
+        systemPresets.any((item) => item.color.value == color.value);
+
+    final rows = [
+      ...recentColors
+          .where((color) => !isSaved(color) && !isSystem(color))
+          .take(RecentFillLightColors.limit)
+          .map(
+            (color) => FillLightPreset(
+              fillLightColorLabel(color),
+              color,
+              0.6,
+            ),
+          ),
+      ...savedColors.map(
+        (item) => FillLightPreset(item.name, item.color, 0.6, isSaved: true),
+      ),
+      ...systemPresets,
+    ];
+
+    if (activeColor == null) return rows;
+    final activeIndex = rows.indexWhere(
+      (item) => item.color.value == activeColor.value,
+    );
+    final activePreset = activeIndex == -1
+        ? FillLightPreset('当前', activeColor, 0.6)
+        : rows.removeAt(activeIndex);
+    return [activePreset, ...rows];
+  }
 }
 
 class FillLightPreset {
-  const FillLightPreset(this.label, this.color, this.intensity);
+  const FillLightPreset(
+    this.label,
+    this.color,
+    this.intensity, {
+    this.isSaved = false,
+  });
   final String label;
   final Color color;
   final double intensity;
+  final bool isSaved;
 }
 
 class PresetColorDot extends StatelessWidget {
@@ -568,6 +761,8 @@ class PresetColorDot extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               preset.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: selected ? visual.accent : visual.foregroundMuted,
                 fontSize: 10,
@@ -632,12 +827,88 @@ class ActionDot extends StatelessWidget {
   }
 }
 
+class _SavedColorActionSheet extends ConsumerWidget {
+  const _SavedColorActionSheet({
+    required this.name,
+    required this.color,
+    required this.onRename,
+    required this.onChangeColor,
+    required this.onDelete,
+  });
+
+  final String name;
+  final Color color;
+  final VoidCallback onRename;
+  final VoidCallback onChangeColor;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final visual = LumiraThemeResolver.captureOverlayVisual(
+      tokens: ref.watch(themeTokensProvider),
+      style: ref.watch(appThemeProvider).style,
+      appearance: ref.watch(CaptureState.captureAppearanceProvider),
+      role: CaptureOverlayRole.panel,
+      radiusDp: 0,
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: visual.fillSubtle),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                name,
+                style: TextStyle(
+                  color: visual.foreground,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        LumiraListTile(
+          leading: Icon(Icons.edit, color: visual.accent, size: 20),
+          title:
+              Text('修改名称', style: TextStyle(color: visual.foregroundSecondary)),
+          onTap: onRename,
+        ),
+        LumiraListTile(
+          leading: Icon(Icons.color_lens, color: visual.accent, size: 20),
+          title:
+              Text('修改颜色', style: TextStyle(color: visual.foregroundSecondary)),
+          onTap: onChangeColor,
+        ),
+        LumiraListTile(
+          leading: const Icon(Icons.delete_outline,
+              color: Colors.redAccent, size: 20),
+          title: const Text('删除', style: TextStyle(color: Colors.redAccent)),
+          onTap: onDelete,
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+}
+
 /// 色环展开状态（仅 capture_page 内部使用）
 final _ringExpandedProvider = StateProvider<bool>((ref) => false);
 
 /// 方形 HSV 取色盘（色相 + 饱和度/亮度二维面板）
-/// 顶部：色相条（水平滑动选色相）
-/// 下方：SV 方形面板（X=饱和度，Y=亮度，左下黑、右下灰、右上纯色、左上白）
+/// 下方为紧凑横向色相条，色相选择保留足够拖动范围。
 class SquareColorPicker extends StatefulWidget {
   const SquareColorPicker({required this.onColorChanged});
   final ValueChanged<Color> onColorChanged;
@@ -647,23 +918,26 @@ class SquareColorPicker extends StatefulWidget {
 }
 
 class SquareColorPickerState extends State<SquareColorPicker> {
+  static const _panelSize = 118.0;
+  static const _hueBarWidth = 140.0;
+
   double _hue = 40.0; // 默认暖白附近
   double _saturation = 0.6;
   double _value = 1.0;
 
   @override
   Widget build(BuildContext context) {
-    const panelSize = 220.0;
-    const hueBarHeight = 24.0;
+    const panelSize = _panelSize;
+    const hueBarWidth = _hueBarWidth;
+    const hueBarHeight = 10.0;
     final currentColor =
         HSVColor.fromAHSV(1.0, _hue, _saturation, _value).toColor();
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // SV 方形面板
         SizedBox(
-          width: panelSize,
+          width: _hueBarWidth,
           height: panelSize,
           child: GestureDetector(
             onPanDown: (d) => _handleSv(d.localPosition, panelSize),
@@ -678,18 +952,15 @@ class SquareColorPickerState extends State<SquareColorPicker> {
           ),
         ),
         const SizedBox(height: 8),
-        // 色相条
         SizedBox(
-          width: panelSize,
+          width: hueBarWidth,
           height: hueBarHeight,
           child: GestureDetector(
-            onPanDown: (d) => _handleHue(d.localPosition, panelSize),
-            onPanUpdate: (d) => _handleHue(d.localPosition, panelSize),
+            onPanDown: (d) => _handleHue(d.localPosition),
+            onPanUpdate: (d) => _handleHue(d.localPosition),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(hueBarHeight / 2),
-              child: CustomPaint(
-                painter: HueBarPainter(hue: _hue),
-              ),
+              child: CustomPaint(painter: HueBarPainter(hue: _hue)),
             ),
           ),
         ),
@@ -731,8 +1002,8 @@ class SquareColorPickerState extends State<SquareColorPicker> {
         HSVColor.fromAHSV(1.0, _hue, _saturation, _value).toColor());
   }
 
-  void _handleHue(Offset localPos, double width) {
-    final h = (localPos.dx / width * 360.0).clamp(0.0, 360.0);
+  void _handleHue(Offset localPos) {
+    final h = (localPos.dx / _hueBarWidth * 360.0).clamp(0.0, 360.0);
     setState(() => _hue = h);
     widget.onColorChanged(
         HSVColor.fromAHSV(1.0, _hue, _saturation, _value).toColor());
@@ -779,15 +1050,18 @@ class SvPanelPainter extends CustomPainter {
     final cy = (1.0 - value) * size.height;
     final indicator = Offset(cx, cy);
     canvas.drawCircle(indicator, 8, Paint()..color = Colors.white);
-    canvas.drawCircle(indicator, 8,
-        Paint()..color = Colors.black38..style = PaintingStyle.stroke..strokeWidth = 1.5);
+    canvas.drawCircle(
+        indicator,
+        8,
+        Paint()
+          ..color = Colors.black38
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5);
   }
 
   @override
   bool shouldRepaint(covariant SvPanelPainter old) =>
-      old.hue != hue ||
-      old.saturation != saturation ||
-      old.value != value;
+      old.hue != hue || old.saturation != saturation || old.value != value;
 }
 
 /// 色相条绘制器
@@ -813,7 +1087,10 @@ class HueBarPainter extends CustomPainter {
     final x = (hue / 360.0) * size.width;
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(x, size.height / 2), width: 6, height: size.height + 4),
+        Rect.fromCenter(
+            center: Offset(x, size.height / 2),
+            width: 6,
+            height: size.height + 4),
         const Radius.circular(3),
       ),
       Paint()
@@ -826,14 +1103,11 @@ class HueBarPainter extends CustomPainter {
   bool shouldRepaint(covariant HueBarPainter old) => old.hue != hue;
 }
 
-/// 保存颜色行：合并系统预设与用户保存颜色为一个列表，
-/// 用户保存的颜色可长按修改或删除。
+/// 保存当前自定义补光色的输入区（保存结果显示在补光主行）。
 class SaveColorsRow extends ConsumerStatefulWidget {
   const SaveColorsRow({
-    required this.onPick,
     required this.onAdd,
   });
-  final ValueChanged<Color> onPick;
   final void Function(String name, Color color) onAdd;
 
   @override
@@ -843,32 +1117,6 @@ class SaveColorsRow extends ConsumerStatefulWidget {
 class SaveColorsRowState extends ConsumerState<SaveColorsRow> {
   bool _showNameInput = false;
   final _nameController = TextEditingController();
-  bool _hintShown = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadHintState();
-  }
-
-  Future<void> _loadHintState() async {
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/lumira_fill_light_hint.json');
-      if (await file.exists()) {
-        if (mounted) setState(() => _hintShown = true);
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _markHintShown() async {
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/lumira_fill_light_hint.json');
-      await file.writeAsString('{"shown":true}');
-      if (mounted) setState(() => _hintShown = true);
-    } catch (_) {}
-  }
 
   @override
   void dispose() {
@@ -876,121 +1124,8 @@ class SaveColorsRowState extends ConsumerState<SaveColorsRow> {
     super.dispose();
   }
 
-  // 系统预设颜色（与 CaptureFillLightPanel._presets 一致）
-  static const _presets = [
-    FillLightPreset('暖白', Color(0xFFFFE5B4), 0.6),
-    FillLightPreset('冷白', Color(0xFFE0F0FF), 0.6),
-    FillLightPreset('黄金', Color(0xFFFFB347), 0.7),
-    FillLightPreset('柔粉', Color(0xFFFFC0CB), 0.6),
-    FillLightPreset('青蓝', Color(0xFF8FD3F4), 0.5),
-    FillLightPreset('紫', Color(0xFFD8BFD8), 0.5),
-  ];
-
-  /// 解析当前浮层视觉（编辑 Sheet 弹出时读取一次即可）
-  CaptureOverlayVisual _visualOf(WidgetRef ref) =>
-      LumiraThemeResolver.captureOverlayVisual(
-        tokens: ref.read(themeTokensProvider),
-        style: ref.read(appThemeProvider).style,
-        appearance: ref.read(CaptureState.captureAppearanceProvider),
-        role: CaptureOverlayRole.panel,
-        radiusDp: 0,
-      );
-
-  void _showEditSheet(String name, Color color) {
-    _markHintShown();
-    final visual = _visualOf(ref);
-    showLumiraBottomSheet(
-      context: context,
-      builder: (ctx) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: visual.fillSubtle),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  name,
-                  style: TextStyle(color: visual.foreground, fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-          ),
-          LumiraListTile(
-            leading: Icon(Icons.edit, color: visual.accent, size: 20),
-            title: Text('修改名称', style: TextStyle(color: visual.foregroundSecondary, fontSize: 14)),
-            onTap: () {
-              Navigator.pop(ctx);
-              _showRenameDialog(name);
-            },
-          ),
-          LumiraListTile(
-            leading: Icon(Icons.color_lens, color: visual.accent, size: 20),
-            title: Text('修改颜色', style: TextStyle(color: visual.foregroundSecondary, fontSize: 14)),
-            onTap: () {
-              Navigator.pop(ctx);
-              // 用当前颜色打开色环
-              ref.read(CaptureState.fillLightColorProvider.notifier).state = color;
-            },
-          ),
-          LumiraListTile(
-            leading: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-            title: const Text('删除', style: TextStyle(color: Colors.redAccent, fontSize: 14)),
-            onTap: () {
-              ref.read(customFillLightColorsProvider.notifier).remove(name);
-              Navigator.pop(ctx);
-            },
-          ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    );
-  }
-
-  void _showRenameDialog(String oldName) {
-    final controller = TextEditingController(text: oldName);
-    showLumiraDialog(
-      context: context,
-      builder: (ctx) => LumiraAlertDialog(
-        title: const Text('修改名称'),
-        content: LumiraTextField(
-          controller: controller,
-          hintText: '输入新名称',
-        ),
-        actions: [
-          LumiraButton(
-            variant: ButtonVariant.ghost,
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          LumiraButton(
-            variant: ButtonVariant.primary,
-            onPressed: () {
-              final newName = controller.text.trim();
-              if (newName.isNotEmpty && newName != oldName) {
-                ref.read(customFillLightColorsProvider.notifier).update(oldName, newName: newName);
-              }
-              Navigator.pop(ctx);
-            },
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final customColors = ref.watch(customFillLightColorsProvider);
     final currentColor = ref.watch(CaptureState.fillLightColorProvider);
     // 保存颜色行视觉：随拍摄外观双模式解析
     final visual = LumiraThemeResolver.captureOverlayVisual(
@@ -1018,7 +1153,8 @@ class SaveColorsRowState extends ConsumerState<SaveColorsRow> {
               GestureDetector(
                 onTap: () => setState(() => _showNameInput = !_showNameInput),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: visual.fillSubtle,
                     borderRadius: BorderRadius.circular(10),
@@ -1026,7 +1162,8 @@ class SaveColorsRowState extends ConsumerState<SaveColorsRow> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.bookmark_add_outlined, size: 12, color: visual.accent),
+                      Icon(Icons.bookmark_add_outlined,
+                          size: 12, color: visual.accent),
                       const SizedBox(width: 3),
                       Text(
                         '保存当前',
@@ -1067,85 +1204,31 @@ class SaveColorsRowState extends ConsumerState<SaveColorsRow> {
                     widget.onAdd(name, currentColor);
                     _nameController.clear();
                     setState(() => _showNameInput = false);
-                    _markHintShown();
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: visual.accent,
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       '保存',
-                      style: TextStyle(color: visual.onAccent, fontSize: 11, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                          color: visual.onAccent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
               ],
             ),
           ],
-          // 合并的颜色列表：系统预设 + 用户保存
           const SizedBox(height: 8),
-          SizedBox(
-            height: 44,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                // 系统预设颜色（不可删改）
-                ..._presets.map((p) {
-                  final isSelected = _colorMatch(currentColor, p.color);
-                  return PresetColorDot(
-                    preset: p,
-                    selected: isSelected,
-                    visual: visual,
-                    onTap: () => widget.onPick(p.color),
-                  );
-                }),
-                // 分隔符
-                if (customColors.isNotEmpty)
-                  Container(
-                    width: 1,
-                    margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                    color: visual.fillSubtle,
-                  ),
-                // 用户保存颜色（可长按删改）
-                ...customColors.map((c) {
-                  final isSelected = _colorMatch(currentColor, c.color);
-                  return SavedColorDot(
-                    name: c.name,
-                    color: c.color,
-                    selected: isSelected,
-                    visual: visual,
-                    onTap: () => widget.onPick(c.color),
-                    onLongPress: () => _showEditSheet(c.name, c.color),
-                  );
-                }),
-              ],
-            ),
-          ),
-          // 操作提示（首次显示，用户长按或保存后消失）
-          if (!_hintShown)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, color: visual.foregroundMuted, size: 12),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      '长按保存的颜色可修改或删除',
-                      style: TextStyle(color: visual.foregroundMuted, fontSize: 10),
-                    ),
-                  ),
-                ],
-              ),
-            ),
         ],
       ),
     );
   }
-
-  bool _colorMatch(Color a, Color b) => a.value == b.value;
 }
 
 /// 用户保存的颜色圆点（支持长按）
@@ -1258,7 +1341,8 @@ class ZoomBarState extends ConsumerState<ZoomBar> {
   }
 
   /// 根据设备能力动态生成预设倍数列表。
-  List<double> _getZoomPresets(String facing, double maxZoom, bool supportsUltraWide) {
+  List<double> _getZoomPresets(
+      String facing, double maxZoom, bool supportsUltraWide) {
     final base = <double>[1.0];
     if (facing == 'back') {
       if (maxZoom >= 2.0) base.add(2.0);
@@ -1331,7 +1415,8 @@ class ZoomBarState extends ConsumerState<ZoomBar> {
 
     void tick() {
       final elapsed = DateTime.now().difference(startTime);
-      final t = (elapsed.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
+      final t =
+          (elapsed.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
       final eased = 1 - math.pow(1 - t, 3).toDouble();
       setState(() {
         _dialOffset = start + (end - start) * eased;
@@ -1340,6 +1425,7 @@ class ZoomBarState extends ConsumerState<ZoomBar> {
         Future.delayed(const Duration(milliseconds: 16), tick);
       }
     }
+
     tick();
   }
 
@@ -1351,7 +1437,8 @@ class ZoomBarState extends ConsumerState<ZoomBar> {
 
     void tick() {
       final elapsed = DateTime.now().difference(startTime);
-      final t = (elapsed.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
+      final t =
+          (elapsed.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
       final eased = t * t;
       setState(() {
         _dialOffset = start + (end - start) * eased;
@@ -1362,6 +1449,7 @@ class ZoomBarState extends ConsumerState<ZoomBar> {
         setState(() => _showDial = false);
       }
     }
+
     tick();
   }
 
@@ -1391,6 +1479,7 @@ class ZoomBarState extends ConsumerState<ZoomBar> {
       onPointerCancel: _onPointerCancel,
       behavior: HitTestBehavior.translucent,
       child: SizedBox(
+        width: double.infinity,
         height: 60,
         child: Stack(
           clipBehavior: Clip.none,
@@ -1404,8 +1493,7 @@ class ZoomBarState extends ConsumerState<ZoomBar> {
               onHorizontalDragEnd: canDrag ? _onHorizontalDragEnd : null,
               behavior: HitTestBehavior.opaque,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 decoration: BoxDecoration(
                   color: visual.background,
                   borderRadius: BorderRadius.circular(18),
@@ -1437,16 +1525,18 @@ class ZoomBarState extends ConsumerState<ZoomBar> {
                 bottom: 0 + 80 * _dialOffset,
                 left: 0,
                 right: 0,
-                child: SizedBox(
-                  width: screenWidth,
-                  height: screenWidth / 2,
-                  child: HalfCircleDial(
-                    multiplier: multiplier,
-                    presets: presets,
-                    activeIndex: activeIndex,
-                    minZoom: minZoom,
-                    maxZoom: maxZoom,
-                    visual: visual,
+                child: IgnorePointer(
+                  child: SizedBox(
+                    width: screenWidth,
+                    height: screenWidth,
+                    child: HalfCircleDial(
+                      multiplier: multiplier,
+                      presets: presets,
+                      activeIndex: activeIndex,
+                      minZoom: minZoom,
+                      maxZoom: maxZoom,
+                      visual: visual,
+                    ),
                   ),
                 ),
               ),
@@ -1531,89 +1621,82 @@ class HalfCircleDial extends StatelessWidget {
 
     return SizedBox(
       width: screenWidth,
-      height: radius,
-      child: ClipRect(
-        // topCenter：让完整圆从顶部开始向下溢出，只露出上半圆（∩ 形，圆心在底部中央）。
-        // 之前误用 bottomCenter 导致露出的是下半圆（∪ 形），上半弧上的刻度全被裁掉。
-        child: OverflowBox(
-          maxHeight: screenWidth,
-          alignment: Alignment.topCenter,
-          child: SizedBox(
+      height: screenWidth,
+      child: Stack(
+        children: [
+          // 半透明轮盘背景（immersive=暗底 / theme=风格面板底）
+          Container(
             width: screenWidth,
             height: screenWidth,
-            child: Stack(
-              children: [
-                // 半透明轮盘背景（immersive=暗底 / theme=风格面板底）
-                Container(
-                  width: screenWidth,
-                  height: screenWidth,
-                  decoration: BoxDecoration(
-                    color: visual.background,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                // 旋转刻度层（刻度随轮盘旋转，指针固定）
-                Transform.rotate(
-                  angle: rotationAngle,
-                  child: SizedBox(
-                    width: screenWidth,
-                    height: screenWidth,
-                    child: CustomPaint(
-                      painter: HalfCircleTickPainter(
-                        radius: radius,
-                        startAngle: tickStartAngle,
-                        sweepAngle: tickSweepAngle,
-                        totalRange: totalRange,
-                        tickColor: visual.foregroundMuted,
-                      ),
-                    ),
-                  ),
-                ),
-                // 数字标签：按旋转后的屏幕坐标直接定位，保持正立且不被底部裁切
-                ..._buildUprightLabels(radius, rotationAngle, totalRange, tickStartAngle, tickSweepAngle),
-                // 固定指针
-                Positioned(
-                  top: screenWidth * 0.04,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: CustomPaint(
-                      painter: PointerPainter(color: visual.accent),
-                    ),
-                  ),
-                ),
-                // 当前倍数显示（居中于半圆中心，避免与顶部刻度数字重叠）
-                Positioned(
-                  top: screenWidth * 0.25 - 14,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: visual.accent,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${multiplier.toStringAsFixed(1)}x',
-                        style: TextStyle(
-                          color: visual.onAccent,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            decoration: BoxDecoration(
+              color: visual.background,
+              shape: BoxShape.circle,
             ),
           ),
-        ),
+          // 旋转刻度层（刻度随轮盘旋转，指针固定）
+          Transform.rotate(
+            angle: rotationAngle,
+            child: SizedBox(
+              width: screenWidth,
+              height: screenWidth,
+              child: CustomPaint(
+                painter: HalfCircleTickPainter(
+                  radius: radius,
+                  startAngle: tickStartAngle,
+                  sweepAngle: tickSweepAngle,
+                  totalRange: totalRange,
+                  minZoom: minZoom,
+                  presets: presets,
+                  tickColor: visual.foregroundMuted,
+                ),
+              ),
+            ),
+          ),
+          // 数字标签：按旋转后的屏幕坐标直接定位，保持正立且不被底部裁切
+          ..._buildUprightLabels(radius, rotationAngle, totalRange,
+              tickStartAngle, tickSweepAngle),
+          // 固定指针
+          Positioned(
+            top: screenWidth * 0.04,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: CustomPaint(
+                painter: PointerPainter(color: visual.accent),
+              ),
+            ),
+          ),
+          // 当前倍数显示（居中于半圆中心，避免与顶部刻度数字重叠）
+          Positioned(
+            top: screenWidth * 0.25 - 14,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                decoration: BoxDecoration(
+                  color: visual.accent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${multiplier.toStringAsFixed(1)}x',
+                  style: TextStyle(
+                    color: visual.onAccent,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  List<Widget> _buildUprightLabels(double radius, double rotationAngle, double totalRange, double tickStartAngle, double tickSweepAngle) {
+  List<Widget> _buildUprightLabels(double radius, double rotationAngle,
+      double totalRange, double tickStartAngle, double tickSweepAngle) {
     final widgets = <Widget>[];
     const labelBoxW = 44.0;
     const labelBoxH = 20.0;
@@ -1629,9 +1712,7 @@ class HalfCircleDial extends StatelessWidget {
 
       // 标签中心落在旋转后的屏幕坐标（始终正立，无需反向旋转）
       final cx = radius + labelR * math.cos(screenAngle);
-      var cy = radius + labelR * math.sin(screenAngle);
-      // 夹紧在上半圆内，避免位于基线（左右两端）的标签被底部裁掉一半
-      cy = cy.clamp(labelBoxH / 2 + 2, radius - labelBoxH / 2 - 2).toDouble();
+      final cy = radius + labelR * math.sin(screenAngle);
 
       final label = preset == preset.toInt()
           ? '${preset.toInt()}'
@@ -1641,16 +1722,19 @@ class HalfCircleDial extends StatelessWidget {
         Positioned(
           left: cx - labelBoxW / 2,
           top: cy - labelBoxH / 2,
-          child: SizedBox(
-            width: labelBoxW,
-            height: labelBoxH,
-            child: Center(
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: isMajor ? visual.accent : visual.foregroundSecondary,
-                  fontSize: isMajor ? 15 : 12,
-                  fontWeight: isMajor ? FontWeight.w700 : FontWeight.w500,
+          child: Transform.rotate(
+            angle: screenAngle + math.pi / 2,
+            child: SizedBox(
+              width: labelBoxW,
+              height: labelBoxH,
+              child: Center(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: isMajor ? visual.accent : visual.foregroundSecondary,
+                    fontSize: isMajor ? 15 : 12,
+                    fontWeight: isMajor ? FontWeight.w700 : FontWeight.w500,
+                  ),
                 ),
               ),
             ),
@@ -1669,6 +1753,8 @@ class HalfCircleTickPainter extends CustomPainter {
     required this.startAngle,
     required this.sweepAngle,
     required this.totalRange,
+    required this.minZoom,
+    required this.presets,
     required this.tickColor,
   });
 
@@ -1676,6 +1762,10 @@ class HalfCircleTickPainter extends CustomPainter {
   final double startAngle;
   final double sweepAngle;
   final double totalRange;
+
+  final double minZoom;
+
+  final List<double> presets;
 
   /// 刻度基色（弧线/刻度线按原透明度 0.25/0.35/0.75 施加）
   final Color tickColor;
@@ -1705,9 +1795,8 @@ class HalfCircleTickPainter extends CustomPainter {
     for (var i = 0; i <= stepCount; i++) {
       final t = i / stepCount;
       final angle = startAngle + t * sweepAngle;
-      final isMajorTick = i % 10 == 0;
-      final tickLength = isMajorTick ? 14.0 : 6.0;
-      final tickWidth = isMajorTick ? 1.5 : 0.7;
+      final tickLength = 6.0;
+      final tickWidth = 0.7;
 
       final outerR = arcR;
       final innerR = arcR - tickLength;
@@ -1722,10 +1811,33 @@ class HalfCircleTickPainter extends CustomPainter {
       );
 
       canvas.drawLine(
-        p1, p2,
+        p1,
+        p2,
         Paint()
-          ..color = tickColor.withOpacity(isMajorTick ? 0.75 : 0.35)
+          ..color = tickColor.withOpacity(0.35)
           ..strokeWidth = tickWidth,
+      );
+    }
+
+    for (final preset in presets) {
+      if (totalRange <= 0) continue;
+      final t = (preset - minZoom) / totalRange;
+      if (t < 0 || t > 1) continue;
+      final angle = startAngle + t * sweepAngle;
+      final outerR = arcR;
+      final innerR = arcR - 14.0;
+      canvas.drawLine(
+        Offset(
+          centerX + outerR * math.cos(angle),
+          centerY + outerR * math.sin(angle),
+        ),
+        Offset(
+          centerX + innerR * math.cos(angle),
+          centerY + innerR * math.sin(angle),
+        ),
+        Paint()
+          ..color = tickColor.withOpacity(0.75)
+          ..strokeWidth = 1.5,
       );
     }
   }
@@ -1781,8 +1893,8 @@ class TrialWatermarkOverlay extends StatelessWidget {
             // 中央提示
             Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   color: Colors.black.withOpacity(0.55),
                   borderRadius: BorderRadius.circular(9999),
@@ -1854,6 +1966,7 @@ class CaptureButtonRow extends ConsumerWidget {
   final VoidCallback onSwitchCamera;
   final VoidCallback onThumbnailTap;
   final GlobalKey? thumbnailKey;
+
   /// 试用模式：快门替换为锁定态，点击提示解锁
   final bool locked;
 
@@ -1977,9 +2090,8 @@ class CameraPermissionGuide extends ConsumerWidget {
 
     // 前景跟随拍摄外观：immersive=白系（黑底）；theme=tokens（画布底）
     final tokens = ref.watch(themeTokensProvider);
-    final isThemed =
-        ref.watch(CaptureState.captureAppearanceProvider) ==
-            CaptureAppearance.theme;
+    final isThemed = ref.watch(CaptureState.captureAppearanceProvider) ==
+        CaptureAppearance.theme;
     final fg = isThemed ? tokens.textPrimary : Colors.white;
     final fgSecondary = isThemed ? tokens.textSecondary : Colors.white70;
     final fgMuted = isThemed ? tokens.textTertiary : Colors.white54;
@@ -2034,9 +2146,7 @@ class CameraPermissionGuide extends ConsumerWidget {
                     width: double.infinity,
                     child: LumiraButton(
                       variant: ButtonVariant.primary,
-                      onPressed: isPermanentlyDenied
-                          ? onOpenSettings
-                          : onRetry,
+                      onPressed: isPermanentlyDenied ? onOpenSettings : onRetry,
                       child: Text(actionText),
                     ),
                   ),
@@ -2060,6 +2170,7 @@ class CameraPermissionGuide extends ConsumerWidget {
     );
   }
 }
+
 /// 多姿势模板的「切换姿势」按钮（叠照片浮层）。
 /// 仅在 `editableTemplateProvider.poses.length > 1` 时渲染；点击调用
 /// [CaptureState.nextPose] 循环切换，剪影随 [CaptureState.currentPoseIndexProvider] 跟随。

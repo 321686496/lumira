@@ -250,16 +250,5 @@ void main() {
       expect(container.read(CaptureState.panelExpandedProvider), false);
     });
 
-    testWidgets('点面板外区域（取景器）关闭整栏', (tester) async {
-      final container = makeContainer(templateId: 'soft_portrait');
-      await host(tester, container);
-      expand(container);
-      await tester.pumpAndSettle();
-
-      // 面板贴底；点击屏幕上半部（面板外）
-      await tester.tapAt(const Offset(400, 100));
-      await tester.pumpAndSettle();
-      expect(container.read(CaptureState.panelExpandedProvider), false);
-    });
   });
 }

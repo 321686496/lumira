@@ -932,16 +932,27 @@ class _MyInviteCodeCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final code = ref.watch(inviteStatsProvider).valueOrNull?.myInviteCode;
+    final codeAsync = ref.watch(myInviteCodeProvider);
+    final code = codeAsync.valueOrNull;
     return NeuCard(
       child: Row(
         children: [
           Icon(Icons.tag, size: 20, color: tokens.brand),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              code == null ? '尚未生成邀请码' : '我的邀请码：$code',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: tokens.textPrimary),
+            child: codeAsync.when(
+              data: (_) => Text(
+                '我的邀请码：$code',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: tokens.textPrimary),
+              ),
+              loading: () => Text(
+                '正在获取邀请码…',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: tokens.textSecondary),
+              ),
+              error: (_, __) => Text(
+                '邀请码获取失败',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: tokens.danger),
+              ),
             ),
           ),
           if (code != null)
@@ -958,6 +969,18 @@ class _MyInviteCodeCard extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(1000),
                 ),
                 child: Text('复制', style: TextStyle(fontSize: 12, color: tokens.brandText)),
+            ),
+          ),
+          if (codeAsync.hasError)
+            GestureDetector(
+              onTap: () => ref.invalidate(myInviteCodeProvider),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: tokens.brandSubtle,
+                  borderRadius: BorderRadius.circular(1000),
+                ),
+                child: Text('重试', style: TextStyle(fontSize: 12, color: tokens.brandText)),
               ),
             ),
         ],

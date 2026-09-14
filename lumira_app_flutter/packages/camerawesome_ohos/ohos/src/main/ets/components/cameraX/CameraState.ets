@@ -32,6 +32,7 @@ import { geoLocationManager } from '@kit.LocationKit'
 import { ArkTSUtils, Decimal } from '@kit.ArkTS'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import { display } from '@kit.ArkUI'
+import { colorSpaceManager } from '@kit.ArkGraphics2D'
 import { CameraDeviceChangeListener } from '../sensors/CameraDeviceChangeListener'
 // 取景器实时特效 GPU 管线（libpreview_fx.so）：相机预览流→GL 着色器→Flutter Texture。
 // 数值语义与 iOS PreviewEffectProcessor 一致（磨皮/锐化/颗粒/暗角/色彩矩阵 WYSIWYG）。
@@ -104,6 +105,7 @@ export class CameraState implements StreamHandler {
   private previewProfilesArray: Array<camera.Profile> | undefined = undefined
   private photoProfilesArray: Array<camera.Profile> | undefined = undefined
   private _colorMatrix: Array<number> = []
+  private backActiveColorSpace: number = -1
   private _imageAnalysisBuilder: ImageAnalysisBuilder | undefined = undefined
   // 拍照结果监听（photoAssetAvailable 增强兜底时调用，按队列配对的本帧
   // path/result 落盘，不由注入方闭包捕获——连拍时闭包会被后一次调用覆盖）
@@ -357,6 +359,7 @@ export class CameraState implements StreamHandler {
         // 启动会话
         await this.session.start().then(() => {
           Logger.info(TAG, 'Promise returned to indicate the session start success.');
+          this.alignColorSpaceWithBackCamera()
           // 注册对焦状态监听（仅日志观测），确认触控对焦是否真正触发
           this.registerFocusStateListener()
           if (this.enableImageStream && this.imageAnalysisBuilder) {
@@ -1336,24 +1339,9 @@ export class CameraState implements StreamHandler {
         return
       }
       // 手动色温：OHOS WhiteBalance 支持连续开尔文（API 20+）。
-      // 官方 Method 2：直接用 getWhiteBalanceRange + setWhiteBalance，不切 MANUAL 模式。
-      // 若「模式 + 值」同时设置，只生效一种且模式优先，会覆盖掉手动值（回读恒为 0）。
+      // 手动 K 需先切换 MANUAL 模式再下发连续值；无回读变化时回退到预设模式。
       if (k !== undefined && k !== null) {
-        let range: Array<number> = []
-        try {
-          range = this.session.getWhiteBalanceRange()
-        } catch (e) {
-          Logger.error(TAG, `setWhiteBalanceFn: getWhiteBalanceRange failed, err=${JSON.stringify(e)}`)
-        }
-        let value: number = k
-        if (range && range.length >= 2) {
-          value = Math.min(Math.max(k, range[0]), range[1])
-        }
-        this.session?.setWhiteBalance(value)
-        Logger.info(TAG, `setWhiteBalanceFn set manual K: ${value}; range=${JSON.stringify(range)}`);
-        // 回读确认是否真正生效
-        let curVal: number | undefined = this.session.getWhiteBalance()
-        Logger.info(TAG, `setWhiteBalanceFn set manual AFTER: value=${curVal}`)
+        this.setManualWhiteBalance(k)
         return
       }
       // 预设模式映射
@@ -1379,13 +1367,97 @@ export class CameraState implements StreamHandler {
       }
       if (this.session.isWhiteBalanceModeSupported(wbMode)) {
         this.session?.setWhiteBalanceMode(wbMode)
-        Logger.info(TAG, `setWhiteBalanceFn set mode: ${wbMode}; supported=true`);
+        const activeMode = this.session.getWhiteBalanceMode()
+        const activeValue = this.session.getWhiteBalance()
+        Logger.info(TAG, `setWhiteBalanceFn set mode: ${wbMode}; active=${activeMode}; value=${activeValue}; supported=true`);
       } else {
         Logger.error(TAG, `setWhiteBalanceFn: mode not supported, mode: ${wbMode}`);
       }
     } catch (e) {
       Logger.error(TAG, `setWhiteBalanceFn error: ${(e as BusinessError).code}`);
     }
+  }
+
+  /**
+   * 前置相机输出颜色继承后置相机会话的颜色空间。
+   *
+   * 同一场景下前后置 ISP 的默认 color space 可能不同，导致相同白平衡档位在
+   * 前置呈现不同色偏。后置已与系统相机一致，因此在后置启动时记录其活动
+   * color space；前置启动时优先切换到该空间。
+   */
+  private alignColorSpaceWithBackCamera(): void {
+    const session = this.session
+    if (!session) {
+      return
+    }
+    let active: number = colorSpaceManager.ColorSpace.UNKNOWN
+    let supported: Array<number> = []
+    try {
+      active = session.getActiveColorSpace()
+      supported = session.getSupportedColorSpaces().map((item: colorSpaceManager.ColorSpace): number => item)
+    } catch (e) {
+      Logger.info(TAG, `alignColorSpace: query failed, keep default, err=${JSON.stringify(e)}`)
+      return
+    }
+    Logger.info(TAG, `alignColorSpace: position=${this.cameraPosition}; active=${active}; supported=${JSON.stringify(supported)}; back=${this.backActiveColorSpace}`)
+    if (this.cameraPosition !== camera.CameraPosition.CAMERA_POSITION_FRONT) {
+      this.backActiveColorSpace = active
+      return
+    }
+    let target = this.backActiveColorSpace >= 0
+      ? this.backActiveColorSpace
+      : colorSpaceManager.ColorSpace.SRGB
+    if (active === target || !supported.includes(target)) {
+      return
+    }
+    session.setColorSpace(target as colorSpaceManager.ColorSpace)
+    Logger.info(TAG, `alignColorSpace: set front active ${active} -> ${target}`)
+  }
+
+  private setManualWhiteBalance(k: number): boolean {
+    if (!this.session) {
+      return false
+    }
+    // OHOS 手动色温属于 MANUAL 模式。部分前置 ISP 不会响应“只设值、不切模式”。
+    let manualSupported = false
+    try {
+      manualSupported = this.session.isWhiteBalanceModeSupported(camera.WhiteBalanceMode.MANUAL)
+    } catch (e) {
+      Logger.error(TAG, `setManualWhiteBalance: manual support check failed, err=${JSON.stringify(e)}`)
+    }
+    if (!manualSupported) {
+      Logger.error(TAG, 'setManualWhiteBalance: MANUAL mode not supported')
+      return false
+    }
+    try {
+      this.session.setWhiteBalanceMode(camera.WhiteBalanceMode.MANUAL)
+    } catch (e) {
+      Logger.error(TAG, `setManualWhiteBalance: set MANUAL mode failed, err=${JSON.stringify(e)}`)
+      return false
+    }
+    let range: Array<number> = []
+    try {
+      range = this.session.getWhiteBalanceRange()
+    } catch (e) {
+      Logger.error(TAG, `setManualWhiteBalance: getWhiteBalanceRange failed, err=${JSON.stringify(e)}`)
+    }
+    if (!range || range.length < 2) {
+      Logger.error(TAG, `setManualWhiteBalance: invalid range=${JSON.stringify(range)}`)
+      return false
+    }
+    let value: number = k
+    if (range.length >= 2) {
+      value = Math.min(Math.max(k, range[0]), range[1])
+    }
+    try {
+      this.session.setWhiteBalance(value)
+    } catch (e) {
+      Logger.error(TAG, `setManualWhiteBalance: set value failed, err=${JSON.stringify(e)}`)
+      return false
+    }
+    const curVal: number = this.session.getWhiteBalance()
+    Logger.info(TAG, `setManualWhiteBalance K: ${value}; range=${JSON.stringify(range)}; after=${curVal}`);
+    return Math.abs(curVal - value) <= 1
   }
 
   getMaxZoom(): number {

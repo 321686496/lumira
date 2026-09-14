@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'dart:io';
+
 import 'package:share_plus/share_plus.dart';
 
 import 'share_reporter.dart';
@@ -10,11 +12,21 @@ import 'share_reporter.dart';
 /// 调用 shareXFiles() / share() 会抛出 MissingPluginException。
 /// 此包装器捕获异常后回退到将内容复制到剪贴板。
 class SafeShare {
+  static const MethodChannel _nativeChannel =
+      MethodChannel('lumira/system_share');
+
   /// 降级反馈钩子：share_plus 不可用降级到剪贴板时调用，向用户展示可见提示。
   ///
   /// 由 main.dart 注入 UI 展示逻辑（LumiraToast），核心层不依赖 Flutter UI，
   /// 避免 SafeShare → router 的循环依赖。未注入时静默（保持原有行为）。
   static void Function(String message)? onFallback;
+
+  static bool get _usesNativeShare {
+    if (kIsWeb) return false;
+    return Platform.operatingSystem == 'ios' ||
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform.name == 'ohos';
+  }
 
   /// 分享多个文件，失败时降级为复制第一个文件路径到剪贴板。
   static Future<void> shareXFiles(
@@ -22,6 +34,21 @@ class SafeShare {
     String? subject,
     String? text,
   }) async {
+    if (_usesNativeShare) {
+      final nativeSuccess = await _shareNative(
+        'shareFiles',
+        {
+          'paths': files.map((file) => file.path).toList(),
+          'subject': subject,
+          'text': text,
+        },
+      );
+      if (nativeSuccess) {
+        ShareReporter.notify();
+        return;
+      }
+    }
+
     try {
       await Share.shareXFiles(
         files,
@@ -43,6 +70,17 @@ class SafeShare {
     String text, {
     String? subject,
   }) async {
+    if (_usesNativeShare) {
+      final nativeSuccess = await _shareNative(
+        'shareText',
+        {'text': text, 'subject': subject},
+      );
+      if (nativeSuccess) {
+        ShareReporter.notify();
+        return;
+      }
+    }
+
     try {
       await Share.share(text, subject: subject);
     } on MissingPluginException {
@@ -53,6 +91,19 @@ class SafeShare {
       await _fallbackToClipboardText(text);
     }
     ShareReporter.notify();
+  }
+
+  static Future<bool> _shareNative(
+      String method, Map<String, Object?> args) async {
+    try {
+      final result = await _nativeChannel.invokeMethod(method, args);
+      return result is Map && result['success'] == true;
+    } on MissingPluginException {
+      return false;
+    } catch (e) {
+      debugPrint('[safe_share] native share failed: $e');
+      return false;
+    }
   }
 
   static Future<void> _fallbackToClipboard(String filePath) async {

@@ -57,13 +57,7 @@ class RecentShotCard extends ConsumerWidget {
                   ? null
                   : Border.all(color: tokens.divider, width: 1)),
           boxShadow: isGlass
-              ? const [
-                  BoxShadow(
-                    color: Color(0x1F000000),
-                    offset: Offset(0, 6),
-                    blurRadius: 20,
-                  ),
-                ]
+              ? tokens.shadowFloat
               : (isNeumorphic ? tokens.shadowConvex : null),
         ),
         child: ClipRRect(
@@ -134,7 +128,7 @@ class RecentShotCard extends ConsumerWidget {
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0x991A1A1A),
+                            color: Colors.black.withOpacity(0.6),
                             borderRadius: BorderRadius.circular(1000),
                           ),
                           child: Row(

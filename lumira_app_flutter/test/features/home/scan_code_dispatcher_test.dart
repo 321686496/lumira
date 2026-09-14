@@ -1,6 +1,27 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:lumira_app_flutter/features/home/services/scan_code_dispatcher.dart';
+import 'package:lumira_app_flutter/features/invite/data/invite_models.dart';
+
+class _FakeWidgetRef implements WidgetRef {
+  _FakeWidgetRef(this._stats);
+
+  final InviteStats? _stats;
+
+  @override
+  T read<T>(ProviderListenable<T> provider) {
+    final stats = _stats;
+    if (stats == null) {
+      return Future<InviteStats>.error(Exception('offline')) as T;
+    }
+    return Future<InviteStats>.value(stats) as T;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('$invocation');
+}
 
 void main() {
   group('ScanCodeDispatcher.classify', () {
@@ -16,7 +37,9 @@ void main() {
         ScanCodeType.templateOfflineLink,
       );
       expect(
-        ScanCodeDispatcher.classify('https://lumira.app/tpl?name=x&category=food').type,
+        ScanCodeDispatcher.classify(
+                'https://lumira.app/tpl?name=x&category=food')
+            .type,
         ScanCodeType.templateOfflineLink,
       );
     });
@@ -32,11 +55,13 @@ void main() {
     });
 
     test('恢复码 account-recover / secret=', () {
-      final r1 = ScanCodeDispatcher.classify('lumira://account-recover?v=1&secret=mySecret');
+      final r1 = ScanCodeDispatcher.classify(
+          'lumira://account-recover?v=1&secret=mySecret');
       expect(r1.type, ScanCodeType.recoveryCode);
       expect(r1.payload, 'mySecret');
       expect(
-        ScanCodeDispatcher.classify('https://x.app/account-recover?secret=abc').type,
+        ScanCodeDispatcher.classify('https://x.app/account-recover?secret=abc')
+            .type,
         ScanCodeType.recoveryCode,
       );
       expect(
@@ -56,7 +81,8 @@ void main() {
     });
 
     test('未知：普通文本 / 过短 / 空串', () {
-      expect(ScanCodeDispatcher.classify('hello world').type, ScanCodeType.unknown);
+      expect(ScanCodeDispatcher.classify('hello world').type,
+          ScanCodeType.unknown);
       expect(ScanCodeDispatcher.classify('12').type, ScanCodeType.unknown);
       expect(ScanCodeDispatcher.classify('').type, ScanCodeType.unknown);
       expect(ScanCodeDispatcher.classify('   ').type, ScanCodeType.unknown);
@@ -68,8 +94,64 @@ void main() {
         ScanCodeType.templateShareCode,
       );
       expect(
-        ScanCodeDispatcher.classify('https://lumira.app/tpl?u=https://lumira.app/imp/y').type,
+        ScanCodeDispatcher.classify(
+                'https://lumira.app/tpl?u=https://lumira.app/imp/y')
+            .type,
         ScanCodeType.templateOfflineLink,
+      );
+    });
+  });
+
+  group('ScanCodeDispatcher.inviteScanBlockReason', () {
+    test('自己的邀请码不进入预填页', () async {
+      final ref = _FakeWidgetRef(const InviteStats(
+        totalInvites: 0,
+        currentTier: 0,
+        unlockedRewards: [],
+        myInviteCode: 'A3B9CK',
+      ));
+      expect(
+        await ScanCodeDispatcher.inviteScanBlockReason(ref, 'a3b9ck'),
+        '这是你的邀请码，不能绑定自己',
+      );
+    });
+
+    test('已绑定邀请码不进入预填页', () async {
+      final ref = _FakeWidgetRef(const InviteStats(
+        totalInvites: 0,
+        currentTier: 0,
+        unlockedRewards: [],
+        myInviteCode: 'MYCODE',
+        myInviter: InviteBinding(
+          inviterDeviceId: 'inviter',
+          inviteCode: 'A3B9CK',
+          channel: 'scan',
+          activatedAt: 1,
+          status: 'pending',
+        ),
+      ));
+      expect(
+        await ScanCodeDispatcher.inviteScanBlockReason(ref, 'A3B9CK'),
+        '已绑定邀请码，无需再次绑定',
+      );
+    });
+
+    test('他人的有效邀请码允许跳转预填', () async {
+      final ref = _FakeWidgetRef(const InviteStats(
+        totalInvites: 0,
+        currentTier: 0,
+        unlockedRewards: [],
+        myInviteCode: 'MYCODE',
+      ));
+      expect(await ScanCodeDispatcher.inviteScanBlockReason(ref, 'A3B9CK'),
+          isNull);
+    });
+
+    test('状态接口失败时保持原跳转行为', () async {
+      expect(
+        await ScanCodeDispatcher.inviteScanBlockReason(
+            _FakeWidgetRef(null), 'A3B9CK'),
+        isNull,
       );
     });
   });

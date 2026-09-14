@@ -99,6 +99,12 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
                   ref
                       .read(CaptureState.panelExpandedProvider.notifier)
                       .state = true;
+                  ref
+                      .read(CaptureState.activeToolProvider.notifier)
+                      .state = 'params';
+                  ref
+                      .read(CaptureState.activeToolProvider.notifier)
+                      .state = 'params';
                 },
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
