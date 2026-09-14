@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+<title>拍摄页 · 两功能按钮调整原型</title>
+<style>
+:root{
+  --ink:#0c0d0e;--control:rgba(22,23,25,.62);--control-border:rgba(255,255,255,.12);
+  --control-border-strong:rgba(255,255,255,.26);--white:#fff;--text-sub:rgba(255,255,255,.62);
+  --accent:#EFD2A1;--accent-soft:rgba(239,210,161,.16);--ease:cubic-bezier(.22,.9,.3,1);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",system-ui,sans-serif;
+  background:radial-gradient(120% 90% at 50% 0%,#202326 0%,var(--ink) 58%);color:var(--white);
+  display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.phone{position:relative;width:min(392px,100vw);height:min(846px,100vh);background:var(--ink);overflow:hidden;
+  box-shadow:0 24px 70px -18px rgba(0,0,0,.75),inset 0 0 0 1px rgba(255,255,255,.06);border-radius:32px;isolation:isolate;}
+@media (max-width:420px){body{background:var(--ink);}.phone{width:100vw;height:100vh;border-radius:0;box-shadow:none;}}
+
+/* 取景器 */
+.viewfinder{position:absolute;inset:0;overflow:hidden;background:#2a2c2e;}
+.viewfinder img{width:100%;height:100%;object-fit:cover;display:block;}
+.viewfinder::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(0,0,0,.30) 0%,rgba(0,0,0,0) 24%,rgba(0,0,0,0) 62%,rgba(0,0,0,.28) 100%);}
+
+/* 手势层（滑动切换姿势） */
+.gesture{position:absolute;inset:0;z-index:8;touch-action:none;}
+
+/* 顶部导航胶囊（现状 + 右侧新增延迟摄影图标） */
+.nav{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:12px;right:12px;height:46px;z-index:20;
+  display:flex;align-items:center;gap:2px;padding:0 6px;border-radius:24px;background:var(--control);
+  border:1px solid var(--control-border);backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2);}
+.nav-back{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:#fff;cursor:pointer;
+  flex-shrink:0;transition:transform .15s,background .2s;}
+.nav-back:active{transform:scale(.9);background:rgba(255,255,255,.14);}
+.nav-title{flex:1;min-width:0;text-align:center;padding:2px 0;}
+.nav-title b{display:block;font-size:13.5px;font-weight:600;line-height:1.2;}
+.nav-title span{display:block;font-size:10.5px;color:var(--text-sub);margin-top:1px;}
+.nav-icon{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:#fff;cursor:pointer;
+  flex-shrink:0;position:relative;transition:transform .15s,background .2s,color .2s;}
+.nav-icon:active{transform:scale(.9);background:rgba(255,255,255,.14);}
+.nav-icon.on{color:var(--accent);background:var(--accent-soft);}
+.nav-icon .badge{position:absolute;right:-1px;top:-1px;min-width:15px;height:13px;padding:0 3px;border-radius:7px;
+  background:var(--accent);color:#1a1408;font-size:8.5px;font-weight:700;line-height:13px;text-align:center;display:none;}
+.nav-icon.on .badge{display:block;}
+
+/* 顶部组合列（现状；已去掉延迟摄影独占行）：
+   比例切换器 → 参数 pill 栏 → 模板信息卡 */
+.top-col{position:absolute;top:calc(env(safe-area-inset-top,0px) + 72px);left:0;right:0;z-index:20;
+  display:flex;flex-direction:column;align-items:center;gap:8px;padding:0 12px;pointer-events:none;}
+.top-col > *{pointer-events:auto;}
+.ratio-capsule{display:flex;align-items:center;height:40px;padding:0 4px;border-radius:20px;background:var(--control);
+  border:1px solid var(--control-border);backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2);}
+.ratio{display:flex;align-items:center;gap:4px;padding:0 11px;height:32px;border-radius:16px;color:var(--text-sub);
+  font-size:12px;font-weight:500;cursor:pointer;transition:all .18s var(--ease);white-space:nowrap;}
+.ratio.on{background:var(--accent);color:#1a1408;font-weight:700;}
+.pill-bar{display:flex;align-items:center;gap:2px;height:34px;padding:0 6px;border-radius:17px;background:var(--control);
+  border:1px solid var(--control-border);backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2);}
+.pill{display:flex;align-items:center;gap:4px;padding:0 10px;height:28px;border-radius:14px;color:#fff;font-size:11.5px;
+  cursor:pointer;transition:background .15s,color .15s;}
+.pill:active{background:rgba(255,255,255,.14);}
+.pill.on{color:var(--accent);}
+.pill-primary{background:var(--accent);color:#1a1408;font-weight:700;padding:0 12px;}
+.pill-primary:active{filter:brightness(.94);}
+/* 模板信息卡：左对齐，放列内下方 */
+.tpl-card{display:flex;align-items:center;gap:10px;width:100%;max-width:262px;padding:9px 10px;border-radius:15px;
+  background:var(--control);border:1px solid var(--control-border);backdrop-filter:blur(16px) saturate(1.2);
+  -webkit-backdrop-filter:blur(16px) saturate(1.2);align-self:flex-start;}
+.tpl-card img{width:38px;height:38px;border-radius:10px;object-fit:cover;flex-shrink:0;}
+.tpl-card .t-name{font-size:12.5px;font-weight:600;line-height:1.2;}
+.tpl-card .t-desc{font-size:10.5px;color:var(--text-sub);line-height:1.25;margin-top:2px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.tpl-card .tpl-x{margin-left:auto;color:var(--text-sub);cursor:pointer;padding:5px;border-radius:7px;flex-shrink:0;}
+.tpl-card .tpl-x:active{background:rgba(255,255,255,.14);color:#fff;}
+
+/* 切换姿势提示：左下角小徽标（信息提示，不挡操作） */
+.pose-hint{position:absolute;left:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 122px);z-index:20;
+  display:flex;align-items:center;gap:6px;height:30px;padding:0 13px;border-radius:15px;background:var(--control);
+  border:1px solid var(--control-border);backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2);
+  color:#fff;font-size:11.5px;line-height:1;pointer-events:none;white-space:nowrap;}
+.pose-hint .p-num{color:var(--accent);font-weight:700;}
+.pose-hint .p-sw{color:var(--text-sub);font-size:10.5px;}
+.pose-hint.pop{animation:posepop .30s var(--ease);}
+@keyframes posepop{0%{transform:scale(.9);opacity:.35}100%{transform:scale(1);opacity:1}}
+
+/* 底部快门区（现状） */
+.shutter-zone{position:absolute;left:0;right:0;bottom:0;z-index:20;display:flex;align-items:flex-end;
+  justify-content:space-between;padding:0 26px calc(env(safe-area-inset-bottom,0px) + 26px);}
+.thumb-btn{width:52px;height:52px;border-radius:14px;padding:2.5px;background:var(--control);
+  border:1px solid var(--control-border-strong);cursor:pointer;overflow:hidden;box-shadow:0 8px 24px -8px rgba(0,0,0,.6);}
+.thumb-btn img{width:100%;height:100%;object-fit:cover;border-radius:11px;}
+.shutter-wrap{display:grid;place-items:center;}
+.shutter{width:76px;height:76px;border-radius:50%;background:#fff;cursor:pointer;position:relative;
+  box-shadow:0 10px 30px -8px rgba(0,0,0,.6),inset 0 0 0 1.5px rgba(0,0,0,.06);transition:transform .12s var(--ease);}
+.shutter::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid rgba(255,255,255,.9);}
+.shutter:active{transform:scale(.9);}
+.flip-btn{width:52px;height:52px;border-radius:50%;background:var(--control);border:1px solid var(--control-border-strong);
+  display:grid;place-items:center;color:#fff;cursor:pointer;box-shadow:0 8px 24px -8px rgba(0,0,0,.6);}
+.flip-btn:active{transform:scale(.92);}
+
+/* 浮层 / 弹窗 */
+.overlay{position:absolute;inset:0;z-index:40;display:flex;flex-direction:column;justify-content:flex-end;
+  background:rgba(0,0,0,.28);opacity:0;pointer-events:none;transition:opacity .25s var(--ease);}
+.overlay.show{opacity:1;pointer-events:auto;}
+.sheet{background:rgba(20,21,23,.94);backdrop-filter:blur(24px) saturate(1.3);-webkit-backdrop-filter:blur(24px) saturate(1.3);
+  border-radius:26px 26px 0 0;border-top:1px solid var(--control-border);
+  padding:14px 20px calc(env(safe-area-inset-bottom,0px) + 22px);transform:translateY(100%);transition:transform .34s var(--ease);}
+.overlay.show .sheet{transform:translateY(0);}
+.sheet-handle{width:38px;height:4px;border-radius:2px;background:rgba(255,255,255,.22);margin:2px auto 10px;}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.sheet-head h3{font-size:17px;font-weight:700;}
+.sheet-close{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.10);display:grid;place-items:center;
+  color:#fff;cursor:pointer;border:none;}
+.group{margin-bottom:18px;}
+.group-label{font-size:11px;letter-spacing:1px;color:var(--text-sub);text-transform:uppercase;margin-bottom:10px;}
+.seg{display:flex;gap:8px;}
+.seg-item{flex:1;text-align:center;padding:11px 6px;border-radius:12px;background:rgba(255,255,255,.06);
+  border:1px solid var(--control-border);font-size:13px;font-weight:500;cursor:pointer;transition:all .18s var(--ease);}
+.seg-item.on{background:var(--accent-soft);border-color:rgba(239,210,161,.5);color:var(--accent);font-weight:600;}
+.slider-row{display:flex;align-items:center;gap:12px;}
+.slider-val{min-width:60px;text-align:center;font-size:15px;font-weight:700;color:var(--accent);}
+input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:34px;background:transparent;cursor:pointer;}
+input[type=range]::-webkit-slider-runnable-track{height:3px;border-radius:2px;background:linear-gradient(90deg,var(--accent) 0%,var(--accent) var(--fill,50%),rgba(255,255,255,.18) var(--fill,50%));}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:22px;height:22px;margin-top:-9.5px;
+  border-radius:50%;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.4);}
+/* 延迟摄影弹出菜单 */
+.timer-menu{position:absolute;z-index:30;top:calc(env(safe-area-inset-top,0px) + 64px);right:14px;width:110px;
+  display:flex;flex-direction:column;padding:6px;border-radius:14px;background:rgba(24,25,27,.94);
+  border:1px solid rgba(255,255,255,.12);opacity:0;pointer-events:none;transform:translateY(-6px);transition:.2s var(--ease);}
+.timer-menu .mi{padding:9px 10px;border-radius:9px;font-size:13px;cursor:pointer;color:#fff;
+  display:flex;justify-content:space-between;align-items:center;}
+.timer-menu .mi:active{background:rgba(255,255,255,.12);}
+.timer-menu .mi.on{color:var(--accent);}
+.flash-pop{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:45;transition:opacity .14s;}
+.flash-pop.pulse{opacity:.9;transition:opacity .02s;}
+.toast{position:absolute;left:50%;transform:translateX(-50%);z-index:46;top:calc(env(safe-area-inset-top,0px) + 64px);
+  background:var(--control);border:1px solid var(--control-border);border-radius:12px;padding:8px 16px;font-size:13px;
+  color:#fff;opacity:0;transition:opacity .25s var(--ease);pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;}
+svg{display:block;}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="viewfinder"><img src="https://picsum.photos/seed/lumira-capture/880/1220" alt="场景示例"/></div>
+  <div class="gesture" id="gesture" aria-hidden="true"></div>
+
+  <!-- 顶部导航胶囊：右侧图标群新增「延迟摄影」 -->
+  <div class="nav">
+    <button class="nav-back" id="btnBack" aria-label="返回">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <div class="nav-title" id="navTitle">
+      <b>模板拍摄</b><span id="titleSub">点击调整参数</span>
+    </div>
+    <button class="nav-icon" id="navFull" aria-label="全屏">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+    </button>
+    <!-- 延迟摄影：导航胶囊内的图标，不再独占一行 -->
+    <button class="nav-icon" id="timer" aria-label="延迟摄影">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9 2h6"/></svg>
+      <span class="badge" id="timerBadge">3</span>
+    </button>
+    <button class="nav-icon" id="navFlash" aria-label="闪光灯">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    </button>
+  </div>
+
+  <!-- 顶部组合列：比例 → 参数 -> 模板卡（已去掉延迟摄影独占行） -->
+  <div class="top-col">
+    <div class="ratio-capsule">
+      <button class="ratio" data-ratio="全屏">全屏</button>
+      <button class="ratio on" data-ratio="4:3">4:3</button>
+      <button class="ratio" data-ratio="1:1">1:1</button>
+    </div>
+    <div class="pill-bar">
+      <button class="pill on" id="pillEv">EV 0</button>
+      <button class="pill" id="pillIso">ISO 自动</button>
+      <button class="pill-primary">应用</button>
+      <button class="pill" id="pillRaw">RAW</button>
+    </div>
+    <!-- 模板信息卡：现状（左对齐收起） -->
+    <div class="tpl-card">
+      <img src="https://picsum.photos/seed/lumira-tpl2/160/160" alt="模板"/>
+      <div style="flex:1;min-width:0;">
+        <div class="t-name">晴空田园少女人像</div>
+        <div class="t-desc">已套用模板 · 按画面引导对准人物即可拍摄</div>
+      </div>
+      <span class="tpl-x"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+    </div>
+  </div>
+
+  <!-- 切换姿势：左下角信息提示（左右滑动切换） -->
+  <div class="pose-hint" id="poseHint">
+    <span>姿势</span><span class="p-num" id="poseNum">1 / 3</span>
+    <span class="p-sw">左右滑动切换</span>
+  </div>
+
+  <!-- 底部快门区（现状） -->
+  <div class="shutter-zone">
+    <button class="thumb-btn"><img src="https://picsum.photos/seed/lumira-thumb/120/120" alt="最近一张"/></button>
+    <div class="shutter-wrap"><div class="shutter" id="shutter"></div></div>
+    <button class="flip-btn" id="flipBtn" aria-label="切换摄像头">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 8h9l-2-2 2-2"/><circle cx="12" cy="14" r="7"/></svg>
+    </button>
+  </div>
+
+  <div class="flash-pop" id="flashPop"></div>
+  <div class="toast" id="toast"></div>
+  <div class="timer-menu" id="timerMenu"></div>
+
+  <!-- 参数面板（现状） -->
+  <div class="overlay" id="paramSheet">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-head"><h3>拍摄参数</h3>
+        <button class="sheet-close" id="btnCloseParam"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+      <div class="group"><div class="group-label">曝光补偿 EV</div>
+        <div class="slider-row"><input type="range" id="evSlider" min="-3" max="3" step="0.1" value="0"/><span class="slider-val" id="evVal">EV 0</span></div>
+      </div>
+      <div class="group"><div class="group-label">感光度 ISO</div>
+        <div class="seg" id="isoSeg">
+          <span class="seg-item on" data-iso="自动">自动</span><span class="seg-item" data-iso="100">100</span>
+          <span class="seg-item" data-iso="320">320</span><span class="seg-item" data-iso="800">800</span>
+        </div>
+      </div>
+      <div class="group"><div class="group-label">画面比例</div>
+        <div class="seg" id="ratioSeg">
+          <span class="seg-item" data-ratio="全屏">全屏</span><span class="seg-item on" data-ratio="4:3">4:3</span>
+          <span class="seg-item" data-ratio="1:1">1:1</span>
+        </div>
+      </div>
+      <div class="group" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0;">
+        <span style="font-size:13px;color:var(--text-sub);">RAW 格式</span>
+        <span class="seg-item on" style="flex:0 0 auto;width:64px;color:var(--accent);background:var(--accent-soft);border-color:rgba(239,210,161,.5);font-weight:600;">已开启</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+let toastTimer;
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),1500);}
+function openParamSheet(){$('paramSheet').classList.add('show');}
+$('navTitle').addEventListener('click',openParamSheet);
+$('btnCloseParam').addEventListener('click',()=>$('paramSheet').classList.remove('show'));
+$('paramSheet').addEventListener('click',e=>{if(e.target===e.currentTarget)$('paramSheet').classList.remove('show');});
+$('btnBack').addEventListener('click',()=>toast('返回上一页'));
+$('navFull').addEventListener('click',()=>toast('全屏沉浸'));
+
+/* 延迟摄影：导航胶囊内图标 → 弹出 关闭/3s/5s/10s */
+let delay=0;const DELAYS=[['关闭',0],['3s',3],['5s',5],['10s',10]];
+const timerBtn=$('timer'),timerMenu=$('timerMenu');
+function paintTimerMenu(){
+  timerMenu.innerHTML=DELAYS.map(([label,v])=>
+    `<span class="mi ${v===delay?'on':''}" data-v="${v}">${label}${v===delay?'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>':''}</span>`).join('');
+}
+function paintTimer(){timerBtn.classList.toggle('on',delay>0);
+  const b=$('timerBadge');b.textContent=delay>0?delay:'';b.style.display=delay>0?'block':'none';}
+timerBtn.addEventListener('click',()=>{paintTimerMenu();
+  const show=timerMenu.style.opacity!=='1';
+  timerMenu.style.opacity=show?'1':'0';timerMenu.style.pointerEvents=show?'auto':'none';
+  timerMenu.style.transform=show?'translateY(0)':'translateY(-6px)';});
+timerMenu.addEventListener('click',e=>{const it=e.target.closest('.mi');if(!it)return;
+  delay=+it.dataset.v;paintTimer();paintTimerMenu();
+  timerMenu.style.opacity=0;timerMenu.style.pointerEvents='none';timerMenu.style.transform='translateY(-6px)';
+  toast(delay===0?'延迟摄影已关闭':'延迟 '+delay+'s 后拍摄');});
+paintTimer();
+
+/* 比例 */
+let ratio='4:3';
+function setRatio(r){ratio=r;document.querySelectorAll('.ratio,.seg-item[data-ratio]').forEach(el=>{
+  if(el.dataset&&el.dataset.ratio!==undefined)el.classList.toggle('on',el.dataset.ratio===r);})}
+document.querySelectorAll('.ratio,.seg-item[data-ratio]').forEach(el=>{if(el.dataset&&el.dataset.ratio!==undefined)
+  el.addEventListener('click',()=>{setRatio(el.dataset.ratio);toast('画面比例：'+el.dataset.ratio);});});
+
+/* 参数 pill */
+document.querySelectorAll('#pillEv,#pillIso').forEach(p=>p.addEventListener('click',openParamSheet));
+$('pillRaw').addEventListener('click',()=>{$('pillRaw').classList.toggle('on');toast($('pillRaw').classList.contains('on')?'RAW 已开启':'RAW 已关闭');});
+
+/* 切换姿势：左右滑动 */
+let pose=1;const POSES=3;
+function paintPose(){const n=$('poseNum');n.textContent=`${pose} / ${POSES}`;
+  const h=$('poseHint');h.classList.remove('pop');void h.offsetWidth;h.classList.add('pop');}
+function nextPose(){pose=pose%POSES+1;paintPose();toast(`姿势 ${pose} / ${POSES}`);}
+function prevPose(){pose=(pose-2+POSES)%POSES+1;paintPose();toast(`姿势 ${pose} / ${POSES}`);}
+let gx=null;
+const gl=$('gesture');
+gl.addEventListener('pointerdown',e=>{gx=e.clientX;});
+window.addEventListener('pointerup',e=>{if(gx==null)return;const dx=e.clientX-gx;
+  if(Math.abs(dx)>50){dx<0?nextPose():prevPose();}gx=null;});
+
+/* 拍摄 */
+$('shutter').addEventListener('click',()=>{const fp=$('flashPop');fp.classList.add('pulse');
+  setTimeout(()=>{fp.classList.remove('pulse');toast('已拍摄 · 正在合成水印…');},120);});
+$('flipBtn').addEventListener('click',()=>toast('已切换摄像头'));
+
+/* EV / ISO */
+const ev=$('evSlider');function paintEV(){const v=parseFloat(ev.value);ev.style.setProperty('--fill',((v+3)/6*100)+'%');
+  $('evVal').textContent=v===0?'EV 0':(v>0?'EV +'+v.toFixed(1):'EV '+v.toFixed(1));$('pillEv').textContent=$('evVal').textContent;}
+ev.addEventListener('input',paintEV);paintEV();
+document.querySelectorAll('#isoSeg .seg-item').forEach(el=>el.addEventListener('click',()=>{
+  document.querySelectorAll('#isoSeg .seg-item').forEach(x=>x.classList.toggle('on',x===el));
+  $('pillIso').textContent='ISO '+el.dataset.iso;toast('ISO '+el.dataset.iso);}));
+</script>
+</body>
+</html>
