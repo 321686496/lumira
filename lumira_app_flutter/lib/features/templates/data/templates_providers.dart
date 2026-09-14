@@ -270,7 +270,9 @@ final todayRecommendationItemsProvider =
       continue;
     }
     final cls = r.classification;
-    final maj = cls['majorStyle'] is String ? cls['majorStyle'] as String : '';
+    // 与 isProfileMatch（interestFor→effectiveL2）保持一致：majorStyle 为空回退 style，
+    // 避免"判为命中但理由缺 L2 段"的口径分叉。
+    final maj = TemplateRanking.effectiveL2(r);
     final sub = cls['subStyle'] is String ? cls['subStyle'] as String : '';
     final method = cls['method'] is String ? cls['method'] as String : '';
     final seg = <String>[
