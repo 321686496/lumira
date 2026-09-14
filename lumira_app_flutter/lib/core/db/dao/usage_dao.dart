@@ -136,6 +136,33 @@ class UsageDao {
     }
     return result;
   }
+
+  /// 近窗口（sinceMs 之后）本机事件统计：按 use_shoot/open_detail 聚合。
+  /// 与 countMap 口径一致的一次性取多个 item；事件即使已 sync 仍计（本地也发生过）。
+  Future<Map<String, ItemUsageCounts>> recentPopularity(
+      String itemType, List<String> itemIds, int sinceMs) async {
+    if (itemIds.isEmpty) return const {};
+    final placeholders = List.filled(itemIds.length, '?').join(',');
+    final rows = await _db.query(
+      Tables.usageEvents,
+      where: '${Tables.colItemType} = ? AND ${Tables.colItemId} IN ($placeholders) '
+          'AND ${Tables.colOccurredAt} >= ?',
+      whereArgs: [itemType, ...itemIds, sinceMs],
+      columns: [Tables.colItemId, Tables.colEventType],
+    );
+    final result = <String, ItemUsageCounts>{};
+    for (final r in rows) {
+      final id = r[Tables.colItemId] as String;
+      final et = r[Tables.colEventType] as String;
+      final e = result.putIfAbsent(id, () => ItemUsageCounts());
+      if (et == 'use_shoot') {
+        e.useShoot += 1;
+      } else if (et == 'open_detail') {
+        e.openDetail += 1;
+      }
+    }
+    return result;
+  }
 }
 
 /// 某个 item 三类事件次数汇总。
