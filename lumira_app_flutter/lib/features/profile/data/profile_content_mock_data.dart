@@ -1,3 +1,5 @@
+import '../../capture/domain/photo_template.dart';
+
 /// 自定义模板分类（与 uni-app Target 类型对应）
 enum TemplateCategory {
   portrait,    // 人像
@@ -49,6 +51,8 @@ class CustomTemplate {
   final String shutterSpeed;
   final int usageCount;
   final bool isFavorite;
+  /// 适用性别（spec 2026-09-14）：'unisex'（通用）/ 'male'（男）/ 'female'（女）。
+  final TemplateGender gender;
 
   const CustomTemplate({
     required this.id,
@@ -62,6 +66,7 @@ class CustomTemplate {
     required this.shutterSpeed,
     required this.usageCount,
     required this.isFavorite,
+    this.gender = TemplateGender.unisex,
   });
 }
 

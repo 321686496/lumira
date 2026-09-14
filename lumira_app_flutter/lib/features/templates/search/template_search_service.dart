@@ -86,6 +86,15 @@ class TemplateSearchService {
       list = list.where((t) => _templateRatio(t) == ratio).toList();
     }
 
+    // 适用性别：选男/女时纳含通用 unisex 模板，与全部模板列表筛选行为一致
+    final gender = filters.gender;
+    if (gender != null && gender.isNotEmpty) {
+      list = list
+          .where((t) =>
+              t.gender == gender || t.gender == 'unisex' || t.gender.isEmpty)
+          .toList();
+    }
+
     if (filters.ownedOnly) {
       list = list.where((t) => t.source == 'custom').toList();
     }
