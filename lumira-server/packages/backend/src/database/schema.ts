@@ -1,4 +1,4 @@
-﻿// lumira-server/packages/backend/src/database/schema.ts
+// lumira-server/packages/backend/src/database/schema.ts
 
 import { sql } from 'drizzle-orm';
 import { mysqlTable, text, int, bigint, double, longtext, uniqueIndex, varchar, index } from 'drizzle-orm/mysql-core';
@@ -331,8 +331,14 @@ export const operationBanners = mysqlTable('operation_banners', {
   focusY: double('focus_y'),
   focusZoom: double('focus_zoom'),
   condition: varchar('condition', { length: 64 }).notNull(),
+  // 条目类型：operation=条件触达运营位 / ad=活动广告曝光（默认 operation）
+  kind: varchar('kind', { length: 16 }).notNull().default('operation'),
   isActive: int('is_active').notNull().default(1),
   sortOrder: int('sort_order').notNull().default(0),
+  // 广告位绝对槽位下标；NULL=放在最后（默认，防打扰）
+  position: int('position'),
+  // 广告点击跳转的外部 URL（kind=ad 时必填）
+  externalUrl: varchar('external_url', { length: 512 }),
   createdAt: int('created_at').notNull(),
   updatedAt: int('updated_at').notNull(),
 });

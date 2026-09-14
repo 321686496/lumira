@@ -91,11 +91,13 @@ class RecommendationService {
   final UsageDao? _usageDao;
   final InterestDao? _interestDao;
 
-  /// 构建首页 Banner（4 槽位：运营位 + 个性化位）
+  /// 构建首页 Banner（槽位：运营位 + 个性化位 + 活动/广告位）
   ///
   /// [operationInputs] 为运营位条件所需的用户状态快照（远端拉取，失败/离线
   /// 传空 → 不出运营位，slot 0 由个性化补位）。
   /// [operationBanners] 为运营条目目录（默认静态；远端拉取成功后注入后台下发列表）。
+  /// kind=ad 的广告条目按各自 [position] 归位插入（缺省/越界放最后），并过滤出
+  /// 后台统一下发的广告；广告不参与 slot 0 运营位条件匹配。
   Future<List<HomeBannerItem>> buildBanners({
     OperationUserInputs operationInputs = const OperationUserInputs(),
       List<OperationBanner> operationBanners = kOperationBanners,
@@ -125,6 +127,14 @@ class RecommendationService {
 
     final isNewUser = totalPhotos < _kNewUserThreshold;
 
+    // 拆分广告与运营位：广告按 position 归位展示（不参与 slot 0 条件匹配）
+    final ads = operationBanners
+        .where((b) => b.kind == OperationBannerKind.ad)
+        .toList();
+    final ops = operationBanners
+        .where((b) => b.kind != OperationBannerKind.ad)
+        .toList();
+
     final List<HomeBannerItem> banners = [];
     final Set<String> usedTemplateIds = {};
     final Set<String> usedSceneIds = {};
@@ -133,7 +143,7 @@ class RecommendationService {
     // === slot 0：运营位（条件满足则占，否则让位给个性化补位） ===
     final operation = matchOperationBanner(
       isNewUser: isNewUser,
-      banners: operationBanners,
+      banners: ops,
       inputs: operationInputs,
     );
     if (operation != null) {
@@ -319,8 +329,17 @@ class RecommendationService {
       );
     }
 
-    // 防御性截断：固定 4 条
-    return banners.take(4).toList();
+    // === 活动/广告位：按各自 position 归位插入（缺省/越界放最后） ===
+    for (final ad in ads) {
+      final insertAt = (ad.position != null &&
+              ad.position! >= 0 &&
+              ad.position! < banners.length)
+          ? ad.position!
+          : banners.length;
+      banners.insert(insertAt, operationBannerToItem(ad));
+    }
+
+    return banners;
   }
 
   /// 模板类 Banner 副标题：优先用模板短描述，否则截断 description。

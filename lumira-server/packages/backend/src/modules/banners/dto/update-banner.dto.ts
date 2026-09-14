@@ -2,7 +2,7 @@
 // PATCH /admin/banners/:id 的 DTO，所有字段可选（Partial），id 不可改
 import {
   IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min,
-  MaxLength,
+  MaxLength, ValidateIf,
 } from 'class-validator';
 import { OPERATION_BANNER_CONDITIONS, OPERATION_BANNER_ROUTES } from '../operation-banner.rules';
 
@@ -26,8 +26,14 @@ export class UpdateBannerDto {
   tag?: string;
 
   @IsOptional()
+  @ValidateIf((o: UpdateBannerDto) => o.kind !== 'ad')
   @IsIn(OPERATION_BANNER_ROUTES)
   route?: string;
+
+  /** 条目类型：operation=条件触达运营位 / ad=活动广告曝光（默认 operation） */
+  @IsOptional()
+  @IsIn(['operation', 'ad'])
+  kind?: string;
 
   /** 目标模板 id：空串/缺省时清除 */
   @IsOptional()
@@ -60,8 +66,20 @@ export class UpdateBannerDto {
   focusZoom?: number;
 
   @IsOptional()
+  @ValidateIf((o: UpdateBannerDto) => o.kind !== 'ad')
   @IsIn(OPERATION_BANNER_CONDITIONS)
   condition?: string;
+
+  /** 广告点击跳转的外部 URL（kind=ad 时必填）；null/空串清除 */
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  externalUrl?: string | null;
+
+  /** 广告位绝对槽位下标（0 起）；null/缺省 = 放最后一个槽位 */
+  @IsOptional()
+  @IsInt()
+  position?: number | null;
 
   @IsOptional()
   @IsBoolean()

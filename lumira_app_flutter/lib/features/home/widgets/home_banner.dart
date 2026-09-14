@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -182,6 +183,15 @@ class _HomeBannerState extends ConsumerState<HomeBanner>
         .catchError((_) {});
   }
 
+  /// 用系统浏览器打开广告/外链；失败静默（不阻断轮播交互）
+  Future<void> _openExternalUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasScheme) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.platformDefault);
+    } catch (_) {}
+  }
+
   /// 曝光埋点：banner 成为当前页时上报一次（按 trackingId 会话内去重）
   void _reportExpose(List<HomeBannerItem> banners, int realIndex) {
     if (realIndex < 0 || realIndex >= banners.length) return;
@@ -246,7 +256,13 @@ class _HomeBannerState extends ConsumerState<HomeBanner>
                     // 点击埋点：失败静默，不阻断跳转
                     _recordBannerEvent(
                         banner.trackingId, UsageEventType.bannerClick);
-                    GoRouter.of(context).push(banner.route);
+                    // 广告/外链：存在 externalUrl 时用系统浏览器打开，否则 App 内路由
+                    final external = banner.externalUrl;
+                    if (external != null && external.isNotEmpty) {
+                      _openExternalUrl(external);
+                    } else {
+                      GoRouter.of(context).push(banner.route);
+                    }
                   },
                 );
               },
