@@ -42,12 +42,13 @@ class TemplateScore {
 }
 
 /// 个性化模板排序器（纯 Dart，可单元测试）。
-/// 三维画像权重 + 50/50 熟/新混合；独立新引擎，不与现有 recommendation_engine.dart 混用。
+/// 四级画像权重 + 50/50 熟/新混合；独立新引擎，不与现有 recommendation_engine.dart 混用。
 class TemplateRanking {
-  // 三维画像内部权重
-  static const double wCategory = 0.50;
-  static const double wMajorStyle = 0.30;
-  static const double wStyle = 0.20;
+  // 四级画像内部权重（category/style/subStyle/method，总和 1.0）
+  static const double wCategory = 0.40;
+  static const double wStyle = 0.20;     // L2：effective（人像 majorStyle，非人像 style）
+  static const double wSubStyle = 0.20;  // L3：子风格
+  static const double wMethod = 0.20;    // L4：拍摄方式
   // 总分权重
   static const double wInterest = 0.50;
   static const double wExplore = 0.30;
@@ -55,19 +56,35 @@ class TemplateRanking {
   static const double wQuestionnaire = 0.10;
   static const double penaltyRecent = 0.25;
 
-  /// 对每个模板计算 interest（三维画像加权和）
+  /// 取 L2 key：majorStyle 优先，为空回退 style（兼容旧数据）。
+  static String effectiveL2(TemplateRecord t) {
+    final cls = t.classification;
+    final maj = cls['majorStyle'];
+    if (maj is String && maj.isNotEmpty) return maj;
+    final sty = cls['style'];
+    return sty is String ? sty : '';
+  }
+
+  /// 对每个模板计算 interest（四级画像加权和）
   double interestFor(TemplateRecord t, RankingContext ctx) {
     final cls = t.classification;
     final c = ctx.scoreFor(InterestScope.category, t.category);
-    final maj = cls['majorStyle'];
-    final m = maj is String
-        ? ctx.scoreFor(InterestScope.majorStyle, maj)
-        : 0.0;
-    final sty = cls['style'];
-    final s = sty is String
-        ? ctx.scoreFor(InterestScope.style, sty)
-        : 0.0;
-    return wCategory * c + wMajorStyle * m + wStyle * s;
+    final l2 = effectiveL2(t);
+    var relevant = 0.0;
+    if (l2.isNotEmpty) {
+      var m = ctx.scoreFor(InterestScope.style, l2);
+      if (m == 0) m = ctx.scoreFor(InterestScope.majorStyle, l2); // 旧键回退
+      relevant += wStyle * m;
+    }
+    final sub = cls['subStyle'];
+    if (sub is String && sub.isNotEmpty) {
+      relevant += wSubStyle * ctx.scoreFor(InterestScope.subStyle, sub);
+    }
+    final method = cls['method'];
+    if (method is String && method.isNotEmpty) {
+      relevant += wMethod * ctx.scoreFor(InterestScope.method, method);
+    }
+    return wCategory * c + relevant;
   }
 
   /// 打分全量候选（含归一化与问卷/近期展示加减分）
@@ -106,14 +123,14 @@ class TemplateRanking {
     return scores;
   }
 
-  /// 熟/新 50/50 混合：新鲜 half 与兴趣 half 交替合并（去重后回填），
-  /// 最后用 `total`（含热度/问卷/近期降权）做最终排序，使全量信号生效。
-  /// 混合保证多样性（高分探索与高分兴趣均在池内），total 保证排序质量。
+  /// 熟/新 50/50 混合：新鲜 half 与兴趣 half 交替合并（去重后回填）。
+  /// 保留探索/兴趣交错顺序，不加总分数全局重排（避免把探索信号挤到末尾）。
   List<TemplateRecord> mixExplore(List<TemplateScore> scores) {
     if (scores.isEmpty) return const [];
-    final totalById = {for (final s in scores) s.template.id: s.total};
-    final explore = [...scores]..sort((a, b) => b.exploration.compareTo(a.exploration));
-    final exploit = [...scores]..sort((a, b) => b.interest.compareTo(a.interest));
+    final explore = [...scores]
+      ..sort((a, b) => b.exploration.compareTo(a.exploration));
+    final exploit = [...scores]
+      ..sort((a, b) => b.interest.compareTo(a.interest));
     final half = (scores.length / 2).ceil();
     final a = explore.take(half).toList();
     final b = exploit.take(half).toList();
@@ -131,14 +148,16 @@ class TemplateRanking {
       }
     }
     if (out.length < scores.length) {
-      final rest = [...explore.skip(half), ...exploit.skip(half)];
+      final rest = <TemplateScore>[
+        ...explore.skip(half),
+        ...exploit.skip(half),
+      ];
       for (final s in rest) {
         if (out.length >= scores.length) break;
         if (used.add(s.template.id)) out.add(s.template);
       }
     }
-    out.sort((x, y) => (totalById[y.id] ?? 0).compareTo(totalById[x.id] ?? 0));
-    return out;
+    return out; // 保留探索/兴趣交错顺序，不加总分数全局重排
   }
 }
 
@@ -147,4 +166,6 @@ class InterestScope {
   static const category = 'category';
   static const majorStyle = 'major_style';
   static const style = 'style';
+  static const subStyle = 'sub_style';
+  static const method = 'method';
 }
