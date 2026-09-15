@@ -48,6 +48,7 @@ class RouteNames {
   static const String profileSettings = '/profile/settings';
   static const String profileEdit = '/profile/edit';
   static const String profileSettingsTheme = '/profile/settings/theme';
+  static const String profileSettingsWordmark = '/profile/settings/wordmark';
   static const String profileSettingsCache = '/profile/settings/cache';
   static const String profileSettingsResolution = '/profile/settings/resolution';
   static const String profileSettingsWatermark = '/profile/settings/watermark';
