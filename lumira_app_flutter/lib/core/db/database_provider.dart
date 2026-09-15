@@ -33,7 +33,7 @@ import 'dao/templates_drafts_dao.dart';
 import '../../features/templates/recommend/user_interests.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 59;
+const int _kDbVersion = 60;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -498,6 +498,8 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colAspectRatio} TEXT,
       ${Tables.colCaptureAppearance} TEXT NOT NULL DEFAULT 'immersive',
       ${Tables.colOperationBannersCache} TEXT,
+      ${Tables.colTemplateInfoCardHidden} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colTemplateInfoCardTab} TEXT,
       ${Tables.colComplianceAgreed} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colComplianceVersion} TEXT,
       ${Tables.colComplianceAgreedAt} INTEGER,
@@ -1686,6 +1688,28 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await BuiltinDataSeeder.reseedBuiltinTemplates(db);
     } catch (e) {
       debugPrint('v59 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 60) {
+    try {
+      // v60: user_settings 新增 template_info_card_tab 列
+      // 模板信息卡内「场景指南/道具信息/姿势描述」tab 的最后一次选择（持久化），老库升级需显式补列
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colTemplateInfoCardTab,
+        'TEXT',
+      );
+      // 顺带补齐 v34 的 template_info_card_hidden 列（新装库 onCreate 未声明时的兜底）
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colTemplateInfoCardHidden,
+        'INTEGER NOT NULL DEFAULT 0',
+      );
+    } catch (e) {
+      debugPrint('v60 migration failed (silent fallback): $e');
     }
   }
 }
