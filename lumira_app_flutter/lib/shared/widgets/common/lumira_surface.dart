@@ -21,6 +21,7 @@ class LumiraSurface extends ConsumerWidget {
     this.radius,
     this.emphasize = false,
     this.color,
+    this.border,
     this.clip = false,
     this.darkContext = false,
   });
@@ -42,6 +43,11 @@ class LumiraSurface extends ConsumerWidget {
 
   /// 覆盖背景色（仅在需要自定义时使用；为 null 走风格默认）
   final Color? color;
+
+  /// 覆盖描边（仅在需要自定义时使用；为 null 走风格默认）。
+  /// 典型场景：需要品牌色/语义色描边的空态占位块（如"添加照片"虚线框），
+  /// 底色与阴影仍由 [LumiraThemeResolver.cardVisual] 按当前风格决定。
+  final Border? border;
 
   /// 是否裁剪内容到圆角内（子组件可能溢出时用）
   final bool clip;
@@ -69,7 +75,7 @@ class LumiraSurface extends ConsumerWidget {
       decoration: BoxDecoration(
         color: color ?? visual.background,
         borderRadius: BorderRadius.circular(radius ?? 14),
-        border: visual.border,
+        border: border ?? visual.border,
         boxShadow: visual.shadows,
       ),
       clipBehavior: clip ? Clip.antiAlias : Clip.none,

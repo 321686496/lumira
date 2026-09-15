@@ -65,8 +65,8 @@ class RecentShotCard extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AspectRatio(
-                aspectRatio: 3 / 4,
+              // 图片区：Expanded 填满网格单元剩余高度（2 列网格下避免固定 3:4 溢出）
+              Expanded(
                 child: Stack(
                   fit: StackFit.expand,
                   children: [

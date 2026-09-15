@@ -179,9 +179,9 @@ OperationBanner? operationBannerFromJson(Map<String, dynamic> json) {
   final kind = json['kind'] == 'ad'
       ? OperationBannerKind.ad
       : OperationBannerKind.operation;
+  OperationCondition? condition;
   if (kind == OperationBannerKind.operation) {
     if (!kOperationBannerRoutes.contains(route)) return null;
-    OperationCondition? condition;
     for (final c in OperationCondition.values) {
       if (c.name == json['condition']) condition = c;
     }
@@ -213,7 +213,7 @@ OperationBanner? operationBannerFromJson(Map<String, dynamic> json) {
     subtitle: subtitle,
     tag: tag,
     route: route,
-    condition: OperationCondition.hasLockedTemplate,
+    condition: condition ?? OperationCondition.hasLockedTemplate,
     kind: kind,
     position: position,
     externalUrl: externalUrl,

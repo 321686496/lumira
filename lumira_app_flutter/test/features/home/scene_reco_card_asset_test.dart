@@ -79,6 +79,31 @@ void main() {
       isA<MemoryImage>(),
     );
   });
+
+  testWidgets('沉浸式形态：文字叠在封面图上', (tester) async {
+    const tinyPng =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    await tester.pumpWidget(harness(const SceneReco(
+      id: 'scene-imm',
+      name: '沉浸场景',
+      vibe: '氛围文案',
+      imageSeed: 's',
+      badgeText: '推荐',
+      badgeBrand: false,
+      photoCount: 0,
+      coverUrl: 'data:image/png;base64,$tinyPng',
+    )));
+    await tester.pump();
+    // 场景名与氛围文字仍渲染（叠在图上）
+    expect(find.text('沉浸场景'), findsOneWidget);
+    expect(find.text('氛围文案'), findsOneWidget);
+    // 存在黑色渐变遮罩层（叠照片遮罩合法例外）
+    final gradientFound = tester.widgetList<DecoratedBox>(find.byType(DecoratedBox)).any(
+      (w) => w.decoration is BoxDecoration &&
+          (w.decoration as BoxDecoration).gradient != null,
+    );
+    expect(gradientFound, isTrue);
+  });
 }
 
 void _noop() {}

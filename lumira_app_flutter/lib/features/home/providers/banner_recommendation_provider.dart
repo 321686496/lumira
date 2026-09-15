@@ -27,6 +27,7 @@ final bannerRecommendationProvider =
     questionnaireDao: await ref.watch(questionnaireDaoProvider.future),
     usageDao: await ref.watch(usageDaoProvider.future),
     interestDao: await ref.watch(userInterestsDaoProvider.future),
+    profileDao: await ref.watch(userProfileDaoProvider.future),
   );
   // 并行加载运营位所需条件与远端运营条目目录；
   // 两者各自容错（_tryLoad / operationBanners 三级兜底），不阻塞 Banner 主流程。

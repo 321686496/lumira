@@ -19,6 +19,7 @@ import '../data/templates_mock_data.dart';
 import '../data/templates_providers.dart';
 import '../widgets/adaptive_cover_image.dart';
 import '../widgets/recommendation_card.dart';
+import '../widgets/recommendation_skeleton.dart';
 import '../widgets/template_grid.dart';
 import '../widgets/user_preference_card.dart';
 
@@ -373,7 +374,9 @@ class _HeroSection extends ConsumerWidget {
               ),
             ),
             asyncList.when(
-              loading: () => const SizedBox.shrink(),
+              // 加载中（含等待远程模板同步）显示与真实卡片同构的骨架屏，
+              // 高度与数据态一致（256），数据到位后不产生跳动。
+              loading: () => const RecommendationSkeleton(),
               error: (e, _) => const SizedBox.shrink(),
               data: (list) {
                 if (list.isEmpty) return const SizedBox.shrink();

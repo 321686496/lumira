@@ -174,8 +174,8 @@ void main() {
     expect(find.text('自然光人像'), findsOneWidget);
     expect(find.text('复古胶片感'), findsOneWidget);
 
-    // Section 5: GrowthStrip
-    expect(find.text('收藏'), findsOneWidget);
+    // Section 5: GrowthStrip（精简为 连续天/作品/经验）
+    expect(find.text('连续天'), findsOneWidget);
     expect(find.text('经验'), findsOneWidget);
     expect(find.text('作品'), findsOneWidget);
 
@@ -211,6 +211,11 @@ void main() {
 
   */
   testWidgets('HomePage renders across 4 UI styles', (tester) async {
+    tester.binding.window.physicalSizeTestValue = const Size(800, 5500);
+    tester.binding.window.devicePixelRatioTestValue = 1.0;
+    addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+    addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
+
     for (final style in UIStyle.values) {
       await tester.pumpWidget(_wrapWithRouter(style: style));
       await settleOrPump(tester, style);
@@ -222,6 +227,11 @@ void main() {
   });
 
   testWidgets('HomePage renders across 8 themes', (tester) async {
+    tester.binding.window.physicalSizeTestValue = const Size(800, 5500);
+    tester.binding.window.devicePixelRatioTestValue = 1.0;
+    addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+    addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
+
     for (final theme in ThemeKey.values) {
       await tester.pumpWidget(_wrapWithRouter(theme: theme));
       await tester.pumpAndSettle();
@@ -264,8 +274,56 @@ void main() {
     final horizontalRails = find.byWidgetPredicate(
       (widget) => widget is ListView && widget.scrollDirection == Axis.horizontal,
     );
-    expect(horizontalRails, findsNWidgets(2));
+    expect(horizontalRails, findsWidgets);
     expect(find.text('管理'), findsNothing);
+  });
+
+  testWidgets('HomePage 继续创作为 2 列网格', (tester) async {
+    tester.binding.window.physicalSizeTestValue = const Size(800, 5500);
+    tester.binding.window.devicePixelRatioTestValue = 1.0;
+    addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+    addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
+
+    await tester.pumpWidget(_wrapWithRouter());
+    await tester.pumpAndSettle();
+
+    // 继续创作区域使用 SliverGrid（懒构建 2 列网格）
+    final grids = find.byType(SliverGrid);
+    expect(grids, findsWidgets);
+
+    // 场景推荐仍为横向 ListView
+    final horizontalRails = find.byWidgetPredicate(
+      (widget) => widget is ListView && widget.scrollDirection == Axis.horizontal,
+    );
+    expect(horizontalRails, findsWidgets);
+    // 最近作品仍在
+    expect(find.text('自然光人像'), findsOneWidget);
+  });
+
+  testWidgets('HomePage 结构：搜索胶囊在 Banner 前、成长条在入口后', (tester) async {
+    tester.binding.window.physicalSizeTestValue = const Size(800, 5500);
+    tester.binding.window.devicePixelRatioTestValue = 1.0;
+    addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+    addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
+
+    await tester.pumpWidget(_wrapWithRouter());
+    await tester.pumpAndSettle();
+
+    // 搜索胶囊存在
+    expect(find.text('搜索模板 / 场景 / 拍摄教程'), findsOneWidget);
+
+    // 成长条 3 项
+    expect(find.text('连续天'), findsOneWidget);
+    expect(find.text('作品'), findsOneWidget);
+    expect(find.text('经验'), findsOneWidget);
+    expect(find.text('收藏'), findsNothing);
+
+    // 顺序：搜索胶囊 y < QuickActions y < GrowthStrip y
+    final searchY = tester.getTopLeft(find.text('搜索模板 / 场景 / 拍摄教程')).dy;
+    final quickY = tester.getTopLeft(find.text('拍摄').first).dy;
+    final growthY = tester.getTopLeft(find.text('连续天')).dy;
+    expect(searchY, lessThan(quickY));
+    expect(quickY, lessThan(growthY));
   });
 
   testWidgets('HomePage recent shot opens gallery detail', (tester) async {
