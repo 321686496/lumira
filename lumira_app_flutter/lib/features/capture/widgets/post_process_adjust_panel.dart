@@ -246,9 +246,12 @@ class _AdjustPanelState extends State<AdjustPanel> {
                   tokens: t,
                   accentColor: widget.accentColor,
                   onChanged: (v) {
-                    if (v != def.getValue(widget.full)) {
+                    // 诊断按「取整后的生效值」去重：pointer-move 每帧都产出连续
+                    // 小数，而下游真正消费的是四舍五入后的整数，逐帧打印会挤爆
+                    // hilog 限速、把关键的 build/paint 日志冲掉。
+                    if (v.round() != def.getValue(widget.full).round()) {
                       debugPrint('[edit-diag] slider ${def.label} '
-                          '${def.getValue(widget.full)} → $v');
+                          '${def.getValue(widget.full).round()} → ${v.round()}');
                     }
                     widget.onChanged(def.setValue(widget.full, v));
                   },

@@ -8,6 +8,9 @@ import 'package:lumira_app_flutter/features/capture/widgets/post_process_color_t
 import 'package:lumira_app_flutter/features/capture/widgets/post_process_detail_tab.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/preview_edit_panel.dart';
 
+/// 诊断：toolbar 增量指纹去重（StatelessWidget 无字段可挂，故用文件级变量）。
+String _lastDeltaDiag = '';
+
 /// 拍摄预览页编辑工具（与 gallery_edit_page._EditTool 对齐的公开版本）。
 enum PreviewEditTool { color, detail, filter, crop }
 
@@ -67,9 +70,12 @@ class PreviewEditToolbar extends StatelessWidget {
 
   void _updatePostFromFull(PostProcess newFull) {
     final next = deltaOf(_baked, newFull, current: postProcess);
-    debugPrint('[edit-diag] toolbar delta → '
-        'smooth=${next.smoothStrength} sharpen=${next.sharpen} '
-        'vignette=${next.vignette} grain=${next.grain} leg=${next.legStretch}');
+    final sig = '${next.smoothStrength}|${next.sharpen}|${next.vignette}'
+        '|${next.grain}|${next.legStretch}';
+    if (sig != _lastDeltaDiag) {
+      _lastDeltaDiag = sig;
+      debugPrint('[edit-diag] toolbar delta → $sig');
+    }
     onPostProcessChanged(next);
   }
 
