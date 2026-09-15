@@ -184,12 +184,16 @@ class RecentShotCard extends ConsumerWidget {
                           color: tokens.textTertiary,
                         ),
                         const SizedBox(width: 4),
-                        Text(
-                          _relativeTime(recent.createdAt),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: tokens.textTertiary,
-                            height: 1.2,
+                        Flexible(
+                          child: Text(
+                            _relativeTime(recent.createdAt),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: tokens.textTertiary,
+                              height: 1.2,
+                            ),
                           ),
                         ),
                       ],
