@@ -99,21 +99,60 @@ class PosterHairline extends StatelessWidget {
   Widget build(BuildContext context) => Container(height: 1, color: color);
 }
 
-/// 缺角相框：四角切角 + 左上/右下金色 L 角标，内嵌 [child]。
+/// 缺角相框：左上/右下切角 + 金色 L 角标，内嵌 [child]。
 class GoldNotchedFrame extends StatelessWidget {
-  const GoldNotchedFrame({super.key, required this.child, this.notch = 0.28});
+  const GoldNotchedFrame({
+    super.key,
+    required this.child,
+    this.notch = 0.28,
+    this.notchPx,
+    this.cornerLen,
+    this.cornerStroke = 2.5,
+    this.cornerColor,
+    this.showCorners = true,
+  });
+
   final Widget child;
-  final double notch; // 切角相对短边比例
+
+  /// 切角相对短边比例（[notchPx] 为空时生效）。
+  final double notch;
+
+  /// 切角绝对边长（逻辑 px），优先于 [notch]。
+  final double? notchPx;
+
+  /// L 角标边长（缺省 18）。
+  final double? cornerLen;
+
+  /// L 角标线宽（缺省 2.5）。
+  final double cornerStroke;
+
+  /// L 角标颜色（缺省 [PosterPalette.goldDeep]）。
+  final Color? cornerColor;
+
+  /// 是否绘制角标（部分版式只需切角）。
+  final bool showCorners;
 
   @override
   Widget build(BuildContext context) {
+    final len = cornerLen ?? 18.0;
+    final color = cornerColor ?? PosterPalette.goldDeep;
     return CustomPaint(
-      painter: _NotchedFramePainter(notch: notch),
+      painter: _NotchedFramePainter(notch: notch, notchPx: notchPx),
       child: Stack(
         children: [
           child,
-          const Positioned(top: 0, left: 0, child: _LCorner(false)),
-          const Positioned(bottom: 0, right: 0, child: _LCorner(true)),
+          if (showCorners) ...[
+            Positioned(
+              top: 0,
+              left: 0,
+              child: _LCorner(false, len: len, stroke: cornerStroke, color: color),
+            ),
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: _LCorner(true, len: len, stroke: cornerStroke, color: color),
+            ),
+          ],
         ],
       ),
     );
@@ -121,18 +160,24 @@ class GoldNotchedFrame extends StatelessWidget {
 }
 
 class _LCorner extends StatelessWidget {
-  const _LCorner(this.lower, {Key? key}) : super(key: key);
+  const _LCorner(
+    this.lower, {
+    required this.len,
+    required this.stroke,
+    required this.color,
+  });
   final bool lower;
+  final double len;
+  final double stroke;
+  final Color color;
+
   @override
   Widget build(BuildContext context) {
-    const stroke = 2.5;
-    const len = 18.0;
-    final g = PosterPalette.goldDeep;
     return SizedBox(
       width: len,
       height: len,
       child: CustomPaint(
-        painter: _LMarkerPainter(lower: lower, stroke: stroke, len: len, color: g),
+        painter: _LMarkerPainter(lower: lower, stroke: stroke, len: len, color: color),
       ),
     );
   }
@@ -174,14 +219,15 @@ class _LMarkerPainter extends CustomPainter {
 }
 
 class _NotchedFramePainter extends CustomPainter {
-  const _NotchedFramePainter({required this.notch});
+  const _NotchedFramePainter({required this.notch, this.notchPx});
   final double notch;
+  final double? notchPx;
 
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
-    final n = (w < h ? w : h) * notch;
+    final n = notchPx ?? (w < h ? w : h) * notch;
     final path = Path()
       ..moveTo(n, 0)
       ..lineTo(w, 0)
@@ -196,7 +242,8 @@ class _NotchedFramePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_NotchedFramePainter o) => o.notch != notch;
+  bool shouldRepaint(_NotchedFramePainter o) =>
+      o.notch != notch || o.notchPx != notchPx;
 }
 
 /// 印章（红色圆章，用于金字招牌样式）。

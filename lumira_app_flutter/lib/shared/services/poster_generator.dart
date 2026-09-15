@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -312,8 +313,15 @@ class _PosterSheetState extends State<_PosterSheet> {
     return spec.allItems.where((it) => !_selected.contains(it)).toList();
   }
 
+  /// 把 [oldIndex] 处的照片移动到 [newIndex] 槽位（目标槽位语义，非插入点语义）。
+  ///
+  /// 注意：这里**不做** `newIndex > oldIndex` 时的 -1 补偿——那是
+  /// ReorderableListView「先移除再插入」的回调约定；自绘拖拽直接给出
+  /// 目标槽位下标，再补偿会差一位。
   void _onReorderPhoto(int oldIndex, int newIndex) {
-    if (newIndex > oldIndex) newIndex -= 1;
+    if (oldIndex == newIndex) return;
+    if (oldIndex < 0 || newIndex < 0) return;
+    if (oldIndex >= _selected.length || newIndex >= _selected.length) return;
     setState(() {
       final it = _selected.removeAt(oldIndex);
       _selected.insert(newIndex, it);
@@ -801,7 +809,15 @@ class _RatioPill extends StatelessWidget {
 }
 
 /// 照片顺序编辑面板：已按序选中横排（长按拖拽调整、点 × 移除）+ 可选候选追加。
-class _PosterReorderPanel extends StatelessWidget {
+///
+/// 拖拽排序为**自绘实现**（LongPressDraggable + DragTarget），不使用
+/// 「ReorderableListView 外套 RotatedBox」的横排技巧：Flutter 3.7 的
+/// ReorderableListView 用手指的 Y 坐标判定插入位置（`_dragUpdateItems` 取的是
+/// `dragPosition.dy`，`scrollDirection` 恒为 vertical），横排后所有 item 的全局
+/// Y 区间完全重合，拖到哪儿都算同一个槽位，`onReorder` 根本不会被调用。
+/// 这里改为按 X 坐标计算目标槽位（内容坐标 = 视口 x + 横向滚动量），
+/// 拖动过程中实时让位，松手即生效。
+class _PosterReorderPanel extends StatefulWidget {
   const _PosterReorderPanel({
     required this.tokens,
     required this.selected,
@@ -822,12 +838,133 @@ class _PosterReorderPanel extends StatelessWidget {
   final void Function(Object item) onRemove;
   final void Function(Object item) onAdd;
 
+  @override
+  State<_PosterReorderPanel> createState() => _PosterReorderPanelState();
+}
+
+class _PosterReorderPanelState extends State<_PosterReorderPanel> {
   static const double _thumb = 54;
   static const double _gap = 6;
+  /// 单个缩略图在横排中占据的步距（含右侧间距）。
+  static const double _stride = _thumb + _gap;
+
+  /// 长按触发拖拽的时长（与系统长按一致）。
+  static const Duration _dragDelay = Duration(milliseconds: 500);
+
+  final ScrollController _scrollCtl = ScrollController();
+  Timer? _autoScrollTimer;
+
+  /// 当前被拖项在 [widget.selected] 中的下标；实时让位后同步更新。
+  int? _dragIndex;
+  /// 是否处于拖拽中：拖拽期间禁用横排自身的滚动，避免与拖拽抢横向手势。
+  bool _dragging = false;
+  /// 指针在横排视口内的 x 坐标（滚动后重算落点用，< 0 表示未知）。
+  double _pointerViewDx = -1;
+  /// 指针的**屏幕** x 坐标（贴边自动滚动用，不依赖是否落在横排条内）。
+  double _pointerGlobalDx = -1;
+  /// 横排内容层的 RenderBox（把 DragTarget 回调里的全局坐标换算成内容坐标）。
+  ///
+  /// 注意：Flutter 3.7 的 [DragTargetDetails.offset] 是 **globalPosition**
+  /// （源码注释 "The global position when the specific pointer event occurred"），
+  /// 不是 DragTarget 的局部坐标。横排滚动后必须减去内容层的全局左边缘，
+  /// 否则落点会按"未滚动"的坐标算，拖到最后一位实际只落到中间某个位置。
+  RenderBox? _contentBox;
+  /// 横排视口宽度（LayoutBuilder 取得）。
+  double _viewWidth = 0;
+  /// 屏幕宽度（贴边判定用）。
+  double _screenWidth = 0;
+
+  @override
+  void dispose() {
+    _stopAutoScroll();
+    _scrollCtl.dispose();
+    super.dispose();
+  }
+
+  void _startDrag(int index) {
+    _dragIndex = index;
+    // 长按成立、照片被"拎起"时给一次明确的震动反馈。
+    HapticFeedback.mediumImpact();
+    setState(() => _dragging = true);
+    _stopAutoScroll();
+    _autoScrollTimer =
+        Timer.periodic(const Duration(milliseconds: 16), (_) => _tickAutoScroll());
+  }
+
+  void _endDrag() {
+    _stopAutoScroll();
+    _dragIndex = null;
+    _pointerViewDx = -1;
+    _pointerGlobalDx = -1;
+    if (mounted) setState(() => _dragging = false);
+  }
+
+  void _stopAutoScroll() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = null;
+  }
+
+  /// 拖到屏幕左右边缘时自动横向滚动，便于把照片送到屏幕外的槽位。
+  ///
+  /// 判定用**屏幕坐标**而非横排条内的相对坐标：手指拖到条外（上方预览区、
+  /// 屏幕最左/最右）时只要还没松手，滚动依然继续，不会中途停住。
+  /// 越贴边滚得越快（3～20dp / 帧）。
+  void _tickAutoScroll() {
+    if (!_scrollCtl.hasClients || _pointerGlobalDx < 0) return;
+    final double width = _screenWidth > 0 ? _screenWidth : _viewWidth;
+    if (width <= 0) return;
+    const double edge = 56;
+    double delta;
+    if (_pointerGlobalDx < edge) {
+      delta = -((edge - _pointerGlobalDx) / 4).clamp(3.0, 20.0);
+    } else if (_pointerGlobalDx > width - edge) {
+      delta = ((_pointerGlobalDx - (width - edge)) / 4).clamp(3.0, 20.0);
+    } else {
+      return;
+    }
+    final double min = _scrollCtl.position.minScrollExtent;
+    final double max = _scrollCtl.position.maxScrollExtent;
+    final double cur = _scrollCtl.offset;
+    final double target = (cur + delta).clamp(min, max).toDouble();
+    // 已到尽头（或内容本就放得下）时不再跳，避免无谓重建。
+    if (target == cur) return;
+    _scrollCtl.jumpTo(target);
+    // 内容滚过去后，指针下方的槽位也变了，按新的内容坐标重算落点。
+    if (_pointerViewDx >= 0) _applyTarget(_pointerViewDx + target);
+  }
+
+  /// 拖拽中的位移：刷新指针的屏幕坐标（供贴边滚动判断）。
+  void _onDragUpdate(DragUpdateDetails details) {
+    _pointerGlobalDx = details.globalPosition.dx;
+  }
+
+  void _onDragMove(DragTargetDetails<int> details) {
+    // details.offset 是全局坐标，先换算成横排内容坐标。
+    final RenderBox? box = _contentBox;
+    if (box == null || !box.attached) return;
+    final double contentDx = details.offset.dx - box.localToGlobal(Offset.zero).dx;
+    final double scroll = _scrollCtl.hasClients ? _scrollCtl.offset : 0.0;
+    // 视口坐标（滚动后重算落点用）；指针全局坐标顺手同步，贴边滚动更跟手。
+    _pointerViewDx = contentDx - scroll;
+    _pointerGlobalDx = details.offset.dx;
+    _applyTarget(contentDx);
+  }
+
+  /// 按内容坐标 x 算出目标槽位并实时让位（让位后被拖项就位于 [to]）。
+  void _applyTarget(double contentDx) {
+    final int? from = _dragIndex;
+    final int len = widget.selected.length;
+    if (from == null || len < 2) return;
+    final int to = (contentDx / _stride).floor().clamp(0, len - 1).toInt();
+    if (to == from) return;
+    widget.onReorder(from, to);
+    _dragIndex = to;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final t = tokens;
+    final t = widget.tokens;
+    _screenWidth = MediaQuery.of(context).size.width;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
@@ -853,44 +990,57 @@ class _PosterReorderPanel extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                '已选 ${selected.length}/$maxCount',
+                '已选 ${widget.selected.length}/${widget.maxCount}',
                 style: TextStyle(fontSize: 10, color: t.textTertiary),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          // 已按序选中：横排，长按拖拽排序
-          // Flutter 3.7 的 ReorderableListView 不支持水平方向，用 RotatedBox 旋转垂直列表实现横排拖拽
+          // 已按序选中：单行横排，长按拖拽排序。
+          //
+          // 横排超出屏宽时需要滚动，而滚动手势会与拖拽抢横向位移：
+          // 拖拽期间（_dragging）把 physics 换成 NeverScrollable，横向手势
+          // 就全归拖拽，配合贴边自动滚动可以够到屏幕外的槽位；不拖拽时
+          // 仍可正常左右滑动查看。
           SizedBox(
             height: _thumb + 6,
-            child: selected.length == 1
-                ? Align(
-                    alignment: Alignment.topLeft,
-                    child: _orderedTile(selected.first, 0, showRemove: false),
-                  )
-                : RotatedBox(
-                    quarterTurns: 1,
-                    child: ReorderableListView.builder(
-                      buildDefaultDragHandles: false,
-                      padding: const EdgeInsets.only(bottom: 4),
-                      onReorder: onReorder,
-                      proxyDecorator: (child, index, animation) => Material(
-                        color: Colors.transparent,
-                        elevation: 3,
-                        borderRadius: BorderRadius.circular(6),
-                        clipBehavior: Clip.antiAlias,
-                        child: RotatedBox(quarterTurns: 3, child: child),
-                      ),
-                      itemCount: selected.length,
-                      itemBuilder: (context, index) => RotatedBox(
-                        quarterTurns: 3,
-                        child: _orderedTile(selected[index], index),
-                      ),
-                    ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                _viewWidth = constraints.maxWidth;
+                return SingleChildScrollView(
+                  controller: _scrollCtl,
+                  scrollDirection: Axis.horizontal,
+                  physics: _dragging
+                      ? const NeverScrollableScrollPhysics()
+                      : const ClampingScrollPhysics(),
+                  child: DragTarget<int>(
+                    onMove: _onDragMove,
+                    onLeave: (_) {
+                      _pointerViewDx = -1;
+                    },
+                    builder: (context, _, __) {
+                      // 缓存内容层 RenderBox：DragTarget 回调给的是全局坐标，
+                      // 需要它换算成内容坐标（见 _onDragMove）。
+                      final Object? ro = context.findRenderObject();
+                      if (ro is RenderBox) _contentBox = ro;
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (var i = 0; i < widget.selected.length; i++) ...[
+                            if (i > 0) const SizedBox(width: _gap),
+                            _orderedTile(widget.selected[i], i),
+                          ],
+                        ],
+                      );
+                    },
                   ),
+                );
+              },
+            ),
           ),
           // 可选候选：追加
-          if (candidates.isNotEmpty) ...[
+          if (widget.candidates.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
               '从全部中选择',
@@ -901,13 +1051,13 @@ class _PosterReorderPanel extends StatelessWidget {
               height: _thumb + 6,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                itemCount: candidates.length,
+                itemCount: widget.candidates.length,
                 separatorBuilder: (_, __) => const SizedBox(width: _gap),
                 itemBuilder: (context, index) {
-                  final item = candidates[index];
-                  final full = selected.length >= maxCount;
+                  final item = widget.candidates[index];
+                  final full = widget.selected.length >= widget.maxCount;
                   return GestureDetector(
-                    onTap: full ? null : () => onAdd(item),
+                    onTap: full ? null : () => widget.onAdd(item),
                     behavior: HitTestBehavior.opaque,
                     child: Opacity(
                       opacity: full ? .45 : 1,
@@ -922,7 +1072,7 @@ class _PosterReorderPanel extends StatelessWidget {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            itemThumb(item, _thumb),
+                            widget.itemThumb(item, _thumb),
                             Center(
                               child: Container(
                                 width: 20,
@@ -948,12 +1098,43 @@ class _PosterReorderPanel extends StatelessWidget {
     );
   }
 
-  Widget _orderedTile(Object item, int index, {bool showRemove = true}) {
-    final t = tokens;
-    final body = Container(
+  Widget _orderedTile(Object item, int index) {
+    // 只剩一张时无需排序，也不显示删除按钮
+    final bool draggable = widget.selected.length > 1;
+    final Widget tile = _tileBody(item, showRemove: draggable);
+    if (!draggable) return tile;
+    return LongPressDraggable<int>(
+      key: ValueKey<Object>(item),
+      data: index,
+      delay: _dragDelay,
+      // 关掉内置的 selectionClick，改在 onDragStarted 里给一次更明确的
+      // mediumImpact（内置那下太轻，长按拎起照片时几乎感觉不到）。
+      hapticFeedbackOnStart: false,
+      feedback: Material(
+        color: Colors.transparent,
+        elevation: 4,
+        borderRadius: BorderRadius.circular(6),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: _thumb,
+          height: _thumb,
+          child: _tileBody(item, showRemove: false),
+        ),
+      ),
+      childWhenDragging: Opacity(opacity: .3, child: tile),
+      onDragStarted: () => _startDrag(index),
+      onDragUpdate: _onDragUpdate,
+      onDragEnd: (_) => _endDrag(),
+      child: tile,
+    );
+  }
+
+  /// 单张缩略图（间距由外层 Wrap 的 spacing / runSpacing 提供，这里不带 margin）。
+  Widget _tileBody(Object item, {required bool showRemove}) {
+    final t = widget.tokens;
+    return Container(
       width: _thumb,
       height: _thumb,
-      margin: const EdgeInsets.only(right: _gap),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: t.divider, width: 1),
@@ -962,13 +1143,13 @@ class _PosterReorderPanel extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          itemThumb(item, _thumb),
+          widget.itemThumb(item, _thumb),
           if (showRemove)
             Positioned(
               top: 2,
               right: 2,
               child: GestureDetector(
-                onTap: () => onRemove(item),
+                onTap: () => widget.onRemove(item),
                 behavior: HitTestBehavior.opaque,
                 child: Container(
                   width: 16,
@@ -983,12 +1164,6 @@ class _PosterReorderPanel extends StatelessWidget {
             ),
         ],
       ),
-    );
-    if (!showRemove) return body;
-    return ReorderableDelayedDragStartListener(
-      key: ValueKey<Object>(item),
-      index: index,
-      child: body,
     );
   }
 }

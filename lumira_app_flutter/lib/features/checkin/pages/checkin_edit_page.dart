@@ -7,6 +7,8 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/common/lumira_surface.dart';
+import '../../../shared/widgets/effects/recessed_surface.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/photos/lumira_photo_picker_sheet.dart';
@@ -144,31 +146,21 @@ class _CheckinEditPageState extends ConsumerState<CheckinEditPage> {
   }
 
   Future<void> _pickDate() async {
-    final tokens = ref.read(themeTokensProvider);
     final now = DateTime.now();
     final initial = DateTime.fromMillisecondsSinceEpoch(_visitedAt);
-    final picked = await showDatePicker(
+    // 用项目统一的底部日历弹层（4 风格自适应），替换原生 Material DatePicker +
+    // 手写 Theme 包装——后者在 flat/glass/female 下是另一套 Material 观感。
+    final picked = await showLumiraDatePicker(
       context: context,
       initialDate: initial,
       firstDate: DateTime(now.year - 5),
       lastDate: now,
-      builder: (ctx, child) => Theme(
-        data: ThemeData(
-          colorScheme: ColorScheme.light(
-            primary: tokens.brand,
-            surface: tokens.surface,
-            onSurface: tokens.textPrimary,
-          ),
-        ),
-        child: child!,
-      ),
     );
-    if (picked != null) {
-      setState(() {
-        _visitedAt = DateTime(picked.year, picked.month, picked.day)
-            .millisecondsSinceEpoch;
-      });
-    }
+    if (picked == null || !mounted) return;
+    setState(() {
+      _visitedAt = DateTime(picked.year, picked.month, picked.day)
+          .millisecondsSinceEpoch;
+    });
   }
 
   Future<void> _save() async {
@@ -236,13 +228,14 @@ class _CheckinEditPageState extends ConsumerState<CheckinEditPage> {
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(appThemeProvider).tokens;
-    final isEdit = _existing != null;
     return Scaffold(
       backgroundColor: tokens.canvas,
-      extendBodyBehindAppBar: true,
-      appBar: LumiraNav(
-        title: isEdit ? '编辑足迹' : '记录探店',
-        transparent: true,
+      // Forced fix: 标题栏与「探店足迹」独立页面保持完全一致——
+      // 不再 extendBodyBehindAppBar，导航栏背景使用实色 canvas（不做透明处理），
+      // body 从导航栏下方开始布局，无需再手动补偿状态栏高度。
+      appBar: const LumiraNav(
+        title: '探店足迹',
+        transparent: false,
         showBackButton: true,
       ),
       body: _isLoading
@@ -278,10 +271,8 @@ class _CheckinEditPageState extends ConsumerState<CheckinEditPage> {
   }
 
   Widget _buildForm(ThemeTokens tokens) {
-    // Forced fix: extendBodyBehindAppBar=true 时 body 从 y=0 开始（同 collection edit）
-    final topPadding = MediaQuery.of(context).viewPadding.top + 48;
     return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(24, topPadding, 24, 80),
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 80),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -316,32 +307,7 @@ class _CheckinEditPageState extends ConsumerState<CheckinEditPage> {
             child: _LabelField(
               tokens: tokens,
               label: '打卡日期',
-              child: GestureDetector(
-                onTap: _pickDate,
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: tokens.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: tokens.divider, width: 1),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.calendar_today_outlined,
-                          size: 16, color: tokens.textTertiary),
-                      const SizedBox(width: 8),
-                      Text(
-                        formatCheckinDate(_visitedAt),
-                        style: TextStyle(fontSize: 14, color: tokens.textPrimary),
-                      ),
-                      const Spacer(),
-                      Icon(Icons.chevron_right, size: 18, color: tokens.textTertiary),
-                    ],
-                  ),
-                ),
-              ),
+              child: _DateField(timestamp: _visitedAt, onTap: _pickDate),
             ),
           ),
           const SizedBox(height: 16),
@@ -444,6 +410,77 @@ class _LabelField extends StatelessWidget {
   }
 }
 
+/// 打卡日期选择框
+///
+/// 视觉与 [LumiraTextField] / [LumiraDropdown] 同源：读取 `appTheme.inputVisual`，
+/// 新拟态走 [RecessedSurface] 凹陷表面，其余风格走 BoxDecoration，圆角用
+/// `appTheme.inputRadius / 2`。
+/// 之前是手写 `Container(surface + divider)`，只在新拟态下与本页输入框观感一致，
+/// 切到 flat / glass / female 时输入框换了底色而日期框没换，出现明显色差。
+class _DateField extends ConsumerWidget {
+  const _DateField({required this.timestamp, required this.onTap});
+
+  final int timestamp;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final radius = appTheme.inputRadius / 2;
+    final visual = appTheme.inputVisual(InputState.default_);
+
+    final inner = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Icon(Icons.calendar_today_outlined,
+              size: 16, color: tokens.textTertiary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              formatCheckinDate(timestamp),
+              style: TextStyle(fontSize: 14, color: visual.foreground),
+            ),
+          ),
+          Icon(Icons.chevron_right, size: 18, color: tokens.textTertiary),
+        ],
+      ),
+    );
+
+    final Widget surface;
+    if (appTheme.style == UIStyle.neumorphic) {
+      surface = RecessedSurface(
+        tokens: tokens,
+        borderRadius: radius,
+        depth: 0.20,
+        rimFraction: 0.24,
+        recessDark:
+            Color.lerp(tokens.surface, tokens.shadowConcave.first.color, 0.5)!,
+        recessLight:
+            Color.lerp(tokens.surface, tokens.shadowConcave[1].color, 0.55)!,
+        color: visual.background,
+        child: inner,
+      );
+    } else {
+      surface = Container(
+        decoration: BoxDecoration(
+          color: visual.background,
+          borderRadius: BorderRadius.circular(radius),
+          border: visual.border,
+        ),
+        child: inner,
+      );
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: surface,
+    );
+  }
+}
+
 /// 5 星点选（点当前星再点一次清零）
 class _RatingSelector extends StatelessWidget {
   const _RatingSelector({
@@ -497,39 +534,53 @@ class _CategorySelector extends StatelessWidget {
       runSpacing: 10,
       children: [
         for (final c in kCheckinCategories)
-          GestureDetector(
-            onTap: () => onChanged(c.key),
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: c.key == category ? c.iconBgColor : tokens.surface,
-                borderRadius: BorderRadius.circular(1000),
-                border: Border.all(
-                  color: c.key == category ? c.iconColor : tokens.divider,
-                  width: 1,
-                ),
-              ),
-              child: Row(
+          Builder(
+            builder: (context) {
+              final selected = c.key == category;
+              final content = Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     c.icon,
                     size: 14,
-                    color: c.key == category ? c.iconColor : tokens.textTertiary,
+                    color: selected ? c.iconColor : tokens.textTertiary,
                   ),
                   const SizedBox(width: 6),
                   Text(
                     c.label,
                     style: TextStyle(
                       fontSize: 13,
-                      color: c.key == category ? c.iconColor : tokens.textSecondary,
-                      fontWeight: c.key == category ? FontWeight.w600 : FontWeight.w400,
+                      color: selected ? c.iconColor : tokens.textSecondary,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                     ),
                   ),
                 ],
-              ),
-            ),
+              );
+              return GestureDetector(
+                onTap: () => onChanged(c.key),
+                behavior: HitTestBehavior.opaque,
+                child: selected
+                    // 选中态：分类自有配色（咖啡/甜品…各有语义色），保留手写表面
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: c.iconBgColor,
+                          borderRadius: BorderRadius.circular(1000),
+                          border: Border.all(color: c.iconColor, width: 1),
+                        ),
+                        child: content,
+                      )
+                    // 未选中：走项目统一表面（LumiraThemeResolver.cardVisual），
+                    // 4 种 UI 风格各自的底色/描边/阴影由它决定，不再硬编码新拟态
+                    : LumiraSurface(
+                        radius: 1000,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        child: content,
+                      ),
+              );
+            },
           ),
       ],
     );
@@ -698,19 +749,16 @@ class _AddPhotoPrompt extends StatelessWidget {
     return GestureDetector(
       onTap: onAdd,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        height: 120,
-        decoration: BoxDecoration(
-          color: tokens.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: tokens.brand.withOpacity(0.3),
-            width: 1.5,
-          ),
-          boxShadow: tokens.shadowConvexSubtle,
+      child: LumiraSurface(
+        radius: 12,
+        // 品牌色描边是「可点击的空态」语义，底色与阴影交给 cardVisual 按风格决定
+        border: Border.all(
+          color: tokens.brand.withOpacity(0.3),
+          width: 1.5,
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: SizedBox(
+          height: 117, // 120 - 上下描边 1.5×2，与改前总高一致
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -762,45 +810,39 @@ class _AddPhotoCell extends StatelessWidget {
     return GestureDetector(
       onTap: onAdd,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        decoration: BoxDecoration(
-          color: tokens.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: tokens.brand.withOpacity(0.25),
-            width: 1.5,
-          ),
-          boxShadow: tokens.shadowConvexSubtle,
+      child: LumiraSurface(
+        radius: 12,
+        border: Border.all(
+          color: tokens.brand.withOpacity(0.25),
+          width: 1.5,
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: tokens.brand.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.add,
-                  size: 19,
-                  color: tokens.brand,
-                ),
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: tokens.brand.withOpacity(0.1),
+                shape: BoxShape.circle,
               ),
-              const SizedBox(height: 6),
-              Text(
-                '添加',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: tokens.brand,
-                  fontWeight: FontWeight.w500,
-                ),
+              child: Icon(
+                Icons.add,
+                size: 19,
+                color: tokens.brand,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '添加',
+              style: TextStyle(
+                fontSize: 11,
+                color: tokens.brand,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
       ),
     );
