@@ -59,3 +59,11 @@ scripts/results/
 
 # 风格参考图（本地设计素材）
 /refs/
+
+# Flutter / Dart 工具缓存（本地生成，不入库）
+.flutter
+.flutter_tool_state
+.dart/
+
+# Agent 工作目录（本地记忆/配置，不入库）
+.workbuddy-ai/
