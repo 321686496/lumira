@@ -240,6 +240,8 @@ final homeInspirationProvider =
     apiClient: apiClient,
     templatesDao: templatesDao,
     usageDao: usageDao,
+    profileDao: await ref.watch(userProfileDaoProvider.future),
+    questionnaireDao: await ref.watch(questionnaireDaoProvider.future),
   );
   try {
     return await service.build();

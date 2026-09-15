@@ -8,6 +8,7 @@ import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/db/dao/user_interests_dao.dart';
 import '../../../features/profile/data/composition_kit_models.dart';
+import '../../../features/profile/data/profile_dao.dart';
 import '../../templates/recommend/template_ranking.dart';
 import '../../onboarding/data/questionnaire_dao.dart';
 import '../data/home_mock_data.dart';
@@ -73,6 +74,7 @@ class RecommendationService {
     required QuestionnaireDao questionnaireDao,
     UsageDao? usageDao,
     InterestDao? interestDao,
+    UserProfileDao? profileDao,
   })  : _galleryDao = galleryDao,
         _scenesDao = scenesDao,
         _templatesDao = templatesDao,
@@ -80,7 +82,8 @@ class RecommendationService {
         _growthDao = growthDao,
         _questionnaireDao = questionnaireDao,
         _usageDao = usageDao,
-        _interestDao = interestDao;
+        _interestDao = interestDao,
+        _profileDao = profileDao;
 
   final GalleryDao _galleryDao;
   final ScenesDao _scenesDao;
@@ -90,6 +93,11 @@ class RecommendationService {
   final QuestionnaireDao _questionnaireDao;
   final UsageDao? _usageDao;
   final InterestDao? _interestDao;
+  final UserProfileDao? _profileDao;
+
+  /// 本次构建解析出的用户性别（'male'/'female'），未知/不愿透露为 null。仅随单次
+  /// buildBanners 使用，作为所有槽位挑模板时的性别硬过滤依据。
+  String? _resolvedGender;
 
   /// 构建首页 Banner（槽位：运营位 + 个性化位 + 活动/广告位）
   ///
@@ -117,6 +125,8 @@ class RecommendationService {
     final allKits = await allKitsFuture;
     final systemPicks = await systemPicksFuture;
     final popularity = await popularityFuture;
+    // 解析用户性别（Profile 优先，问卷兜底）作为本次所有槽位的性别硬过滤依据
+    _resolvedGender = await _userGender();
     final interestById = await _loadTemplateInterest(systemPicks);
     // 最近用过的模板（用户已实际拍摄过/相册里存在的），推荐时优先排除，
     // 避免轮播重复推用户刚用过的同款内容（与主流推荐 app 一致）。
@@ -500,15 +510,17 @@ class RecommendationService {
 
   /// 在候选列表里选"热度*0.5 + 个人兴趣*0.5"混合分最大的模板；
   /// 分数打平时优先更新更晚的（利于新上线的线上模板/新模板曝光）。
+  /// 挑选前先按用户性别硬过滤（仅保留通用 + 同性别模板）。
   TemplateRecord? _pickBest(
     List<TemplateRecord> candidates,
     Map<String, int> popularity,
     Map<String, double> interestById,
   ) {
-    if (candidates.isEmpty) return null;
-    var best = candidates.first;
+    final pool = _genderFiltered(candidates);
+    if (pool.isEmpty) return null;
+    var best = pool.first;
     var bestScore = _blendScore(best, popularity, interestById);
-    for (final t in candidates.skip(1)) {
+    for (final t in pool.skip(1)) {
       final s = _blendScore(t, popularity, interestById);
       if (s > bestScore ||
           (s == bestScore && t.updatedAt > best.updatedAt)) {
@@ -517,6 +529,39 @@ class RecommendationService {
       }
     }
     return best;
+  }
+
+  /// 按已解析用户性别硬过滤候选池：仅保留 通用(unisex) + 同性别 模板。
+  /// 同性别 + 通用均不存在时回退全池（含异性别），避免槽位空缺。
+  /// 性别未知/不愿透露时不过滤。
+  List<TemplateRecord> _genderFiltered(List<TemplateRecord> records) {
+    final g = _resolvedGender;
+    if (g == null || g.isEmpty) return records;
+    final hit = records
+        .where((t) => t.gender == 'unisex' || t.gender == g)
+        .toList();
+    return hit.isNotEmpty ? hit : records;
+  }
+
+  /// 解析用户性别：Profile 优先，问卷兜底；返回 'male'/'female'。
+  /// 未设置或不方便透露时返回 null（不参与性别过滤）。
+  Future<String?> _userGender() async {
+    String? g;
+    try {
+      g = (await _profileDao?.get())?.gender;
+    } catch (_) {/* 读取失败继续走问卷兜底 */}
+    if (g == null || g == 'prefer_not') {
+      try {
+        g = (await _questionnaireDao.getAnswers())?.gender;
+      } catch (_) {/* 问卷读取失败按未知处理 */}
+    }
+    return _mapGender(g);
+  }
+
+  /// 把性别值归一化为 'male'/'female'；非法/空/'prefer_not' 返回 null。
+  static String? _mapGender(String? g) {
+    if (g == 'male' || g == 'female') return g;
+    return null;
   }
 
   /// 模板的「二级风格 key」：人像取 majorStyle，其余取 style。
@@ -528,25 +573,16 @@ class RecommendationService {
     return cls['style'] as String?;
   }
 
-  /// 性别「软偏好」选择：同性别 + 通用(unisex) 模板优先；
-  /// 用户性别未知/不便透露时不分组；匹配组为空时回退全池，保证不空槽。
+  /// 按用户性别硬过滤后选最优（性别过滤统一走 [_pickBest] → [_resolvedGender]）。
+  /// 同性别 + 通用不存在时回退全池，保证不空槽。
+  /// [userGender] 入参保留以兼容调用方，实际以本次已解析性别为准。
   TemplateRecord? _pickGenderPreferred(
     List<TemplateRecord> candidates,
     String? userGender,
     Map<String, int> popularity,
     Map<String, double> interestById,
   ) {
-    if (candidates.isEmpty) return null;
-    if (userGender == null ||
-        userGender.isEmpty ||
-        userGender == 'prefer_not') {
-      return _pickBest(candidates, popularity, interestById);
-    }
-    final matched = candidates
-        .where((t) => t.gender == 'unisex' || t.gender == userGender)
-        .toList();
-    return _pickBest(matched, popularity, interestById) ??
-        _pickBest(candidates, popularity, interestById);
+    return _pickBest(candidates, popularity, interestById);
   }
 
   /// 从系统推荐列表中取未占用、且“(热度*0.5 + 个人兴趣*0.5) 混合分”最大的模板；

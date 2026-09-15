@@ -77,12 +77,10 @@ class _HeroCardState extends ConsumerState<HeroCard> {
     final isGlass = appTheme.style == UIStyle.glass;
     final inspirationAsync = ref.watch(homeInspirationProvider);
 
+    // 底部间距交由调用方统一控制（同 QuickActions），此处只保留左右边距，
+    // 使今日灵感卡上下留白由单一数值决定、且天然对称。
     return Padding(
-      padding: const EdgeInsets.only(
-        left: 20,
-        right: 20,
-        bottom: 20, // 40rpx → 20dp
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
         // Forced fix(半圆被内边距剪裁): 把 padding 移出 Container（下放到 _buildContent 的内容层）。
         // 这样装饰半圆（Positioned top/right: -30）相对于整个卡片 padding box 定位，
@@ -136,24 +134,11 @@ class _HeroCardState extends ConsumerState<HeroCard> {
       // Clip.none：允许装饰半圆溢出到卡片边缘（由外层 Container antiAlias 做圆角裁剪）
       clipBehavior: Clip.none,
       children: [
-        // hero-deco 装饰圆
-        Positioned(
-          top: -30, // -60rpx → -30dp
-          right: -30,
-          child: Container(
-            width: 140, // 280rpx → 140dp
-            height: 140,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: tokens.brand.withOpacity(0.10),
-            ),
-          ),
-        ),
-        // 内容层（内边距在此下放，自卡片 padding box 内偏移）
+        // 内容层（压缩：垂直 padding 28 → 16，水平 24 → 20）
         Padding(
           padding: const EdgeInsets.symmetric(
-            horizontal: 24, // 48rpx → 24dp
-            vertical: 28, // 56rpx → 28dp
+            horizontal: 20,
+            vertical: 16,
           ),
           child: Opacity(
             opacity: dim ? 0.5 : 1.0,
@@ -164,35 +149,62 @@ class _HeroCardState extends ConsumerState<HeroCard> {
                 Text(
                   inspiration.title,
                   style: TextStyle(
-                    fontSize: 22, // 44rpx → 22dp
+                    fontSize: 20, // 40rpx → 20dp（略减以配合压缩）
                     fontWeight: FontWeight.w600,
                     color: tokens.textPrimary,
-                    letterSpacing: -0.01 * 22,
+                    letterSpacing: -0.01 * 20,
                     height: 1.3,
                   ),
                 ),
                 const SizedBox(height: 4),
+                // 日期：完整显示（原与天气挤在一行导致双双省略，现各自独占一行）
                 Text(
                   inspiration.dateText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12,
                     color: tokens.textSecondary,
                     height: 1.4,
                   ),
                 ),
-                const SizedBox(height: 8),
-                // 描述
+                // 天气：完整显示，可换行；无天气数据时整行隐藏
+                if (inspiration.weatherText.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Icon(
+                          Icons.location_on_outlined,
+                          size: 12,
+                          color: tokens.textTertiary,
+                        ),
+                      ),
+                      const SizedBox(width: 3),
+                      Expanded(
+                        child: Text(
+                          inspiration.weatherText,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: tokens.textTertiary,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 6),
+                // 描述：完整显示（原 maxLines:1 截断，现按内容自动换行）
                 Text(
                   inspiration.description,
                   style: TextStyle(
                     fontSize: 13, // 26rpx → 13dp
                     color: tokens.textSecondary,
-                    height: 1.6,
+                    height: 1.4,
                   ),
                 ),
-                const SizedBox(height: 16), // 32rpx → 16dp，模板卡片与上方文字间隙
+                const SizedBox(height: 12), // 模板卡片与上方文字间隙（压缩后减小）
                 // 推荐模板卡（有推荐时嵌入灵感卡内部，点击直接套用进入拍摄）
                 if (inspiration.recommendedTemplateId.isNotEmpty) ...[
                   Builder(
@@ -206,7 +218,7 @@ class _HeroCardState extends ConsumerState<HeroCard> {
                       )),
                     ),
                   ),
-                  const SizedBox(height: 20), // 40rpx → 20dp
+                  const SizedBox(height: 12), // 40rpx → 20dp（压缩后减小）
                 ],
                 // CTA 按钮（有推荐模板时，点击直接套用模板进入拍摄）
                 Builder(builder: (context) {
@@ -224,8 +236,8 @@ class _HeroCardState extends ConsumerState<HeroCard> {
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 24, // 48rpx → 24dp
-                        vertical: 12, // 24rpx → 12dp
+                        horizontal: 20, // 40rpx → 20dp（压缩后减小）
+                        vertical: 10, // 20rpx → 10dp
                       ),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(8), // 16rpx → 8dp
@@ -268,31 +280,6 @@ class _HeroCardState extends ConsumerState<HeroCard> {
                     ),
                   );
                 }),
-                if (inspiration.weatherText.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.location_on_outlined,
-                        size: 14,
-                        color: tokens.textTertiary,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          inspiration.weatherText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: tokens.textTertiary,
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
               ],
             ),
           ),
@@ -308,7 +295,6 @@ class _HeroCardState extends ConsumerState<HeroCard> {
     required HeroInspiration inspiration,
     required VoidCallback onTap,
   }) {
-    final isNeu = style == UIStyle.neumorphic;
     final isFlat = style == UIStyle.flat;
     final category = inspiration.recommendedTemplateCategory;
     return GestureDetector(
@@ -319,14 +305,14 @@ class _HeroCardState extends ConsumerState<HeroCard> {
         decoration: BoxDecoration(
           color: tokens.surface,
           borderRadius: BorderRadius.circular(12),
-          boxShadow: isNeu ? tokens.shadowConvex : null,
+          // 叠在灵感卡内的子卡保持扁平：不挂外阴影（避免照片/纯色底上的光晕感）
           border: isFlat ? Border.all(color: tokens.divider, width: 1) : null,
         ),
         child: Row(
           children: [
             SizedBox(
-              width: 72, // 144rpx → 72dp 紧凑缩略图
-              height: 96, // 192rpx → 96dp（3:4），与文字列撑起卡片高度
+              width: 56, // 压缩后缩略图
+              height: 72, // 3:4，与文字列撑起卡片高度
               child: TemplateCoverImage(
                 cover: inspiration.recommendedTemplateCover,
                 coverData: inspiration.recommendedTemplateCoverData,
@@ -380,8 +366,6 @@ class _HeroCardState extends ConsumerState<HeroCard> {
                     const SizedBox(height: 4),
                     Text(
                       inspiration.recommendedTemplateName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,

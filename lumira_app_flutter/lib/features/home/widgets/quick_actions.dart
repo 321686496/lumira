@@ -83,12 +83,11 @@ class QuickActions extends ConsumerWidget {
       ),
     ];
 
+    // 底部间距交由调用方（首页 slivers 的 SizedBox）统一控制：
+    // 原 uni-app 遗留的 bottom: 24 会与外层间距叠加，
+    // 使 HeroCard 上方实得 44dp，且与下方 40dp 不对称、来源分散不可调。
     return Padding(
-      padding: const EdgeInsets.only(
-        left: 20,
-        right: 20,
-        bottom: 24, // 48rpx → 24dp
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: actions

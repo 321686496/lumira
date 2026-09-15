@@ -11,6 +11,7 @@ import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/common/lumira_surface.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
+import '../../../shared/widgets/nav/home_nav_action.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/home_mock_data.dart';
 import '../data/home_providers.dart';
@@ -22,20 +23,22 @@ import '../widgets/quick_actions.dart';
 import '../widgets/recent_template_strip.dart';
 import '../widgets/recent_shot_card.dart';
 import '../widgets/scene_reco_card.dart';
+import '../widgets/search_capsule.dart';
 import '../widgets/scan_qr_page.dart';
 
 /// 首页
 ///
 /// 视觉规格来源：lumira-app/src/pages/home/index.vue
-/// 8 个 section:
-/// 1. LumiraNav（带位置 + 通知/二维码 actions）
-/// 2. HomeBanner（运营位）
-/// 3. QuickActions（核心入口）
-/// 4. HeroCard（今日任务）
-/// 5. RecentTemplateStrip（最近使用/备选模板）
-/// 6. SceneRecoCard 横向场景推荐流
-/// 7. RecentShotCard 横向继续创作流
-/// 8. GrowthStrip（轻量成长信息）
+/// 9 个 section（顺序即首屏优先级）：
+/// 1. LumiraNav（品牌标题 + 扫码/通知/兑换 actions）
+/// 2. SearchCapsule（搜索入口）
+/// 3. HomeBanner（运营位）
+/// 4. QuickActions（核心入口）
+/// 5. HeroCard（今日任务，唯一主 CTA）
+/// 6. RecentTemplateStrip（最近使用/备选模板）
+/// 7. SceneRecoCard 横向场景推荐流
+/// 8. GrowthStrip（轻量成长信息，下移至场景流之后，让出首屏黄金位）
+/// 9. RecentShotCard 继续创作网格
 ///
 /// 改进点（vs uni-app）：
 /// - 用 ScrollController + listener 替代 window scroll 监听，更可靠
@@ -140,18 +143,18 @@ class _HomePageState extends ConsumerState<HomePage> {
         horizontalPadding: 24,
         leading: const HomeBrandTitle(),
         actions: [
-          _NavAction(
+          HomeNavAction(
             icon: Icons.qr_code_scanner,
             tokens: tokens,
             onTap: _onScanTap,
           ),
-          _NavAction(
+          HomeNavAction(
             icon: Icons.notifications_outlined,
             tokens: tokens,
             badgeCount: unreadCount,
             onTap: () => GoRouter.of(context).push(RouteNames.profileNotifications),
           ),
-          _NavAction(
+          HomeNavAction(
             icon: Icons.card_giftcard_outlined,
             tokens: tokens,
             onTap: () => GoRouter.of(context).push(RouteNames.profileRedeem),
@@ -195,14 +198,19 @@ class _HomePageState extends ConsumerState<HomePage> {
                   sliver: SliverList(
                     delegate: SliverChildListDelegate(
                       [
-                        // Section 0: Banner 轮播
+                        // Section 0: 搜索胶囊（全局搜索入口，置顶）
+                        const FadeUp(
+                          child: SearchCapsule(),
+                        ),
+                        const SizedBox(height: 8),
+                        // Section 1: Banner 轮播
                         // Forced fix: 改为 const HomeBanner()，由 widget 内部 watch
                         // bannerRecommendationProvider 获取真实推荐数据
                         const FadeUp(
                           child: HomeBanner(),
                         ),
                         const SizedBox(height: 20),
-                        // Section 1: QuickActions（核心入口，紧贴运营位）
+                        // Section 2: QuickActions（核心入口，紧贴运营位）
                         FadeUp(
                           child: QuickActions(
                             onCapture: _goCapture,
@@ -211,21 +219,25 @@ class _HomePageState extends ConsumerState<HomePage> {
                             onGallery: _goGallery,
                           ),
                         ),
-                        const SizedBox(height: 20),
-                        // Section 2: Hero（唯一主任务）
+                        // 主任务卡上下留白统一 28dp（略大于常规 section 的 20dp 以形成层级），
+                        // 且只由此处单点控制——两个卡片组件内部已不再自带 bottom padding。
+                        const SizedBox(height: 28),
+                        // Section 3: Hero（唯一主任务）
+                        // 成长条下移 + 快捷入口去掉遗留内边距后，首屏共让出约 104dp，
+                        // HeroCard 的 CTA 由此落回首屏折线之上。
                         FadeUp(
-                          delay: const Duration(milliseconds: 100),
+                          delay: const Duration(milliseconds: 60),
                           child: HeroCard(onCapture: _goCapture),
                         ),
-                        const SizedBox(height: 20),
-                        // Section 3: 最近使用模板 / 备选模板
+                        const SizedBox(height: 28),
+                        // Section 4: 最近使用模板 / 备选模板
                         const FadeUp(
-                          delay: Duration(milliseconds: 180),
+                          delay: Duration(milliseconds: 120),
                           child: RecentTemplateStrip(),
                         ),
                         // Section 5 标题：场景推荐
                         FadeUp(
-                          delay: const Duration(milliseconds: 200),
+                          delay: const Duration(milliseconds: 160),
                           child: _SectionTitle(
                             title: '场景推荐',
                             tagText: '今日灵感',
@@ -260,7 +272,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                   sliver: SliverList(
                     delegate: SliverChildListDelegate(
                       [
-                        // Section 6 标题：继续创作
+                        // Section 6: 轻量成长条（下移至场景推荐之后：
+                        // 连续天数/作品/经验属回看型数据，放在靠近「我的作品」处更顺，
+                        // 同时不再挤占首屏黄金位）
+                        const FadeUp(child: GrowthStrip()),
+                        const SizedBox(height: 20),
+                        // Section 7 标题：继续创作
                         FadeUp(
                           child: _SectionTitle(
                             title: '继续你的创作',
@@ -277,25 +294,18 @@ class _HomePageState extends ConsumerState<HomePage> {
                     ),
                   ),
                 ),
-                // Section 6 横向继续创作流
+                // Section 7 继续创作网格
                 _RecentShotsGridSliver(
                   onTap: () => _goGallery(),
                   onPhotoTap: _goPhotoDetail,
                   onCapture: _goCapture,
                   onRetake: _goRetake,
                 ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(0, 20, 0, 100),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate(
-                      const [
-                        // Section 7: 轻量成长条
-                        FadeUp(
-                          delay: Duration(milliseconds: 100),
-                          child: GrowthStrip(),
-                        ),
-                      ],
-                    ),
+                // 页底留白（FloatingTabBar 遮挡区域）
+                const SliverPadding(
+                  padding: EdgeInsets.fromLTRB(0, 20, 0, 100),
+                  sliver: SliverToBoxAdapter(
+                    child: SizedBox.shrink(),
                   ),
                 ),
               ],
@@ -308,53 +318,6 @@ class _HomePageState extends ConsumerState<HomePage> {
 }
 
 /// 顶部导航右侧 action 按钮
-class _NavAction extends StatelessWidget {
-  const _NavAction({
-    required this.icon,
-    required this.tokens,
-    this.badgeCount,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final ThemeTokens tokens;
-
-  /// 未读通知角标数量；<=0 或 null 时不显示角标。
-  final int? badgeCount;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final Widget iconWidget = Icon(
-      icon,
-      size: 20, // 40rpx → 20dp
-      color: tokens.textSecondary,
-    );
-
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: (badgeCount != null && badgeCount! > 0)
-            ? Badge(
-                label: Text(
-                  badgeCount! > 99 ? '99+' : '$badgeCount',
-                  style: TextStyle(
-                    fontSize: 9,
-                    color: tokens.textInverse,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                backgroundColor: tokens.brand,
-                smallSize: 8,
-                child: iconWidget,
-              )
-            : iconWidget,
-      ),
-    );
-  }
-}
 
 /// Section 标题行：标题 + tag + 右侧链接组
 class _SectionTitle extends StatelessWidget {
@@ -509,7 +472,7 @@ class _SceneRecoGridSliver extends ConsumerWidget {
         if (scenes.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink()); // 空态
         return SliverToBoxAdapter(
           child: SizedBox(
-            height: 248,   // align with RecommendedTemplate card (130x248)
+            height: 180,   // 沉浸式卡片：封面铺满整卡 + 叠字遮罩（缩小后与模板流宽度对齐）
             child: ListView.separated(
               clipBehavior: Clip.none,
               scrollDirection: Axis.horizontal,
@@ -545,8 +508,9 @@ class _SceneGridSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 通用加载占位，不再使用 mock 场景数据
+    // 高度与 data 分支的横向流一致（180），避免加载完成时出现 60dp 跳动
     return const SizedBox(
-      height: 120,
+      height: 180,
       child: Center(child: CircularProgressIndicator(strokeWidth: 3)),
     );
   }
@@ -586,28 +550,28 @@ class _RecentShotsGridSliver extends ConsumerWidget {
             ),
           );
         }
-        return SliverToBoxAdapter(
-          child: SizedBox(
-            height: 248,   // align with RecommendedTemplate card (130x248)
-            child: ListView.separated(
-              clipBehavior: Clip.none,
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              itemCount: recents.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (_, i) {
+        // 2 列照片网格：懒构建（SliverGrid），单元 3:4 竖图 + 下方文字区
+        return SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          sliver: SliverGrid(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 0.72, // 3:4 竖图 + 下方文字区
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, i) {
                 final recent = recents[i];
                 return RepaintBoundary(
-                  child: SizedBox(
-                    width: 130,
-                    child: RecentShotCard(
-                      recent: recent,
-                      onTap: () => onPhotoTap(recent),
-                      onRetake: () => onRetake(recent),
-                    ),
+                  child: RecentShotCard(
+                    recent: recent,
+                    onTap: () => onPhotoTap(recent),
+                    onRetake: () => onRetake(recent),
                   ),
                 );
               },
+              childCount: recents.length,
             ),
           ),
         );
@@ -615,28 +579,27 @@ class _RecentShotsGridSliver extends ConsumerWidget {
     );
   }
 
-  /// loading/error 骨架：与旧 shrinkWrap GridView 一致（mock 数据占位）。
+  /// loading/error 骨架：与 data 分支一致的 2 列 SliverGrid（mock 数据占位）。
   Widget _buildSkeleton() {
     final mocks = HomeMockData.recents;
-    return SliverToBoxAdapter(
-      child: SizedBox(
-        height: 248,   // align with RecommendedTemplate card (130x248)
-        child: ListView.separated(
-          clipBehavior: Clip.none,
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          itemCount: mocks.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 12),
-          itemBuilder: (_, i) => RepaintBoundary(
-            child: SizedBox(
-            width: 130,
-              child: RecentShotCard(
-                recent: mocks[i],
-                onTap: onTap,
-                onRetake: () => onRetake(mocks[i]),
-              ),
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 0.72,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (context, i) => RepaintBoundary(
+            child: RecentShotCard(
+              recent: mocks[i],
+              onTap: onTap,
+              onRetake: () => onRetake(mocks[i]),
             ),
           ),
+          childCount: mocks.length,
         ),
       ),
     );

@@ -32,8 +32,10 @@ class RecentTemplateStrip extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 顶部不再自带 20dp：外层已由首页 slivers 提供 28dp 间距，
+            // 这里再叠加会让今日灵感卡下方实得 48dp、与上方 28dp 不对称。
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
               child: Row(
                 children: [
                   Text(

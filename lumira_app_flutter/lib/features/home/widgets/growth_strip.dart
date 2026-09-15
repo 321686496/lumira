@@ -23,12 +23,14 @@ class GrowthStrip extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
+            // 连续天数：主视觉，数字放大 + 强调色
             _GrowthItem(
               icon: Icons.local_fire_department_outlined,
               value: '${streak.streakDays}',
               label: '连续天',
               color: tokens.danger,
               tokens: tokens,
+              valueFontSize: 20,
             ),
             _GrowthDivider(tokens: tokens),
             _GrowthItem(
@@ -36,14 +38,6 @@ class GrowthStrip extends ConsumerWidget {
               value: '${stats.totalPhotos}',
               label: '作品',
               color: tokens.brand,
-              tokens: tokens,
-            ),
-            _GrowthDivider(tokens: tokens),
-            _GrowthItem(
-              icon: Icons.favorite_border,
-              value: '${stats.favorites}',
-              label: '收藏',
-              color: tokens.danger,
               tokens: tokens,
             ),
             _GrowthDivider(tokens: tokens),
@@ -84,6 +78,7 @@ class _GrowthItem extends StatelessWidget {
     required this.label,
     required this.color,
     required this.tokens,
+    this.valueFontSize = 16,
   });
 
   final IconData icon;
@@ -91,6 +86,9 @@ class _GrowthItem extends StatelessWidget {
   final String label;
   final Color color;
   final ThemeTokens tokens;
+
+  /// 数字字号：连续天等主视觉项可放大。
+  final double valueFontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -108,7 +106,7 @@ class _GrowthItem extends StatelessWidget {
                   child: Text(
                     value,
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: valueFontSize,
                       fontWeight: FontWeight.w700,
                       color: tokens.textPrimary,
                       height: 1.1,

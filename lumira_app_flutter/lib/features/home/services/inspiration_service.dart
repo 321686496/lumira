@@ -18,6 +18,8 @@ import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/network/api_client.dart';
+import '../../../features/profile/data/profile_dao.dart';
+import '../../onboarding/data/questionnaire_dao.dart';
 import '../data/inspiration_models.dart';
 import '../data/inspiration_rules.dart';
 import '../data/template_context_rules.dart';
@@ -135,15 +137,21 @@ class InspirationService {
     required ApiClient apiClient,
     required TemplatesDao templatesDao,
     required UsageDao usageDao,
+    UserProfileDao? profileDao,
+    QuestionnaireDao? questionnaireDao,
   })  : _galleryDao = galleryDao,
         _apiClient = apiClient,
         _templatesDao = templatesDao,
-        _usageDao = usageDao;
+        _usageDao = usageDao,
+        _profileDao = profileDao,
+        _questionnaireDao = questionnaireDao;
 
   final GalleryDao _galleryDao;
   final ApiClient _apiClient;
   final TemplatesDao _templatesDao;
   final UsageDao _usageDao;
+  final UserProfileDao? _profileDao;
+  final QuestionnaireDao? _questionnaireDao;
 
   /// 构建今日灵感
   /// 失败时返回 fallback，绝不抛异常
@@ -302,7 +310,9 @@ class InspirationService {
       region: regionOf(latitude),
     );
 
-    final templates = await _templatesDao.getBuiltinAndRemote();
+    final templates = await _genderFilteredTemplates(
+      await _templatesDao.getBuiltinAndRemote(),
+    );
     if (templates.isEmpty) return null;
     // 批量取所有模板的全站 use_shoot 次数，避免逐条查询
     final usage = await _usageDao.countMap('template', templates.map((t) => t.id).toList());
@@ -335,4 +345,34 @@ class InspirationService {
   /// 用本地日期构造整数种子（YYYYMMDD），保证每天稳定、每天不同。
   int _daySeed(DateTime now) =>
       now.year * 10000 + now.month * 100 + now.day;
+
+  /// 按用户性别硬过滤候选模板：仅保留 通用(unisex) + 同性别 模板。
+  /// 同性别 + 通用均不存在时回退全池（含异性别），避免推荐落空。
+  /// 性别未知/不愿透露时不过滤。
+  Future<List<TemplateRecord>> _genderFilteredTemplates(
+    List<TemplateRecord> templates,
+  ) async {
+    final g = await _userGender();
+    if (g == null || g.isEmpty) return templates;
+    final hit = templates
+        .where((t) => t.gender == 'unisex' || t.gender == g)
+        .toList();
+    return hit.isNotEmpty ? hit : templates;
+  }
+
+  /// 解析用户性别：Profile 优先，问卷兜底；返回 'male'/'female'。
+  /// 未设置或不方便透露时返回 null。
+  Future<String?> _userGender() async {
+    String? g;
+    try {
+      g = (await _profileDao?.get())?.gender;
+    } catch (_) {/* 读取失败继续走问卷兜底 */}
+    if (g == null || g == 'prefer_not') {
+      try {
+        g = (await _questionnaireDao?.getAnswers())?.gender;
+      } catch (_) {/* 问卷读取失败按未知处理 */}
+    }
+    if (g == 'male' || g == 'female') return g;
+    return null;
+  }
 }

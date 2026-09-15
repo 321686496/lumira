@@ -33,132 +33,116 @@ class SceneRecoCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
-    final isNeumorphic = appTheme.style == UIStyle.neumorphic;
-    final isGlass = appTheme.style == UIStyle.glass;
 
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          // Forced fix(玻璃): 玻璃风格用半透明品牌玻璃面 + 细白描边 + 柔和投影，
-          // 让背后 GlassBackground 光晕透出形成玻璃卡；其余风格保持不变。
-          color: isGlass
-              ? ThemeTokens.glassFill(tokens)
-              : (isNeumorphic ? tokens.surface : tokens.canvas),
-          borderRadius: BorderRadius.circular(14), // 28rpx → 14dp
-          border: isGlass
-              ? Border.all(color: ThemeTokens.glassBorder(tokens), width: 1)
-              : (isNeumorphic
-                  ? null
-                  : Border.all(color: tokens.divider, width: 1)), // 2rpx → 1dp
-          boxShadow: isGlass
-              ? tokens.shadowFloat
-              : (isNeumorphic ? tokens.shadowConvex : null),
-        ),
-        child: ClipRRect(
           borderRadius: BorderRadius.circular(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 图片区
-              AspectRatio(
-                aspectRatio: 3 / 4, // padding-bottom 133.33% → 3:4
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    _buildCoverImage(tokens),
-                    // 标签
-                    Positioned(
-                      top: 8, // 16rpx → 8dp
-                      left: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8, // 16rpx → 8dp
-                          vertical: 3, // 6rpx → 3dp
+          // 叠照片遮罩（半透明黑）为跨风格合法例外
+          color: Colors.black.withOpacity(0.0),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _buildCoverImage(tokens),
+            // 底部渐变遮罩：压暗保证文字可读
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.55),
+                  ],
+                ),
+              ),
+            ),
+            // 左上角标签
+            Positioned(
+              top: 8,
+              left: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: scene.badgeBrand
+                      ? tokens.brand
+                      : Colors.black.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(1000),
+                ),
+                child: Text(
+                  scene.badgeText,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white,
+                    letterSpacing: 0.04 * 10,
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            ),
+            // 左下角：场景名 + 氛围
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 12,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    scene.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                      height: 1.3,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    scene.vibe,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.white.withOpacity(0.85),
+                      height: 1.3,
+                    ),
+                  ),
+                  if (showPhotoCount) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.photo_library_outlined,
+                          size: 12,
+                          color: Colors.white,
                         ),
-                        decoration: BoxDecoration(
-                          color: scene.badgeBrand
-                              ? tokens.brand
-                              : Colors.black.withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(1000),
-                        ),
-                        child: Text(
-                          scene.badgeText,
-                          style: const TextStyle(
-                            fontSize: 10, // 20rpx → 10dp
+                        const SizedBox(width: 4),
+                        Text(
+                          '${scene.photoCount}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.white.withOpacity(0.9),
                             fontWeight: FontWeight.w500,
-                            color: Colors.white,
-                            letterSpacing: 0.04 * 10,
                             height: 1.2,
                           ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
-                ),
+                ],
               ),
-              // 文字区
-              Padding(
-                padding: const EdgeInsets.all(12),   // align with RecommendedTemplate card (fit 130x248)
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      scene.name,
-                      style: TextStyle(
-                        fontSize: 14, // 28rpx → 14dp
-                        fontWeight: FontWeight.w600,
-                        color: tokens.textPrimary,
-                        height: 1.3,
-                      ),
-                    ),
-                    const SizedBox(height: 3),   // align with RecommendedTemplate card
-                    Text(
-                      scene.vibe,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11, // 22rpx → 11dp
-                        color: tokens.textTertiary,
-                        height: 1.3,   // align with RecommendedTemplate card (fit 130x248)
-                      ),
-                    ),
-                    // 照片数行：条件渲染（home 页默认 showPhotoCount=true 行为不变）
-                    if (showPhotoCount) ...[
-                      const SizedBox(height: 6), // 12rpx → 6dp
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.photo_library_outlined,
-                            size: 12, // 24rpx → 12dp
-                            color: tokens.brand, // 跟随主题
-                          ),
-                          const SizedBox(width: 4), // 8rpx → 4dp
-                          Text(
-                            '${scene.photoCount}',
-                            style: TextStyle(
-                              fontSize: 11, // 22rpx → 11dp
-                              color: tokens.textSecondary, // 跟随主题
-                              fontWeight: FontWeight.w500,
-                              height: 1.2,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    // footer widget：条件渲染（home 页默认 footer=null 不渲染）
-                    if (footer != null) ...[
-                      const SizedBox(height: 6),
-                      footer!,
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
