@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/capture_appearance.dart';
 import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/lumira/_internal/lumira_theme_resolver.dart';
 import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
@@ -13,7 +14,13 @@ import '../domain/photo_template.dart';
 /// 拍摄页套用模板后的可折叠模板信息卡。
 ///
 /// - 折叠态：图标 + 模板名 + 展开箭头
-/// - 展开态：简介（meta.description）+ 拍摄注意点列表（sceneGuide.tips）
+/// - 展开态：标题栏右侧 tab 切换三个分区（展示顺序固定：场景指南 / 道具信息 / 姿势描述）
+///   - 场景指南：光线 / 距离 / 背景 / 时段 + 拍摄注意点（sceneGuide.tips）
+///   - 道具信息：sceneGuide.props 道具标签
+///   - 姿势描述：当前姿势的描述（多姿势模板跟随当前姿势下标）
+/// - 仅渲染「当前模板有内容」的分区；默认选中优先级：姿势描述 > 场景指南 > 道具信息
+/// - 用户手动选中的 tab 会持久化（user_settings），下次进入拍摄页沿用；
+///   若该 tab 在当前模板无内容，则回落到默认优先级
 /// - 套用模板默认展开；切换模板（id 变化）时重置为展开
 /// - 视觉与 ChallengeOverlayBar 保持一致（双模式浮层 + 品牌色描边）：
 ///   immersive=暗色半透明 / theme=当前风格的叠照片浮层取向
@@ -41,6 +48,35 @@ class TemplateInfoCard extends ConsumerStatefulWidget {
   ConsumerState<TemplateInfoCard> createState() => _TemplateInfoCardState();
 }
 
+/// 信息卡内容分区（对应标题栏右侧的 tab）。
+enum _InfoTab {
+  scene,
+  props,
+  pose;
+
+  /// 展示顺序即上方声明顺序：场景指南 → 道具信息 → 姿势描述。
+  String get label {
+    switch (this) {
+      case _InfoTab.scene:
+        return '场景';
+      case _InfoTab.props:
+        return '道具';
+      case _InfoTab.pose:
+        return '姿势';
+    }
+  }
+
+  /// 持久化/恢复用的 key（与 DAO 存储值一致）。
+  String get key => name;
+
+  static _InfoTab? fromKey(String? raw) {
+    for (final tab in _InfoTab.values) {
+      if (tab.key == raw) return tab;
+    }
+    return null;
+  }
+}
+
 class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
   /// 默认展开，让用户第一时间看到拍摄要点
   bool _expanded = true;
@@ -56,6 +92,42 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
 
   void _toggle() {
     setState(() => _expanded = !_expanded);
+  }
+
+  void _selectTab(_InfoTab tab) {
+    ref.read(CaptureState.templateInfoCardTabProvider.notifier).state = tab.key;
+    CaptureState.persistTemplateInfoCardTab(
+      ProviderScope.containerOf(context, listen: false),
+      tab.key,
+    );
+  }
+
+  /// 当前模板下「有内容」的分区（按展示顺序）。
+  List<_InfoTab> _availableTabs(Pose pose) {
+    final guide = widget.template.sceneGuide;
+    final hasScene = guide.lightDirection.isNotEmpty ||
+        guide.shootingDistance.isNotEmpty ||
+        guide.background.isNotEmpty ||
+        guide.bestTime.isNotEmpty ||
+        (guide.bestTimeFrom != null && guide.bestTimeTo != null) ||
+        guide.tips.isNotEmpty;
+    return <_InfoTab>[
+      if (hasScene) _InfoTab.scene,
+      if (guide.props.isNotEmpty) _InfoTab.props,
+      if (pose.description.trim().isNotEmpty) _InfoTab.pose,
+    ];
+  }
+
+  /// 默认选中优先级：姿势描述 > 场景指南 > 道具信息（取第一个可用的）。
+  _InfoTab? _defaultTab(List<_InfoTab> available) {
+    for (final tab in const <_InfoTab>[
+      _InfoTab.pose,
+      _InfoTab.scene,
+      _InfoTab.props,
+    ]) {
+      if (available.contains(tab)) return tab;
+    }
+    return null;
   }
 
   @override
@@ -123,10 +195,21 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
   Widget _buildBody(AppThemeData appTheme, CaptureOverlayVisual visual) {
     final tokens = appTheme.tokens;
     final template = widget.template;
-    final tips = template.sceneGuide.tips;
-    // 无简介且无注意点时仅渲染标题条
-    final hasContent =
-        template.meta.description.isNotEmpty || tips.isNotEmpty;
+
+    // 多姿势模板跟随「当前姿势下标」（与拍摄页姿势切换按钮同源）
+    final poses = template.poses;
+    final rawIndex = ref.watch(CaptureState.currentPoseIndexProvider);
+    final poseIndex =
+        poses.isEmpty ? 0 : rawIndex.clamp(0, poses.length - 1).toInt();
+    final pose = poses.isEmpty ? const Pose() : poses[poseIndex];
+
+    final available = _availableTabs(pose);
+    final persisted =
+        _InfoTab.fromKey(ref.watch(CaptureState.templateInfoCardTabProvider));
+    final selected = (persisted != null && available.contains(persisted))
+        ? persisted
+        : _defaultTab(available);
+
     final radius = BorderRadius.circular(_expanded ? 14 : 24);
 
     final Widget card = AnimatedSize(
@@ -157,7 +240,7 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 标题行：图标 + 模板名 + 箭头（折叠/展开共用）
+                  // 标题行：图标 + 模板名 + tab（右侧）+ 箭头 + 隐藏
                   Row(
                     children: [
                       Icon(Icons.auto_awesome, size: 16, color: tokens.brand),
@@ -175,6 +258,12 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
                           ),
                         ),
                       ),
+                      // tab 仅在展开态 + 存在多个分区时出现（单个分区无需切换）
+                      if (_expanded && selected != null && available.length > 1)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: _buildTabs(available, selected, visual),
+                        ),
                       const SizedBox(width: 8),
                       AnimatedRotation(
                         turns: _expanded ? 0.5 : 0,
@@ -202,58 +291,23 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
                         ),
                     ],
                   ),
-                  // 展开态：简介 + 注意点
-                  if (_expanded && hasContent) ...[
+                  // 展开态：当前 tab 对应分区的内容
+                  if (_expanded && selected != null) ...[
                     const SizedBox(height: 10),
                     Container(
                       height: 1,
                       color: visual.fillSubtle,
                     ),
-                    if (template.meta.description.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      Text(
-                        template.meta.description,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: visual.foregroundSecondary,
-                          height: 1.5,
-                        ),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                    if (tips.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      ...tips.map(
-                        (tip) => Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(top: 1),
-                                child: Icon(
-                                  Icons.check_circle_outline,
-                                  size: 13,
-                                  color: tokens.brand,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  tip,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: visual.foreground,
-                                    height: 1.5,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                    const SizedBox(height: 10),
+                    _buildTabContent(
+                      tab: selected,
+                      guide: template.sceneGuide,
+                      pose: pose,
+                      poseIndex: poseIndex,
+                      poseCount: poses.length,
+                      visual: visual,
+                      tokens: tokens,
+                    ),
                   ],
                 ],
               ),
@@ -273,5 +327,225 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
             ),
           )
         : card;
+  }
+
+  /// 标题栏右侧的 tab 按钮组（点击切换分区并持久化）。
+  Widget _buildTabs(
+    List<_InfoTab> tabs,
+    _InfoTab selected,
+    CaptureOverlayVisual visual,
+  ) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < tabs.length; i++) ...[
+          if (i > 0) const SizedBox(width: 4),
+          GestureDetector(
+            onTap: () => _selectTab(tabs[i]),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: tabs[i] == selected
+                    ? visual.accent.withOpacity(0.18)
+                    : visual.fillSubtle,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: tabs[i] == selected
+                      ? visual.accent.withOpacity(0.55)
+                      : Colors.transparent,
+                  width: 0.8,
+                ),
+              ),
+              child: Text(
+                tabs[i].label,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  height: 1.1,
+                  fontWeight:
+                      tabs[i] == selected ? FontWeight.w600 : FontWeight.w400,
+                  color:
+                      tabs[i] == selected ? visual.accent : visual.foregroundSecondary,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildTabContent({
+    required _InfoTab tab,
+    required SceneGuide guide,
+    required Pose pose,
+    required int poseIndex,
+    required int poseCount,
+    required CaptureOverlayVisual visual,
+    required ThemeTokens tokens,
+  }) {
+    switch (tab) {
+      case _InfoTab.scene:
+        return _buildSceneContent(guide, visual, tokens);
+      case _InfoTab.props:
+        return _buildPropsContent(guide.props, visual);
+      case _InfoTab.pose:
+        return _buildPoseContent(pose, poseIndex, poseCount, visual);
+    }
+  }
+
+  /// 场景指南：紧凑 label:value 行 + 拍摄注意点
+  Widget _buildSceneContent(
+    SceneGuide guide,
+    CaptureOverlayVisual visual,
+    ThemeTokens tokens,
+  ) {
+    final time = (guide.bestTimeFrom != null && guide.bestTimeTo != null)
+        ? '${guide.bestTimeFrom} - ${guide.bestTimeTo}'
+        : guide.bestTime;
+    final rows = <MapEntry<String, String>>[
+      if (guide.lightDirection.isNotEmpty)
+        MapEntry('光线', guide.lightDirection),
+      if (guide.shootingDistance.isNotEmpty)
+        MapEntry('距离', guide.shootingDistance),
+      if (guide.background.isNotEmpty) MapEntry('背景', guide.background),
+      if (time.isNotEmpty) MapEntry('时段', time),
+    ];
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...rows.map(
+          (row) => Padding(
+            padding: const EdgeInsets.only(bottom: 5),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 30,
+                  child: Text(
+                    row.key,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: visual.foregroundMuted,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    row.value,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: visual.foreground,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (guide.tips.isNotEmpty) ...[
+          if (rows.isNotEmpty) const SizedBox(height: 2),
+          ...guide.tips.map(
+            (tip) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: Icon(
+                      Icons.check_circle_outline,
+                      size: 13,
+                      color: tokens.brand,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      tip,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: visual.foreground,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// 道具信息：道具标签（无道具时不渲染本分区，故此处恒非空）
+  Widget _buildPropsContent(List<String> props, CaptureOverlayVisual visual) {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final prop in props)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: visual.fillSubtle,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: visual.accent.withOpacity(0.28), width: 0.8),
+            ),
+            child: Text(
+              prop,
+              style: TextStyle(
+                fontSize: 11,
+                color: visual.foreground,
+                height: 1.3,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// 姿势描述：多姿势时带「姿势 n/N」前缀 + 姿势名，随后是描述正文
+  Widget _buildPoseContent(
+    Pose pose,
+    int poseIndex,
+    int poseCount,
+    CaptureOverlayVisual visual,
+  ) {
+    final titleParts = <String>[
+      if (poseCount > 1) '姿势 ${poseIndex + 1}/$poseCount',
+      if (pose.name.trim().isNotEmpty) pose.name.trim(),
+    ];
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (titleParts.isNotEmpty) ...[
+          Text(
+            titleParts.join(' · '),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: visual.accent,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 4),
+        ],
+        Text(
+          pose.description.trim(),
+          style: TextStyle(
+            fontSize: 12,
+            color: visual.foreground,
+            height: 1.5,
+          ),
+        ),
+      ],
+    );
   }
 }

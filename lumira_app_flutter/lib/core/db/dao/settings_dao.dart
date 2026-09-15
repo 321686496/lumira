@@ -471,6 +471,32 @@ class SettingsDao {
     );
   }
 
+  /// 读取模板信息卡内 tab 的最后一次选择（'scene' | 'props' | 'pose'；未设置返回 null）
+  Future<String?> getTemplateInfoCardTab() async {
+    final rows = await _db.query(
+      Tables.userSettings,
+      columns: [Tables.colTemplateInfoCardTab],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return null;
+    final v = rows.first[Tables.colTemplateInfoCardTab] as String?;
+    return (v == null || v.isEmpty) ? null : v;
+  }
+
+  /// 保存模板信息卡内 tab 的选择（'scene' | 'props' | 'pose'）
+  Future<void> setTemplateInfoCardTab(String tab) async {
+    await _db.update(
+      Tables.userSettings,
+      {
+        Tables.colTemplateInfoCardTab: tab,
+        Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+  }
+
   /// 读取拍摄页/预览页外观（user_settings.capture_appearance，默认 immersive）
   Future<CaptureAppearance> getCaptureAppearance() async {
     final rows = await _db.query(

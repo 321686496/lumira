@@ -105,6 +105,11 @@ class Tables {
   // 套用模板时顶部的可折叠模板信息卡是否被用户隐藏（1=隐藏，0=显示，默认显示）
   static const String colTemplateInfoCardHidden = 'template_info_card_hidden';
 
+  // === user_settings 扩展列（v60 迁移新增，模板信息卡分区偏好持久化） ===
+  // 套用模板时模板信息卡内「场景指南 / 道具信息 / 姿势描述」三个 tab 的最后一次选择
+  // （'scene' | 'props' | 'pose'；NULL=未选择过，按默认优先级自动选中）
+  static const String colTemplateInfoCardTab = 'template_info_card_tab';
+
   // === user_settings 扩展列（v56 迁移新增，运营 Banner 离线缓存） ===
   // 存储后端下发的运营 Banner 列表 JSON（远端拉取成功后写入，离线时兜底读取）
   static const String colOperationBannersCache = 'operation_banners_cache';

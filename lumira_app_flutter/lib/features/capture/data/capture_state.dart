@@ -465,6 +465,11 @@ class CaptureState {
   /// true=隐藏；false=显示（默认）。用户点了隐藏后，下次进入拍摄页保持隐藏。
   static final templateInfoCardHiddenProvider = StateProvider<bool>((ref) => false);
 
+  /// 模板信息卡内「场景指南 / 道具信息 / 姿势描述」tab 的最后一次选择（持久化到 user_settings）。
+  /// 取值 'scene' | 'props' | 'pose'；null=用户未选择过 → 按默认优先级（姿势 > 场景 > 道具）
+  /// 自动选中当前模板可用的第一个分区。
+  static final templateInfoCardTabProvider = StateProvider<String?>((ref) => null);
+
   // ── 自由模式参数持久化（防抖写入 DAO）──
 
   /// 防抖 Timer：参数变更后 500ms 无新变更才写入 DAO
@@ -552,6 +557,8 @@ class CaptureState {
       final dao = await container.read(settingsDaoProvider.future);
       final hidden = await dao.getTemplateInfoCardHidden();
       container.read(templateInfoCardHiddenProvider.notifier).state = hidden;
+      final tab = await dao.getTemplateInfoCardTab();
+      container.read(templateInfoCardTabProvider.notifier).state = tab;
     } catch (e) {
       // 加载失败静默降级，保持默认显示
       debugPrint('[capture] loadTemplateInfoCardPreference failed: $e');
@@ -569,6 +576,20 @@ class CaptureState {
     } catch (e) {
       // 持久化失败静默，不影响本次拍摄
       debugPrint('[capture] persist template info card hidden failed: $e');
+    }
+  }
+
+  /// 持久化模板信息卡内 tab 的选择（用户点击 tab 时调用）
+  static Future<void> persistTemplateInfoCardTab(
+    ProviderContainer container,
+    String tab,
+  ) async {
+    try {
+      final dao = await container.read(settingsDaoProvider.future);
+      await dao.setTemplateInfoCardTab(tab);
+    } catch (e) {
+      // 持久化失败静默，不影响本次拍摄
+      debugPrint('[capture] persist template info card tab failed: $e');
     }
   }
 
