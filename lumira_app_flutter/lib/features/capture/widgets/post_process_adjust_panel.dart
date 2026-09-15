@@ -245,8 +245,13 @@ class _AdjustPanelState extends State<AdjustPanel> {
                   hint: def.hint,
                   tokens: t,
                   accentColor: widget.accentColor,
-                  onChanged: (v) =>
-                      widget.onChanged(def.setValue(widget.full, v)),
+                  onChanged: (v) {
+                    if (v != def.getValue(widget.full)) {
+                      debugPrint('[edit-diag] slider ${def.label} '
+                          '${def.getValue(widget.full)} → $v');
+                    }
+                    widget.onChanged(def.setValue(widget.full, v));
+                  },
                 ),
               ),
             ),

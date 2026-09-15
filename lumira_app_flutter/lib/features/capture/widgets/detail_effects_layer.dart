@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../../../core/services/ohos_image_processor.dart';
 import '../domain/photo_template.dart';
 import '../services/preview_beauty_shader.dart'
     show loadFragmentProgramFromCandidates;
@@ -102,16 +103,20 @@ Future<ui.Image> loadGrainNoiseTile() async {
 Future<ui.FragmentProgram?>? _programFuture;
 
 Future<ui.FragmentProgram?> _loadDetailProgram() =>
+    // 首选带 assets/ 前缀的 asset key：pubspec.yaml shaders 段声明的路径
+    // 原样保留为编译产物的 asset key（AssetManifest 中为
+    // assets/shaders/edit_detail_effects.frag，iOS/Android/OHOS 一致）。
+    // 无前缀路径仅作工具链行为变化时的兜底。
+    // 失败（null）不进缓存，避免首载偶发失败后本进程永久回退原图。
     _programFuture ??= loadFragmentProgramFromCandidates(
-      // 首选带 assets/ 前缀的 asset key：pubspec.yaml shaders 段声明的路径
-      // 原样保留为编译产物的 asset key（AssetManifest 中为
-      // assets/shaders/edit_detail_effects.frag，iOS/Android/OHOS 一致）。
-      // 无前缀路径仅作工具链行为变化时的兜底。
       const [
         'assets/shaders/edit_detail_effects.frag',
         'shaders/edit_detail_effects.frag',
       ],
-    );
+    ).then((prog) {
+      if (prog == null) _programFuture = null;
+      return prog;
+    });
 
 Future<ui.FragmentProgram?>? _coreProgramFuture;
 
@@ -121,7 +126,10 @@ Future<ui.FragmentProgram?> _loadCoreDetailProgram() =>
         'assets/shaders/edit_smooth_sharpen.frag',
         'shaders/edit_smooth_sharpen.frag',
       ],
-    );
+    ).then((prog) {
+      if (prog == null) _coreProgramFuture = null;
+      return prog;
+    });
 
 /// 编辑页细节效果实时预览层：单 pass fragment shader 完成
 /// 拉腿(几何) → 锐化 → 颗粒 → 磨皮 → 暗角，数值语义与四端成片管线统一
@@ -159,6 +167,7 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
   String? _decodingUrl;
   ui.FragmentProgram? _program;
   ui.FragmentProgram? _coreProgram;
+  String _lastDiagSig = '';
 
   @override
   void initState() {
@@ -190,6 +199,7 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
   Future<void> _decode() async {
     final targetUrl = widget.url;
     _decodingUrl = targetUrl;
+    debugPrint('[edit-diag] layer decode start: $targetUrl');
     final next = await _decodeToUiImage(targetUrl);
     if (!mounted || _decodingUrl != targetUrl) {
       next?.dispose();
@@ -197,6 +207,9 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
     }
     if (next == null) {
       debugPrint('[detail-effects] source decode failed: $targetUrl');
+    } else {
+      debugPrint('[edit-diag] layer decode done: '
+          '${next.width}x${next.height}');
     }
     setState(() => _image = next);
   }
@@ -206,6 +219,21 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
   Future<ui.Image?> _decodeToUiImage(String url) async {
     if (url.isEmpty) return null;
     final maxEdge = widget.maxEdge;
+
+    // OHOS：dart:ui 的 JPEG 软件解码极慢（实测 1200x1600 约 6s），解码期间
+    // 每帧都走 fallback 原图，表现为"拖动磨皮/锐化滑块无实时变化"。优先走
+    // 系统硬解（DCT 降采样，一次解码到 maxEdge），失败回退 dart:ui。
+    // 同 watermark_animation_overlay._decodeSource 的已验证模式。
+    if (OhosImageProcessor.isSupported &&
+        !url.startsWith('data:') &&
+        !url.startsWith('assets/') &&
+        !url.startsWith('http://') &&
+        !url.startsWith('https://')) {
+      final decoded = await _decodeViaOhosNative(url, maxEdge);
+      if (decoded != null) return decoded;
+      debugPrint('[detail-effects] OHOS native decode failed, fallback dart:ui');
+    }
+
     Uint8List bytes;
     try {
       if (url.startsWith('data:')) {
@@ -252,6 +280,44 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
     }
   }
 
+  /// OHOS 系统硬解路径：JPEG → RGBA 由原生 image.ImageSource 完成
+  /// （desiredSize 为 DCT 域降采样，锐度优于事后像素缩放）。
+  Future<ui.Image?> _decodeViaOhosNative(String path, int maxEdge) async {
+    final result = await OhosImageProcessor.instance.decodeJpegToRgba(
+      path: path,
+      targetWidth: maxEdge,
+      targetHeight: maxEdge,
+    );
+    if (result == null) return null;
+    try {
+      return await _rgbaToImage(result.rgba, result.width, result.height);
+    } catch (e) {
+      debugPrint('[detail-effects] rgba→image failed: $e');
+      return null;
+    }
+  }
+
+  Future<ui.Image> _rgbaToImage(
+    Uint8List rgba,
+    int width,
+    int height,
+  ) async {
+    final buffer = await ui.ImmutableBuffer.fromUint8List(rgba);
+    final descriptor = ui.ImageDescriptor.raw(
+      buffer,
+      width: width,
+      height: height,
+      pixelFormat: ui.PixelFormat.rgba8888,
+    );
+    buffer.dispose();
+    final codec = await descriptor.instantiateCodec();
+    final frame = await codec.getNextFrame();
+    final image = frame.image;
+    descriptor.dispose();
+    codec.dispose();
+    return image;
+  }
+
   Future<void> _loadProgram() async {
     ui.FragmentProgram? prog;
     try {
@@ -290,6 +356,14 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
         widget.effects.legStretch == 0;
     final prog = _program;
     final activeProgram = coreOnly ? (_coreProgram ?? prog) : prog;
+    final sig = '${widget.effects.smoothStrength},${widget.effects.sharpen},'
+        '${widget.effects.vignette},${widget.effects.grain},'
+        '${widget.effects.legStretch}|${img != null}|${activeProgram != null}';
+    if (sig != _lastDiagSig) {
+      _lastDiagSig = sig;
+      debugPrint('[edit-diag] layer build sig=$sig coreOnly=$coreOnly '
+          'url=${widget.url}');
+    }
     if (img == null || activeProgram == null) {
       // 未就绪 / 解码失败 / shader 加载失败 → 原图片路径。
       return widget.fallback();
@@ -341,6 +415,10 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
   }
 }
 
+/// 诊断打点去重：painter 每次 build 都是新实例，需用文件级变量记录上次参数指纹。
+String _lastFullPaintDiag = '';
+String _lastCorePaintDiag = '';
+
 /// 逐片元细节效果画家。paint 期异常一律降级画原图（不抛出、不白屏）。
 class DetailEffectsPainter extends CustomPainter {
   DetailEffectsPainter({
@@ -357,6 +435,13 @@ class DetailEffectsPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final sig = '${effects.smoothStrength},${effects.sharpen},'
+        '${effects.vignette},${effects.grain},${effects.legStretch}';
+    if (sig != _lastFullPaintDiag) {
+      _lastFullPaintDiag = sig;
+      debugPrint('[edit-diag] full painter paint fx=[$sig] '
+          'canvas=${size.width}x${size.height} img=${image.width}x${image.height}');
+    }
     try {
       // float 与 sampler 两套独立索引空间（同 SkinSmoothPainter 约定）：
       // - float：uSize(vec2)→0,1；uFrameSize(vec2)→2,3；uSharpenA→4；
@@ -418,6 +503,12 @@ class CoreDetailEffectsPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final sig = '${effects.smoothStrength},${effects.sharpen}';
+    if (sig != _lastCorePaintDiag) {
+      _lastCorePaintDiag = sig;
+      debugPrint('[edit-diag] core painter paint fx=[$sig] '
+          'canvas=${size.width}x${size.height} img=${image.width}x${image.height}');
+    }
     try {
       final shader = program.fragmentShader()
         ..setFloat(0, size.width)

@@ -182,8 +182,13 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
   PostProcess get _fullForEdit => fullOf(_baked, _localPostProcess);
 
   /// 由新的全量值反推增量并更新本地增量参数。
-  void _updatePostFromFull(PostProcess newFull) =>
-      _onPostProcessChanged(deltaOf(_baked, newFull));
+  void _updatePostFromFull(PostProcess newFull) {
+    final next = deltaOf(_baked, newFull);
+    debugPrint('[edit-diag] gallery delta → '
+        'smooth=${next.smoothStrength} sharpen=${next.sharpen} '
+        'vignette=${next.vignette} grain=${next.grain} leg=${next.legStretch}');
+    _onPostProcessChanged(next);
+  }
 
   void _toggleTool(_EditTool tool) {
     if (_isReadOnly) {
@@ -1004,8 +1009,15 @@ class _CanvasArea extends StatelessWidget {
     // 解码未就绪/失败时 DetailEffectsLayer 自动回退到 lumiraImage()。
     final detailEffects = DetailEffectsParams.fromPostProcess(appliedPost);
     final bool isNetworkUrl = url.startsWith('http');
-    Widget imageWidget =
-        !isComparing && detailEffects.hasAnyEffect && !isNetworkUrl
+    final bool useDetailFx =
+        !isComparing && detailEffects.hasAnyEffect && !isNetworkUrl;
+    if (detailEffects.hasAnyEffect) {
+      debugPrint('[edit-diag] gallery build useDetailFx=$useDetailFx '
+          'comparing=$isComparing local=${!isNetworkUrl} '
+          'smooth=${detailEffects.smoothStrength} sharpen=${detailEffects.sharpen} '
+          'url=$url');
+    }
+    Widget imageWidget = useDetailFx
             ? DetailEffectsLayer(
                 url: url,
                 effects: detailEffects,
