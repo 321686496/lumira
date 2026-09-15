@@ -37,9 +37,21 @@ class CameraService {
   private cameraInput: camera.CameraInput | undefined = undefined;
   private photoOutput: camera.PhotoOutput | undefined = undefined;
   private previewOutput: camera.PreviewOutput | undefined = undefined;
+  // 第二路预览输出（imageReceiver 扫码流），initCamera 每次都会新建，
+  // 必须跟踪并在下次初始化 / 释放时一并 release，否则反复进出扫码页后
+  // 相机输出资源耗尽，导致后续 open 失败、取景器黑屏。
+  private previewOutput2: camera.PreviewOutput | undefined = undefined;
   private photoSession: camera.PhotoSession | null = null;
   private context: Context | null = null;
   private isStop: boolean = false;
+  // initCamera 串行化：onLoad→scan() 与 WINDOW_SHOWN→onPageShow 会各自
+  // 触发一次 initCamera，并发执行 createCameraInput + open() 会抢占相机
+  // 设备导致初始化失败、取景器黑屏。用进行中的 Promise 将调用串行排队。
+  private initPromise: Promise<void> | null = null;
+  // 上一次成功初始化使用的 surfaceId 与前后置，用于去重：重复调用
+  // （同 surface 同摄像头且会话仍在运行）直接跳过，不重建会话。
+  private lastSurfaceId: string = '';
+  private lastFront: boolean = false;
   public imageReceiver: image.ImageReceiver;
   private captureSize: camera.Size = { width: 864, height: 480 } as camera.Size;
 
@@ -161,11 +173,63 @@ class CameraService {
       console.error(TAG + 'initCamera skip: empty XComponentSurfaceId');
       return;
     }
-    if (!this.camerasDevices) {
+    // 串行化：若上一次 initCamera 仍在进行中（onLoad 与 onPageShow 双触发、
+    // 或快速切换前后置），先等待其完成，避免并发 open 相机互相抢占导致黑屏。
+    if (this.initPromise) {
+      try {
+        await this.initPromise;
+      } catch (error) {
+        const err = error as BusinessError;
+        console.error(TAG + `previous initCamera failed: ${err.message}`);
+      }
+    }
+    // 去重：同 surface、同前后置且会话仍在运行（如 onLoad 与 WINDOW_SHOWN
+    // 接连触发），跳过重复初始化，避免重建会话瞬间画面黑屏闪烁。
+    if (XComponentSurfaceId === this.lastSurfaceId && front === this.lastFront &&
+      this.photoSession && !this.isStop) {
       return;
     }
+    this.initPromise = this.doInitCamera(XComponentSurfaceId, front);
+    try {
+      await this.initPromise;
+    } finally {
+      this.initPromise = null;
+    }
+  }
+
+  private async doInitCamera(XComponentSurfaceId: string, front: boolean): Promise<void> {
+    try {
+      await this.doInitCameraInner(XComponentSurfaceId, front);
+    } catch (error) {
+      const err = error as BusinessError;
+      console.error(TAG + `initCamera failed: ${err.message}`);
+      // 失败清理：回收已创建的输入 / 会话 / 输出，避免半初始化状态
+      // 占住相机设备，导致后续重试或下一次进入页面黑屏。
+      await this.teardownSession();
+    }
+  }
+
+  private async doInitCameraInner(XComponentSurfaceId: string, front: boolean): Promise<void> {
+    // 相机管理器 / 设备列表就绪兜底：onPageShow 直接触发 initCamera 时
+    // createCamera 可能尚未被调用，此时 this.cameraManager / camerasDevices
+    // 为空，若不补建会静默 return，相机永远不启动、取景器黑屏。
+    if (!this.cameraManager) {
+      if (!this.context) {
+        return;
+      }
+      this.cameraManager = camera.getCameraManager(this.context);
+    }
+    if (!this.camerasDevices) {
+      this.camerasDevices = this.cameraManager.getSupportedCameras();
+    }
+    if (!this.camerasDevices || this.camerasDevices.length === 0) {
+      return;
+    }
+    // 释放上一轮会话与输出：initCamera 可能被多次触发（前后台切换 / 切换
+    // 前后置），不释放旧资源会泄漏相机输出，多次进出后 open 失败黑屏。
+    await this.teardownSession();
     // 前置
-    if (front) {
+    if (front && this.camerasDevices.length > 1) {
       this.curcamerasDevice = this.camerasDevices[1]
     } else {
       this.curcamerasDevice = this.camerasDevices[0]
@@ -207,9 +271,57 @@ class CameraService {
     await this.photoSession.commitConfig();
     // 会话开始
     await this.photoSession.start();
+    // 启动成功后才记录输出与去重标记，失败路径走 catch 清理，
+    // 避免半初始化状态被去重逻辑误判为「已就绪」。
+    this.previewOutput = previewOutput;
+    this.previewOutput2 = previewOutput2;
+    this.lastSurfaceId = XComponentSurfaceId;
+    this.lastFront = front;
     // 对焦模式
     this.setFocusMode(camera.FocusMode.FOCUS_MODE_CONTINUOUS_AUTO);
     this.isStop = false;
+  }
+
+  // 停止并释放当前会话与全部输出（输入 / 会话 / 两路预览输出），
+  // 供重新初始化与页面销毁复用，防止预览输出泄漏耗尽相机资源。
+  private async teardownSession(): Promise<void> {
+    try {
+      await this.photoSession?.stop();
+    } catch (error) {
+      const err = error as BusinessError;
+      console.error(TAG + `teardown stop failed: ${err.message}`);
+    }
+    try {
+      await this.cameraInput?.close();
+    } catch (error) {
+      const err = error as BusinessError;
+      console.error(TAG + `teardown close input failed: ${err.message}`);
+    }
+    try {
+      await this.photoSession?.release();
+    } catch (error) {
+      const err = error as BusinessError;
+      console.error(TAG + `teardown release session failed: ${err.message}`);
+    }
+    try {
+      await this.previewOutput?.release();
+    } catch (error) {
+      const err = error as BusinessError;
+      console.error(TAG + `teardown release preview failed: ${err.message}`);
+    }
+    try {
+      await this.previewOutput2?.release();
+    } catch (error) {
+      const err = error as BusinessError;
+      console.error(TAG + `teardown release preview2 failed: ${err.message}`);
+    }
+    this.photoSession = null;
+    this.cameraInput = undefined;
+    this.previewOutput = undefined;
+    this.previewOutput2 = undefined;
+    // 会话与输出已全部释放，状态回到「已停止」：保证后续 resume / 重进页面
+    // 事件能正确触发重新初始化，而不是误判仍在运行而跳过。
+    this.isStop = true;
   }
 
   /**
@@ -471,35 +583,42 @@ class CameraService {
 
   // 切换前置后置前释放相机流
   stopCamera(): Promise<void> {
-    return this.photoSession!.stop().then(() => {
+    if (!this.photoSession) {
+      // 会话尚未建立（如暂停先于初始化完成到达）时直接置位，避免空引用崩溃
+      this.isStop = true;
+      return Promise.resolve();
+    }
+    return this.photoSession.stop().then(() => {
       this.isStop = true;
     });
   }
 
   // 切换前置后置前释放相机流
   async preFrontRelease(isStop: boolean) {
-    if (!isStop) {
-      await this.photoSession?.stop();
-      this.isStop = true;
+    // 若初始化仍在进行中，先等待其结束再释放，避免释放与初始化交错执行
+    // 导致相机状态错乱（后续 initCamera 已内置 teardown，会重新建流）。
+    if (this.initPromise) {
+      try {
+        await this.initPromise;
+      } catch (_) {
+        // 初始化失败即无资源可释放
+      }
     }
-    await this.photoSession?.release()
-    await this.cameraInput?.close();
-    await this.photoOutput?.release();
-    await this.previewOutput?.release();
+    await this.teardownSession();
   }
 
   /**
    * 释放相机
    */
   async releaseCamera() {
-    if (!this.isStop) {
-      await this.photoSession?.stop();
-      this.isStop = true;
+    if (this.initPromise) {
+      try {
+        await this.initPromise;
+      } catch (_) {
+        // 初始化失败即无资源可释放
+      }
     }
-    await this.cameraInput?.close();
-    await this.previewOutput?.release();
-    await this.photoSession?.release();
-    await this.photoOutput?.release();
+    await this.teardownSession();
     await this.imageReceiver.release();
   }
 }
