@@ -77,6 +77,8 @@ class PosterGenerator {
     required String shareSubject,
     required String shareText,
     required String fileNamePrefix,
+    List<PosterRatio>? ratioOptions,
+    PosterReorderSpec? reorder,
   }) async {
     await showLumiraBottomSheet<void>(
       context: context,
@@ -87,10 +89,47 @@ class PosterGenerator {
         shareSubject: shareSubject,
         shareText: shareText,
         fileNamePrefix: fileNamePrefix,
-        stylePicker: _StylePickerConfig(kind: kind, ratio: ratio, data: data),
+        stylePicker: _StylePickerConfig(
+          kind: kind,
+          ratio: ratio,
+          data: data,
+          ratioOptions: ratioOptions,
+          reorder: reorder,
+        ),
       ),
     );
   }
+}
+
+/// 照片排序 / 选择配置（精选集海报专用，可选）。
+///
+/// 传入后 Sheet 显示一个「照片顺序」面板：顶部为已按序选中的横排，可长按拖拽
+/// 调整顺序、点右上角 × 移除；若可选照片多于已选，则下方显示可追加候选，点加号
+/// 追加（最多 [maxCount] 张）。任意调整都会调用 [buildData] 重建海报数据，
+/// 预览实时更新。调整仅本次 Sheet 存活期内有效，不写库。
+class PosterReorderSpec {
+  PosterReorderSpec({
+    required this.allItems,
+    required this.initialSelected,
+    required this.itemThumb,
+    required this.buildData,
+    this.maxCount = 9,
+  });
+
+  /// 全部可选照片（含初始选中，元素实例需与 [initialSelected] 复用）。
+  final List<Object> allItems;
+
+  /// 初始按序选中（[allItems] 的子序列），用于首批海报。
+  final List<Object> initialSelected;
+
+  /// 渲染单张照片缩略图（拖拽条 / 候选条共用）。
+  final Widget Function(Object item, double size) itemThumb;
+
+  /// 依据当前比例与有序选中照片重建海报数据。
+  final PosterStyleData Function(PosterRatio ratio, List<Object> ordered) buildData;
+
+  /// 允许选中的最大照片数（默认 9）。
+  final int maxCount;
 }
 
 /// 样式选择配置（传此配置时 Sheet 启用样式切换条并持选中态）。
@@ -99,11 +138,19 @@ class _StylePickerConfig {
     required this.kind,
     required this.ratio,
     required this.data,
+    this.ratioOptions,
+    this.reorder,
   });
 
   final PosterKind kind;
   final PosterRatio ratio;
   final PosterStyleData data;
+
+  /// 可选：比例档位（如精选集海报的 3:4 / 1:1），非空时显示比例胶囊。
+  final List<PosterRatio>? ratioOptions;
+
+  /// 可选：照片排序 / 选择配置，非空时显示「照片顺序」面板。
+  final PosterReorderSpec? reorder;
 }
 
 class _PosterSheet extends StatefulWidget {
@@ -164,6 +211,15 @@ class _PosterSheetState extends State<_PosterSheet> {
 
   late String _selectedStyleId;
 
+  /// 当前海报比例（比例胶囊可切换；精选集海报支持 3:4 / 1:1）。
+  late PosterRatio _ratio;
+
+  /// 当前海报数据（比例切换 / 照片排序后重建，预览实时更新）。
+  late PosterStyleData _data;
+
+  /// 已按序选中的照片（照片排序面板状态，仅本次 Sheet 有效）。
+  late List<Object> _selected;
+
   /// 主效果卡片翻页控制器（左右滑动切换版式）。
   late final PageController _pageController;
 
@@ -172,10 +228,15 @@ class _PosterSheetState extends State<_PosterSheet> {
     super.initState();
     _posterKey = widget.posterKey ?? GlobalKey();
     final cfg = widget.stylePicker;
+    _ratio = cfg?.ratio ?? PosterRatio.ratio34;
+    final reorder = cfg?.reorder;
+    _selected = List<Object>.of(reorder?.initialSelected ?? const []);
+    _data = reorder != null
+        ? reorder.buildData(_ratio, List<Object>.of(_selected))
+        : (cfg?.data ?? _emptyPosterData());
     String selectedId = '';
     if (cfg != null) {
-      selectedId =
-          PosterStyleRegistry.defaultFor(cfg.kind, cfg.ratio)?.id ?? '';
+      selectedId = PosterStyleRegistry.defaultFor(cfg.kind, _ratio)?.id ?? '';
     }
     _selectedStyleId = selectedId;
     // showPoster 模式无样式选择（_styles 为空），创建兜底单页控制器。
@@ -210,7 +271,70 @@ class _PosterSheetState extends State<_PosterSheet> {
   List<PosterStyle> get _styles {
     final cfg = widget.stylePicker;
     if (cfg == null) return const [];
-    return PosterStyleRegistry.stylesFor(cfg.kind, cfg.ratio);
+    return PosterStyleRegistry.stylesFor(cfg.kind, _ratio);
+  }
+
+  /// showPoster（无样式选择）模式下的兜底空数据，仅占位，不参与渲染。
+  PosterStyleData _emptyPosterData() => PosterStyleData(
+        ratio: _ratio,
+        title: '',
+        category: '',
+        qrData: '',
+        qrHint: '',
+        qrSub: '',
+        shareText: '',
+        photoBuilder: (w, h) => SizedBox(width: w, height: h),
+      );
+
+  /// 切换比例档位：重建数据并按当前比例取默认样式。
+  void _onSelectRatio(PosterRatio r) {
+    if (r == _ratio) return;
+    final cfg = widget.stylePicker;
+    if (cfg == null) return;
+    setState(() {
+      _ratio = r;
+      _rebuildData();
+      _selectedStyleId = PosterStyleRegistry.defaultFor(cfg.kind, r)?.id ?? '';
+    });
+  }
+
+  /// 依当前比例与选中照片重建海报数据（仅 reorder 模式生效）。
+  void _rebuildData() {
+    final cfg = widget.stylePicker;
+    if (cfg?.reorder == null) return;
+    _data = cfg!.reorder!.buildData(_ratio, List<Object>.of(_selected));
+  }
+
+  /// 可选候选照片（全部可选 - 已选）。元素以相同实例复用，靠 identity 判定。
+  List<Object> get _reorderCandidates {
+    final spec = widget.stylePicker?.reorder;
+    if (spec == null) return const [];
+    return spec.allItems.where((it) => !_selected.contains(it)).toList();
+  }
+
+  void _onReorderPhoto(int oldIndex, int newIndex) {
+    if (newIndex > oldIndex) newIndex -= 1;
+    setState(() {
+      final it = _selected.removeAt(oldIndex);
+      _selected.insert(newIndex, it);
+      _rebuildData();
+    });
+  }
+
+  void _onRemovePhoto(Object item) {
+    setState(() {
+      _selected.remove(item);
+      _rebuildData();
+    });
+  }
+
+  void _onAddPhoto(Object item) {
+    final spec = widget.stylePicker?.reorder;
+    if (spec == null || _selected.length >= spec.maxCount) return;
+    setState(() {
+      _selected.add(item);
+      _rebuildData();
+    });
   }
 
   /// 海报导出目标宽度（物理 px）。
@@ -218,6 +342,30 @@ class _PosterSheetState extends State<_PosterSheet> {
   /// 按「目标宽度 / 画布逻辑宽」计算导出倍率，5 种比例海报统一以 ≥1080px
   /// 宽度出图（9:16 竖图 1080×1920），比固定 3x（9:16 仅 900 宽）更清晰。
   static const double kPosterExportWidth = 1080;
+
+  /// 比例档位胶囊（非空时才渲染；精选集海报：3:4 / 1:1）。
+  Widget _buildRatioPills(ThemeTokens t) {
+    final opts = widget.stylePicker?.ratioOptions;
+    if (opts == null || opts.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Wrap(
+          spacing: 8,
+          children: [
+            for (final r in opts)
+              _RatioPill(
+                label: r == PosterRatio.square ? '1:1 方版' : '3:4 竖版',
+                selected: r == _ratio,
+                onTap: () => _onSelectRatio(r),
+                seeds: t,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<ui.Image?> _captureImage() async {
     // 一律「内容级」捕获：直接捕获海报本体（样式选择模式取设计尺寸的
@@ -369,7 +517,9 @@ class _PosterSheetState extends State<_PosterSheet> {
                       if (widget.stylePicker != null) ...[
                         const SizedBox(height: 2),
                         Text(
-                          '切换版式，预览后导出或分享 · 左右滑动卡片切换',
+                          widget.stylePicker!.reorder != null
+                              ? '长按拖动照片可调整顺序 · 预览后导出或分享'
+                              : '切换版式，预览后导出或分享 · 左右滑动卡片切换',
                           style: TextStyle(
                             fontSize: 11,
                             color: t.textTertiary,
@@ -453,7 +603,7 @@ class _PosterSheetState extends State<_PosterSheet> {
                                       key: _styleContentKeys.putIfAbsent(
                                           i, () => GlobalKey()),
                                       child: style
-                                          .builder(widget.stylePicker!.data),
+                                          .builder(_data),
                                     ),
                                   ),
                                 ),
@@ -465,15 +615,32 @@ class _PosterSheetState extends State<_PosterSheet> {
               ),
             ),
           ),
+          // 比例档位胶囊（精选集海报：3:4 / 1:1）
+          _buildRatioPills(t),
           // 样式切换条（操作按钮与效果卡片之间，视觉重心仍在主效果卡片）
-          if (widget.stylePicker != null)
+          if (widget.stylePicker != null && _styles.length > 1)
             Padding(
               padding: const EdgeInsets.only(top: 12, bottom: 2),
               child: PosterStylePicker(
                 styles: _styles,
-                data: widget.stylePicker!.data,
+                data: _data,
                 selectedId: _selectedStyleId,
                 onSelect: _onSelectStyle,
+              ),
+            ),
+          // 照片顺序编辑面板（精选集海报拖拽排序 / 选照片）
+          if (widget.stylePicker?.reorder != null && _selected.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: _PosterReorderPanel(
+                tokens: t,
+                selected: _selected,
+                candidates: _reorderCandidates,
+                maxCount: widget.stylePicker!.reorder!.maxCount,
+                itemThumb: widget.stylePicker!.reorder!.itemThumb,
+                onReorder: _onReorderPhoto,
+                onRemove: _onRemovePhoto,
+                onAdd: _onAddPhoto,
               ),
             ),
 
@@ -586,6 +753,242 @@ class _PosterAction extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 单个比例档位胶囊（当前态金描边高亮）。
+class _RatioPill extends StatelessWidget {
+  const _RatioPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.seeds,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final ThemeTokens seeds;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? seeds.brandSubtle : seeds.surfaceAlt,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected ? seeds.brand : seeds.divider,
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected ? seeds.brandText : seeds.textTertiary,
+            letterSpacing: 1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 照片顺序编辑面板：已按序选中横排（长按拖拽调整、点 × 移除）+ 可选候选追加。
+class _PosterReorderPanel extends StatelessWidget {
+  const _PosterReorderPanel({
+    required this.tokens,
+    required this.selected,
+    required this.candidates,
+    required this.maxCount,
+    required this.itemThumb,
+    required this.onReorder,
+    required this.onRemove,
+    required this.onAdd,
+  });
+
+  final ThemeTokens tokens;
+  final List<Object> selected;
+  final List<Object> candidates;
+  final int maxCount;
+  final Widget Function(Object item, double size) itemThumb;
+  final void Function(int oldIndex, int newIndex) onReorder;
+  final void Function(Object item) onRemove;
+  final void Function(Object item) onAdd;
+
+  static const double _thumb = 54;
+  static const double _gap = 6;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = tokens;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: t.surfaceAlt,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.drag_indicator_rounded, size: 15, color: t.textTertiary),
+              const SizedBox(width: 4),
+              Text(
+                '照片顺序',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: t.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '已选 ${selected.length}/$maxCount',
+                style: TextStyle(fontSize: 10, color: t.textTertiary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // 已按序选中：横排，长按拖拽排序
+          // Flutter 3.7 的 ReorderableListView 不支持水平方向，用 RotatedBox 旋转垂直列表实现横排拖拽
+          SizedBox(
+            height: _thumb + 6,
+            child: selected.length == 1
+                ? Align(
+                    alignment: Alignment.topLeft,
+                    child: _orderedTile(selected.first, 0, showRemove: false),
+                  )
+                : RotatedBox(
+                    quarterTurns: 1,
+                    child: ReorderableListView.builder(
+                      buildDefaultDragHandles: false,
+                      padding: const EdgeInsets.only(bottom: 4),
+                      onReorder: onReorder,
+                      proxyDecorator: (child, index, animation) => Material(
+                        color: Colors.transparent,
+                        elevation: 3,
+                        borderRadius: BorderRadius.circular(6),
+                        clipBehavior: Clip.antiAlias,
+                        child: RotatedBox(quarterTurns: 3, child: child),
+                      ),
+                      itemCount: selected.length,
+                      itemBuilder: (context, index) => RotatedBox(
+                        quarterTurns: 3,
+                        child: _orderedTile(selected[index], index),
+                      ),
+                    ),
+                  ),
+          ),
+          // 可选候选：追加
+          if (candidates.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              '从全部中选择',
+              style: TextStyle(fontSize: 10, color: t.textTertiary),
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              height: _thumb + 6,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: candidates.length,
+                separatorBuilder: (_, __) => const SizedBox(width: _gap),
+                itemBuilder: (context, index) {
+                  final item = candidates[index];
+                  final full = selected.length >= maxCount;
+                  return GestureDetector(
+                    onTap: full ? null : () => onAdd(item),
+                    behavior: HitTestBehavior.opaque,
+                    child: Opacity(
+                      opacity: full ? .45 : 1,
+                      child: Container(
+                        width: _thumb,
+                        height: _thumb,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: t.divider, width: 1),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            itemThumb(item, _thumb),
+                            Center(
+                              child: Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(.45),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.add_rounded, size: 15, color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _orderedTile(Object item, int index, {bool showRemove = true}) {
+    final t = tokens;
+    final body = Container(
+      width: _thumb,
+      height: _thumb,
+      margin: const EdgeInsets.only(right: _gap),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: t.divider, width: 1),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          itemThumb(item, _thumb),
+          if (showRemove)
+            Positioned(
+              top: 2,
+              right: 2,
+              child: GestureDetector(
+                onTap: () => onRemove(item),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close_rounded, size: 11, color: Colors.white),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+    if (!showRemove) return body;
+    return ReorderableDelayedDragStartListener(
+      key: ValueKey<Object>(item),
+      index: index,
+      child: body,
     );
   }
 }

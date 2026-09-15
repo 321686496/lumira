@@ -1,4 +1,5 @@
 import 'package:lumira_app_flutter/features/checkin/widgets/checkin_poster_styles.dart';
+import 'package:lumira_app_flutter/features/profile/widgets/collection_poster_styles.dart';
 
 import 'photo_poster_styles.dart';
 import 'poster_ratio.dart';
@@ -19,6 +20,7 @@ class PosterStyleRegistry {
     ...templatePosterStyles(),
     ...photoPosterStyles(),
     ...checkinPosterStyles(),
+    ...collectionPosterStyles(),
   ];
 
   /// 该 kind + ratio 下可用的全部样式（保持注册顺序）。

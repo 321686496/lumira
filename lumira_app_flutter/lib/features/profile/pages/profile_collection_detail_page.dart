@@ -13,13 +13,15 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../features/checkin/widgets/checkin_poster_widgets.dart';
 import '../../../shared/services/poster_generator.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../../shared/widgets/poster/poster_ratio.dart';
+import '../../../shared/widgets/poster/poster_style_types.dart';
 import '../providers/collection_providers.dart';
-import '../widgets/collection_poster_generator.dart';
 
 /// 精选集详情页
 ///
@@ -182,29 +184,83 @@ class _DetailContent extends ConsumerWidget {
     );
   }
 
-  /// 精选集分享海报：生成「拼图海报」（名称 + 描述 + 照片拼图 + 二维码信息），
-  /// 可导出到相册或分享到系统社交媒体。
+  /// 精选集分享海报：光影纸册（clPaper）+ 比例切换（3:4 / 1:1）+
+  /// 照片拖拽排序 / 选照片（默认前 9 张，顺序仅本次海报有效，不写库）。
   Future<void> _showSharePoster(BuildContext context, WidgetRef ref) async {
     final tokens = ref.read(themeTokensProvider);
     final collection = data.collection;
-    final posterKey = GlobalKey();
-    await PosterGenerator.showPoster(
+
+    final service = await ref.read(collectionServiceProvider.future);
+    if (!context.mounted) return;
+    // 加载全部照片，供「选照片 + 排顺序」使用（默认前 9 张）。
+    final all = await service.getCollectionPhotos(collectionId, limit: 1000000);
+    if (!context.mounted) return;
+    if (all.isEmpty) {
+      LumiraToast.show(context, '暂无可分享的照片');
+      return;
+    }
+
+    final selected = all.take(9).toList(growable: false);
+    final dateText = DateFormat('yyyy.MM.dd').format(
+      DateTime.fromMillisecondsSinceEpoch(collection.createdAt),
+    );
+
+    PosterStyleData buildData(PosterRatio ratio, List<Object> ordered) {
+      return PosterStyleData(
+        ratio: ratio,
+        title: collection.name,
+        category: '',
+        qrData: '',
+        qrHint: '',
+        qrSub: '',
+        shareText: '我在如画精选了「${collection.name}」精选集，一起来看吧！',
+        photoBuilder: (w, h) => SizedBox(width: w, height: h),
+        note: collection.description ?? '',
+        dateText: dateText,
+        photoCount: collection.photoCount,
+        thumbBuilders: [
+          for (final item in ordered)
+            (w, h) => checkinPhoto(
+                  url: _photoUrlOf(item),
+                  tokens: tokens,
+                  width: w,
+                  height: h,
+                  radius: 0,
+                ),
+        ],
+      );
+    }
+
+    await PosterGenerator.showPosterWithStylePicker(
       context: context,
       tokens: tokens,
       title: '精选集海报',
-      content: CollectionPosterContent(
-        tokens: tokens,
-        name: collection.name,
-        description: collection.description,
-        photoCount: collection.photoCount,
-        createdAt: collection.createdAt,
-        photos: data.photos,
+      kind: PosterKind.collection,
+      ratio: PosterRatio.ratio34,
+      data: buildData(PosterRatio.ratio34, selected),
+      ratioOptions: const [PosterRatio.ratio34, PosterRatio.square],
+      reorder: PosterReorderSpec(
+        allItems: all,
+        initialSelected: selected,
+        itemThumb: (item, size) => checkinPhoto(
+          url: _photoUrlOf(item),
+          tokens: tokens,
+          width: size,
+          height: size,
+        ),
+        buildData: buildData,
+        maxCount: 9,
       ),
-      posterKey: posterKey,
       shareSubject: '如画 · 精选集：${collection.name}',
       shareText: '我在如画精选了「${collection.name}」精选集，一起来看吧！',
       fileNamePrefix: 'lumira_collection_${collection.name}',
     );
+  }
+
+  /// 取照片可渲染 url（dataUrl 优先，其次 filePath）。
+  String _photoUrlOf(Object item) {
+    final p = item as GalleryItemRecord;
+    return p.dataUrl ?? p.filePath ?? '';
   }
 
   /// 点击九宫格照片 → 打开全屏大图查看器（支持双指缩放 + 左右滑动切换）

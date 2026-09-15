@@ -50,7 +50,14 @@
 5. **详情页 `_showSharePoster`**：改调 `showPosterWithStylePicker`（kind=collection）；智能默认比例：照片数 ≤4 → 1:1，≥5 → 3:4；`ratioOptions=[ratio34, square]`；组装 `PosterStyleData`（title=集名、category=`${typeLabel} · 精选集`、note=描述、dateText、thumbBuilders=前 9 张、photoCount=真实收录数）。
 6. **清理**：`collection_poster_generator.dart` 确认无引用后删除。
 
-## 5. 测试与验收
+## 5. 照片排序（分享前自定义顺序）
+
+- 交互：分享海报前，Sheet 内新增「已选照片顺序编辑区」——已按序选中的照片横排缩略图，**长按拖拽调整顺序**、点右上角 × 移除；下方「从全部中选择」横排候选缩略图可点选追加（满 9 张后置灰禁用）。
+- 数量上限：最多 9 张（与宫格容量一致，来源于精选集真实收录照片，`limit` 取超大值拉全量）。
+- 数据流转：`PosterReorderSpec`（allItems / initialSelected / itemThumb / buildData / maxCount）持有排序与选择状态；顺序仅**本次海报临时有效**，不写库、不影响精选集原顺序。拖拽/增删时经 `buildData(ratio, ordered)` 实时重建海报数据并重绘预览。
+- 实现约束：Flutter 3.7.12 的 `ReorderableListView` 不支持水平方向，横排拖拽用 `RotatedBox(quarterTurns:1)` 包裹垂直 `ReorderableListView.builder` 实现，条目与 `proxyDecorator` 内各自 `RotatedBox(quarterTurns:3)` 回正。
+
+## 6. 测试与验收
 
 - 单测：
   1. `clPaper` 样式 × 两比例 × 张数（0/1/2/5/9）widget test：无 overflow、宫格 cell 数正确、收录数文案（含 N>9）正确；
@@ -60,7 +67,7 @@
 - 验证命令：`flutter analyze`（零告警）+ `flutter test`（相关套件全绿）。
 - 验收：1-9 张无溢出无拉伸；两比例档位可切实时预览；导出 PNG 宽 ≥1080px；任意 App 主题下导出外观一致；断网/空描述/空名称正常降级。
 
-## 6. 风险与约束
+## 7. 风险与约束
 
 - Dart 2.19.6 / Flutter 3.7.12：禁用 Dart 3 records/patterns 语法。
 - `_PosterSheet` 为三种海报共用：改动必须向后兼容，缺省路径不得引入行为差异。
