@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -66,10 +67,159 @@ class LumiraNav extends ConsumerStatefulWidget implements PreferredSizeWidget {
   ConsumerState<LumiraNav> createState() => _LumiraNavState();
 }
 
+/// 自适应顶栏布局 ID：leading / middle / trailing
+const _kLayoutLeading = 'leading';
+const _kLayoutMiddle = 'middle';
+const _kLayoutTrailing = 'trailing';
+
+/// 居中标题的真测量布局：
+/// - 先测量 leading / trailing（actions），用 max(leading,trailing)+gap 对称预留
+/// - 标题按可用宽度约束后仍居中
+/// - 取代旧的固定 `horizontalPadding + 72` 方案，根除"标题与右侧按钮重叠"
+/// - 标题可用空间过小时由 [_CrampedTitle] 用 LayoutBuilder 自判并淡出
+class _CenterToolbarLayout extends MultiChildLayoutDelegate {
+  _CenterToolbarLayout({
+    required this.barHeight,
+  });
+
+  final double barHeight;
+
+  /// leading 与 trailing 之间留出的最小水平间隙（dp）。
+  /// 旧行为无间隙，视觉挤；这里固定 8dp 呼吸。
+  static const double _sideGap = 8.0;
+
+  @override
+  void performLayout(Size size) {
+    final hasLeading = hasChild(_kLayoutLeading);
+    final hasTrailing = hasChild(_kLayoutTrailing);
+    final hasMiddle = hasChild(_kLayoutMiddle);
+
+    // 1) 测量 leading（宽松约束即可）
+    final leadingSize = hasLeading
+        ? layoutChild(
+            _kLayoutLeading,
+            BoxConstraints.loose(Size(size.width, barHeight)),
+          )
+        : Size.zero;
+
+    // 2) 测量 trailing（宽松约束即可）
+    final trailingSize = hasTrailing
+        ? layoutChild(
+            _kLayoutTrailing,
+            BoxConstraints.loose(Size(size.width, barHeight)),
+          )
+        : Size.zero;
+
+    // 3) 计算中间标题的可用宽度（对称预留，保留视觉居中）
+    final sideSpace =
+        math.max(leadingSize.width, trailingSize.width) + _sideGap;
+    final maxMiddleWidth =
+        math.max(0.0, size.width - 2 * sideSpace);
+
+    // 4) 测量 middle：maxWidth=可用宽度；shrink-fit（高度由内容决定）
+    final middleSize = hasMiddle
+        ? layoutChild(
+            _kLayoutMiddle,
+            BoxConstraints(
+              maxWidth: maxMiddleWidth,
+              maxHeight: barHeight,
+            ),
+          )
+        : Size.zero;
+
+    // 5) 定位（垂直居中）
+    if (hasLeading) {
+      positionChild(
+        _kLayoutLeading,
+        Offset(0, (size.height - leadingSize.height) / 2),
+      );
+    }
+    if (hasTrailing) {
+      positionChild(
+        _kLayoutTrailing,
+        Offset(
+          size.width - trailingSize.width,
+          (size.height - trailingSize.height) / 2,
+        ),
+      );
+    }
+    if (hasMiddle) {
+      final midX = (size.width - middleSize.width) / 2;
+      positionChild(
+        _kLayoutMiddle,
+        Offset(midX, (size.height - middleSize.height) / 2),
+      );
+    }
+  }
+
+  @override
+  bool shouldRelayout(_CenterToolbarLayout oldDelegate) {
+    return oldDelegate.barHeight != barHeight;
+  }
+}
+
+/// 包装居中标题：用 LayoutBuilder 读取父级约束的 maxWidth，判定是否淡出。
+///
+/// 判定规则（[requiredWidth] 为标题的固有宽度，null 表示非文本无法测量）：
+/// - available >= requiredWidth  → 完整显示
+/// - available <  requiredWidth 但 >= [floor] → 省略号截断（仍有信息价值）
+/// - available <  min(requiredWidth, floor)   → 淡出（太小，无意义）
+///
+/// 这样短标题（如"发现"）在窄空间里仍能显示，长标题优先截断而非整块消失，
+/// 只有连"照片预览"这种 4 字短标题都塞不下时才让位给 leading/actions。
+/// 在约束变化时（右侧动作栏出现/消失、旋转、字号改变）180ms 平滑过渡。
+class _CrampedTitle extends StatelessWidget {
+  const _CrampedTitle({required this.child, this.requiredWidth});
+
+  final Widget child;
+
+  /// 标题的固有宽度（dp）。null → 退化到 [_LumiraNavState._kMinTitleWidth]。
+  final double? requiredWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const floor = _LumiraNavState._kMinTitleWidth;
+        final need = requiredWidth == null
+            ? floor
+            : math.min(requiredWidth!, floor);
+        final cramped = constraints.maxWidth < need;
+        return IgnorePointer(
+          ignoring: cramped,
+          child: AnimatedOpacity(
+            opacity: cramped ? 0.0 : 1.0,
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _LumiraNavState extends ConsumerState<LumiraNav>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _sigmaCurve;
+
+  /// 标题的"可读性下限"宽度（dp）。
+  /// 可用宽度低于 min(标题固有宽度, 本值) 时才淡出——
+  /// 保证至少能显示「照片预览」这类 4 字中文标题（19dp × 4 ≈ 80dp）。
+  /// 高于该值一律显示（哪怕需要省略号截断），避免长标题整块消失。
+  static const double _kMinTitleWidth = 80.0;
+
+  /// 用 TextPainter 同步测量文本标题的固有宽度（dp）。
+  /// 仅用于 [_CrampedTitle] 的淡出判定，不参与布局，开销可忽略。
+  double _measureTitleWidth(String title, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: title, style: style),
+      maxLines: 1,
+      textDirection: TextDirection.ltr,
+    )..layout();
+    return painter.width;
+  }
 
   @override
   void initState() {
@@ -120,6 +270,62 @@ class _LumiraNavState extends ConsumerState<LumiraNav>
       spaced.add(actions[i]);
     }
     return spaced;
+  }
+
+  /// 将右侧 actions 包成一个固定 ID 的 LayoutId（用于自适应布局）。
+  /// 空 actions 时仍提供 40dp 占位（与旧行为一致：保留标题居中）。
+  Widget _actionsRow() {
+    final list = _actionsList();
+    return LayoutId(
+      id: _kLayoutTrailing,
+      child: list.length == 1
+          ? list.first
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: list,
+            ),
+    );
+  }
+
+  /// 居中标题的自适应顶栏：真测量 leading / actions 宽度后对称预留，
+  /// 避免重叠；当可用宽度小于 [_kMinTitleWidth] 时淡出标题，让位给 actions。
+  Widget _buildCenterToolbar({
+    required Widget leadingWidget,
+    required Widget? centerWidget,
+    required Widget actionsRow,
+    double? titleRequiredWidth,
+  }) {
+    final delegate = _CenterToolbarLayout(barHeight: 48);
+
+    return CustomMultiChildLayout(
+      delegate: delegate,
+      children: [
+        // 用 Padding 把 horizontalPadding 应用到 leading 与 trailing，
+        // 保持与旧实现一致的左右内边距（详情页 12dp、tab 页 24dp）
+        LayoutId(
+          id: _kLayoutLeading,
+          child: Padding(
+            padding: EdgeInsets.only(left: widget.horizontalPadding),
+            child: leadingWidget,
+          ),
+        ),
+        if (centerWidget != null)
+          LayoutId(
+            id: _kLayoutMiddle,
+            child: _CrampedTitle(
+              requiredWidth: titleRequiredWidth,
+              child: centerWidget,
+            ),
+          ),
+        LayoutId(
+          id: _kLayoutTrailing,
+          child: Padding(
+            padding: EdgeInsets.only(right: widget.horizontalPadding),
+            child: actionsRow,
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -173,6 +379,13 @@ class _LumiraNavState extends ConsumerState<LumiraNav>
     // Logo 升级：计算居中标题内容
     // - useWordmark=true → 品牌 SVG 文字标
     // - 否则若有 title → 纯文本标题
+    final titleStyle = TextStyle(
+      fontSize: 19, // 38rpx → 19dp
+      fontWeight: FontWeight.w600,
+      color: tokens.textPrimary,
+      letterSpacing: 0.04 * 19,
+      height: 1.3,
+    );
     final Widget? centerWidget = widget.useWordmark
         ? const LumiraLogo.wordmark(
             height: 22, // 略大于原 19dp 文本，承载 SVG 描边
@@ -181,17 +394,17 @@ class _LumiraNavState extends ConsumerState<LumiraNav>
         : (widget.title != null
             ? Text(
                 widget.title!,
-                style: TextStyle(
-                  fontSize: 19, // 38rpx → 19dp
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                  letterSpacing: 0.04 * 19,
-                  height: 1.3,
-                ),
+                style: titleStyle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               )
             : null);
+
+    // 文本标题的固有宽度（用于淡出判定；SVG 文字标无法同步测量 → null）
+    final double? titleRequiredWidth =
+        (!widget.useWordmark && widget.title != null)
+            ? _measureTitleWidth(widget.title!, titleStyle)
+            : null;
 
     // 性能(Forced fix): BackdropFilter 会令引擎把其背后的滚动内容单独成层，
     // 并在滚动时每帧重新捕获/合成该条区域——这是四个 Tab 页在 OHOS 上滚动掉帧的
@@ -207,39 +420,11 @@ class _LumiraNavState extends ConsumerState<LumiraNav>
         child: SizedBox(
           height: 48, // min-height 96rpx → 48dp
           child: widget.centerTitle
-              ? Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // 左侧
-                    Positioned(
-                      left: widget.horizontalPadding,
-                      child: leadingWidget,
-                    ),
-                    // 居中标题 / wordmark
-                    // 用水平内边距预留两侧 leading/actions 的空间，
-                    // 避免标题与较宽的右侧按钮（如编辑页的收藏+保存）重叠。
-                    if (centerWidget != null)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        child: Center(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: widget.horizontalPadding + 72,
-                            ),
-                            child: centerWidget,
-                          ),
-                        ),
-                      ),
-                    // 右侧
-                    Positioned(
-                      right: widget.horizontalPadding,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: _actionsList(),
-                      ),
-                    ),
-                  ],
+              ? _buildCenterToolbar(
+                  centerWidget: centerWidget,
+                  leadingWidget: leadingWidget,
+                  actionsRow: _actionsRow(),
+                  titleRequiredWidth: titleRequiredWidth,
                 )
               : Padding(
                   padding: EdgeInsets.symmetric(horizontal: widget.horizontalPadding),

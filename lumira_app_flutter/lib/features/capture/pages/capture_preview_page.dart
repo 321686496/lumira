@@ -106,6 +106,15 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 现在使用本地状态，保存时由 Task 10 从原图全量重新处理，拍摄页参数不受影响。
   late PostProcess _localPostProcess;
 
+  /// 诊断探针：记录上一次页面 build 的关键参数指纹，去重打印。
+  String _diagBuildSig = '';
+
+  /// 诊断探针：记录上一次照片内容 build 的指纹（url+门控+增量值），去重打印。
+  String _diagContentSig = '';
+
+  /// 诊断探针：记录上一次 setState 的参数指纹，去重打印。
+  String _diagSetStateSig = '';
+
   /// 照片已烘焙的后期参数（拍照时烘焙进 JPEG 的参数）。
   ///
   /// 修复"2x 参数"bug：拍照时色彩矩阵已烘焙进 JPEG（_processCaptureInIsolate
@@ -405,8 +414,13 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       _showReadOnlyToast();
       return;
     }
-    debugPrint('[edit-diag] preview setState smooth=${next.smoothStrength} '
-        'sharpen=${next.sharpen} pendingFinal=$_isPendingFinal');
+    final setStateSig = '${next.smoothStrength}|${next.sharpen}'
+        '|${next.vignette}|${next.grain}|${next.legStretch}';
+    if (setStateSig != _diagSetStateSig) {
+      _diagSetStateSig = setStateSig;
+      debugPrint('[edit-diag] preview setState fx=[$setStateSig] '
+          'pendingFinal=$_isPendingFinal state=${identityHashCode(this)}');
+    }
     setState(() {
       _localPostProcess = next;
       _isEdited = true;
@@ -642,11 +656,14 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         photoUrl.isNotEmpty && !photoUrl.startsWith('http');
     final useDetailFx =
         !isComparing && detailEffects.hasAnyEffect && sourceIsLocalFile;
-    if (detailEffects.hasAnyEffect) {
+    final contentSig = '$photoUrl|$useDetailFx'
+        '|${detailEffects.smoothStrength}|${detailEffects.sharpen}';
+    if (contentSig != _diagContentSig) {
+      _diagContentSig = contentSig;
       debugPrint('[edit-diag] preview build useDetailFx=$useDetailFx '
           'comparing=$isComparing local=$sourceIsLocalFile '
-          'smooth=${detailEffects.smoothStrength} sharpen=${detailEffects.sharpen} '
-          'url=$photoUrl');
+          'smooth=${detailEffects.smoothStrength} '
+          'sharpen=${detailEffects.sharpen} url=$photoUrl');
     }
     final Widget baseImage = useDetailFx
         ? DetailEffectsLayer(
@@ -716,7 +733,10 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     }
   }
 
-  /// 顶部 nav 分享按钮：弹出底部 Sheet
+  /// 顶部 nav 更多按钮：弹出底部 Sheet
+  ///
+  /// 顶栏动作精简为「保存 pill（编辑态）+ 更多」，原顶栏的
+  /// 删除 / 保存到系统相册两个图标收进这里，避免右动作栏过宽挤掉居中标题。
   Future<void> _onShare() async {
     final tokens = ref.read(themeTokensProvider);
     await showLumiraBottomSheet<void>(
@@ -724,13 +744,24 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       builder: (ctx) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // 非编辑态才显示：编辑态顶栏已有「保存」pill，功能重复
+          if (!_isEdited)
+            _ShareOption(
+              icon: Icons.save_alt_outlined,
+              text: '保存到相册',
+              tokens: tokens,
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _onSave();
+              },
+            ),
           _ShareOption(
-            icon: Icons.save_alt_outlined,
-            text: '保存到相册',
+            icon: Icons.save_alt,
+            text: '保存到系统相册',
             tokens: tokens,
             onTap: () {
               Navigator.of(ctx).pop();
-              _onSave();
+              _onSaveToAlbum();
             },
           ),
           _ShareOption(
@@ -761,6 +792,16 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
             },
           ),
           const SizedBox(height: 8),
+          _ShareOption(
+            icon: Icons.delete_outline,
+            text: '删除照片',
+            tokens: tokens,
+            danger: true,
+            onTap: () {
+              Navigator.of(ctx).pop();
+              _onDelete();
+            },
+          ),
           _ShareOption(
             icon: Icons.close,
             text: '取消',
@@ -1326,6 +1367,12 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
 
   @override
   Widget build(BuildContext context) {
+    final diagSig = '${_localPostProcess.smoothStrength},'
+        '${_localPostProcess.sharpen}|crop=$_isCropMode';
+    if (diagSig != _diagBuildSig) {
+      _diagBuildSig = diagSig;
+      debugPrint('[edit-diag] PAGE build fx=[$diagSig]');
+    }
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
     final appearance = ref.watch(CaptureState.captureAppearanceProvider);
@@ -1373,10 +1420,9 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                             isThemed: isThemed,
                             onBack: _back,
                             onShare: _onShare,
+                            // 删除 / 保存到系统相册已移入「更多」底部 Sheet
                             onSave: _onSave,
                             showSave: _isEdited,
-                            onDelete: _onDelete,
-                            onSaveToAlbum: _onSaveToAlbum,
                           ),
                           // 只读模式横幅：原图未保留时显示（位于导航栏下方）
                           if (_isReadOnly)
@@ -1602,7 +1648,10 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
 }
 
 /// 顶部导航（LumiraNav transparent: true + 自定义返回按钮 + 顶栏动作图标）
-/// 保存 pill（编辑态）/ 删除 / 保存到系统相册 / 分享
+///
+/// 右侧动作栏最多 2 个：保存 pill（仅编辑态）+ 更多（⋮）。
+/// 删除 / 保存到系统相册收进「更多」底部 Sheet——顶栏塞 4 个动作约 190dp，
+/// 会把居中标题「照片预览」挤没或压在下面。
 class _PreviewNav extends StatelessWidget {
   const _PreviewNav({
     required this.tokens,
@@ -1611,8 +1660,6 @@ class _PreviewNav extends StatelessWidget {
     required this.onShare,
     this.onSave,
     this.showSave = false,
-    this.onDelete,
-    this.onSaveToAlbum,
   });
 
   final ThemeTokens tokens;
@@ -1622,17 +1669,13 @@ class _PreviewNav extends StatelessWidget {
   final bool isThemed;
 
   final VoidCallback onBack;
+
+  /// 打开「更多」底部 Sheet（分享到系统 / 保存到系统相册 / 对比图 / EXIF / 删除）
   final VoidCallback onShare;
 
   /// 编辑态右上角保存按钮：仅当 showSave 为 true 时显示
   final VoidCallback? onSave;
   final bool showSave;
-
-  /// 删除当前照片（原底部悬浮组操作，收进顶栏）
-  final VoidCallback? onDelete;
-
-  /// 保存到系统相册（原底部悬浮组操作，收进顶栏）
-  final VoidCallback? onSaveToAlbum;
 
   @override
   Widget build(BuildContext context) {
@@ -1642,19 +1685,25 @@ class _PreviewNav extends StatelessWidget {
       child: LumiraNav(
         title: '照片预览',
         transparent: true,
+        // 沉浸式预览页：左右内边距收窄到 12（与下方对比按钮的 right:12 对齐），
+        // 给居中标题留出更多可用宽度
+        horizontalPadding: 12,
         leading: _NavBackButton(
           onTap: onBack,
           color: isThemed ? tokens.textPrimary : tokens.textInverse,
         ),
+        // 右侧动作精简为最多 2 个（保存 pill + 更多），
+        // 删除 / 保存到系统相册已收进「更多」底部 Sheet，
+        // 否则 4 个动作 ≈190dp 会挤掉「照片预览」标题。
         actions: [
           if (showSave && onSave != null)
             GestureDetector(
               onTap: onSave,
               behavior: HitTestBehavior.opaque,
               child: Container(
-                margin: const EdgeInsets.only(right: 4),
+                margin: const EdgeInsets.only(right: 2),
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
@@ -1667,12 +1716,12 @@ class _PreviewNav extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.save_outlined,
-                        size: 14, color: tokens.textInverse),
-                    const SizedBox(width: 4),
+                        size: 13, color: tokens.textInverse),
+                    const SizedBox(width: 3),
                     Text(
                       '保存',
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 12.5,
                         fontWeight: FontWeight.w500,
                         color: tokens.textInverse,
                       ),
@@ -1681,25 +1730,13 @@ class _PreviewNav extends StatelessWidget {
                 ),
               ),
             ),
-          if (onDelete != null)
-            _NavIcon(
-                icon: Icons.delete_outline,
-                onTap: onDelete!,
-                tokens: tokens,
-                isThemed: isThemed),
-          if (onSaveToAlbum != null)
-            _NavIcon(
-                icon: Icons.save_alt,
-                onTap: onSaveToAlbum!,
-                tokens: tokens,
-                isThemed: isThemed),
           GestureDetector(
             onTap: onShare,
             behavior: HitTestBehavior.opaque,
             child: Padding(
               padding: const EdgeInsets.all(8),
               child: Icon(
-                Icons.ios_share_outlined,
+                Icons.more_vert,
                 size: 22,
                 color: isThemed ? tokens.textPrimary : tokens.textInverse,
               ),
@@ -1733,45 +1770,13 @@ class _NavBackButton extends StatelessWidget {
   }
 }
 
-/// 顶栏动作图标（叠照片浮层）
-class _NavIcon extends StatelessWidget {
-  const _NavIcon({
-    required this.icon,
-    required this.onTap,
-    required this.tokens,
-    required this.isThemed,
-  });
-
-  final IconData icon;
-  final VoidCallback onTap;
-  final ThemeTokens tokens;
-
-  /// 跟随主题模式：textPrimary（画布底可读）；沉浸式：textInverse（深底白字）
-  final bool isThemed;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(
-          icon,
-          size: 22,
-          color: isThemed ? tokens.textPrimary : tokens.textInverse,
-        ),
-      ),
-    );
-  }
-}
-
 class _ShareOption extends StatelessWidget {
   const _ShareOption({
     required this.icon,
     required this.text,
     required this.onTap,
     required this.tokens,
+    this.danger = false,
   });
 
   final IconData icon;
@@ -1779,16 +1784,20 @@ class _ShareOption extends StatelessWidget {
   final VoidCallback onTap;
   final ThemeTokens tokens;
 
+  /// 危险操作（如删除照片）：图标与文字用 danger 色，与普通项区分
+  final bool danger;
+
   @override
   Widget build(BuildContext context) {
+    final color = danger ? tokens.danger : tokens.textPrimary;
     return LumiraListTile(
-      leading: Icon(icon, size: 22, color: tokens.textPrimary),
+      leading: Icon(icon, size: 22, color: color),
       title: Text(
         text,
         style: TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w500,
-          color: tokens.textPrimary,
+          color: color,
         ),
       ),
       onTap: onTap,

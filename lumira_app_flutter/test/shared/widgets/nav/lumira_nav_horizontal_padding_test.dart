@@ -21,17 +21,21 @@ void main() {
     expect(nav.horizontalPadding, 24.0);
   });
 
-  testWidgets('LumiraNav horizontalPadding=12 applies to leading Positioned', (tester) async {
+  testWidgets('LumiraNav horizontalPadding=12 applies to leading Padding', (tester) async {
     await tester.pumpWidget(_wrap(LumiraNav(
       title: 'T',
       horizontalPadding: 12.0,
       leading: const Text('L'),
     )));
     await tester.pumpAndSettle();
-    // centerTitle=true default → leading uses Positioned(left: horizontalPadding)
-    final positioned = find.byWidgetPredicate((w) =>
-        w is Positioned && w.left == 12.0);
-    expect(positioned, findsWidgets);
+    // 中心标题分支改用自适应布局（CustomMultiChildLayout）后，
+    // leading 上的水平内边距通过 Padding(left: horizontalPadding) 实现，
+    // 不再使用 Positioned(left: ...)。
+    final padding = find.byWidgetPredicate((w) =>
+        w is Padding &&
+        w.padding is EdgeInsets &&
+        (w.padding as EdgeInsets).left == 12.0);
+    expect(padding, findsWidgets);
   });
 
   testWidgets('LumiraNav horizontalPadding=16 applies to non-centerTitle Padding', (tester) async {
