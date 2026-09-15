@@ -5,15 +5,19 @@ import 'package:zxing2/qrcode.dart';
 
 /// 从图片字节流解码二维码文本，未识别到返回 null。
 ///
-/// 采用「快速路径 → 阈值二值化 → linear 2x 兜底」多策略解码，对齐微信等
-/// 主流扫码工具的识别能力与速度：
-/// - 快速路径：原图直解（清晰图一次命中，约 40ms 级）
-/// - 增强路径 A：Rec.601 亮度 + Otsu 自适应阈值二值化（约 200ms 级）——
-///   救回大图 / 光照不均 / 压缩失真的二维码，无需放大，避免整图 2x 的
-///   数秒级耗时（旧实现 cubic 2x 在 1080w 海报上实测 ~4-25s，是本问题
-///   「等五六秒」的根因）
-/// - 增强路径 B：linear 2x 放大 + TRY_HARDER（Hybrid 二值化）——兜底救回
-///   小模块 / 边缘略糊的二维码；基于限幅后的工作图，避免内存爆炸
+/// 采用「先限幅 → 快速直解 → 阈值二值化 → 2x 兜底 → 原图兜底」策略，对齐
+/// 微信等主流扫码工具的识别能力与速度：
+/// - 预处理：先限幅到最长边 2048 的「工作图」——手机照片普遍 12MP，
+///   在原尺寸上做逐像素 RGBA 转换 / 二值化 / 解码是此前「识别要等好几秒」
+///   的根因；二维码识别不依赖全分辨率，限幅后所有常规策略都快一个量级
+/// - 快速路径：工作图直解（清晰图一次命中，几十 ms 级）
+/// - 增强路径 A：Rec.601 亮度 + Otsu 自适应阈值二值化——救回大图 /
+///   光照不均 / 压缩失真的二维码（多阈值循环在工作图上跑，开销可控）
+/// - 增强路径 B：linear 2x 放大 + TRY_HARDER（Hybrid 二值化）——救回
+///   小模块 / 边缘略糊的二维码
+/// - 原图兜底：仅当原图大于工作图且以上全部失败时，才在原图（限幅内）
+///   上做一次阈值尝试，覆盖「二维码在超大海报中占比极小、限幅后模块
+///   过小」的极端场景（只在失败场景付出代价，不拖慢常规路径）
 ///
 /// 本函数为纯 Dart 顶层函数，可直接作为 `compute`（后台 isolate）的入口，
 /// 避免在 UI 线程上执行解码导致界面卡顿。
@@ -21,17 +25,30 @@ String? decodeQrFromBytes(List<int> bytes) {
   final image = img.decodeImage(Uint8List.fromList(bytes));
   if (image == null) return null;
 
-  // 快速路径：清晰图一次命中，零开销
-  final fast = _decodeOnce(image);
+  // 预处理：限幅出工作图，所有常规策略在工作图上执行
+  final work = _boundedSource(image);
+  final downscaled = !identical(work, image);
+
+  // 快速路径：清晰图一次命中，零额外开销
+  final fast = _decodeOnce(work);
   if (fast != null) return fast;
 
-  // 增强路径 A：阈值二值化（线性开销，远快于 2x 放大，识别率更高）
-  final threshold = _decodeThreshold(image);
+  // 增强路径 A：阈值二值化（线性开销，识别率高于盲放大）
+  final threshold = _decodeThreshold(work);
   if (threshold != null) return threshold;
 
-  // 增强路径 B：linear 2x 兜底（基于限幅后的工作图）
-  final work = _boundedSource(image);
-  return _decodeOnce(work, scale: 2, tryHarder: true);
+  // 增强路径 B：linear 2x 兜底（基于工作图，限幅后不会内存爆炸）
+  final scaled = _decodeOnce(work, scale: 2, tryHarder: true);
+  if (scaled != null) return scaled;
+
+  // 原图兜底：限幅可能伤害「大图中的极小二维码」，仅在以上全部失败时
+  // 用原图做一次阈值尝试（原图通常 12MP 级，这一步本身可达秒级，
+  // 所以放在最后，成功即返回、失败也只付出一次代价）。
+  if (downscaled) {
+    final original = _decodeThreshold(image);
+    if (original != null) return original;
+  }
+  return null;
 }
 
 /// 将超大图等比缩到增强路径可接受的尺寸（最长边 ≤ 2048），避免 2x 放大内存爆炸。

@@ -58,6 +58,11 @@ public class QRView:NSObject,FlutterPlatformView {
     }
     
     public func view() -> UIView {
+        // 注册点击对焦手势（防重复添加）：近距离取景时用户可点击目标位置立即合焦
+        if previewView.gestureRecognizers?.contains(where: { $0 is UITapGestureRecognizer }) != true {
+            let tap = UITapGestureRecognizer(target: self, action: #selector(handleTapToFocus(_:)))
+            previewView.addGestureRecognizer(tap)
+        }
         channel.setMethodCallHandler({
             [weak self] (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
             switch(call.method){
@@ -274,9 +279,14 @@ public class QRView:NSObject,FlutterPlatformView {
                     position: (self.cameraFacing == MTBCamera.front) ? .front : .back)
             guard let device = device else { return }
             self.applyBestFocus(on: device)
-            // preset 提升引发的连接重建是异步完成的，延时再补一次对焦/曝光配置，
-            // 避免刚设好的连续自动对焦被重建过程清掉。
+            // preset 提升引发的连接重建是异步完成的，延时再补两次对焦/曝光配置，
+            // 避免刚设好的连续自动对焦被重建过程清掉（部分机型重建耗时超过
+            // 0.2s，故 0.2s 与 0.8s 各补一次）。
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                guard let self = self else { return }
+                self.applyBestFocus(on: device)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 guard let self = self else { return }
                 self.applyBestFocus(on: device)
             }
@@ -290,22 +300,29 @@ public class QRView:NSObject,FlutterPlatformView {
         NSLog("[QRView] high-quality configured preset=%@", session.sessionPreset.rawValue)
     }
 
-    /// 对指定摄像头应用「连续自动对焦/曝光 + 中央聚焦 + 近距优先」。
+    /// 对指定摄像头应用「中央聚焦 + 连续自动对焦/曝光 + 近距优先」。
     ///
-    /// lockForConfiguration 对同一设备是安全的，失败（如设备忙）时静默回退、不阻断
-    /// 扫码。提取为复用方法，供 preset 提升前后各调用一次，覆盖会话重建导致的配置回退。
+    /// 注意顺序：AVFoundation 要求先设置 focusPointOfInterest /
+    /// exposurePointOfInterest，再设置 focusMode / exposureMode——
+    /// 反过来先设模式再设点，焦点点不会生效（此前「近距离仍模糊」的根因之一）。
+    /// lockForConfiguration 对同一设备是安全的，失败（如设备忙）时静默回退、
+    /// 不阻断扫码。提取为复用方法，供 preset 提升前后各调用一次，覆盖会话
+    /// 重建导致的配置回退。
     @available(iOS 10.0, *)
     private func applyBestFocus(on device: AVCaptureDevice) {
         do {
             try device.lockForConfiguration()
+            if device.isFocusPointOfInterestSupported {
+                device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+            }
             if device.isFocusModeSupported(.continuousAutoFocus) {
                 device.focusMode = .continuousAutoFocus
             }
+            if device.isExposurePointOfInterestSupported {
+                device.exposurePointOfInterest = CGPoint(x: 0.5, y: 0.5)
+            }
             if device.isExposureModeSupported(.continuousAutoExposure) {
                 device.exposureMode = .continuousAutoExposure
-            }
-            if device.isFocusPointOfInterestSupported {
-                device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
             }
             if device.isAutoFocusRangeRestrictionSupported {
                 device.autoFocusRangeRestriction = .near
@@ -313,6 +330,46 @@ public class QRView:NSObject,FlutterPlatformView {
             device.unlockForConfiguration()
         } catch {
             // 配置失败（如设备忙）时保持默认行为，不阻断扫码
+        }
+    }
+
+    /// 点击对焦：把点击位置换算成相机设备坐标并单次对焦，稍后恢复连续对焦。
+    ///
+    /// 靠近二维码时若连续对焦仍在拉风箱，用户点击取景框内目标位置可立即
+    /// 合焦（对齐微信等主流扫码体验）。坐标转换用 previewLayer 的
+    /// captureDevicePointConverted(fromLayerPoint:)，自动处理预览方向与
+    /// videoGravity 裁剪。
+    @objc private func handleTapToFocus(_ gesture: UITapGestureRecognizer) {
+        guard #available(iOS 10.0, *),
+              let scanner = self.scanner,
+              let previewLayer = scanner.previewLayer as? AVCaptureVideoPreviewLayer,
+              let session = previewLayer.session else { return }
+        let device = session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.first?.device
+        guard let device = device else { return }
+        let tapPoint = gesture.location(in: previewView)
+        let devicePoint = previewLayer.captureDevicePointConverted(fromLayerPoint: tapPoint)
+        do {
+            try device.lockForConfiguration()
+            if device.isFocusPointOfInterestSupported {
+                device.focusPointOfInterest = devicePoint
+            }
+            // 单次自动对焦立即合焦；同时把曝光测光点带到点击处
+            if device.isFocusModeSupported(.autoFocus) {
+                device.focusMode = .autoFocus
+            }
+            if device.isExposurePointOfInterestSupported {
+                device.exposurePointOfInterest = devicePoint
+            }
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposureMode = .continuousAutoExposure
+            }
+            device.unlockForConfiguration()
+        } catch {
+            return
+        }
+        // 单次对焦合焦后恢复连续自动对焦，保持后续移动取景仍能跟焦
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            self?.applyBestFocus(on: device)
         }
     }
 
