@@ -88,6 +88,15 @@ export struct OhosView {
   }
 
   onPageShow(): void {
+    // 首次打开时，系统相机权限弹窗会打断页面生命周期：返回前台触发本回调时，
+    // XComponent 可能尚未 onLoad（userGrant 在授权后才置位），此时 surfaceId 仍为
+    // 空。若用空 surfaceId 去 initCamera，会抢占相机设备却绑不到有效预览 surface，
+    // 导致随后 onLoad→scan() 的真正初始化失败，画面黑屏。surfaceId 就绪前直接跳过，
+    // 相机统一由 onLoad→scan() 在 surfaceId 就绪后启动。
+    if (!this.surfaceId) {
+      console.info(TAG + 'onPageShow skip: surfaceId not ready');
+      return;
+    }
     this.cameraService!.initCamera(this.surfaceId, this.isFront)
     if (!this.isFront) {
       this.timerId = setTimeout(() => {
@@ -206,7 +215,9 @@ export struct OhosView {
       }
     }
     if (!this.userGrant) {
-      this.channel!.invokeMethod(ChannelMethods.CHANNEL_METHOD_ON_PERMISSION_SET, this.userGrant);
+      // 首次打开时 onStartScan（下发 channel）与授权弹窗的时序不固定，channel 可能
+      // 尚未就绪，做空判兜底，避免授权结果回调时崩溃。
+      this.channel?.invokeMethod(ChannelMethods.CHANNEL_METHOD_ON_PERMISSION_SET, this.userGrant);
     }
   }
 

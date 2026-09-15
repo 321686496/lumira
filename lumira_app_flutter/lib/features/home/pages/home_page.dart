@@ -511,6 +511,7 @@ class _SceneRecoGridSliver extends ConsumerWidget {
           child: SizedBox(
             height: 248,   // align with RecommendedTemplate card (130x248)
             child: ListView.separated(
+              clipBehavior: Clip.none,
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20),
               itemCount: scenes.length,
@@ -589,6 +590,7 @@ class _RecentShotsGridSliver extends ConsumerWidget {
           child: SizedBox(
             height: 248,   // align with RecommendedTemplate card (130x248)
             child: ListView.separated(
+              clipBehavior: Clip.none,
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20),
               itemCount: recents.length,
@@ -618,8 +620,9 @@ class _RecentShotsGridSliver extends ConsumerWidget {
     final mocks = HomeMockData.recents;
     return SliverToBoxAdapter(
       child: SizedBox(
-        height: 264,
+        height: 248,   // align with RecommendedTemplate card (130x248)
         child: ListView.separated(
+          clipBehavior: Clip.none,
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 20),
           itemCount: mocks.length,

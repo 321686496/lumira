@@ -261,8 +261,11 @@ public class QRView:NSObject,FlutterPlatformView {
         session.commitConfiguration()
 
         // 2. 连续自动对焦/自动曝光 + 中央聚焦 + 近距优先。
-        //    MTBBarcodeScanner 虽在设备创建时已设 continuousAutoFocus，但会话
-        //    格式切换可能重置设备配置，这里用会话实际使用的设备再兜底强制一次。
+        //    MTBBarcodeScanner 虽在设备创建时已设 continuousAutoFocus，但上面把预览
+        //    preset 从默认 High(720p) 提升到 1080p，会让 AVFoundation 重建会话连接，
+        //    从而把刚设好的自动对焦/曝光重置回默认——这正是「手机拉近二维码后画面
+        //    仍发虚」的根因之一。这里立即应用一次，并在会话稳定后再延时补一次，
+        //    确保连续对焦在分辨率提升之后依然生效（近距离取景保持清晰）。
         if #available(iOS 10.0, *) {
             let device = (session.inputs.compactMap { $0 as? AVCaptureDeviceInput }
                 .first?.device)
@@ -270,23 +273,12 @@ public class QRView:NSObject,FlutterPlatformView {
                     .builtInWideAngleCamera, for: .video,
                     position: (self.cameraFacing == MTBCamera.front) ? .front : .back)
             guard let device = device else { return }
-            do {
-                try device.lockForConfiguration()
-                if device.isFocusModeSupported(.continuousAutoFocus) {
-                    device.focusMode = .continuousAutoFocus
-                }
-                if device.isExposureModeSupported(.continuousAutoExposure) {
-                    device.exposureMode = .continuousAutoExposure
-                }
-                if device.isFocusPointOfInterestSupported {
-                    device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
-                }
-                if device.isAutoFocusRangeRestrictionSupported {
-                    device.autoFocusRangeRestriction = .near
-                }
-                device.unlockForConfiguration()
-            } catch {
-                // 配置失败（如设备忙）时保持默认行为，不阻断扫码
+            self.applyBestFocus(on: device)
+            // preset 提升引发的连接重建是异步完成的，延时再补一次对焦/曝光配置，
+            // 避免刚设好的连续自动对焦被重建过程清掉。
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                guard let self = self else { return }
+                self.applyBestFocus(on: device)
             }
         }
 
@@ -296,6 +288,32 @@ public class QRView:NSObject,FlutterPlatformView {
         }
 
         NSLog("[QRView] high-quality configured preset=%@", session.sessionPreset.rawValue)
+    }
+
+    /// 对指定摄像头应用「连续自动对焦/曝光 + 中央聚焦 + 近距优先」。
+    ///
+    /// lockForConfiguration 对同一设备是安全的，失败（如设备忙）时静默回退、不阻断
+    /// 扫码。提取为复用方法，供 preset 提升前后各调用一次，覆盖会话重建导致的配置回退。
+    @available(iOS 10.0, *)
+    private func applyBestFocus(on device: AVCaptureDevice) {
+        do {
+            try device.lockForConfiguration()
+            if device.isFocusModeSupported(.continuousAutoFocus) {
+                device.focusMode = .continuousAutoFocus
+            }
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposureMode = .continuousAutoExposure
+            }
+            if device.isFocusPointOfInterestSupported {
+                device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+            }
+            if device.isAutoFocusRangeRestrictionSupported {
+                device.autoFocusRangeRestriction = .near
+            }
+            device.unlockForConfiguration()
+        } catch {
+            // 配置失败（如设备忙）时保持默认行为，不阻断扫码
+        }
     }
 
     /// 识别到首个有效码后经平台通道回传一次，并立即置位停止后续重复回传。
