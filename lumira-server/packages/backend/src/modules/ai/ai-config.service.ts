@@ -26,6 +26,8 @@ export interface AiConfigView {
   textPlatform: { provider: string; baseUrl: string; apiKeyMasked: string } | null;
   /** 生图模态独立平台（null = 跟随共享平台） */
   imagePlatform: { provider: string; baseUrl: string; apiKeyMasked: string } | null;
+  /** 剪影模态独立平台（null = 跟随生图模态） */
+  silhouettePlatform: { provider: string; baseUrl: string; apiKeyMasked: string } | null;
   /** 剪影专用模型：null = 与生图模型一致 */
   silhouetteModel: string | null;
   enabled: boolean;
@@ -47,7 +49,9 @@ export interface ActiveAiConfig {
   text: AiModalityEndpoint;
   /** 生图模态：独立平台 ?? 共享平台 */
   image: AiModalityEndpoint;
-  /** 生效的剪影模型（未单独指定时已回退为 imageModel；平台走 image 模态端点，调用方直接使用） */
+  /** 剪影模态：独立平台 ?? 生图模态端点；model = 生效剪影模型（silhouetteModel || imageModel，调用方直接使用） */
+  silhouette: AiModalityEndpoint;
+  /** 生效的剪影模型（未单独指定时已回退为 imageModel） */
   silhouetteModel: string;
   /** 是否配置了独立文本模型（连通测试分支用） */
   hasCustomTextModel: boolean;
@@ -108,6 +112,10 @@ export class AiConfigService {
         row.imageProvider && row.imageBaseUrl
           ? { provider: row.imageProvider, baseUrl: row.imageBaseUrl, apiKeyMasked: maskKey(row.imageApiKey ?? '') }
           : null,
+      silhouettePlatform:
+        row.silhouetteProvider && row.silhouetteBaseUrl
+          ? { provider: row.silhouetteProvider, baseUrl: row.silhouetteBaseUrl, apiKeyMasked: maskKey(row.silhouetteApiKey ?? '') }
+          : null,
       silhouetteModel: row.silhouetteModel ?? null,
       enabled: row.enabled === 1,
     };
@@ -157,6 +165,23 @@ export class AiConfigService {
       imageApiKey = resolvedImageApiKey;
     }
 
+    // 剪影模态独立平台组：语义同生图组（剪影模型 silhouetteModel 仍可选，缺省回退生图模型）
+    let silhouetteProvider: string | null = null;
+    let silhouetteBaseUrl: string | null = null;
+    let silhouetteApiKey: string | null = null;
+    if (dto.silhouetteProvider?.trim()) {
+      if (!dto.silhouetteBaseUrl?.trim()) {
+        throw new BadRequestException('剪影独立平台必须填写 baseUrl');
+      }
+      const resolvedSilhouetteApiKey = dto.silhouetteApiKey?.trim() || existing?.silhouetteApiKey;
+      if (!resolvedSilhouetteApiKey) {
+        throw new BadRequestException('首次配置独立平台必须填写 API Key');
+      }
+      silhouetteProvider = dto.silhouetteProvider;
+      silhouetteBaseUrl = dto.silhouetteBaseUrl.trim();
+      silhouetteApiKey = resolvedSilhouetteApiKey;
+    }
+
     if (!existing) {
       if (!dto.apiKey) {
         throw new BadRequestException('首次配置必须填写 API Key');
@@ -175,6 +200,9 @@ export class AiConfigService {
         imageProvider,
         imageBaseUrl,
         imageApiKey,
+        silhouetteProvider,
+        silhouetteBaseUrl,
+        silhouetteApiKey,
         silhouetteModel,
         enabled: dto.enabled ? 1 : 0,
         createdAt: now,
@@ -195,6 +223,9 @@ export class AiConfigService {
           imageProvider,
           imageBaseUrl,
           imageApiKey,
+          silhouetteProvider,
+          silhouetteBaseUrl,
+          silhouetteApiKey,
           silhouetteModel,
           enabled: dto.enabled ? 1 : 0,
           apiKey: dto.apiKey ? dto.apiKey : existing.apiKey, // 留空 = 不改
@@ -241,11 +272,12 @@ export class AiConfigService {
             timeoutMs: 30_000,
           });
         } else {
+          const endpoint = target === 'silhouette' ? cfg.silhouette : cfg.image;
           await generateImage(
-            target === 'silhouette' ? { ...cfg.image, model: cfg.silhouetteModel } : cfg.image,
+            endpoint,
             {
               prompt: 'connectivity test',
-              size: mapSize(cfg.image.provider, '1:1'),
+              size: mapSize(endpoint.provider, '1:1'),
               referenceBase64: target === 'silhouette' ? TEST_IMAGE_PNG_B64 : undefined,
               referenceMime: target === 'silhouette' ? 'image/png' : undefined,
             },
@@ -275,16 +307,22 @@ export class AiConfigService {
     // 独立平台「存在」= provider + baseUrl + apiKey 三者齐全（任缺其一视为未配置，防止手工 SQL 缺 key 时把 null 直达上游客户端）
     const hasTextPlatform = Boolean(row.textProvider?.trim() && row.textBaseUrl?.trim() && row.textApiKey?.trim());
     const hasImagePlatform = Boolean(row.imageProvider?.trim() && row.imageBaseUrl?.trim() && row.imageApiKey?.trim());
+    const hasSilhouettePlatform = Boolean(row.silhouetteProvider?.trim() && row.silhouetteBaseUrl?.trim() && row.silhouetteApiKey?.trim());
     const shared = { provider: row.provider, baseUrl: row.baseUrl, apiKey: row.apiKey };
+    const image = hasImagePlatform
+      ? { provider: row.imageProvider as string, baseUrl: row.imageBaseUrl as string, apiKey: row.imageApiKey as string, model: row.imageModel }
+      : { ...shared, model: row.imageModel };
+    const silhouetteModel = row.silhouetteModel?.trim() || row.imageModel;
     return {
       vision: { ...shared, model: row.visionModel },
       text: hasTextPlatform
         ? { provider: row.textProvider as string, baseUrl: row.textBaseUrl as string, apiKey: row.textApiKey as string, model: row.textModel as string }
         : { ...shared, model: hasCustomTextModel ? (row.textModel as string) : row.visionModel },
-      image: hasImagePlatform
-        ? { provider: row.imageProvider as string, baseUrl: row.imageBaseUrl as string, apiKey: row.imageApiKey as string, model: row.imageModel }
-        : { ...shared, model: row.imageModel },
-      silhouetteModel: row.silhouetteModel?.trim() || row.imageModel,
+      image,
+      silhouette: hasSilhouettePlatform
+        ? { provider: row.silhouetteProvider as string, baseUrl: row.silhouetteBaseUrl as string, apiKey: row.silhouetteApiKey as string, model: silhouetteModel }
+        : { ...image, model: silhouetteModel },
+      silhouetteModel,
       hasCustomTextModel,
     };
   }

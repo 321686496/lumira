@@ -54,6 +54,7 @@ const ACTIVE_CFG = {
   vision: { ...IMAGE_ENDPOINT, model: 'qwen-vl-max' },
   text: { ...IMAGE_ENDPOINT, model: 'qwen-plus' },
   image: IMAGE_ENDPOINT,
+  silhouette: { ...IMAGE_ENDPOINT, model: 'wanx-sil-special' },
   silhouetteModel: 'wanx-sil-special',
   hasCustomTextModel: true,
 };
@@ -179,10 +180,10 @@ describe('AiSilhouetteService', () => {
 
       const res = await service.generate(image(), JSON.stringify({ mode: 'sketch', crop: false, engine: 'ai' }));
 
-      // 生图参数：剪影模型覆盖 imageModel；线稿提示词；800x600 → 4:3；参考图 = 源图 base64
+      // 生图参数：剪影端点（专用剪影模型，可独立于生图平台）；线稿提示词；800x600 → 4:3；参考图 = 源图 base64
       expect(generateImageMock).toHaveBeenCalledTimes(1);
       const [genCfg, genInput] = generateImageMock.mock.calls[0];
-      expect(genCfg).toEqual({ ...ACTIVE_CFG.image, model: 'wanx-sil-special' });
+      expect(genCfg).toEqual(ACTIVE_CFG.silhouette);
       expect(genInput.prompt).toContain('线稿');
       expect(genInput.size).toBe('1280*720'); // mapSize('qwen','4:3')
       expect(genInput.referenceBase64).toBe(Buffer.from('fake-jpeg-bytes').toString('base64'));

@@ -69,6 +69,21 @@ export class UpdateAiConfigDto {
   @MaxLength(64)
   silhouetteModel?: string;
 
+  /** 剪影模态独立平台：语义同 imageProvider（非空 = 启用，需 silhouetteBaseUrl + apiKey） */
+  @IsOptional()
+  @IsIn(PROVIDERS)
+  silhouetteProvider?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  silhouetteBaseUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  silhouetteApiKey?: string;
+
   @IsBoolean()
   enabled!: boolean;
 }

@@ -360,6 +360,10 @@ export const aiProviderConfig = mysqlTable('ai_provider_config', {
   imageApiKey: varchar('image_api_key', { length: 255 }),
   /** 剪影专用模型：NULL = 与生图模型一致；非空 = 单独指定的专用剪影模型 */
   silhouetteModel: varchar('silhouette_model', { length: 64 }),
+  /** 剪影模态独立平台：provider 非空 = 启用；NULL = 跟随生图模态（语义同 imageProvider） */
+  silhouetteProvider: varchar('silhouette_provider', { length: 32 }),
+  silhouetteBaseUrl: varchar('silhouette_base_url', { length: 255 }),
+  silhouetteApiKey: varchar('silhouette_api_key', { length: 255 }),
   enabled: int('enabled').notNull().default(0),
   createdAt: int('created_at').notNull(),
   updatedAt: int('updated_at').notNull(),

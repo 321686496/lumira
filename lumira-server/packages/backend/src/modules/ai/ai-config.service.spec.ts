@@ -37,6 +37,10 @@ function row(overrides: Record<string, unknown> = {}) {
     imageProvider: null,
     imageBaseUrl: null,
     imageApiKey: null,
+    silhouetteModel: null,
+    silhouetteProvider: null,
+    silhouetteBaseUrl: null,
+    silhouetteApiKey: null,
     enabled: 1,
     createdAt: 1,
     updatedAt: 1,
@@ -150,6 +154,42 @@ describe('AiConfigService — textModel', () => {
     expect(cfg.text.model).toBe('qwen-vl-max'); // text 未配置 → 回退 visionModel
   });
 
+  it('getActiveConfig() 剪影独立平台启用 → silhouette 端点用覆盖平台 + 生效剪影模型，image 不受影响', async () => {
+    const service = new AiConfigService(
+      readonlyDb(row({ silhouetteProvider: 'doubao', silhouetteBaseUrl: 'https://d.example/v3', silhouetteApiKey: 'sk-sil-key', silhouetteModel: 'doubao-sil-1' })),
+    );
+    const cfg = await service.getActiveConfig();
+    expect(cfg.silhouette).toEqual({ provider: 'doubao', baseUrl: 'https://d.example/v3', apiKey: 'sk-sil-key', model: 'doubao-sil-1' });
+    expect(cfg.silhouetteModel).toBe('doubao-sil-1');
+    expect(cfg.image.provider).toBe('qwen'); // 生图模态不受影响
+    expect(cfg.vision.provider).toBe('qwen');
+  });
+
+  it('getActiveConfig() 剪影独立平台 + 未指定剪影模型 → model 回退 imageModel', async () => {
+    const service = new AiConfigService(
+      readonlyDb(row({ silhouetteProvider: 'doubao', silhouetteBaseUrl: 'https://d.example/v3', silhouetteApiKey: 'sk-sil-key' })),
+    );
+    const cfg = await service.getActiveConfig();
+    expect(cfg.silhouette).toEqual({ provider: 'doubao', baseUrl: 'https://d.example/v3', apiKey: 'sk-sil-key', model: 'wanx2.1-t2i-turbo' });
+    expect(cfg.silhouetteModel).toBe('wanx2.1-t2i-turbo');
+  });
+
+  it('getActiveConfig() 剪影跟随生图模态 → silhouette 端点 = 生图端点 + 剪影模型（独立生图平台时同样跟随）', async () => {
+    const service = new AiConfigService(
+      readonlyDb(row({ imageProvider: 'zhipu', imageBaseUrl: 'https://z.example/v1', imageApiKey: 'sk-img-key', silhouetteModel: 'sil-x' })),
+    );
+    const cfg = await service.getActiveConfig();
+    expect(cfg.silhouette).toEqual({ provider: 'zhipu', baseUrl: 'https://z.example/v1', apiKey: 'sk-img-key', model: 'sil-x' });
+  });
+
+  it('getActiveConfig() 剪影独立平台缺 apiKey → 视为未配置，回退生图端点', async () => {
+    const service = new AiConfigService(
+      readonlyDb(row({ silhouetteProvider: 'doubao', silhouetteBaseUrl: 'https://d.example/v3', silhouetteApiKey: null })),
+    );
+    const cfg = await service.getActiveConfig();
+    expect(cfg.silhouette).toEqual({ provider: 'qwen', baseUrl: 'https://x.example', apiKey: 'sk-1234567890', model: 'wanx2.1-t2i-turbo' });
+  });
+
   it('getActiveConfig() 文本独立平台 provider/baseUrl 已设但 apiKey 为 NULL → 视为未配置，回退共享平台（防御手工 SQL 缺 key）', async () => {
     const service = new AiConfigService(
       readonlyDb(row({ textProvider: 'openai', textBaseUrl: 'https://o.example/v1', textApiKey: null, textModel: 'gpt-x' })),
@@ -210,6 +250,21 @@ describe('AiConfigService — textModel', () => {
     expect(generateImageMock).toHaveBeenCalledTimes(1);
     expect(generateImageMock.mock.calls[0][0]).toMatchObject({ model: 'sil-x' });
     expect(Object.keys(result).filter((key) => key !== 'note')).toEqual(['silhouette']);
+  });
+
+  it('test() 剪影独立平台 → silhouette 目标用覆盖端点（独立 provider/baseUrl/apiKey + 剪影模型）', async () => {
+    const service = new AiConfigService(
+      readonlyDb(row({ silhouetteProvider: 'doubao', silhouetteBaseUrl: 'https://d.example/v3', silhouetteApiKey: 'sk-sil-key', silhouetteModel: 'doubao-sil-1' })),
+    );
+    const result = await service.test(['silhouette']);
+    expect(generateImageMock).toHaveBeenCalledTimes(1);
+    expect(generateImageMock.mock.calls[0][0]).toEqual({
+      provider: 'doubao',
+      baseUrl: 'https://d.example/v3',
+      apiKey: 'sk-sil-key',
+      model: 'doubao-sil-1',
+    });
+    expect(result.silhouette?.ok).toBe(true);
   });
 
   it.each([
@@ -392,12 +447,28 @@ describe('AiConfigService — 模态独立平台（text/image override）', () =
     expect(view.imagePlatform).toBe(null);
   });
 
-  it('get() 行无覆盖 → textPlatform / imagePlatform 均为 null', async () => {
+  it('get() 行无覆盖 → textPlatform / imagePlatform / silhouettePlatform 均为 null', async () => {
     const service = new AiConfigService(readonlyDb(row()));
     const view = await service.get();
     if (view.configured !== true) throw new Error('should be configured');
     expect(view.textPlatform).toBe(null);
     expect(view.imagePlatform).toBe(null);
+    expect(view.silhouettePlatform).toBe(null);
+  });
+
+  it('get() 行含 silhouetteProvider+silhouetteBaseUrl → silhouettePlatform 返回组（apiKey 脱敏）、imagePlatform 为 null', async () => {
+    const service = new AiConfigService(
+      readonlyDb(row({ silhouetteProvider: 'doubao', silhouetteBaseUrl: 'https://d.example/v3', silhouetteApiKey: 'sk-sil-key-123456' })),
+    );
+    const view = await service.get();
+    if (view.configured !== true) throw new Error('should be configured');
+    expect(view.silhouettePlatform).toEqual({
+      provider: 'doubao',
+      baseUrl: 'https://d.example/v3',
+      apiKeyMasked: 'sk-****56',
+    });
+    expect(view.imagePlatform).toBe(null);
+    expect(view.textPlatform).toBe(null);
   });
 
   it('image 组：保存带 imageProvider 组 → 收到三列；再保存不带 → 清除为 null', async () => {
@@ -414,5 +485,59 @@ describe('AiConfigService — 模态独立平台（text/image override）', () =
     expect(updateSet).toHaveBeenLastCalledWith(
       expect.objectContaining({ imageProvider: null, imageBaseUrl: null, imageApiKey: null }),
     );
+  });
+
+  it('silhouette 组：保存带 silhouetteProvider 组 → 收到三列；再保存不带 → 清除为 null', async () => {
+    const { service, updateSet } = writableDb(row());
+    await service.save(
+      dto({ silhouetteProvider: 'doubao', silhouetteBaseUrl: 'https://d.example/v3', silhouetteApiKey: 'sk-sil-key' }),
+    );
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        silhouetteProvider: 'doubao',
+        silhouetteBaseUrl: 'https://d.example/v3',
+        silhouetteApiKey: 'sk-sil-key',
+      }),
+    );
+    await service.save(dto());
+    expect(updateSet).toHaveBeenLastCalledWith(
+      expect.objectContaining({ silhouetteProvider: null, silhouetteBaseUrl: null, silhouetteApiKey: null }),
+    );
+  });
+
+  it('silhouette 组：首次保存带 silhouetteProvider 组 → insert values 收到三列', async () => {
+    const { service, insertValues } = writableDb(undefined);
+    await service.save(
+      dto({ silhouetteProvider: 'doubao', silhouetteBaseUrl: 'https://d.example/v3', silhouetteApiKey: 'sk-sil-key' }),
+    );
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        silhouetteProvider: 'doubao',
+        silhouetteBaseUrl: 'https://d.example/v3',
+        silhouetteApiKey: 'sk-sil-key',
+      }),
+    );
+  });
+
+  it('save() silhouetteProvider 但 silhouetteBaseUrl 空 → 400 剪影独立平台必须填写 baseUrl', async () => {
+    const { service } = writableDb(row());
+    await expect(
+      service.save(dto({ silhouetteProvider: 'doubao', silhouetteBaseUrl: '', silhouetteApiKey: 'sk-sil-key' })),
+    ).rejects.toThrow('剪影独立平台必须填写 baseUrl');
+  });
+
+  it('save() silhouetteProvider 无存量覆盖 key 且未传 silhouetteApiKey → 400 首次配置独立平台必须填写 API Key', async () => {
+    const { service } = writableDb(row()); // row() 默认 silhouetteApiKey: null
+    await expect(
+      service.save(dto({ silhouetteProvider: 'doubao', silhouetteBaseUrl: 'https://d.example/v3' })),
+    ).rejects.toThrow('首次配置独立平台必须填写 API Key');
+  });
+
+  it('save() silhouetteProvider 传空 silhouetteApiKey 但存量有 → 保留存量值', async () => {
+    const { service, updateSet } = writableDb(row({ silhouetteApiKey: 'sk-stored' }));
+    await service.save(
+      dto({ silhouetteProvider: 'doubao', silhouetteBaseUrl: 'https://d.example/v3', silhouetteApiKey: '' }),
+    );
+    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ silhouetteApiKey: 'sk-stored' }));
   });
 });
