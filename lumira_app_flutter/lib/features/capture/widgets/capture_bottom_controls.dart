@@ -1304,6 +1304,15 @@ class ZoomBar extends ConsumerStatefulWidget {
 }
 
 class ZoomBarState extends ConsumerState<ZoomBar> {
+  /// 轮盘直径系数（相对屏幕宽度）：2.0 = 直径 2 倍屏宽
+  static const double _dialDiameterFactor = 2.0;
+
+  /// 轮盘整体下移量系数（相对轮盘直径）：0.7 = 下移自身直径的 70%
+  static const double _dialDownShiftFactor = 0.7;
+
+  /// 轮盘滑入/滑出动画的位移量（px），与圆盘大小无关
+  static const double _dialAnimShift = 80.0;
+
   /// 是否正在显示弧形轮盘（水平拖动中）
   bool _showDial = false;
 
@@ -1456,6 +1465,9 @@ class ZoomBarState extends ConsumerState<ZoomBar> {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
+    // 轮盘直径（2 倍屏宽）与整体下移量（自身直径的 70%）
+    final dialSize = screenWidth * _dialDiameterFactor;
+    final dialDownShift = dialSize * _dialDownShiftFactor;
     final facing = ref.watch(CaptureState.cameraFacingProvider);
     final multiplier = ref.watch(CaptureState.apparentZoomProvider);
     final maxZoom = ref.watch(CaptureState.deviceMaxZoomProvider) ?? 10.0;
@@ -1522,21 +1534,21 @@ class ZoomBarState extends ConsumerState<ZoomBar> {
             // 圆形轮盘 overlay（后置拖动时从底部滑入）
             if (_showDial)
               Positioned(
-                bottom: 0 + 80 * _dialOffset,
-                left: 0,
-                right: 0,
+                // 负号 = 整体下移；动画位移叠加在偏移基准之上
+                bottom: -dialDownShift + _dialAnimShift * _dialOffset,
+                // 圆盘比屏幕宽时左右各溢出一半，用负 left 保持水平居中
+                left: (screenWidth - dialSize) / 2,
+                width: dialSize,
+                height: dialSize,
                 child: IgnorePointer(
-                  child: SizedBox(
-                    width: screenWidth,
-                    height: screenWidth,
-                    child: HalfCircleDial(
-                      multiplier: multiplier,
-                      presets: presets,
-                      activeIndex: activeIndex,
-                      minZoom: minZoom,
-                      maxZoom: maxZoom,
-                      visual: visual,
-                    ),
+                  child: HalfCircleDial(
+                    multiplier: multiplier,
+                    presets: presets,
+                    activeIndex: activeIndex,
+                    minZoom: minZoom,
+                    maxZoom: maxZoom,
+                    visual: visual,
+                    diameter: dialSize,
                   ),
                 ),
               ),
@@ -1587,7 +1599,7 @@ class ZoomTab extends StatelessWidget {
 
 /// 半圆缩放轮盘 — 完整圆形只显示上半部分
 ///
-/// 直径 = 屏幕宽度 100%，圆心在底部中央。
+/// 直径由外部传入（[diameter]，默认按屏幕宽度倍数计算），圆心在底部中央。
 /// 半透明黑色圆形背景，只显示上半圆。
 class HalfCircleDial extends StatelessWidget {
   const HalfCircleDial({
@@ -1597,6 +1609,7 @@ class HalfCircleDial extends StatelessWidget {
     required this.minZoom,
     required this.maxZoom,
     required this.visual,
+    required this.diameter,
   });
 
   final double multiplier;
@@ -1606,10 +1619,12 @@ class HalfCircleDial extends StatelessWidget {
   final double maxZoom;
   final CaptureOverlayVisual visual;
 
+  /// 轮盘直径（px）。所有内部元素按此值等比布局。
+  final double diameter;
+
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final radius = screenWidth / 2;
+    final radius = diameter / 2;
 
     final totalRange = maxZoom - minZoom;
     final currentT = totalRange > 0 ? (multiplier - minZoom) / totalRange : 0.0;
@@ -1620,14 +1635,14 @@ class HalfCircleDial extends StatelessWidget {
     final rotationAngle = (-math.pi / 2) - currentAngleOnDial;
 
     return SizedBox(
-      width: screenWidth,
-      height: screenWidth,
+      width: diameter,
+      height: diameter,
       child: Stack(
         children: [
           // 半透明轮盘背景（immersive=暗底 / theme=风格面板底）
           Container(
-            width: screenWidth,
-            height: screenWidth,
+            width: diameter,
+            height: diameter,
             decoration: BoxDecoration(
               color: visual.background,
               shape: BoxShape.circle,
@@ -1637,8 +1652,8 @@ class HalfCircleDial extends StatelessWidget {
           Transform.rotate(
             angle: rotationAngle,
             child: SizedBox(
-              width: screenWidth,
-              height: screenWidth,
+              width: diameter,
+              height: diameter,
               child: CustomPaint(
                 painter: HalfCircleTickPainter(
                   radius: radius,
@@ -1657,7 +1672,7 @@ class HalfCircleDial extends StatelessWidget {
               tickStartAngle, tickSweepAngle),
           // 固定指针
           Positioned(
-            top: screenWidth * 0.04,
+            top: diameter * 0.04,
             left: 0,
             right: 0,
             child: Center(
@@ -1668,7 +1683,7 @@ class HalfCircleDial extends StatelessWidget {
           ),
           // 当前倍数显示（居中于半圆中心，避免与顶部刻度数字重叠）
           Positioned(
-            top: screenWidth * 0.25 - 14,
+            top: diameter * 0.25 - 14,
             left: 0,
             right: 0,
             child: Center(
