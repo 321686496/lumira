@@ -58,4 +58,15 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets('bannerIntervalFor：运营位 10s、个性化位 5s', (tester) async {
+    expect(
+      bannerIntervalFor(BannerType.operation),
+      const Duration(seconds: 10),
+    );
+    expect(
+      bannerIntervalFor(BannerType.recommend),
+      const Duration(seconds: 5),
+    );
+  });
 }
