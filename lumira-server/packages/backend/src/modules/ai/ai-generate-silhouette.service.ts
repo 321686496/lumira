@@ -126,12 +126,12 @@ export class AiSilhouetteService {
     const meta = await sharp(input).metadata();
     const aspectRatio = closestAspectRatio(meta.width ?? 0, meta.height ?? 0);
 
-    // 生图用剪影模型：getActiveConfig 已回退为 imageModel（未单独指定时）；平台走生图模态端点
+    // 生图走剪影端点：getActiveConfig 已回退为 imageModel（未单独指定时）；平台 = 剪影独立平台 ?? 生图模态
     const gen = await generateImage(
-      { ...cfg.image, model: cfg.silhouetteModel },
+      cfg.silhouette,
       {
         prompt: AI_SILHOUETTE_PROMPTS[mode],
-        size: mapSize(cfg.image.provider, aspectRatio),
+        size: mapSize(cfg.silhouette.provider, aspectRatio),
         referenceBase64: input.toString('base64'),
         referenceMime: meta.format === 'png' ? 'image/png' : 'image/jpeg',
       },

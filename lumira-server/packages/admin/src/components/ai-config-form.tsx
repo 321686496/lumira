@@ -84,7 +84,7 @@ interface OverrideState {
   apiKey: string; // 留空 = 不修改原值
 }
 
-type Modality = 'text' | 'image';
+type Modality = 'text' | 'image' | 'silhouette';
 
 /** 从已保存视图还原独立平台状态（null → 跟随） */
 const overrideFromPlatform = (platform: AiPlatformOverride | null): OverrideState =>
@@ -157,6 +157,7 @@ export function AiConfigForm({
   const configured = initial.configured;
   const initialTextPlatform = configured ? initial.textPlatform : null;
   const initialImagePlatform = configured ? initial.imagePlatform : null;
+  const initialSilhouettePlatform = configured ? initial.silhouettePlatform : null;
   const [form, setForm] = useState<FormState>(() =>
     configured
       ? {
@@ -201,12 +202,18 @@ export function AiConfigForm({
   const [imageOverride, setImageOverride] = useState<OverrideState>(() =>
     overrideFromPlatform(initialImagePlatform),
   );
+  const [silhouetteOverride, setSilhouetteOverride] = useState<OverrideState>(() =>
+    overrideFromPlatform(initialSilhouettePlatform),
+  );
   /** 已保存独立平台的脱敏 Key（占位符展示；为空 = 尚未保存过独立平台，保存时要求填 Key） */
   const [textPlatformMasked, setTextPlatformMasked] = useState(
     initialTextPlatform?.apiKeyMasked ?? '',
   );
   const [imagePlatformMasked, setImagePlatformMasked] = useState(
     initialImagePlatform?.apiKeyMasked ?? '',
+  );
+  const [silhouettePlatformMasked, setSilhouettePlatformMasked] = useState(
+    initialSilhouettePlatform?.apiKeyMasked ?? '',
   );
   const [testResult, setTestResult] = useState<AiConfigTestResult | null>(null);
   const [testTargets, setTestTargets] = useState<AiConfigTestTarget[]>(ALL_TEST_TARGETS);
@@ -230,29 +237,65 @@ export function AiConfigForm({
   /** 独立区预设选择：始终覆盖 provider/baseUrl；对应模型仅在为空时填充（避免覆盖用户输入） */
   const selectOverrideProvider = (modality: Modality, key: ProviderKey) => {
     const preset = PROVIDER_PRESETS[key];
-    const setOverride = modality === 'text' ? setTextOverride : setImageOverride;
+    const setOverride =
+      modality === 'text'
+        ? setTextOverride
+        : modality === 'image'
+          ? setImageOverride
+          : setSilhouetteOverride;
     setOverride((o) => ({ ...o, provider: key, baseUrl: preset.baseUrl }));
     const modelEmpty =
-      modality === 'text' ? form.textModel.trim() === '' : form.imageModel.trim() === '';
+      modality === 'text'
+        ? form.textModel.trim() === ''
+        : modality === 'image'
+          ? form.imageModel.trim() === ''
+          : form.silhouetteModel.trim() === '';
     if (modelEmpty) {
+      // 文本模态用预设文本模型；生图/剪影模态用预设生图模型（剪影模型不参与 touched，主厂商切换不会覆盖它）
       const model = modality === 'text' ? preset.textModel : preset.imageModel;
-      markTouched(modality === 'text' ? 'textModel' : 'imageModel');
+      if (modality !== 'silhouette') {
+        markTouched(modality === 'text' ? 'textModel' : 'imageModel');
+      }
       setForm((f) =>
-        modality === 'text' ? { ...f, textModel: model } : { ...f, imageModel: model },
+        modality === 'text'
+          ? { ...f, textModel: model }
+          : modality === 'image'
+            ? { ...f, imageModel: model }
+            : { ...f, silhouetteModel: model },
       );
     }
   };
 
-  /** 跟随↔独立切换：开启独立且 baseUrl 为空时从主平台预填；关闭仅置 independent=false（保留输入便于反悔） */
+  /** 跟随↔独立切换：开启独立且 baseUrl 为空时预填（文本/生图取自共享平台，剪影取自生图模态）；关闭仅置 independent=false（保留输入便于反悔） */
   const toggleIndependent = (modality: Modality, independent: boolean) => {
-    const setOverride = modality === 'text' ? setTextOverride : setImageOverride;
+    const setOverride =
+      modality === 'text'
+        ? setTextOverride
+        : modality === 'image'
+          ? setImageOverride
+          : setSilhouetteOverride;
+    // 剪影跟随生图模态：启用独立时的预填来源 = 生图独立平台 ?? 共享平台
+    const imagePrefill =
+      imageOverride.independent && imageOverride.baseUrl.trim() !== ''
+        ? { provider: imageOverride.provider, baseUrl: imageOverride.baseUrl }
+        : { provider: form.provider, baseUrl: form.baseUrl };
     setOverride((o) => {
       if (!independent) return { ...o, independent: false };
       if (o.baseUrl.trim() === '') {
-        return { ...o, independent: true, provider: form.provider, baseUrl: form.baseUrl };
+        return {
+          ...o,
+          independent: true,
+          provider: modality === 'silhouette' ? imagePrefill.provider : form.provider,
+          baseUrl: modality === 'silhouette' ? imagePrefill.baseUrl : form.baseUrl,
+        };
       }
       return { ...o, independent: true };
     });
+    // 剪影启用独立且未指定模型 → 预填生效平台预设的默认生图模型（一次点选即可用）
+    if (modality === 'silhouette' && independent && form.silhouetteModel.trim() === '') {
+      const provider = silhouetteOverride.independent ? silhouetteOverride.provider : imagePrefill.provider;
+      setForm((f) => ({ ...f, silhouetteModel: PROVIDER_PRESETS[provider].imageModel }));
+    }
   };
 
   const handleSave = () => {
@@ -296,6 +339,22 @@ export function AiConfigForm({
       });
       return;
     }
+    if (silhouetteOverride.independent && !silhouetteOverride.baseUrl.trim()) {
+      toast({
+        variant: 'destructive',
+        title: '请填写完整',
+        description: '剪影独立平台 baseUrl 与模型名不能为空',
+      });
+      return;
+    }
+    if (silhouetteOverride.independent && !silhouettePlatformMasked && !silhouetteOverride.apiKey.trim()) {
+      toast({
+        variant: 'destructive',
+        title: '缺少 API Key',
+        description: '首次配置剪影独立平台必须填写 API Key',
+      });
+      return;
+    }
     startSave(async () => {
       const payload: UpdateAiConfigPayload = {
         provider: form.provider,
@@ -317,6 +376,11 @@ export function AiConfigForm({
         payload.imageBaseUrl = imageOverride.baseUrl.trim();
         if (imageOverride.apiKey.trim()) payload.imageApiKey = imageOverride.apiKey.trim();
       }
+      if (silhouetteOverride.independent) {
+        payload.silhouetteProvider = silhouetteOverride.provider;
+        payload.silhouetteBaseUrl = silhouetteOverride.baseUrl.trim();
+        if (silhouetteOverride.apiKey.trim()) payload.silhouetteApiKey = silhouetteOverride.apiKey.trim();
+      }
       const result = await saveAiConfigAction(payload);
       if ('error' in result) {
         toast({ variant: 'destructive', title: '保存失败', description: result.error });
@@ -326,6 +390,7 @@ export function AiConfigForm({
       setApiKeyMasked(config.apiKeyMasked);
       setTextPlatformMasked(config.textPlatform?.apiKeyMasked ?? '');
       setImagePlatformMasked(config.imagePlatform?.apiKeyMasked ?? '');
+      setSilhouettePlatformMasked(config.silhouettePlatform?.apiKeyMasked ?? '');
       // 后端为权威：独立开关与平台字段按保存结果回填（被清除时保留输入、仅置回跟随）
       setTextOverride((o) => {
         const saved = overrideFromPlatform(config.textPlatform);
@@ -333,6 +398,10 @@ export function AiConfigForm({
       });
       setImageOverride((o) => {
         const saved = overrideFromPlatform(config.imagePlatform);
+        return saved.independent ? saved : { ...o, independent: false, apiKey: '' };
+      });
+      setSilhouetteOverride((o) => {
+        const saved = overrideFromPlatform(config.silhouettePlatform);
         return saved.independent ? saved : { ...o, independent: false, apiKey: '' };
       });
       setForm((f) => ({ ...f, apiKey: '' }));
@@ -402,23 +471,40 @@ export function AiConfigForm({
     );
   };
 
-  /** 文本/生图模态区块（跟随 ↔ 独立平台切换） */
+  /** 文本/生图/剪影模态区块（跟随 ↔ 独立平台切换；剪影默认跟随生图模态） */
   const renderModalitySection = (modality: Modality) => {
     const isText = modality === 'text';
-    const override = isText ? textOverride : imageOverride;
-    const setOverride = isText ? setTextOverride : setImageOverride;
-    const masked = isText ? textPlatformMasked : imagePlatformMasked;
-    const modelValue = isText ? form.textModel : form.imageModel;
-    const modelField = isText ? 'textModel' : 'imageModel';
-    const modelId = isText ? 'ai-text-model' : 'ai-image-model';
+    const isSilhouette = modality === 'silhouette';
+    const override = isText ? textOverride : isSilhouette ? silhouetteOverride : imageOverride;
+    const setOverride = isText
+      ? setTextOverride
+      : isSilhouette
+        ? setSilhouetteOverride
+        : setImageOverride;
+    const masked = isText
+      ? textPlatformMasked
+      : isSilhouette
+        ? silhouettePlatformMasked
+        : imagePlatformMasked;
+    const modelValue = isText
+      ? form.textModel
+      : isSilhouette
+        ? form.silhouetteModel
+        : form.imageModel;
+    const modelId = isSilhouette ? 'ai-silhouette-model' : isText ? 'ai-text-model' : 'ai-image-model';
+    const followLabel = isSilhouette ? '跟随生图平台' : '跟随视觉平台';
     return (
       <div className="space-y-4 rounded-lg border border-border p-4">
         <div>
           <div className="text-sm font-medium text-foreground">
-            {isText ? '文本模型 · 识别与提示词润色' : '生图模型 · 封面效果图'}
+            {isSilhouette
+              ? '剪影模型 · AI 一键建模剪影生成'
+              : isText
+                ? '文本模型 · 识别与提示词润色'
+                : '生图模型 · 封面效果图'}
           </div>
           <div className="mt-0.5 text-xs text-muted-foreground">
-            跟随视觉平台，或切换为独立平台（OpenAI 兼容接口）
+            {followLabel}，或切换为独立平台（OpenAI 兼容接口）
           </div>
         </div>
 
@@ -438,7 +524,7 @@ export function AiConfigForm({
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                {independent ? '独立平台' : '跟随视觉平台'}
+                {independent ? '独立平台' : followLabel}
               </button>
             ))}
           </div>
@@ -448,7 +534,7 @@ export function AiConfigForm({
           <>
             <ProviderPresetGrid
               activeKey={override.provider}
-              modelKey={modelField}
+              modelKey={isSilhouette || !isText ? 'imageModel' : 'textModel'}
               compact
               onSelect={(key) => selectOverrideProvider(modality, key)}
             />
@@ -478,29 +564,60 @@ export function AiConfigForm({
               </div>
               <div className="space-y-2">
                 <Label htmlFor={modelId}>
-                  {isText ? '文本模型' : '生图模型'}（独立平台必填）
+                  {isSilhouette ? '剪影模型' : isText ? '文本模型' : '生图模型'}
+                  {isSilhouette ? '（留空 = 默认生图模型）' : '（独立平台必填）'}
                 </Label>
                 <Input
                   id={modelId}
                   value={modelValue}
                   onChange={(e) => {
-                    markTouched(modelField);
+                    if (!isSilhouette) markTouched(isText ? 'textModel' : 'imageModel');
                     const value = e.target.value;
                     setForm((f) =>
-                      isText ? { ...f, textModel: value } : { ...f, imageModel: value },
+                      isSilhouette
+                        ? { ...f, silhouetteModel: value }
+                        : isText
+                          ? { ...f, textModel: value }
+                          : { ...f, imageModel: value },
                     );
                   }}
                   placeholder={
-                    isText
-                      ? '例：qwen-plus / gpt-4o-mini'
-                      : override.provider === 'doubao'
-                        ? '接入点 ep-xxx 或模型名'
-                        : 'wanx2.1-t2i-turbo'
+                    isSilhouette
+                      ? '留空 = 默认生图模型'
+                      : isText
+                        ? '例：qwen-plus / gpt-4o-mini'
+                        : override.provider === 'doubao'
+                          ? '接入点 ep-xxx 或模型名'
+                          : 'wanx2.1-t2i-turbo'
                   }
                 />
               </div>
             </div>
           </>
+        ) : isSilhouette ? (
+          /* 跟随生图平台：保留原「剪影模型 + 同生图模型」交互 */
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="ai-silhouette-model">剪影模型（可选）</Label>
+              <button
+                type="button"
+                className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-40"
+                disabled={!form.imageModel.trim() || form.silhouetteModel.trim() === form.imageModel.trim()}
+                onClick={() => setForm((f) => ({ ...f, silhouetteModel: f.imageModel.trim() }))}
+              >
+                同生图模型
+              </button>
+            </div>
+            <Input
+              id="ai-silhouette-model"
+              value={form.silhouetteModel}
+              onChange={(e) => setForm((f) => ({ ...f, silhouetteModel: e.target.value }))}
+              placeholder="留空 = 使用生图模型（用于 AI 一键建模的剪影生成）"
+            />
+            <p className="text-xs text-muted-foreground">
+              AI 一键建模「生成剪影」选用 AI 方式时使用的模型；不填则与生图模型一致，平台与 Key 跟随生图模态
+            </p>
+          </div>
         ) : isText ? (
           <div className="space-y-2">
             <Label htmlFor="ai-text-model">文本模型</Label>
@@ -616,29 +733,8 @@ export function AiConfigForm({
           {/* 模态三：生图模型 */}
           {renderModalitySection('image')}
 
-          {/* 剪影专用模型（AI 一键建模「生成剪影」用，平台跟随生图模态） */}
-          <div className="space-y-2 rounded-lg border border-border p-4">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="ai-silhouette-model">剪影模型（可选）</Label>
-              <button
-                type="button"
-                className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-40"
-                disabled={!form.imageModel.trim() || form.silhouetteModel.trim() === form.imageModel.trim()}
-                onClick={() => setForm((f) => ({ ...f, silhouetteModel: f.imageModel.trim() }))}
-              >
-                同生图模型
-              </button>
-            </div>
-            <Input
-              id="ai-silhouette-model"
-              value={form.silhouetteModel}
-              onChange={(e) => setForm((f) => ({ ...f, silhouetteModel: e.target.value }))}
-              placeholder="留空 = 使用生图模型（用于 AI 一键建模的剪影生成）"
-            />
-            <p className="text-xs text-muted-foreground">
-              AI 一键建模「生成剪影」选用 AI 方式时使用的模型；不填则与生图模型一致，平台与 Key 跟随生图模态
-            </p>
-          </div>
+          {/* 模态四：剪影模型（AI 一键建模「生成剪影」用，默认跟随生图平台） */}
+          {renderModalitySection('silhouette')}
 
           {/* 启用开关 */}
           <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">

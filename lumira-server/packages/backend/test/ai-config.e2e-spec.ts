@@ -157,6 +157,40 @@ describe('AiConfigController (e2e)', () => {
     expect(getRes.body.apiKeyMasked).toBe('sk-****89');
   });
 
+  it('PUT /api/v1/admin/ai-config — 保存剪影独立平台组 → GET 返回 silhouettePlatform（apiKey 脱敏）', async () => {
+    await request(app.getHttpServer())
+      .put('/api/v1/admin/ai-config')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        provider: 'qwen',
+        baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        apiKey: '',
+        visionModel: 'qwen-vl-max',
+        imageModel: 'qwen-max',
+        enabled: true,
+        silhouetteModel: 'doubao-sil-1',
+        silhouetteProvider: 'doubao',
+        silhouetteBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+        silhouetteApiKey: 'sk-sil-123456789',
+      })
+      .expect(200);
+
+    const getRes = await request(app.getHttpServer())
+      .get('/api/v1/admin/ai-config')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(getRes.body.silhouettePlatform).toEqual({
+      provider: 'doubao',
+      baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+      apiKeyMasked: 'sk-****89',
+    });
+    expect(getRes.body.silhouetteModel).toBe('doubao-sil-1');
+    expect(getRes.body.imagePlatform).toBe(null);
+    // 独立平台不影响共享配置
+    expect(getRes.body.apiKeyMasked).toBe('sk-****89');
+  });
+
   it('PUT /api/v1/admin/ai-config — 不带独立平台字段再保存 → 覆盖组清除（GET 返回 null）', async () => {
     await request(app.getHttpServer())
       .put('/api/v1/admin/ai-config')

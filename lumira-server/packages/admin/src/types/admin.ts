@@ -431,6 +431,8 @@ export interface AiProviderConfigView {
   textPlatform: AiPlatformOverride | null;
   /** 生图模态独立平台（null = 跟随共享平台） */
   imagePlatform: AiPlatformOverride | null;
+  /** 剪影模态独立平台（null = 跟随生图模态） */
+  silhouettePlatform: AiPlatformOverride | null;
   /** 剪影专用模型：null = 与生图模型一致 */
   silhouetteModel: string | null;
   enabled: boolean;
@@ -456,6 +458,10 @@ export interface UpdateAiConfigPayload {
   imageProvider?: string;
   imageBaseUrl?: string;
   imageApiKey?: string;
+  /** 剪影模态独立平台：语义同上 */
+  silhouetteProvider?: string;
+  silhouetteBaseUrl?: string;
+  silhouetteApiKey?: string;
 }
 
 /** POST /admin/ai-config/test 可选目标（缺省 = 全部） */
