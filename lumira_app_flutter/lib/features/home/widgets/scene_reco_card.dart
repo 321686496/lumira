@@ -100,7 +100,7 @@ class SceneRecoCard extends ConsumerWidget {
               ),
               // 文字区
               Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 14), // 28/24/28/28 rpx → 14/12/14/14 dp
+                padding: const EdgeInsets.all(12),   // align with RecommendedTemplate card (fit 130x248)
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -114,7 +114,7 @@ class SceneRecoCard extends ConsumerWidget {
                         height: 1.3,
                       ),
                     ),
-                    const SizedBox(height: 4), // 8rpx → 4dp
+                    const SizedBox(height: 3),   // align with RecommendedTemplate card
                     Text(
                       scene.vibe,
                       maxLines: 2,
@@ -122,7 +122,7 @@ class SceneRecoCard extends ConsumerWidget {
                       style: TextStyle(
                         fontSize: 11, // 22rpx → 11dp
                         color: tokens.textTertiary,
-                        height: 1.5,
+                        height: 1.3,   // align with RecommendedTemplate card (fit 130x248)
                       ),
                     ),
                     // 照片数行：条件渲染（home 页默认 showPhotoCount=true 行为不变）

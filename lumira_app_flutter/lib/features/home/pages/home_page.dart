@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -509,7 +509,7 @@ class _SceneRecoGridSliver extends ConsumerWidget {
         if (scenes.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink()); // 空态
         return SliverToBoxAdapter(
           child: SizedBox(
-            height: 304,
+            height: 248,   // align with RecommendedTemplate card (130x248)
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -519,8 +519,10 @@ class _SceneRecoGridSliver extends ConsumerWidget {
                 final scene = scenes[i];
                 return RepaintBoundary(
                   child: SizedBox(
-                    width: 150,
+                    width: 130,
                     child: SceneRecoCard(
+                      // hide photo-count row to match RecommendedTemplate card
+                      showPhotoCount: false,
                       scene: scene,
                       onTap: () => onTap(scene.id),
                     ),
@@ -576,11 +578,16 @@ class _RecentShotsGridSliver extends ConsumerWidget {
       error: (_, __) => _buildSkeleton(),
       data: (recents) {
         if (recents.isEmpty) {
-          return SliverToBoxAdapter(child: _buildEmpty(tokens));
+          return SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _buildEmpty(tokens),
+            ),
+          );
         }
         return SliverToBoxAdapter(
           child: SizedBox(
-            height: 264,
+            height: 248,   // align with RecommendedTemplate card (130x248)
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -590,7 +597,7 @@ class _RecentShotsGridSliver extends ConsumerWidget {
                 final recent = recents[i];
                 return RepaintBoundary(
                   child: SizedBox(
-                    width: 150,
+                    width: 130,
                     child: RecentShotCard(
                       recent: recent,
                       onTap: () => onPhotoTap(recent),
@@ -619,7 +626,7 @@ class _RecentShotsGridSliver extends ConsumerWidget {
           separatorBuilder: (_, __) => const SizedBox(width: 12),
           itemBuilder: (_, i) => RepaintBoundary(
             child: SizedBox(
-            width: 150,
+            width: 130,
               child: RecentShotCard(
                 recent: mocks[i],
                 onTap: onTap,
