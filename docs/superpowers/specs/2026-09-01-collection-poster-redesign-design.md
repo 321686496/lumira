@@ -1,5 +1,7 @@
 # 精选集导出海报重设计（九宫格 · 最多 9 张）
 
+> ⚠️ 本方案已于 2026-09-14 作废（superseded），由 `2026-09-14-collection-poster-redesign-v5-design.md`（光影纸册 · 双比例单版式）取代，未实施任何代码。
+
 - 日期：2026-09-01
 - 状态：已获用户批准（用户反馈"先这样设计吧，对于图片最多放置九张"）
 - 关联视觉稿：`docs/design/collection_poster_mockup.html`（v2，含 4 套版式 + 旧版对照）

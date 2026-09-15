@@ -396,11 +396,17 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 本地后期参数更新（仅影响预览和保存，不回写 CaptureState）
   void _updateLocalPostProcess(PostProcess next) {
     if (!mounted) return;
-    if (_guardPendingFinal()) return;
+    if (_guardPendingFinal()) {
+      debugPrint('[edit-diag] preview update BLOCKED by pending-final guard');
+      return;
+    }
     if (_isReadOnly) {
+      debugPrint('[edit-diag] preview update BLOCKED by read-only');
       _showReadOnlyToast();
       return;
     }
+    debugPrint('[edit-diag] preview setState smooth=${next.smoothStrength} '
+        'sharpen=${next.sharpen} pendingFinal=$_isPendingFinal');
     setState(() {
       _localPostProcess = next;
       _isEdited = true;
@@ -636,6 +642,12 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         photoUrl.isNotEmpty && !photoUrl.startsWith('http');
     final useDetailFx =
         !isComparing && detailEffects.hasAnyEffect && sourceIsLocalFile;
+    if (detailEffects.hasAnyEffect) {
+      debugPrint('[edit-diag] preview build useDetailFx=$useDetailFx '
+          'comparing=$isComparing local=$sourceIsLocalFile '
+          'smooth=${detailEffects.smoothStrength} sharpen=${detailEffects.sharpen} '
+          'url=$photoUrl');
+    }
     final Widget baseImage = useDetailFx
         ? DetailEffectsLayer(
             url: photoUrl,

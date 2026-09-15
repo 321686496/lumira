@@ -65,8 +65,13 @@ class PreviewEditToolbar extends StatelessWidget {
 
   PostProcess get _fullForEdit => fullOf(_baked, postProcess);
 
-  void _updatePostFromFull(PostProcess newFull) =>
-      onPostProcessChanged(deltaOf(_baked, newFull, current: postProcess));
+  void _updatePostFromFull(PostProcess newFull) {
+    final next = deltaOf(_baked, newFull, current: postProcess);
+    debugPrint('[edit-diag] toolbar delta → '
+        'smooth=${next.smoothStrength} sharpen=${next.sharpen} '
+        'vignette=${next.vignette} grain=${next.grain} leg=${next.legStretch}');
+    onPostProcessChanged(next);
+  }
 
   void _toggle(PreviewEditTool tool) {
     if (isReadOnly) {

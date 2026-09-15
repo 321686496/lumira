@@ -15,7 +15,7 @@ Future<ui.Image> _decodeImage(String path) async {
   return frame.image;
 }
 
-Future<ui.Image> _paint(DetailEffectsPainter painter) async {
+Future<ui.Image> _paint(CustomPainter painter) async {
   final recorder = ui.PictureRecorder();
   painter.paint(ui.Canvas(recorder), const Size(64, 64));
   final picture = recorder.endRecording();
@@ -64,9 +64,49 @@ void main() {
     final baseBytes = await tester.runAsync(() => base.toByteData());
     final sharpenBytes = await tester.runAsync(() => sharpened.toByteData());
     expect(sharpenBytes, isNot(equals(baseBytes)));
+    final coreProgram = await tester.runAsync(
+      () => loadFragmentProgramFromCandidates(const [
+        'assets/shaders/edit_smooth_sharpen.frag',
+        'shaders/edit_smooth_sharpen.frag',
+      ]),
+    );
+    expect(coreProgram, isNotNull, reason: 'core shader must load');
+
+    final coreBasePainter = CoreDetailEffectsPainter(
+      image: image,
+      effects: const DetailEffectsParams(),
+      program: coreProgram!,
+    );
+    final coreSharpenPainter = CoreDetailEffectsPainter(
+      image: image,
+      effects: const DetailEffectsParams(sharpen: 100),
+      program: coreProgram,
+    );
+    final coreSmoothPainter = CoreDetailEffectsPainter(
+      image: image,
+      effects: const DetailEffectsParams(smoothStrength: 100),
+      program: coreProgram,
+    );
+    final coreBase = (await tester.runAsync(() => _paint(coreBasePainter)))!;
+    final coreSharp =
+        (await tester.runAsync(() => _paint(coreSharpenPainter)))!;
+    final coreSmooth =
+        (await tester.runAsync(() => _paint(coreSmoothPainter)))!;
+    final coreBaseBytes = await tester.runAsync(() => coreBase.toByteData());
+    final coreSharpBytes = await tester.runAsync(() => coreSharp.toByteData());
+    final coreSmoothBytes =
+        await tester.runAsync(() => coreSmooth.toByteData());
+    expect(coreSharpBytes, isNot(equals(coreBaseBytes)),
+        reason: 'core shader must react to sharpen');
+    expect(coreSmoothBytes, isNot(equals(coreBaseBytes)),
+        reason: 'core shader must react to smoothStrength');
+
     image.dispose();
     base.dispose();
     sharpened.dispose();
+    coreBase.dispose();
+    coreSharp.dispose();
+    coreSmooth.dispose();
     try {
       tempDir.deleteSync(recursive: true);
     } catch (_) {}

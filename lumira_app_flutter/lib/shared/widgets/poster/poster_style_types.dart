@@ -1,9 +1,9 @@
-﻿import 'package:flutter/widgets.dart';
+import 'package:flutter/widgets.dart';
 
 import 'poster_ratio.dart';
 
-/// 海报类型：模板详情分享海报 / 照片详情分享海报 / 探店足迹分享海报。
-enum PosterKind { template, photo, checkin }
+/// 海报类型：模板详情分享海报 / 照片详情分享海报 / 探店足迹分享海报 / 精选集分享海报。
+enum PosterKind { template, photo, checkin, collection }
 
 /// 海报展示数据。
 ///
@@ -28,6 +28,7 @@ class PosterStyleData {
     this.dateText = '',
     this.rating = 0.0,
     this.thumbBuilders,
+    this.photoCount = 0,
   });
 
   final PosterRatio ratio;
@@ -70,6 +71,10 @@ class PosterStyleData {
 
   /// 探店小图构建器（至多 4 张，每张 `(w,h) => Widget`）。
   final List<Widget Function(double w, double h)>? thumbBuilders;
+
+  /// 精选集真实收录照片数（海报页脚「共收录 N 张」用，可大于 [thumbBuilders] 长度；
+  /// 0 时样式回退到 `thumbBuilders.length`）。
+  final int photoCount;
 }
 
 /// 一种海报样式定义。
