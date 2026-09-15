@@ -16,7 +16,7 @@ import 'checkin_poster_widgets.dart';
 /// 展示海报：直接调用 [showCheckinPoster] 生成/导出/分享探店足迹海报。
 ///
 /// 会异步加载该次探店全部照片；照片 >5 张时先弹选图面板（最多 5 张，首位为大图），
-/// 再进入样式选择器预览（温柔手帐 / 原版足迹 / 金字招牌 / 克制奢华）。
+/// 再进入样式选择器预览（温柔手帐 / 奶油莫兰迪 / 鎏金画框 / 错落画廊）。
 Future<void> showCheckinPoster({
   required BuildContext context,
   required ThemeTokens tokens,
