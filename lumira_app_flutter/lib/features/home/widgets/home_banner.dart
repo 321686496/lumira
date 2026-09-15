@@ -14,6 +14,13 @@ import '../../usage/usage_providers.dart';
 import '../data/home_mock_data.dart';
 import '../providers/banner_recommendation_provider.dart';
 
+/// 自动轮播间隔：运营位 10s（曝光提效），个性化位 5s
+Duration bannerIntervalFor(BannerType type) {
+  return type == BannerType.operation
+      ? const Duration(seconds: 10)
+      : const Duration(seconds: 5);
+}
+
 /// 首页 Banner 轮播
 ///
 /// 展示与用户相关的推荐信息：模板与场景搭配、拍摄灵感、新模板等。
@@ -47,6 +54,9 @@ class _HomeBannerState extends ConsumerState<HomeBanner>
   int _current = 0;
   Timer? _timer;
   int _bannerCount = 0;
+
+  /// 当前展示的 banner 列表（供轮播定时按类型选择间隔）
+  List<HomeBannerItem>? _banners;
 
   /// 会话内已上报曝光的 bannerId（去重：自动轮播/来回滑动不重复计曝光）
   final Set<String> _exposedBannerIds = {};
@@ -123,7 +133,12 @@ class _HomeBannerState extends ConsumerState<HomeBanner>
     _timer = null;
     if (count <= 1) return;
     if (!TickerMode.of(context)) return; // Tab 非激活时不启动
-    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
+    final banners = _banners;
+    final type = (banners != null && banners.isNotEmpty)
+        ? banners[_current % banners.length].type
+        : BannerType.recommend;
+    final interval = bannerIntervalFor(type);
+    _timer = Timer.periodic(interval, (_) {
       final c = _controller;
       if (c == null || !c.hasClients || !mounted) return;
       // 已滚出可视区时不自动轮播（省掉不可见的离屏重绘）
@@ -228,6 +243,7 @@ class _HomeBannerState extends ConsumerState<HomeBanner>
   Widget _buildCarousel(List<HomeBannerItem> banners, ThemeTokens tokens) {
     if (banners.isEmpty) return const SizedBox.shrink();
     final count = banners.length;
+    _banners = banners;
     // 首屏曝光：首帧渲染后上报当前页（仅当轮播处于外层可视区）
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
