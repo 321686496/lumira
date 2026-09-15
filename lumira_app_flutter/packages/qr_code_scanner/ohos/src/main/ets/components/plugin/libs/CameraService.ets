@@ -154,6 +154,13 @@ class CameraService {
 
   // 初始化相机并开始捕获预览流
   async initCamera(XComponentSurfaceId: string, front: boolean = false): Promise<void> {
+    // 首次打开扫一扫的授权流程中，onPageShow 可能在 XComponent onLoad 之前触发，
+    // 传入空 surfaceId。此时若继续启动相机，会以空 surfaceId 创建预览输出并抢占
+    // 相机输入，随后真正携带有效 surfaceId 的初始化反而失败导致黑屏。这里兜底拦截。
+    if (!XComponentSurfaceId) {
+      console.error(TAG + 'initCamera skip: empty XComponentSurfaceId');
+      return;
+    }
     if (!this.camerasDevices) {
       return;
     }

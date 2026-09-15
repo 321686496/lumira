@@ -9,7 +9,7 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/lumira/lumira.dart'
-    show ButtonVariant, LumiraButton, LumiraProgress, LumiraToast;
+    show LumiraProgress;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/rewards_models.dart';
 import '../data/rewards_repository.dart';
@@ -106,30 +106,119 @@ class _RewardsPageState extends ConsumerState<RewardsPage> {
       );
     }
 
-    final claimedCount =
-        rewards.where((r) => r.status == UnlockStatus.claimed).length;
-    final pendingCount =
-        rewards.where((r) => r.status == UnlockStatus.unlocked).length;
+    final invite = rewards
+        .where((r) => r.source == RewardSource.invite)
+        .toList();
+    final redemption = rewards
+        .where((r) => r.source == RewardSource.redemption)
+        .toList();
 
     return ListView(
       controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
         FadeUp(
           child: _OverviewCard(
             tokens: tokens,
-            claimedCount: claimedCount,
-            pendingCount: pendingCount,
+            total: rewards.length,
+            inviteCount: invite.length,
+            redemptionCount: redemption.length,
           ),
         ),
-        const SizedBox(height: 14),
-        for (var i = 0; i < rewards.length; i++) ...[
+        if (invite.isNotEmpty) ...[
+          const SizedBox(height: 26),
           FadeUp(
-            delay: Duration(milliseconds: (i + 1) * 80),
-            child: _RewardCard(reward: rewards[i]),
+            child: _SectionHeader(
+              tokens: tokens,
+              icon: Icons.people_alt_outlined,
+              title: '邀请收获',
+              subtitle: '你的邀请带来的美好回报',
+            ),
           ),
           const SizedBox(height: 12),
+          for (var i = 0; i < invite.length; i++) ...[
+            if (i > 0) const SizedBox(height: 10),
+            FadeUp(
+              delay: Duration(milliseconds: (i + 1) * 80),
+              child: _RewardCard(reward: invite[i]),
+            ),
+          ],
         ],
+        if (redemption.isNotEmpty) ...[
+          const SizedBox(height: 26),
+          FadeUp(
+            child: _SectionHeader(
+              tokens: tokens,
+              icon: Icons.redeem_outlined,
+              title: '兑换所得',
+              subtitle: '用积分兑换的专属奖励',
+            ),
+          ),
+          const SizedBox(height: 12),
+          for (var i = 0; i < redemption.length; i++) ...[
+            if (i > 0) const SizedBox(height: 10),
+            FadeUp(
+              delay: Duration(milliseconds: (i + 1) * 80),
+              child: _RewardCard(reward: redemption[i]),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
+/// 奖励分组小标题
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.tokens,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+  final ThemeTokens tokens;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: tokens.brandSubtle,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 16, color: tokens.brand),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontFamily: 'Noto Serif SC',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: tokens.textTertiary,
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -189,207 +278,320 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-/// 奖励总览卡：累计已领 X 项 / 待领取 Y 项
+/// 奖励总览卡：品牌渐变 hero + 累计解锁 + 按来源统计
 class _OverviewCard extends StatelessWidget {
   const _OverviewCard({
     required this.tokens,
-    required this.claimedCount,
-    required this.pendingCount,
+    required this.total,
+    required this.inviteCount,
+    required this.redemptionCount,
   });
   final ThemeTokens tokens;
-  final int claimedCount;
-  final int pendingCount;
+  final int total;
+  final int inviteCount;
+  final int redemptionCount;
 
   @override
   Widget build(BuildContext context) {
-    return NeuCard(
-      child: Row(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: tokens.brandSubtle,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.emoji_events_outlined,
-              size: 28,
-              color: tokens.brand,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '奖励总览',
-                  style: TextStyle(
-                    fontFamily: 'Noto Serif SC',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '累计已领 $claimedCount 项 · 待领取 $pendingCount 项',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: tokens.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            tokens.brandSubtle,
+            tokens.brand.withOpacity(0.10),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
       ),
-    );
-  }
-}
-
-/// 单张奖励卡：左侧 tier 徽章 + 右侧标题/items/状态
-class _RewardCard extends ConsumerStatefulWidget {
-  final UnlockedReward reward;
-  const _RewardCard({required this.reward});
-
-  @override
-  ConsumerState<_RewardCard> createState() => _RewardCardState();
-}
-
-class _RewardCardState extends ConsumerState<_RewardCard> {
-  bool _claiming = false;
-
-  Future<void> _onClaim() async {
-    setState(() => _claiming = true);
-    try {
-      final repo = await ref.read(rewardsRepositoryProvider.future);
-      await repo.claim(widget.reward.id);
-      ref.invalidate(rewardsListProvider);
-      if (mounted) {
-        LumiraToast.show(context, '奖励已领取');
-      }
-    } on ApiException catch (e) {
-      if (mounted) {
-        LumiraToast.show(context, '领取失败：${e.message}');
-      }
-    } finally {
-      if (mounted) setState(() => _claiming = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final r = widget.reward;
-    final tokens = ref.watch(themeTokensProvider);
-    final sourceLabel = r.source == RewardSource.invite ? '邀请奖励' : '兑换奖励';
-    final title = r.sourceDetail ?? sourceLabel;
-    final canClaim = r.status == UnlockStatus.unlocked;
-
-    return NeuCard(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: tokens.brand,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              'T${r.tier}',
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontFamily: 'Noto Serif SC',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+          Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: tokens.brand,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                const SizedBox(height: 8),
-                for (var i = 0; i < r.rewardItems.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 4),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 7),
-                        child: Container(
-                          width: 4,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: tokens.brand,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          r.rewardItems[i].label,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: tokens.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                child: Icon(
+                  Icons.card_giftcard_outlined,
+                  size: 24,
+                  color: tokens.textInverse,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (canClaim)
-                      LumiraButton(
-                        variant: ButtonVariant.primary,
-                        onPressed: _claiming ? null : _onClaim,
-                        child: Text(_claiming ? '领取中...' : '领取'),
-                      )
-                    else
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: tokens.brandSubtle,
-                          borderRadius: BorderRadius.circular(1000),
-                        ),
-                        child: Text(
-                          '已领取',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: tokens.brandText,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                    Text(
+                      '我的奖励',
+                      style: TextStyle(
+                        fontFamily: 'Noto Serif SC',
+                        fontSize: 19,
+                        fontWeight: FontWeight.w700,
+                        color: tokens.textPrimary,
+                        letterSpacing: 0.4,
                       ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '等你解锁的专属奖励，都为你守候在这里',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: tokens.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              _StatItem(
+                tokens: tokens,
+                label: '累计解锁',
+                value: '$total',
+                accent: true,
+              ),
+              const SizedBox(width: 10),
+              _StatItem(
+                tokens: tokens,
+                label: '邀请所得',
+                value: '$inviteCount',
+              ),
+              const SizedBox(width: 10),
+              _StatItem(
+                tokens: tokens,
+                label: '兑换所得',
+                value: '$redemptionCount',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 总览卡内的单个统计块
+class _StatItem extends StatelessWidget {
+  const _StatItem({
+    required this.tokens,
+    required this.label,
+    required this.value,
+    this.accent = false,
+  });
+  final ThemeTokens tokens;
+  final String label;
+  final String value;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = accent ? tokens.brand : tokens.brandDeep;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: accent
+                ? tokens.brand.withOpacity(0.30)
+                : tokens.divider.withOpacity(0.7),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: TextStyle(
+                fontFamily: 'Noto Serif SC',
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: tokens.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 单张奖励卡：来源徽章 + 标题 + 奖励明细 + 「已解锁」状态（无领取按钮，
+/// 解锁即视为已领取，避免无意义的确认操作）。
+class _RewardCard extends ConsumerWidget {
+  const _RewardCard({required this.reward});
+
+  final UnlockedReward reward;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final r = reward;
+    final tokens = ref.watch(themeTokensProvider);
+    final title = (r.sourceDetail?.isNotEmpty ?? false)
+        ? r.sourceDetail!
+        : (r.source == RewardSource.invite ? '邀请奖励' : '兑换奖励');
+    final subtitle = r.source == RewardSource.invite
+        ? '邀请带来的美好回报'
+        : '用积分兑换的专属奖励';
+
+    return NeuCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: tokens.brandSubtle,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.workspace_premium_outlined,
+                  size: 22,
+                  color: tokens.brand,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Noto Serif SC',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: tokens.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: tokens.textTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _UnlockedChip(tokens: tokens),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Divider(height: 1, color: tokens.divider),
+          const SizedBox(height: 12),
+          for (var i = 0; i < r.rewardItems.length; i++) ...[
+            if (i > 0) const SizedBox(height: 10),
+            Row(
+              children: [
+                Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: tokens.brandSubtle,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    _rewardItemIcon(r.rewardItems[i]),
+                    size: 14,
+                    color: tokens.brand,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    r.rewardItems[i].displayLabel,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: tokens.textPrimary,
+                    ),
+                  ),
+                ),
               ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// 「已解锁」状态标签（替代原「领取」按钮；解锁即视为已领取）
+class _UnlockedChip extends StatelessWidget {
+  const _UnlockedChip({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: tokens.brandSubtle,
+        borderRadius: BorderRadius.circular(9999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check, size: 12, color: tokens.brand),
+          const SizedBox(width: 3),
+          Text(
+            '已解锁',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: tokens.brandText,
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+/// 按奖励类型映射图标
+IconData _rewardItemIcon(RewardItem item) {
+  switch (item.type) {
+    case RewardType.points:
+      return Icons.stars_outlined;
+    case RewardType.unlockCount:
+      return Icons.lock_open_outlined;
+    case RewardType.achievement:
+      return Icons.emoji_events_outlined;
+    case RewardType.template:
+      return Icons.auto_awesome_outlined;
+    case RewardType.templatePack:
+      return Icons.collections_outlined;
   }
 }
