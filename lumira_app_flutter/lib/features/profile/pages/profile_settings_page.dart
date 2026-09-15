@@ -11,7 +11,6 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/utils/cache_utils.dart';
-import '../../../shared/widgets/brand/home_brand_title.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
@@ -93,72 +92,6 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     }
   }
 
-  Widget _buildHomeWordmarkSection(ThemeTokens tokens) {
-    final currentStyle = ref.watch(homeWordmarkStyleProvider);
-    final options = <MapEntry<HomeWordmarkStyle, String>>[
-      const MapEntry(HomeWordmarkStyle.logoEnglish, 'Logo + 英文'),
-      const MapEntry(HomeWordmarkStyle.logoEnglishChinese, 'Logo + 英文 + 中文'),
-      const MapEntry(HomeWordmarkStyle.englishChinese, '英文 + 中文'),
-    ];
-
-    return Column(
-      children: options.map((option) {
-        final style = option.key;
-        final label = option.value;
-        final selected = style == currentStyle;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: GestureDetector(
-            onTap: () {
-              ref.read(homeWordmarkStyleProvider.notifier).state = style;
-            },
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: selected ? tokens.brandSubtle.withOpacity(0.30) : tokens.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: selected ? tokens.brand : tokens.divider,
-                  width: selected ? 1.5 : 1.0,
-                ),
-              ),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 180,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: HomeBrandTitle(preview: true, styleOverride: style),
-                    ),
-                  ),
-                  const Spacer(),
-                  Flexible(
-                    child: Text(
-                      label,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: selected ? tokens.brand : tokens.textSecondary,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    selected ? Icons.check_circle : Icons.radio_button_unchecked,
-                    size: 18,
-                    color: selected ? tokens.brand : tokens.textTertiary,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
@@ -171,6 +104,9 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     final styleLabel = ProfileMockData.styles
         .firstWhere((s) => s.style == currentUiStyle)
         .label;
+    // 首页标题样式 value 动态显示当前选择
+    final wordmarkLabel =
+        HomeWordmarkLabels.labelOf(ref.watch(homeWordmarkStyleProvider));
     // 水印设置（总开关 / 动画开关）+ 当前选中模板名称
     final watermarkSettings = ref.watch(watermarkSettingsProvider);
     final watermarkTemplate = ref.watch(currentWatermarkTemplateProvider);
@@ -232,6 +168,14 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                         tokens: tokens,
                       ),
                       _SettingItem(
+                        icon: Icons.title_outlined,
+                        label: '首页标题样式',
+                        value: wordmarkLabel,
+                        onTap: () => GoRouter.of(context)
+                            .push(RouteNames.profileSettingsWordmark),
+                        tokens: tokens,
+                      ),
+                      _SettingItem(
                         icon: Icons.language_outlined,
                         label: '语言',
                         value: '简体中文',
@@ -248,10 +192,6 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
-                _GroupTitle(text: '首页标题样式', tokens: tokens),
-                const SizedBox(height: 8),
-                _buildHomeWordmarkSection(tokens),
                 const SizedBox(height: 20),
                 _GroupTitle(text: '显示', tokens: tokens),
                 const SizedBox(height: 8),

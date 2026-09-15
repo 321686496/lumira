@@ -63,6 +63,7 @@ import '../features/profile/pages/profile_settings_cache_page.dart';
 import '../features/profile/pages/profile_settings_resolution_page.dart';
 import '../features/profile/feedback/pages/feedback_page.dart';
 import '../features/profile/pages/profile_theme_page.dart';
+import '../features/profile/pages/profile_settings_wordmark_page.dart';
 import '../features/points/pages/points_wallet_page.dart';
 import '../features/points/pages/points_transactions_page.dart';
 import '../features/points/pages/points_recharge_page.dart';
@@ -479,6 +480,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.profileSettingsTheme,
         name: 'profileSettingsTheme',
         builder: (context, state) => const ProfileThemePage(),
+      ),
+      GoRoute(
+        path: RouteNames.profileSettingsWordmark,
+        name: 'profileSettingsWordmark',
+        builder: (context, state) => const ProfileSettingsWordmarkPage(),
       ),
       GoRoute(
         path: RouteNames.profileSettingsCache,
