@@ -558,15 +558,18 @@ class _FlashControl extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cam = ref.watch(CaptureState.effectiveCameraProvider);
+    // 直接读写 flashModeProvider：它与顶部导航闪光按钮、拍照 config 共用同一
+    // 状态源，capture_page 的监听器会据此调用 CameraService.setFlashMode 真正驱动相机。
+    final flashMode = ref.watch(CaptureState.flashModeProvider);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
       child: _ChoicePillRow(
         items: _flashChoices,
-        selected: cam.flashMode,
+        selected: flashMode.name,
         visual: visual,
         onSelected: (v) =>
-            CaptureState.updateCamera(ref, (c) => c.copyWith(flashMode: v)),
+            ref.read(CaptureState.flashModeProvider.notifier).state =
+                CaptureFlashMode.values.byName(v),
       ),
     );
   }
