@@ -5,7 +5,7 @@ import 'package:image/image.dart' as img;
 // ignore_for_file: implementation_imports
 import 'package:image/src/exif/ifd_directory.dart';
 import 'package:image/src/exif/ifd_value.dart';
-import 'exif_card_generator.dart';
+import 'exif_info.dart';
 
 /// 从 JPEG 文件读取 EXIF 元数据
 ///
