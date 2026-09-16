@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -52,6 +54,98 @@ class MyApp extends ConsumerWidget {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 框架级异常兜底：release 下 FlutterError 默认只 dump 到控制台，界面上没有任何反馈，
+  // 用户看到的就是"白屏"。这里显式上报，便于 hilog / 崩溃平台定位。
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    _reportFatal(details.exception, details.stack);
+  };
+
+  Object? bootError;
+  StackTrace? bootStack;
+
+  // 启动链整体放进 zone：任何逃逸到这里的异常都会被捕获，最后兜底渲染错误页，
+  // 而不是留下一个白屏。
+  await runZonedGuarded(
+    _bootstrapAndRun,
+    (Object error, StackTrace stack) {
+      bootError ??= error;
+      bootStack ??= stack;
+      _reportFatal(error, stack);
+    },
+  );
+
+  if (bootError != null) {
+    // 启动失败（典型：sqflite 原生库缺失导致 _createBootstrapDaos 抛异常）
+    // —— 宁可把错误显示出来，也不要白屏。
+    runApp(_BootErrorApp(error: bootError!, stack: bootStack));
+  }
+}
+
+/// 把致命错误打到控制台（release 下也会输出，鸿蒙上会进 hilog）。
+void _reportFatal(Object error, StackTrace? stack) {
+  FlutterError.dumpErrorToConsole(
+    FlutterErrorDetails(
+      exception: error,
+      stack: stack,
+      library: 'Lumira bootstrap',
+    ),
+  );
+}
+
+/// Bootstrap 失败时的兜底 UI。
+///
+/// 原先 main() 在 runApp 之前会 await sqflite 初始化（_createBootstrapDaos），
+/// 一旦原生库缺失或数据库损坏抛异常，runApp 永远不会执行 —— 用户只看到白屏，
+/// 且没有任何可反馈的信息。这里把异常直接渲染出来，至少能自证问题。
+class _BootErrorApp extends StatelessWidget {
+  const _BootErrorApp({required this.error, this.stack});
+
+  final Object error;
+  final StackTrace? stack;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: '如画 Lumira',
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '启动失败',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  '应用初始化时发生错误。请重启应用；若持续出现，请联系客服并提供下面的信息。',
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      '${stack == null ? error : '$error\n\n$stack'}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 启动链：全部初始化 + runApp。
+///
+/// 任何异常向上抛给 main 里的 runZonedGuarded，由它决定渲染错误页。
+Future<void> _bootstrapAndRun() async {
   // 性能(OHOS): 调大解码位图缓存上限（Flutter 默认 100MB / 1000 张）。
   // 四个 Tab 页常驻 + 图片密集，默认上限会在滚动时频繁淘汰已解码缩略图；
   // 而 ln 引擎 dart:ui 图片解码慢，滚动回看/新卡入屏会因重新解码掉帧。
