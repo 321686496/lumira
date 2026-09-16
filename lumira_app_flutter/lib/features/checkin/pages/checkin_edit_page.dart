@@ -871,6 +871,9 @@ class _PhotoEditCell extends StatelessWidget {
         boxShadow: tokens.shadowConvexSubtle,
       ),
       child: Stack(
+        // StackFit.expand：图片是唯一非定位子节点，强制撑满整个格，
+        // 其余封面角标/渐变/删除按钮均为 Positioned，不受影响。
+        fit: StackFit.expand,
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(12),

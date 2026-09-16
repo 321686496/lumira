@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_tokens.dart';
@@ -10,13 +10,13 @@ import '../data/checkin_categories.dart';
 import '../data/checkin_models.dart';
 import '../data/checkin_providers.dart';
 import 'checkin_common.dart';
-import 'checkin_poster_photo_picker.dart';
 import 'checkin_poster_widgets.dart';
 
 /// 展示海报：直接调用 [showCheckinPoster] 生成/导出/分享探店足迹海报。
 ///
-/// 会异步加载该次探店全部照片；照片 >5 张时先弹选图面板（最多 5 张，首位为大图），
-/// 再进入样式选择器预览（温柔手帐 / 奶油莫兰迪 / 鎏金画框 / 错落画廊）。
+/// 会异步加载该次探店全部照片，并在样式选择器弹窗（温柔手帐 / 奶油莫兰迪 /
+/// 鎏金画框 / 错落画廊）内置「照片顺序」面板：可拖拽调序、从全部照片追加，
+/// 首位照片为海报大图；最多 5 张（匹配各版式「1 大图 + 4 小图」的固定布局）。
 Future<void> showCheckinPoster({
   required BuildContext context,
   required ThemeTokens tokens,
@@ -40,23 +40,13 @@ Future<void> showCheckinPoster({
     return;
   }
 
-  final List<String> urls;
-  if (base.length > 5) {
-    final picked =
-        await showCheckinPhotoPicker(context: context, tokens: tokens, photoUrls: base);
-    if (picked == null || picked.isEmpty) return; // 用户取消
-    urls = picked;
-  } else {
-    urls = base.take(5).toList(growable: false);
-  }
-
-  if (!context.mounted) return;
-  if (urls.isEmpty || urls.first.isEmpty) {
-    LumiraToast.show(context, '暂无可分享的照片');
-    return;
-  }
-
-  final data = buildCheckinData(record: record, photoUrls: urls, tokens: tokens);
+  // 初始默认取前 5 张作为首批海报照片（首位为大图）。
+  final initial = base.take(_kMaxPosterPhotos).toList(growable: false);
+  final data = buildCheckinData(
+    record: record,
+    photoUrls: List<String>.of(initial),
+    tokens: tokens,
+  );
 
   if (!context.mounted) return;
   await PosterGenerator.showPosterWithStylePicker(
@@ -66,11 +56,27 @@ Future<void> showCheckinPoster({
     kind: PosterKind.checkin,
     ratio: PosterRatio.ratio34,
     data: data,
+    // 「照片顺序」面板：在弹窗内拖拽调序 / 从全部追加，取代旧的独立选图前置弹窗。
+    reorder: PosterReorderSpec(
+      allItems: base,
+      initialSelected: initial,
+      itemThumb: (item, size) =>
+          checkinPhoto(url: item as String, tokens: tokens, width: size, height: size),
+      buildData: (ratio, ordered) => buildCheckinData(
+        record: record,
+        photoUrls: ordered.map((e) => e as String).toList(growable: false),
+        tokens: tokens,
+      ),
+      maxCount: _kMaxPosterPhotos,
+    ),
     shareSubject: '如画 LUMIRA · 探店足迹',
     shareText: '推荐你这家店：${record.name}',
     fileNamePrefix: 'checkin_${record.id}',
   );
 }
+
+/// 探店足迹海报单次展示照片上限（匹配各版式「1 大图 + 4 小图」固定布局）。
+const int _kMaxPosterPhotos = 5;
 
 /// 组装海报数据：首位照片为大图，其余为小图（至多 4 张）。
 /// 发布于测试可见：供 Widget/单测直接构造数据。
