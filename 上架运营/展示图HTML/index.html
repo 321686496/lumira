@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 Lumira · App Store 展示图（8 张 · 1080×1920）</title>
+<style>
+  :root{
+    --cream:#FAF7F2;
+    --cream-deep:#F2EEE6;
+    --ink:#1A1A1A;
+    --ink-2:#5C5852;
+    --ink-3:#9C9690;
+    --gold:#C9A96E;
+    --gold-deep:#A88550;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#EAE6DE;font-family:-apple-system,"PingFang SC","Microsoft YaHei","Helvetica Neue",Helvetica,Arial,sans-serif;}
+
+  /* 顶部工具栏 */
+  .toolbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    padding:12px 22px;background:rgba(250,247,242,.94);backdrop-filter:blur(8px);border-bottom:1px solid #DCD7CB;}
+  .toolbar h1{font-size:17px;font-weight:700;color:var(--ink);margin-right:4px;}
+  .toolbar .sub{font-size:12px;color:var(--ink-2);}
+  .toolbar .spacer{flex:1;}
+  .toolbar label{font-size:12px;color:var(--ink-2);display:flex;align-items:center;gap:6px;}
+  .toolbar input[type=range]{width:120px;}
+  .toolbar button{font-size:12px;padding:6px 12px;border-radius:16px;border:1px solid #D0C9B7;background:#fff;color:var(--ink);cursor:pointer;}
+  .toolbar button:hover{border-color:var(--gold);color:var(--gold-deep);}
+
+  /* 画廊：每行四张 */
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;padding:24px;max-width:1500px;margin:0 auto;}
+  .post{background:#FBF9F4;border-radius:14px;overflow:hidden;box-shadow:0 10px 26px rgba(60,52,40,.14);
+    border:1px solid #ECE5D6;}
+  .post .cap{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;font-size:12px;color:var(--ink-2);}
+  .post .cap b{color:var(--ink);font-size:12px;}
+  .cell{position:relative;width:100%;aspect-ratio:9/16;overflow:hidden;background:#E4DED2;border-top:1px solid #EAE2D2;}
+
+  /* 画板（1080 x 1920） */
+  .artboard{position:absolute;top:0;left:0;width:1080px;height:1920px;background:var(--cream);transform-origin:top left;}
+  .artboard .label{position:absolute;top:52px;right:44px;font-size:18px;font-weight:600;color:rgba(90,80,60,.45);letter-spacing:2px;}
+
+  /* 文字 */
+  .big-title{font-size:66px;font-weight:800;line-height:1.2;color:var(--ink);letter-spacing:1px;}
+  .big-title .hl{color:var(--gold-deep);}
+  .sub-title{font-size:31px;font-weight:500;color:var(--ink-2);margin-top:18px;letter-spacing:.5px;}
+
+  /* 手机壳（屏幕比例按真实手机 9:19.5） */
+  .phone{background:#1E1C1A;border-radius:44px;padding:12px;box-shadow:0 34px 70px rgba(40,34,26,.45);flex:none;position:relative;}
+  .phone .screen{background:var(--cream);border-radius:34px;overflow:hidden;position:relative;}
+  .phone .notch{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:132px;height:22px;background:#1E1C1A;border-radius:16px;z-index:3;}
+
+  .pic{background-size:cover;background-position:center;background-color:#E4DED2;}
+  .pill{display:inline-flex;align-items:center;gap:10px;background:var(--ink);color:#fff;border-radius:999px;padding:20px 38px;font-size:32px;font-weight:600;}
+  .badge-gold{background:linear-gradient(135deg,#D8B57A,#B8894E);color:#fff;}
+  /* 手机内模板列表行 */
+  .pt{display:flex;gap:14px;align-items:center;background:#fff;border-radius:16px;padding:12px;border:1px solid #F0E8D8;box-shadow:0 10px 22px rgba(90,78,58,.08);}
+  .pt.hot{border:1px solid #E7CB9A;background:linear-gradient(180deg,#FFFDF6,#FBF3E2);}
+  .pt .th{width:84px;height:84px;border-radius:12px;background-size:cover;background-position:center;background-color:#E9E2D2;flex:none;}
+  .pt .nm{font-size:16px;font-weight:700;color:var(--ink);line-height:1.25;}
+  .pt .tg{font-size:12px;color:var(--ink-2);margin-top:3px;}
+  .pt .ic{width:26px;height:26px;border-radius:8px;background:var(--gold);display:grid;place-items:center;font-size:14px;color:#fff;flex:none;margin-left:auto;}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <h1>如画 Lumira · 上架展示图</h1>
+  <span class="sub">每行 4 张 · 1080 × 1920 · 图片为占位</span>
+  <div class="spacer"></div>
+  <label>缩放 <input type="range" id="scaleRange" min="0.2" max="1.5" step="0.02" value="1"></label>
+  <button onclick="proto(1)">自动适配</button>
+  <button onclick="setAllScale(1)">100%</button>
+</div>
+
+<div class="grid" id="grid">
+
+<!-- ===== ① 首图 ===== -->
+<figure class="post">
+  <div class="cap"><b>① 首图 · 获客</b><span>1080×1920</span></div>
+  <div class="cell"><div class="artboard">
+    <div class="label">SCREEN 1 / 8</div>
+    <div style="position:absolute;top:52px;left:0;right:0;text-align:center;">
+      <div style="font-size:21px;font-weight:600;color:var(--gold-deep);letter-spacing:7px;">姿势剪影实时引导</div>
+      <div class="big-title" style="margin-top:8px;font-size:66px;">照着模板拍出大片</div>
+    </div>
+    <!-- 左废片 / 中App界面 / 右大片 三栏 -->
+    <!-- 中间 App 界面（在照片下一层，被两张照片重叠覆盖） -->
+    <div style="position:absolute;top:250px;left:0;right:0;text-align:center;z-index:3;">
+      <div style="font-size:20px;font-weight:700;color:var(--gold-deep);">App 内 · 套用模板引导</div>
+    </div>
+    <div style="position:absolute;top:340px;left:330px;z-index:1;">
+      <div class="phone" style="width:420px;border-radius:38px;padding:11px;">
+      <div class="screen" style="width:398px;height:708px;border-radius:30px;">
+          <div class="notch"></div>
+          <!-- 取景器 + 剪影 -->
+          <div class="pic" style="position:absolute;inset:0;filter:blur(2px) brightness(1.02);background-image:url('https://picsum.photos/seed/lumira-tpl/420/750');"></div>
+          <div style="position:absolute;inset:0;display:grid;place-items:center;">
+            <svg width="188" height="352" viewBox="0 0 300 560" fill="rgba(255,255,255,.5)" style="filter:drop-shadow(0 6px 12px rgba(0,0,0,.4));">
+              <ellipse cx="150" cy="78" rx="52" ry="60"/>
+              <path d="M60 300 C60 230 110 140 150 140 C190 140 240 230 240 300 C250 360 248 420 240 470 L250 540 L190 540 L196 460 C190 430 186 410 180 395 C196 460 190 520 150 540 C110 520 104 460 120 395 C114 410 110 430 104 460 L110 540 L50 540 L60 470 C52 420 50 360 60 300 Z"/>
+            </svg>
+          </div>
+          <div style="position:absolute;left:44px;top:44px;width:22px;height:22px;border:3px solid rgba(255,255,255,.75);border-radius:6px;"></div>
+          <!-- 顶部模板名 -->
+          <div style="position:absolute;top:56px;left:50%;transform:translateX(-50%);background:rgba(250,247,242,.95);border-radius:999px;padding:8px 18px;font-size:16px;font-weight:700;color:var(--ink);white-space:nowrap;">已套用：晴空少女人像</div>
+          <!-- 底部跟摆提示 -->
+          <div style="position:absolute;left:0;right:0;bottom:0;padding:28px 20px 62px;">
+            <div style="background:rgba(250,247,242,.97);border-radius:18px;padding:18px 20px;">
+              <div style="font-size:18px;font-weight:800;color:var(--ink);line-height:1.3;">肩膀放松，重心移到后脚</div>
+              <div style="font-size:14px;color:var(--ink-2);margin-top:4px;">侧身 45°，看镜头微笑</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 左：使用前（9:16） -->
+    <div style="position:absolute;top:520px;left:52px;width:430px;height:764px;border-radius:30px;overflow:hidden;box-shadow:0 34px 70px rgba(60,50,40,.30);z-index:2;">
+      <div class="pic" style="position:absolute;inset:0;filter:saturate(.5) contrast(.9) brightness(1.06);background-image:url('https://picsum.photos/seed/lumira-stiff/460/820');"></div>
+      <div style="position:absolute;left:22px;top:22px;background:rgba(250,247,242,.92);border-radius:13px;padding:9px 16px;font-size:21px;font-weight:700;color:#8a7a68;">使用前 · 僵硬废片</div>
+      <div style="position:absolute;left:0;right:0;bottom:0;padding:20px 22px;background:linear-gradient(to top,rgba(50,42,32,.55),transparent);">
+        <div style="font-size:24px;font-weight:700;color:#fff;">不会摆 · 没构图</div>
+        <div style="font-size:17px;color:rgba(255,255,255,.85);margin-top:4px;">姿势歪斜，十张九废</div>
+      </div>
+    </div>
+    <!-- 右：使用后（9:16） -->
+    <div style="position:absolute;top:520px;left:598px;width:430px;height:764px;border-radius:30px;overflow:hidden;box-shadow:0 34px 70px rgba(60,50,40,.30);z-index:2;">
+      <div class="pic" style="position:absolute;inset:0;background-image:url('https://picsum.photos/seed/lumira-shot/460/820');"></div>
+      <div style="position:absolute;right:22px;top:22px;background:#fff;border-radius:13px;padding:9px 16px;font-size:21px;font-weight:700;color:var(--gold-deep);">使用后 · 秒出大片</div>
+      <div style="position:absolute;left:0;right:0;bottom:0;padding:20px 22px;background:linear-gradient(to top,rgba(40,30,20,.45),transparent);">
+        <div style="font-size:24px;font-weight:700;color:#fff;">跟着摆 · 构图全对齐</div>
+        <div style="font-size:17px;color:rgba(255,255,255,.85);margin-top:4px;">看镜头微笑，一张出片</div>
+      </div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:56px;text-align:center;">
+      <div class="pill badge-gold" style="font-size:30px;padding:20px 46px;">打开 App 跟我摆 →</div>
+    </div>
+  </div></div>
+</figure>
+
+<!-- ===== ② 模板库 ===== -->
+<figure class="post">
+  <div class="cap"><b>② 模板库</b><span>1080×1920</span></div>
+  <div class="cell"><div class="artboard">
+    <div class="label">SCREEN 2 / 8</div>
+    <div style="position:absolute;top:56px;left:56px;">
+      <div class="big-title">百款模板随心挑</div>
+      <div class="sub-title">人像 / 风光 / 美食 / 街拍 / 夜景全覆盖</div>
+    </div>
+    <!-- 一级分类 chips -->
+    <div style="position:absolute;top:230px;left:56px;right:56px;display:flex;flex-wrap:wrap;gap:14px;">
+      <span style="background:var(--ink);color:#fff;border-radius:999px;padding:12px 28px;font-size:26px;font-weight:700;">人像</span>
+      <span style="background:#fff;color:var(--ink);border:1px solid #E6DCC8;border-radius:999px;padding:11px 27px;font-size:26px;font-weight:600;">风光</span>
+      <span style="background:#fff;color:var(--ink);border:1px solid #E6DCC8;border-radius:999px;padding:11px 27px;font-size:26px;font-weight:600;">美食</span>
+      <span style="background:#fff;color:var(--ink);border:1px solid #E6DCC8;border-radius:999px;padding:11px 27px;font-size:26px;font-weight:600;">街拍</span>
+      <span style="background:#fff;color:var(--ink);border:1px solid #E6DCC8;border-radius:999px;padding:11px 27px;font-size:26px;font-weight:600;">夜景</span>
+      <span style="background:#fff;color:var(--ink);border:1px solid #E6DCC8;border-radius:999px;padding:11px 27px;font-size:26px;font-weight:600;">微距</span>
+      <span style="background:#fff;color:var(--ink);border:1px solid #E6DCC8;border-radius:999px;padding:11px 27px;font-size:26px;font-weight:600;">静物</span>
+    </div>
+    <!-- 瀑布流平铺：三列串列重叠 + 中缝跨列交错（7 大分类） -->
+    <div class="phone" style="position:absolute;top:360px;left:40px;width:300px;z-index:1;"><div class="screen" style="width:276px;height:491px;">
+      <div class="notch"></div>
+      <div style="padding:88px 18px 18px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div style="font-size:24px;font-weight:800;color:var(--ink);">模板库 · 人像</div>
+          <div style="font-size:14px;color:var(--gold-deep);font-weight:700;">12</div>
+        </div>
+        <div class="pt hot"><div class="th" style="width:96px;height:96px;background-image:url('https://picsum.photos/seed/rx1/140/140');"></div><div><div class="nm" style="font-size:19px;">晴空田园少女</div><div class="tg" style="font-size:14px;">田园 · 甜系</div></div><div class="ic">›</div></div>
+        <div class="pt" style="margin-top:10px;"><div class="th" style="width:96px;height:96px;background-image:url('https://picsum.photos/seed/rx2/140/140');"></div><div><div class="nm" style="font-size:19px;">复古港风女神</div><div class="tg" style="font-size:14px;">复古 · 影楼</div></div><div class="ic">›</div></div>
+      </div>
+    </div></div>
+    <div class="phone" style="position:absolute;top:300px;left:400px;width:300px;z-index:1;"><div class="screen" style="width:276px;height:491px;">
+      <div class="notch"></div>
+      <div style="padding:88px 18px 18px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div style="font-size:24px;font-weight:800;color:var(--ink);">模板库 · 美食</div>
+          <div style="font-size:14px;color:var(--gold-deep);font-weight:700;">9</div>
+        </div>
+        <div class="pt hot"><div class="th" style="width:96px;height:96px;background-image:url('https://picsum.photos/seed/ms1/140/140');"></div><div><div class="nm" style="font-size:19px;">暖光美食日记</div><div class="tg" style="font-size:14px;">餐厅 · 暖调</div></div><div class="ic">›</div></div>
+        <div class="pt" style="margin-top:10px;"><div class="th" style="width:96px;height:96px;background-image:url('https://picsum.photos/seed/ms2/140/140');"></div><div><div class="nm" style="font-size:19px;">咖啡馆手冲</div><div class="tg" style="font-size:14px;">咖啡 · 特写</div></div><div class="ic">›</div></div>
+      </div>
+    </div></div>
+    <div class="phone" style="position:absolute;top:380px;left:760px;width:300px;z-index:1;"><div class="screen" style="width:276px;height:491px;">
+      <div class="notch"></div>
+      <div style="padding:88px 18px 18px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div style="font-size:24px;font-weight:800;color:var(--ink);">模板库 · 街拍</div>
+          <div style="font-size:14px;color:var(--gold-deep);font-weight:700;">8</div>
+        </div>
+        <div class="pt hot"><div class="th" style="width:96px;height:96px;background-image:url('https://picsum.photos/seed/jp1/140/140');"></div><div><div class="nm" style="font-size:19px;">街角回眸</div><div class="tg" style="font-size:14px;">街头 · 抓拍</div></div><div class="ic">›</div></div>
+        <div class="pt" style="margin-top:10px;"><div class="th" style="width:96px;height:96px;background-image:url('https://picsum.photos/seed/jp2/140/140');"></div><div><div class="nm" style="font-size:19px;">斑马线抓拍</div><div class="tg" style="font-size:14px;">街头 · 动感</div></div><div class="ic">›</div></div>
+      </div>
+    </div></div>
+    <div class="phone" style="position:absolute;top:760px;left:40px;width:300px;z-index:2;"><div class="screen" style="width:276px;height:491px;">
+      <div class="notch"></div>
+      <div style="padding:88px 18px 18px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div style="font-size:24px;font-weight:800;color:var(--ink);">模板库 · 夜景</div>
+          <div style="font-size:14px;color:var(--gold-deep);font-weight:700;">11</div>
+        </div>
+        <div class="pt hot"><div class="th" style="width:96px;height:96px;background-image:url('https://picsum.photos/seed/yj1/140/140');"></div><div><div class="nm" style="font-size:19px;">城市霓虹</div><div class="tg" style="font-size:14px;">夜景 · 霓虹</div></div><div class="ic">›</div></div>
+        <div class="pt" style="margin-top:10px;"><div class="th" style="width:96px;height:96px;background-image:url('https://picsum.photos/seed/yj2/140/140');"></div><div><div class="nm" style="font-size:19px;">光斑暗调</div><div class="tg" style="font-size:14px;">夜景 · Bokeh</div></div><div class="ic">›</div></div>
+      </div>
+    </div></div>
+    <div class="phone" style="position:absolute;top:700px;left:400px;width:300px;z-index:2;"><div class="screen" style="width:276px;height:491px;">
+      <div class="notch"></div>
+      <div style="padding:88px 18px 18px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div style="font-size:24px;font-weight:800;color:var(--ink);">模板库 · 风光</div>
+          <div style="font-size:14px;color:var(--gold-deep);font-weight:700;">7</div>
+        </div>
+        <div class="pt hot"><div class="th" style="width:96px;height:96px;background-image:url('https://picsum.photos/seed/fg1/140/140');"></div><div><div class="nm" style="font-size:19px;">黄金时刻山天</div><div class="tg" style="font-size:14px;">风景 · 金调</div></div><div class="ic">›</div></div>
+        <div class="pt" style="margin-top:10px;"><div class="th" style="width:96px;height:96px;background-image:url('https://picsum.photos/seed/fg2/140/140');"></div><div><div class="nm" style="font-size:19px;">湖面天空之镜</div><div class="tg" style="font-size:14px;">风景 · 倒影</div></div><div class="ic">›</div></div>
+      </div>
+    </div></div>
+    <div class="phone" style="position:absolute;top:760px;left:760px;width:300px;z-index:2;"><div class="screen" style="width:276px;height:491px;">
+      <div class="notch"></div>
+      <div style="padding:88px 18px 18px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div style="font-size:24px;font-weight:800;color:var(--ink);">模板库 · 微距</div>
+          <div style="font-size:14px;color:var(--gold-deep);font-weight:700;">5</div>
+        </div>
+        <div class="pt hot"><div class="th" style="width:96px;height:96px;background-image:url('https://picsum.photos/seed/wj1/140/140');"></div><div><div class="nm" style="font-size:19px;">露珠特写</div><div class="tg" style="font-size:14px;">微距 · 水珠</div></div><div class="ic">›</div></div>
+        <div class="pt" style="margin-top:10px;"><div class="th" style="width:96px;height:96px;background-image:url('https://picsum.photos/seed/wj2/140/140');"></div><div><div class="nm" style="font-size:19px;">花瓣肌理</div><div class="tg" style="font-size:14px;">微距 · 纹理</div></div><div class="ic">›</div></div>
+      </div>
+    </div></div>
+    <div class="phone" style="position:absolute;top:1000px;left:190px;width:300px;z-index:3;"><div class="screen" style="width:276px;height:491px;">
+      <div class="notch"></div>
+      <div style="padding:88px 18px 18px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div style="font-size:24px;font-weight:800;color:var(--ink);">模板库 · 静物</div>
+          <div style="font-size:14px;color:var(--gold-deep);font-weight:700;">6</div>
+        </div>
+        <div class="pt hot"><div class="th" style="width:96px;height:96px;background-image:url('https://picsum.photos/seed/jw1/140/140');"></div><div><div class="nm" style="font-size:19px;">窗光器物</div><div class="tg" style="font-size:14px;">器物 · 柔光</div></div><div class="ic">›</div></div>
+        <div class="pt" style="margin-top:10px;"><div class="th" style="width:96px;height:96px;background-image:url('https://picsum.photos/seed/jw2/140/140');"></div><div><div class="nm" style="font-size:19px;">手作陶瓷</div><div class="tg" style="font-size:14px;">器物 · 质感</div></div><div class="ic">›</div></div>
+      </div>
+    </div></div>
+    <!-- 底部横幅 -->
+    <div style="position:absolute;bottom:120px;left:56px;right:56px;background:linear-gradient(135deg,#E7CB9A,#D8B57A);border-radius:34px;padding:34px 42px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:34px;font-weight:800;color:#5A472C;">60+ 款精品模板 · 打开即拍</div>
+      <div style="font-size:26px;color:#6B5636;font-weight:600;">七大分类 · 每周上新 ▸</div>
+    </div>
+  </div></div>
+</figure>
+
+<!-- ===== ③ 剪影 ===== -->
+<figure class="post">
+  <div class="cap"><b>③ 姿势剪影</b><span>1080×1920</span></div>
+  <div class="cell"><div class="artboard">
+    <div class="label">SCREEN 3 / 8</div>
+    <div style="position:absolute;top:56px;left:56px;">
+      <div class="big-title">不会摆姿势？跟着来</div>
+      <div class="sub-title">构图姿势，一目了然</div>
+    </div>
+    <div style="position:absolute;top:280px;left:50%;transform:translateX(-50%);">
+      <div class="phone" style="width:540px;">
+        <div class="screen" style="width:516px;height:1172px;">
+          <div class="notch"></div>
+          <div class="pic" style="position:absolute;inset:0;filter:blur(2px);background-image:url('https://picsum.photos/seed/lumira-view/540/1200');"></div>
+          <div style="position:absolute;inset:0;display:grid;place-items:center;">
+            <svg width="270" height="504" viewBox="0 0 300 560" fill="rgba(255,255,255,.5)" style="filter:drop-shadow(0 8px 16px rgba(0,0,0,.4));">
+              <ellipse cx="150" cy="78" rx="52" ry="60"/>
+              <path d="M60 300 C60 230 110 140 150 140 C190 140 240 230 240 300 C250 360 248 420 240 470 L250 540 L190 540 L196 460 C190 430 186 410 180 395 C196 460 190 520 150 540 C110 520 104 460 120 395 C114 410 110 430 104 460 L110 540 L50 540 L60 470 C52 420 50 360 60 300 Z"/>
+            </svg>
+          </div>
+          <div style="position:absolute;left:44px;top:44px;width:26px;height:26px;border:3px solid rgba(255,255,255,.7);border-radius:7px;"></div>
+          <div style="position:absolute;right:44px;top:230px;width:90px;height:5px;border-radius:3px;background:rgba(255,255,255,.6);"></div>
+          <div style="position:absolute;left:0;right:0;bottom:0;padding:44px 32px 120px;">
+            <div style="background:rgba(250,247,242,.96);border-radius:24px;padding:26px 30px;display:flex;align-items:center;justify-content:space-between;">
+              <div>
+                <div style="font-size:26px;font-weight:800;color:var(--ink);">对准剪影，手腕抬高一点</div>
+                <div style="font-size:21px;color:var(--ink-2);margin-top:6px;">侧身 45°，看镜头微笑</div>
+              </div>
+              <div style="width:70px;height:70px;border-radius:50%;background:var(--gold);color:#fff;display:grid;place-items:center;font-size:30px;">✓</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+</figure>
+
+<!-- ===== ④ 场景·探店 ===== -->
+<figure class="post">
+  <div class="cap"><b>④ 场景·探店</b><span>1080×1920</span></div>
+  <div class="cell"><div class="artboard">
+    <div class="label">SCREEN 4 / 8</div>
+    <div style="position:absolute;top:56px;left:56px;">
+      <div class="big-title">探店打卡，一键出片</div>
+      <div class="sub-title">场景模板，直接套用</div>
+    </div>
+    <div style="position:absolute;top:300px;bottom:70px;left:56px;right:56px;border-radius:34px;overflow:hidden;box-shadow:0 34px 70px rgba(60,50,40,.30);position:relative;">
+      <div class="pic" style="position:absolute;inset:0;background-image:url('https://picsum.photos/seed/lumira-coffee/1080/1500');"></div>
+      <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(40,30,20,.35),transparent 40%);"></div>
+      <div style="position:absolute;left:50%;top:44px;transform:translateX(-50%);display:flex;gap:14px;background:rgba(250,247,242,.9);padding:12px 24px;border-radius:999px;font-size:25px;font-weight:700;color:var(--ink);">☕ 咖啡探店 · 暖光氛围</div>
+      <div style="position:absolute;left:44px;bottom:44px;">
+        <div style="font-size:42px;font-weight:800;color:#fff;text-shadow:0 3px 16px rgba(0,0,0,.4);">随手一拍都是大片</div>
+        <div style="font-size:24px;color:rgba(255,255,255,.85);margin-top:12px;">用「如画」· 照着剪影出片</div>
+      </div>
+      <div style="position:absolute;right:44px;bottom:44px;background:#fff;color:var(--gold-deep);font-size:26px;font-weight:700;padding:16px 24px;border-radius:18px;">导出分享</div>
+    </div>
+  </div></div>
+</figure>
+
+<!-- ===== ⑤ 记录 ===== -->
+<figure class="post">
+  <div class="cap"><b>⑤ 情感·记录</b><span>1080×1920</span></div>
+  <div class="cell"><div class="artboard">
+    <div class="label">SCREEN 5 / 8</div>
+    <div style="position:absolute;top:56px;left:56px;">
+      <div class="big-title">把生活拍成日记</div>
+      <div class="sub-title">每日挑战 · 连续打卡</div>
+    </div>
+    <div style="position:absolute;top:280px;left:56px;right:56px;display:flex;gap:36px;align-items:center;">
+      <div class="phone" style="width:480px;">
+        <div class="screen" style="width:456px;height:990px;">
+          <div class="notch"></div>
+          <div style="padding:54px 26px 30px;">
+            <div style="font-size:36px;font-weight:800;color:var(--ink);margin-bottom:30px;">我的拍摄日记</div>
+            <div style="display:flex;flex-direction:column;gap:24px;">
+              <div style="display:flex;gap:20px;align-items:flex-start;">
+                <div style="width:22px;align-self:stretch;display:flex;justify-content:center;padding-top:4px;">
+                  <div style="width:15px;height:15px;border-radius:50%;background:var(--gold);outline:5px solid #F3E7D0;"></div>
+                </div>
+                <div>
+                  <div style="font-size:21px;color:var(--ink-2);font-weight:600;">今天 09:30 · 晴</div>
+                  <div style="font-size:27px;font-weight:700;color:var(--ink);margin-top:5px;">秋日氛围 · 咖啡探店</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:20px;align-items:flex-start;">
+                <div style="width:22px;align-self:stretch;display:flex;justify-content:center;padding-top:4px;">
+                  <div style="width:15px;height:15px;border-radius:50%;background:#C9C4B4;outline:5px solid #F2EEE6;"></div>
+                </div>
+                <div>
+                  <div style="font-size:21px;color:var(--ink-2);font-weight:600;">昨天 · 街拍</div>
+                  <div style="font-size:27px;font-weight:700;color:var(--ink);margin-top:5px;">律动街角大片</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:20px;align-items:flex-start;">
+                <div style="width:22px;align-self:stretch;display:flex;justify-content:center;padding-top:4px;">
+                  <div style="width:15px;height:15px;border-radius:50%;background:#C9C4B4;outline:5px solid #F2EEE6;"></div>
+                </div>
+                <div>
+                  <div style="font-size:21px;color:var(--ink-2);font-weight:600;">周一 · 夜景</div>
+                  <div style="font-size:27px;font-weight:700;color:var(--ink);margin-top:5px;">城市灯火剪影</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+        <div class="pic" style="aspect-ratio:3/4.4;border-radius:24px;background-image:url('https://picsum.photos/seed/day1/480/700');"></div>
+        <div class="pic" style="aspect-ratio:3/4.4;border-radius:24px;background-image:url('https://picsum.photos/seed/day2/480/700');"></div>
+        <div class="pic" style="aspect-ratio:3/4.4;border-radius:24px;background-image:url('https://picsum.photos/seed/day3/480/700');"></div>
+        <div class="pic" style="aspect-ratio:3/4.4;border-radius:24px;background-image:url('https://picsum.photos/seed/day4/480/700');"></div>
+      </div>
+    </div>
+  </div></div>
+</figure>
+
+<!-- ===== ⑥ 风格 ===== -->
+<figure class="post">
+  <div class="cap"><b>⑥ 体验·风格</b><span>1080×1920</span></div>
+  <div class="cell"><div class="artboard" style="background:linear-gradient(160deg,#FAF7F2,#F3EEE2);">
+    <div class="label">SCREEN 6 / 8</div>
+    <div style="position:absolute;top:56px;left:56px;">
+      <div class="big-title">四种风格随心换</div>
+      <div class="sub-title">好看界面，匹配你的审美</div>
+    </div>
+    <div style="position:absolute;top:330px;left:70px;right:70px;display:grid;grid-template-columns:repeat(4,1fr);gap:20px;">
+      <div style="border-radius:26px;background:#F2EEE6;box-shadow:8px 8px 22px rgba(120,105,85,.18),-8px -8px 22px #fff;padding:24px;">
+        <div style="border-radius:20px;background:#F2EEE6;box-shadow:6px 6px 14px rgba(120,105,85,.18),-6px -6px 14px #fff;height:190px;display:grid;place-items:center;">
+          <div style="width:92px;height:92px;border-radius:50%;background:#F2EEE6;box-shadow:inset 6px 6px 13px rgba(120,105,85,.22),inset -6px -6px 13px #fff;"></div>
+        </div>
+        <div style="text-align:center;font-size:27px;font-weight:700;color:var(--ink);margin-top:22px;">新拟态</div>
+        <div style="text-align:center;font-size:19px;color:var(--ink-2);margin-top:5px;">柔和浮雕质感</div>
+      </div>
+      <div style="border-radius:26px;background:linear-gradient(150deg,rgba(255,255,255,.7),rgba(240,238,250,.5));border:1px solid rgba(255,255,255,.8);padding:24px;">
+        <div style="border-radius:20px;height:190px;background:linear-gradient(150deg,#D8E4EC,#C7B9E0);position:relative;overflow:hidden;">
+          <div style="position:absolute;left:-24px;top:-16px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.5);filter:blur(5px);"></div>
+          <div style="position:absolute;right:24px;top:48px;width:70px;height:70px;border-radius:18px;background:rgba(255,255,255,.65);"></div>
+        </div>
+        <div style="text-align:center;font-size:27px;font-weight:700;color:var(--ink);margin-top:22px;">玻璃</div>
+        <div style="text-align:center;font-size:19px;color:var(--ink-2);margin-top:5px;">通透磨砂质感</div>
+      </div>
+      <div style="border-radius:26px;background:#fff;border:1px solid #EDE7DA;padding:24px;">
+        <div style="border-radius:20px;height:190px;background:linear-gradient(150deg,#EFDCD4,#F6E9C7);display:grid;place-items:center;">
+          <div style="width:92px;height:92px;border-radius:22px;background:var(--gold);"></div>
+        </div>
+        <div style="text-align:center;font-size:27px;font-weight:700;color:var(--ink);margin-top:22px;">扁平</div>
+        <div style="text-align:center;font-size:19px;color:var(--ink-2);margin-top:5px;">清爽简洁</div>
+      </div>
+      <div style="border-radius:26px;background:linear-gradient(150deg,#F6E3EC,#EADBF0);padding:24px;">
+        <div style="border-radius:20px;height:190px;background:linear-gradient(150deg,#F3CFE0,#DCCBEA);display:grid;place-items:center;">
+          <div style="width:92px;height:92px;border-radius:50%;background:linear-gradient(135deg,#E8A0BF,#C79AD6);box-shadow:8px 12px 22px rgba(150,100,150,.3);"></div>
+        </div>
+        <div style="text-align:center;font-size:27px;font-weight:700;color:#6A3D52;margin-top:22px;">女性美学</div>
+        <div style="text-align:center;font-size:19px;color:#8A5C77;margin-top:5px;">温柔浪漫</div>
+      </div>
+    </div>
+  </div></div>
+</figure>
+
+<!-- ===== ⑦ 分享 ===== -->
+<figure class="post">
+  <div class="cap"><b>⑦ 情感·分享</b><span>1080×1920</span></div>
+  <div class="cell"><div class="artboard" style="background:linear-gradient(165deg,#FAF7F2,#F1E9DD 60%,#FAF7F2);">
+    <div class="label">SCREEN 7 / 8</div>
+    <div style="position:absolute;top:56px;left:56px;right:56px;text-align:left;">
+      <div class="big-title" style="font-size:60px;">好看的照片，忍不住想分享</div>
+      <div class="sub-title">一键生成专属分享海报</div>
+    </div>
+    <div style="position:absolute;top:360px;left:64px;right:64px;display:flex;align-items:center;justify-content:center;">
+      <div style="width:820px;border-radius:34px;overflow:hidden;box-shadow:0 40px 80px rgba(60,50,40,.32);position:relative;">
+        <div class="pic" style="height:960px;background-image:url('https://picsum.photos/seed/lumira-share/820/1000');"></div>
+        <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(30,22,14,.45),transparent 45%);"></div>
+        <div style="position:absolute;inset:0;padding:30px;display:flex;flex-direction:column;justify-content:flex-end;">
+          <div style="border:3px dashed rgba(255,255,255,.7);border-radius:18px;display:flex;justify-content:space-between;align-items:flex-end;padding:22px;">
+            <div>
+              <div style="font-size:42px;font-weight:800;color:#fff;text-shadow:0 3px 14px rgba(0,0,0,.45);">秋日·咖啡午后</div>
+              <div style="font-size:22px;color:rgba(255,255,255,.9);margin-top:8px;">☀ 一键海报 · 扫码拍同款</div>
+            </div>
+            <div style="width:150px;height:150px;background:#fff;border-radius:16px;display:grid;place-items:center;">
+              <div style="width:112px;height:112px;background:repeating-conic-gradient(#1A1A1A 0 25%,#fff 0 50%);background-size:23px 23px;border:5px solid #fff;border-radius:5px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:20px;margin-left:20px;">
+        <div class="pic" style="width:128px;height:202px;border-radius:18px;background-image:url('https://picsum.photos/seed/p1/260/410');border:3px solid #fff;box-shadow:0 16px 32px rgba(60,50,40,.25);"></div>
+        <div class="pic" style="width:128px;height:202px;border-radius:18px;background-image:url('https://picsum.photos/seed/p2/260/410');border:3px solid #fff;box-shadow:0 16px 32px rgba(60,50,40,.25);"></div>
+        <div class="pic" style="width:128px;height:202px;border-radius:18px;background-image:url('https://picsum.photos/seed/p3/260/410');border:3px solid #fff;box-shadow:0 16px 32px rgba(60,50,40,.25);"></div>
+      </div>
+    </div>
+  </div></div>
+</figure>
+
+<!-- ===== ⑧ 拉新 ===== -->
+<figure class="post">
+  <div class="cap"><b>⑧ 增长·拉新</b><span>1080×1920</span></div>
+  <div class="cell"><div class="artboard">
+    <div class="label">SCREEN 8 / 8</div>
+    <div style="position:absolute;top:56px;left:56px;">
+      <div class="big-title">邀请好友，双方都得积分</div>
+      <div class="sub-title">积分，解锁付费模板</div>
+    </div>
+    <div style="position:absolute;top:360px;left:60px;right:60px;display:flex;gap:40px;align-items:center;">
+      <div style="width:520px;height:1000px;border-radius:32px;overflow:hidden;box-shadow:0 40px 80px rgba(60,50,40,.32);position:relative;">
+        <div class="pic" style="position:absolute;inset:0;background-image:url('https://picsum.photos/seed/invite/540/1060');"></div>
+        <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(30,22,14,.5),transparent 55%);"></div>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;padding:44px;">
+          <div style="font-size:34px;font-weight:800;color:#fff;text-shadow:0 3px 14px rgba(0,0,0,.45);">来「如画」一起拍照吧</div>
+          <div style="width:320px;height:2px;background:linear-gradient(90deg,transparent,#E3C58A,transparent);"></div>
+          <div style="width:196px;height:196px;background:#fff;border-radius:22px;display:grid;place-items:center;box-shadow:0 14px 34px rgba(0,0,0,.25);">
+            <div style="width:150px;height:150px;background:repeating-conic-gradient(#1A1A1A 0 25%,#fff 0 50%);background-size:30px 30px;border:6px solid #fff;border-radius:5px;"></div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:23px;color:rgba(255,255,255,.9);">邀请码</div>
+            <div style="font-size:38px;font-weight:800;color:#E3C58A;letter-spacing:10px;margin-top:6px;">LUMIRA 2026</div>
+          </div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:26px;">
+        <div style="background:#fff;border-radius:24px;padding:28px 30px;box-shadow:10px 14px 30px rgba(60,50,40,.14);display:flex;align-items:center;gap:20px;">
+          <div style="width:72px;height:72px;border-radius:22px;background:#F3E7D0;display:grid;place-items:center;font-size:32px;color:var(--gold-deep);">＋</div>
+          <div>
+            <div style="font-size:29px;font-weight:800;color:var(--ink);">双方各 +30 积分</div>
+            <div style="font-size:20px;color:var(--ink-2);margin-top:4px;">邀请人 & 新用户都可得</div>
+          </div>
+        </div>
+        <div style="background:#fff;border-radius:24px;padding:28px 30px;box-shadow:10px 14px 30px rgba(60,50,40,.14);display:flex;align-items:center;gap:20px;">
+          <div style="width:72px;height:72px;border-radius:22px;background:var(--ink);display:grid;place-items:center;font-size:30px;color:#fff;">♪</div>
+          <div>
+            <div style="font-size:29px;font-weight:800;color:var(--ink);">解锁付费模板</div>
+            <div style="font-size:20px;color:var(--ink-2);margin-top:4px;">积分直接兑换尖货模板</div>
+          </div>
+        </div>
+        <div class="pill badge-gold" style="justify-content:center;font-size:27px;padding:18px 26px;">手机扫一扫 · 立即邀请</div>
+      </div>
+    </div>
+  </div></div>
+</figure>
+
+</div>
+
+<script>
+  var grid = document.getElementById('grid');
+  var cells = Array.prototype.slice.call(grid.querySelectorAll('.cell'));
+  var scaleRange = document.getElementById('scaleRange');
+  var baseScale = 1; // 记录用户设定的缩放倍率
+
+  function proto(s){ setAllScale(s); }
+  function setAllScale(s){
+    baseScale = s;
+    scaleRange.value = s;
+    cells.forEach(function(c){
+      var art = c.querySelector('.artboard');
+      var sBase = c.clientWidth / 1080;      // 适配到单元格宽度
+      var sc = sBase * baseScale;
+      art.style.transform = 'scale(' + sc + ')';
+    });
+  }
+  scaleRange.addEventListener('input', function(){ setAllScale(parseFloat(scaleRange.value)); });
+  window.addEventListener('resize', function(){ setAllScale(baseScale); });
+
+  setAllScale(1);
+</script>
+</body>
+</html>
