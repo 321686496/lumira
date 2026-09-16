@@ -199,11 +199,7 @@ class _CrampedTitle extends StatelessWidget {
   }
 }
 
-class _LumiraNavState extends ConsumerState<LumiraNav>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _sigmaCurve;
-
+class _LumiraNavState extends ConsumerState<LumiraNav> {
   /// 标题的"可读性下限"宽度（dp）。
   /// 可用宽度低于 min(标题固有宽度, 本值) 时才淡出——
   /// 保证至少能显示「照片预览」这类 4 字中文标题（19dp × 4 ≈ 80dp）。
@@ -219,43 +215,6 @@ class _LumiraNavState extends ConsumerState<LumiraNav>
       textDirection: TextDirection.ltr,
     )..layout();
     return painter.width;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
-    // Forced fix: 初始 scrolled=true 时直接跳到终态，避免首帧 sigma=0 闪烁
-    if (widget.scrolled) {
-      _controller.value = 1.0;
-    }
-    _sigmaCurve = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOut,
-    );
-  }
-
-  @override
-  void didUpdateWidget(LumiraNav oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Forced fix: sigma 与颜色动画同步——监听 scrolled 变化时 forward/reverse
-    // 让 BackdropFilter 的 sigma 平滑过渡（不再瞬变），消除视觉撕裂
-    if (widget.scrolled != oldWidget.scrolled) {
-      if (widget.scrolled) {
-        _controller.forward();
-      } else {
-        _controller.reverse();
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
   }
 
   /// 计算右侧操作按钮列表：按 [actionsSpacing] 在按钮之间插入间距。
@@ -342,7 +301,7 @@ class _LumiraNavState extends ConsumerState<LumiraNav>
     // Forced fix: 按「当前 UI 风格」解析滚动后的背景/描边/阴影
     final BoxDecoration decoration;
     if (isGlass) {
-      // 玻璃拟态：始终半透明毛玻璃，滚动时加深，仅此风格保留 blur 动画；
+      // 玻璃拟态：始终半透明毛玻璃（blur 恒定，不随 scrolled 动画），滚动时加深填充；
       // 填充色跟随主题品牌（白底品牌微染）。
       targetSigma = 28.0;
       decoration = BoxDecoration(
@@ -447,21 +406,19 @@ class _LumiraNavState extends ConsumerState<LumiraNav>
       ),
     );
 
-    // 玻璃风格：保留实时模糊（sigma 随滚动动画变化），其余风格跳过。
+    // 玻璃风格：恒定毛玻璃（sigma=28），其余风格跳过。
+    // Forced fix: 之前的实现把 blur 的 sigma 绑定在 _sigmaCurve（随 scrolled 滚动动画
+    // 从 0→28）上——摄影美学院这类「透明 + 不传 scrolled」的页面 sigma 恒为 0，
+    // 玻璃没有模糊，内容滑到导航栏下被一层 50% 白糊住、透不过来。
+    // 现在 blur 与 scrolled 彻底解耦：任何时候内容滑动到导航栏下方都实时透出模糊，
+    // scrolled 只负责加深填充不透明度（0.50→0.68，由 AnimatedContainer 平滑过渡）。
     if (!isGlass) return surface;
 
-    return AnimatedBuilder(
-      animation: _sigmaCurve,
-      builder: (context, child) => ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: targetSigma * _sigmaCurve.value,
-            sigmaY: targetSigma * _sigmaCurve.value,
-          ),
-          child: child,
-        ),
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: targetSigma, sigmaY: targetSigma),
+        child: surface,
       ),
-      child: surface,
     );
   }
 
