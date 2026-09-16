@@ -22,10 +22,12 @@ import '../../../shared/widgets/common/lumira_surface.dart';
 import '../data/capture_preview_mock_data.dart';
 import '../data/capture_state.dart';
 import '../data/capture_thumbnail_state.dart';
+import '../data/scene_presets_data.dart';
 import '../widgets/compare_photo_button.dart';
 import '../widgets/detail_effects_layer.dart';
 import '../widgets/preview_edit_toolbar.dart';
 import '../widgets/preview_tag_pill_row.dart';
+import '../widgets/exif_poster_card.dart';
 import '../../gallery/widgets/photo_crop_layer.dart';
 import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
@@ -34,7 +36,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/utils/safe_share.dart';
 import '../../../shared/services/poster_generator.dart';
-import '../services/exif_card_generator.dart';
 import '../services/photo_exif_reader.dart';
 import '../services/photo_post_processor.dart';
 
@@ -834,6 +835,9 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   }
 
   /// 生成 EXIF 海报并弹出 PosterGenerator 预览
+  ///
+  /// 海报为 Widget 渲染的品牌纸感卡（[ExifPosterCard]），经 PosterGenerator
+  /// 的内容级 RepaintBoundary 捕获出图；不再生成临时 PNG 文件。
   Future<void> _onExifPoster() async {
     if (_photoUrl.isEmpty || _photoUrl.startsWith('http')) {
       LumiraToast.show(context, '网络图片无法生成 EXIF 海报');
@@ -841,21 +845,17 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     }
 
     try {
-      final templateId = ref.read(CaptureState.currentTemplateIdProvider);
+      // 场景/模板在海报上展示中文名（取不到时回退原 ID）
       final sceneId = ref.read(CaptureState.activeScenePresetIdProvider);
       final exif = await PhotoExifReader.read(
         _photoUrl,
-        sceneName: sceneId,
-        template: templateId,
+        sceneName: sceneId == null
+            ? null
+            : ScenePresetsData.getScenePreset(sceneId)?.name,
+        template: ref.read(CaptureState.originalTemplateProvider)?.meta.name,
         timestamp: DateTime.now().millisecondsSinceEpoch,
       );
-      final outputPath =
-          '${_photoUrl}_exif_${DateTime.now().millisecondsSinceEpoch}.png';
-      await ExifCardGenerator.generate(
-        photoPath: _photoUrl,
-        outputPath: outputPath,
-        exif: exif,
-      );
+      final aspect = await probePhotoAspect(_photoUrl);
       if (!mounted) return;
 
       final tokens = ref.watch(themeTokensProvider);
@@ -866,17 +866,10 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         context: context,
         tokens: tokens,
         title: 'EXIF 海报预览',
-        content: Container(
-          color: const Color(0xFF1C1A17),
-          child: Image.file(
-            File(outputPath),
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => Container(
-              height: 200,
-              color: tokens.surfaceAlt,
-              child: Icon(Icons.image_outlined, color: tokens.textTertiary),
-            ),
-          ),
+        content: ExifPosterCard(
+          photoPath: _photoUrl,
+          aspect: aspect,
+          exif: exif,
         ),
         posterKey: posterKey,
         shareSubject: '如画 LUMIRA · EXIF 海报',
