@@ -2238,8 +2238,20 @@ export default function TemplateForm({
             name={watchedValues.name}
           />
         );
-        // 向导模式 + 宿主就绪 → portal 到向导 sticky 面板（宿主面板自带卡片与标题，仅渲染预览本体）
-        if (wizardMode && previewPortalTarget) {
+        // 向导模式统一走 portal：宿主未就绪时渲染无 hook 的占位（不渲染 PhonePreview）。
+        // 切勿在此位置动态切换「普通 <div> 子树」与「createPortal」——两者 Fiber 类型不同，
+        // 在预览宿主由未就绪→就绪翻转时会让 React 复用错位的 hook（错误 #482）。
+        if (wizardMode) {
+          if (!previewPortalTarget) {
+            return (
+              <div className="hidden xl:block w-[300px] shrink-0" aria-hidden>
+                <div className="rounded-lg border border-border bg-card p-4">
+                  <h3 className="text-sm font-medium text-foreground mb-3">模板预览</h3>
+                  <p className="text-sm text-muted-foreground">预览面板加载中…</p>
+                </div>
+              </div>
+            );
+          }
           return createPortal(previewContent, previewPortalTarget);
         }
         return (
