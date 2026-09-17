@@ -78,6 +78,10 @@ export interface InviteListResponse {
     inviteCode: string;
     channel: string;
     activatedAt: number;
+    /** 'pending'（待成片，奖励未发放）| 'success'（已达成，奖励已发放） */
+    status: string;
+    /** 达成成片时间（unix 秒），未达成时为 null */
+    achievedAt: number | null;
     inviterIp: string | null;
     inviteeIp: string | null;
   }>;
