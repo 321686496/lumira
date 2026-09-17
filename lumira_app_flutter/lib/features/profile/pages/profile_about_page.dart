@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -97,8 +98,36 @@ class ProfileAboutPage extends ConsumerWidget {
                       ),
                       _InfoRow(
                         label: '构建编号',
-                        value: 'flutter-harmony-001',
+                        value: '2026.07.001',
                         tokens: tokens,
+                        isLast: true,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // 3.5 官方信息（官网 + ICP 备案号，上架合规展示）
+                  _SectionCard(
+                    tokens: tokens,
+                    icon: Icons.verified_outlined,
+                    title: '官方信息',
+                    children: [
+                      _InfoRow(
+                        label: '官方网站',
+                        value: 'lumira.iwtle.top',
+                        tokens: tokens,
+                        onTap: () => _launchUrl(
+                          context,
+                          'https://lumira.iwtle.top/',
+                        ),
+                      ),
+                      _InfoRow(
+                        label: 'ICP 备案号',
+                        value: '湘ICP备2025102622号',
+                        tokens: tokens,
+                        onTap: () => _launchUrl(
+                          context,
+                          'https://beian.miit.gov.cn/',
+                        ),
                         isLast: true,
                       ),
                     ],
@@ -150,7 +179,25 @@ class ProfileAboutPage extends ConsumerWidget {
       ),
     );
   }
+
+  /// 调用系统浏览器打开外部链接（官网 / 工信部备案查询）。
+  /// OHOS 等平台若无 url_launcher 原生实现，捕获异常静默降级，不打断页面。
+  Future<void> _launchUrl(BuildContext context, String url) async {
+    try {
+      final ok = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+      // 打开失败仅静默忽略，不弹错误，避免打断正常浏览
+      if (!ok && context.mounted) {
+        // no-op
+      }
+    } catch (_) {
+      // no-op
+    }
+  }
 }
+
 class _AppHeader extends StatelessWidget {
   const _AppHeader({required this.tokens});
   final ThemeTokens tokens;
