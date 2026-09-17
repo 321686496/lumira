@@ -23,6 +23,17 @@ RUN npm install -g pnpm@9 \
     && pnpm config set fetch-timeout 120000
 WORKDIR /app
 
+# ⚠️ onnxruntime-node 的 postinstall 默认会尝试从 GitHub 下载 CUDA EP 二进制
+# （onnxruntime-linux-x64-gpu-*.tgz，~258MB）。国内服务器无法访问 github.com，
+# 该下载必然超时失败。但运行时用的是 CPU 推理（silhouette.pipeline.ts 未指定
+# executionProviders），CPU 的 libonnxruntime.so 已随 npm 包自带到
+# bin/napi-v3/linux/x64/，无需额外下载。故按官方跳过机制
+# （install.js: `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`，见脚本内错误提示
+#  "You will still be able to use ONNX Runtime, but the CUDA EP will not be
+#  available"）跳过 CUDA 下载，消除对 github.com 的依赖。
+# 该 ENV 会传递给 base 阶段及由 base 派生的 builder 阶段的所有 pnpm install。
+ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
+
 # Copy workspace manifests first for better layer caching
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/backend/package.json packages/backend/
@@ -31,17 +42,7 @@ COPY packages/shared/package.json packages/shared/
 
 # Use hoisted node-linker so node_modules is flat (no symlinks to .pnpm store),
 # making runtime COPY straightforward.
-# ⚠️ onnxruntime-node 的 postinstall 会从 GitHub 直接下载约 40MB 原生二进制，
-# 国内服务器的 GitHub 连接不稳定，偶发 SocketError（传输中途断开）。这里对
-# install 做重试：pnpm 幂等，重试可安全续跑，直至 6 次仍失败才退出。
-RUN pnpm config set node-linker hoisted \
-    && attempt=0; \
-       while ! pnpm install --frozen-lockfile; do \
-         attempt=$((attempt+1)); \
-         [ "$attempt" -ge 6 ] && { echo "pnpm install failed after 6 attempts"; exit 1; }; \
-         echo "[retry] pnpm install attempt $attempt/6 failed (onnxruntime-node binary download flaky), retrying..."; \
-         sleep 10; \
-       done
+RUN pnpm config set node-linker hoisted && pnpm install --frozen-lockfile
 
 # =============================================================================
 # Builder — build shared + backend, then prune to production deps
@@ -63,14 +64,8 @@ RUN pnpm --filter @lumira/backend build
 RUN cp -r packages/backend/src/database/migrations packages/backend/dist/database/
 
 # Re-install with --prod to remove devDependencies from node_modules
-# （此步同样会重跑 onnxruntime-node 的 postinstall 下载二进制，做重试兜底）
-RUN attempt=0; \
-    while ! pnpm install --prod --frozen-lockfile; do \
-      attempt=$((attempt+1)); \
-      [ "$attempt" -ge 6 ] && { echo "pnpm install --prod failed after 6 attempts"; exit 1; }; \
-      echo "[retry] pnpm install --prod attempt $attempt/6 failed (onnxruntime-node binary download flaky), retrying..."; \
-      sleep 10; \
-    done
+# （build 据 ONNXRUNTIME_NODE_INSTALL_CUDA=skip 跳过 onnxruntime-node 的 CUDA 下载）
+RUN pnpm install --prod --frozen-lockfile
 
 # =============================================================================
 # Runner — minimal production image
