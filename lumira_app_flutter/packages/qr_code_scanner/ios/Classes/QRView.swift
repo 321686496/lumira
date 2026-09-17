@@ -139,6 +139,14 @@ public class QRView:NSObject,FlutterPlatformView {
                 rect = rect.offsetBy(dx: 0, dy: CGFloat(reversedOffset))
             }
             pendingScanRect = rect
+
+            // 并行化后 startScan 可能已先于 setDimensions 把会话跑起来，此时
+            // didStartScanningBlock 已触发过、configureHighQualityScanning 不会再来应用
+            // 该扫描区域；若会话已在运行，这里即时应用到 scanRect（MTBBarcodeScanner
+            // 允许在扫描中随时修改 crop rect），保证只识别框内二维码。
+            if let sc = self.scanner, sc.isScanning() {
+                sc.scanRect = rect
+            }
         }
         return result(width)
         
@@ -156,6 +164,17 @@ public class QRView:NSObject,FlutterPlatformView {
             self.channel.invokeMethod("onPermissionSet", arguments: permissionGranted)
 
             if permissionGranted {
+                // 确保 scanner 已实例化：Dart 侧 _startScan 已并行化（startScan 先行、
+                // setDimensions 后行），而 iOS 的 scanner 只在 setDimensions（内置 300ms
+                // 延迟）里通过 MTBBarcodeScanner(previewView:) 创建，init 阶段仍为 nil。
+                // 若 startScan 先于 setDimensions 触发时自认为 scanner 已有，直接
+                // `self.scanner?.startScanning(...)` 会对 nil 做可选链调用被整体跳过，
+                // 相机会话永不启动 → 取景黑屏。这里统一在开始前兜底创建，使 startScan
+                // 与 setDimensions 的先后顺序无关（setDimensions 稍后会复用该实例并
+                // 校正 previewLayer 尺寸与扫描区域）。
+                if self.scanner == nil {
+                    self.scanner = MTBBarcodeScanner(previewView: self.previewView)
+                }
                 // 在会话启动完成后立刻提升取景清晰度：提高 sessionPreset 分辨率
                 // + 开启连续自动对焦/自动曝光，避免靠近二维码时画面越拉越模糊。
                 self.scanner?.didStartScanningBlock = { [weak self] in
