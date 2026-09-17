@@ -201,8 +201,9 @@ export function AiCreateWizard({
       if (inputText.trim()) analyzeFd.set('text', inputText.trim());
       setAnalyzeExtras(analyzeFd);
       const result = await aiAnalyzeAction(analyzeFd);
-      if ('error' in result) {
-        setErrorText(result.error);
+      if (!result || 'error' in result) {
+        // server action 可能因请求被中止/网关掐断返回 undefined，避免 `'error' in undefined` 崩溃
+        setErrorText(result?.error || '识别请求失败，请重试');
         return;
       }
       setDraft(result.draft);
@@ -244,9 +245,9 @@ export function AiCreateWizard({
       if (inputText.trim()) analyzeFd.set('text', inputText.trim());
       setAnalyzeExtras(analyzeFd);
       const analyzeResult = await aiAnalyzeAction(analyzeFd);
-      if ('error' in analyzeResult) {
+      if (!analyzeResult || 'error' in analyzeResult) {
         setAutoState(null);
-        setErrorText(analyzeResult.error);
+        setErrorText(analyzeResult?.error || '识别请求失败，请重试');
         return;
       }
       const draftLocal = analyzeResult.draft;

@@ -61,7 +61,10 @@ export async function aiAnalyzeAction(
   formData: FormData,
 ): Promise<AiAnalyzeResult | { error: string }> {
   try {
-    return await api.aiAnalyze(formData);
+    const result = await api.aiAnalyze(formData);
+    // 兜底：后端/网关异常导致空值时不返回 undefined，否则调用方 `'error' in result` 会崩
+    if (!result) return { error: '识别结果为空，请重试' };
+    return result;
   } catch (e) {
     if (e instanceof UnauthenticatedError) redirect('/login');
     return { error: (e as Error).message };
