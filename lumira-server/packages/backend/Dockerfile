@@ -31,8 +31,17 @@ COPY packages/shared/package.json packages/shared/
 
 # Use hoisted node-linker so node_modules is flat (no symlinks to .pnpm store),
 # making runtime COPY straightforward.
+# ⚠️ onnxruntime-node 的 postinstall 会从 GitHub 直接下载约 40MB 原生二进制，
+# 国内服务器的 GitHub 连接不稳定，偶发 SocketError（传输中途断开）。这里对
+# install 做重试：pnpm 幂等，重试可安全续跑，直至 6 次仍失败才退出。
 RUN pnpm config set node-linker hoisted \
-    && pnpm install --frozen-lockfile
+    && attempt=0; \
+       while ! pnpm install --frozen-lockfile; do \
+         attempt=$((attempt+1)); \
+         [ "$attempt" -ge 6 ] && { echo "pnpm install failed after 6 attempts"; exit 1; }; \
+         echo "[retry] pnpm install attempt $attempt/6 failed (onnxruntime-node binary download flaky), retrying..."; \
+         sleep 10; \
+       done
 
 # =============================================================================
 # Builder — build shared + backend, then prune to production deps
@@ -54,7 +63,14 @@ RUN pnpm --filter @lumira/backend build
 RUN cp -r packages/backend/src/database/migrations packages/backend/dist/database/
 
 # Re-install with --prod to remove devDependencies from node_modules
-RUN pnpm install --prod --frozen-lockfile
+# （此步同样会重跑 onnxruntime-node 的 postinstall 下载二进制，做重试兜底）
+RUN attempt=0; \
+    while ! pnpm install --prod --frozen-lockfile; do \
+      attempt=$((attempt+1)); \
+      [ "$attempt" -ge 6 ] && { echo "pnpm install --prod failed after 6 attempts"; exit 1; }; \
+      echo "[retry] pnpm install --prod attempt $attempt/6 failed (onnxruntime-node binary download flaky), retrying..."; \
+      sleep 10; \
+    done
 
 # =============================================================================
 # Runner — minimal production image
