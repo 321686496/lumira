@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 const navItems = [
   { href: '/dashboard', label: '概览', icon: ChartLineUp },
   { href: '/dashboard/devices', label: '设备统计', icon: DeviceMobile },
-  { href: '/dashboard/invites', label: '邀请记录', icon: Users },
+  { href: '/dashboard/invites', label: '邀请管理', icon: Users },
   { href: '/dashboard/redeem-batches', label: '兑换码', icon: Ticket },
   { href: '/dashboard/rewards', label: '奖励明细', icon: Gift },
   { href: '/dashboard/questionnaire', label: '问卷数据', icon: ClipboardText },

@@ -27,9 +27,15 @@ export default async function InvitesPage({
 
   return (
     <div className="space-y-4">
+      <div>
+        <h1 className="text-lg font-semibold">邀请管理</h1>
+        <p className="text-sm text-muted-foreground">
+          查看用户间邀请关系：谁邀请了谁、邀请时间、达成状态与奖励发放情况
+        </p>
+      </div>
       <form className="flex gap-2 items-end">
         <div className="flex-1 max-w-xs">
-          <label className="text-sm text-muted-foreground mb-1 block">按设备 ID 筛选</label>
+          <label className="text-sm text-muted-foreground mb-1 block">按邀请人设备 ID 筛选</label>
           <Input
             name="deviceId"
             defaultValue={deviceId}
