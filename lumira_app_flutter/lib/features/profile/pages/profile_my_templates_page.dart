@@ -333,7 +333,7 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
       appBar: LumiraNav(
         title: '我的模板',
         transparent: true,
-        leading: _BackButton(tokens: tokens),
+        backFallback: () => GoRouter.of(context).go(RouteNames.profile),
         actions: [
           _ImportButton(tokens: tokens, onTap: _showImportSheet),
         ],
@@ -405,30 +405,6 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
     );
   }
 }
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens});
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        if (Navigator.of(context).canPop()) {
-          Navigator.pop(context);
-        } else {
-          GoRouter.of(context).go(RouteNames.profile);
-        }
-      },
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(Icons.arrow_back_ios_new, size: 20, color: tokens.textPrimary),
-      ),
-    );
-  }
-}
-
 class _ImportButton extends StatelessWidget {
   const _ImportButton({required this.tokens, required this.onTap});
   final ThemeTokens tokens;

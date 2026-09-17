@@ -28,10 +28,13 @@ class LumiraNav extends ConsumerStatefulWidget implements PreferredSizeWidget {
     this.centerTitle = true,
     this.scrolled = false,
     this.transparent = true,
+    this.forceTransparent = false,
     this.showBackButton = true,
     this.useWordmark = false,
     this.horizontalPadding = 24.0,
     this.actionsSpacing = 0,
+    this.onBack,
+    this.backFallback,
   });
 
   final String? title;
@@ -40,6 +43,23 @@ class LumiraNav extends ConsumerStatefulWidget implements PreferredSizeWidget {
   final bool centerTitle;
   final bool scrolled;
   final bool transparent;
+
+  /// 强制透明：即使当前 UI 风格是玻璃拟态（glass），也跳过毛玻璃表面与
+  /// [BackdropFilter]，直接渲染透明导航。
+  ///
+  /// 用于照片预览等需要完全沉浸式、不允许任何半透明/模糊遮盖的场景——
+  /// 玻璃风格默认的 50% 白 + blur 表面叠在深色照片上会显示为灰色矩形，
+  /// 且 iOS 上 BackdropFilter 在大型变换图层的 backdrop 上可能产生右侧缺口伪影。
+  final bool forceTransparent;
+
+  /// 默认返回按钮点击时、执行 pop 之前调用的回调。
+  /// 用于保留页面原有的副作用逻辑（如刷新上级列表、标记已读等）。
+  final VoidCallback? onBack;
+
+  /// 无上级路由可 pop（canPop 为 false）时默认返回按钮的回退动作。
+  /// 不传则按钮仅在 canPop 时显示；传入后 deep-link/go 直接进入的页面
+  /// 也能显示返回按钮并执行回退（如跳回「我的」）。
+  final VoidCallback? backFallback;
 
   /// 右侧操作按钮组之间的水平间距（dp）。默认 0（兼容旧行为，按钮紧贴），
   /// 页面可通过传值调整，避免多个按钮挤在一起。
@@ -231,19 +251,17 @@ class _LumiraNavState extends ConsumerState<LumiraNav> {
     return spaced;
   }
 
-  /// 将右侧 actions 包成一个固定 ID 的 LayoutId（用于自适应布局）。
-  /// 空 actions 时仍提供 40dp 占位（与旧行为一致：保留标题居中）。
+  /// 右侧 actions 行：单按钮直接返回，多个时用 Row 按间距排列。
+  /// LayoutId(id: trailing) 由 [_buildCenterToolbar] 统一包裹，此处不可重复包裹——
+  /// 嵌套在 Padding 内的 LayoutId 会触发 ParentData 冲突断言（debug 崩溃）。
   Widget _actionsRow() {
     final list = _actionsList();
-    return LayoutId(
-      id: _kLayoutTrailing,
-      child: list.length == 1
-          ? list.first
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: list,
-            ),
-    );
+    return list.length == 1
+        ? list.first
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: list,
+          );
   }
 
   /// 居中标题的自适应顶栏：真测量 leading / actions 宽度后对称预留，
@@ -300,7 +318,14 @@ class _LumiraNavState extends ConsumerState<LumiraNav> {
 
     // Forced fix: 按「当前 UI 风格」解析滚动后的背景/描边/阴影
     final BoxDecoration decoration;
-    if (isGlass) {
+    if (widget.forceTransparent) {
+      // 强制透明（照片预览等沉浸式场景）：跳过玻璃毛玻璃表面，
+      // 与未滚动 transparent 分支一致，用 canvas 自身 alpha=0 保持色相一致的透明。
+      targetSigma = 0.0;
+      decoration = BoxDecoration(
+        color: tokens.canvas.withOpacity(0),
+      );
+    } else if (isGlass) {
       // 玻璃拟态：始终半透明毛玻璃（blur 恒定，不随 scrolled 动画），滚动时加深填充；
       // 填充色跟随主题品牌（白底品牌微染）。
       targetSigma = 28.0;
@@ -327,12 +352,17 @@ class _LumiraNavState extends ConsumerState<LumiraNav> {
 
     // Forced fix: 计算 leading widget
     // - 如果显式传了 leading，用它
-    // - 否则如果 showBackButton=true 且 canPop=true，显示返回按钮
+    // - 否则如果 showBackButton=true 且（canPop=true 或提供了 backFallback），
+    //   显示默认圆形返回按钮（onBack 在 pop 前执行，backFallback 兜底无上级路由场景）
     // - 否则用 SizedBox.shrink()（不再占位 40dp，避免 tab 页左侧死区与右侧不对称）
     // Tab 页传 showBackButton=false，避免 canPop 误判导致 tab 页显示返回按钮
+    final bool canPop = Navigator.of(context).canPop();
     final Widget leadingWidget = widget.leading ??
-        (widget.showBackButton && Navigator.of(context).canPop()
-            ? _NavBackButton()
+        (widget.showBackButton && (canPop || widget.backFallback != null)
+            ? _NavBackButton(
+                onBack: widget.onBack,
+                backFallback: widget.backFallback,
+              )
             : const SizedBox.shrink());
 
     // Logo 升级：计算居中标题内容
@@ -412,7 +442,9 @@ class _LumiraNavState extends ConsumerState<LumiraNav> {
     // 玻璃没有模糊，内容滑到导航栏下被一层 50% 白糊住、透不过来。
     // 现在 blur 与 scrolled 彻底解耦：任何时候内容滑动到导航栏下方都实时透出模糊，
     // scrolled 只负责加深填充不透明度（0.50→0.68，由 AnimatedContainer 平滑过渡）。
-    if (!isGlass) return surface;
+    // 玻璃风格：恒定毛玻璃（sigma=28），其余风格跳过。
+    // forceTransparent 时即使 glass 也跳过 BackdropFilter（沉浸式透明）。
+    if (!isGlass || widget.forceTransparent) return surface;
 
     return ClipRect(
       child: BackdropFilter(
@@ -468,13 +500,28 @@ class _LumiraNavState extends ConsumerState<LumiraNav> {
 /// 默认返回按钮（圆形 neumorphic 背景）
 /// 来自 App.vue line 466-486: 64rpx 圆形 + surface 背景 + shadow-convex-subtle
 class _NavBackButton extends ConsumerWidget {
+  const _NavBackButton({this.onBack, this.backFallback});
+
+  /// pop 前执行的回调（保留页面副作用逻辑）。
+  final VoidCallback? onBack;
+
+  /// 无上级路由可 pop 时的回退动作。
+  final VoidCallback? backFallback;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
 
     return GestureDetector(
-      onTap: () => Navigator.of(context).maybePop(),
+      onTap: () {
+        onBack?.call();
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).maybePop();
+        } else {
+          backFallback?.call();
+        }
+      },
       child: Container(
         width: 32, // 64rpx → 32dp
         height: 32,

@@ -22,13 +22,7 @@ import 'profile_notification_detail_page.dart';
 class ProfileNotificationsPage extends ConsumerWidget {
   const ProfileNotificationsPage({super.key});
 
-  void _back(BuildContext context) {
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      GoRouter.of(context).go(RouteNames.home);
-    }
-  }
+
 
   /// 全部标记已读。
   Future<void> _markAll(WidgetRef ref) async {
@@ -80,7 +74,7 @@ class ProfileNotificationsPage extends ConsumerWidget {
       appBar: LumiraNav(
         title: '通知中心',
         transparent: true,
-        leading: _BackButton(tokens: tokens, onTap: () => _back(context)),
+        backFallback: () => GoRouter.of(context).go(RouteNames.home),
         actions: [
           LumiraNavButton(
             icon: Icons.done_all_outlined,
@@ -224,24 +218,6 @@ class _NotificationRow extends ConsumerWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens, required this.onTap});
-  final ThemeTokens tokens;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(Icons.arrow_back_ios_new, size: 20, color: tokens.textPrimary),
       ),
     );
   }

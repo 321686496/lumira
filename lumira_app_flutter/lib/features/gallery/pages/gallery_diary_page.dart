@@ -160,7 +160,6 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
       appBar: LumiraNav(
         title: '拍摄日记',
         transparent: true,
-        leading: _BackButton(tokens: tokens),
         actions: [
           _CalendarAction(
             tokens: tokens,
@@ -325,23 +324,6 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens});
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => Navigator.of(context).maybePop(),
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(Icons.arrow_back_ios_new, size: 18, color: tokens.textPrimary),
       ),
     );
   }

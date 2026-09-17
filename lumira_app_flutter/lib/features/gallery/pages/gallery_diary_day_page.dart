@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
+import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../providers/gallery_diary_providers.dart';
 import '../widgets/diary_photo_cell.dart';
 import 'gallery_detail_page.dart';
@@ -27,62 +28,60 @@ class GalleryDiaryDayPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: tokens.canvas,
-      appBar: AppBar(
-        backgroundColor: tokens.canvas,
-        elevation: 0,
-        title: Text(
-          '${DateFormat('M月d日').format(dayOnly)} · 拍摄',
-          style: TextStyle(color: tokens.textPrimary),
-        ),
-        leading: BackButton(color: tokens.textPrimary),
+      extendBodyBehindAppBar: true,
+      appBar: LumiraNav(
+        title: '${DateFormat('M月d日').format(dayOnly)} · 拍摄',
+        transparent: true,
       ),
-      body: photosAsync.when(
-        loading: () => Center(child: LumiraProgress.circular()),
-        error: (e, _) => Center(
-          child: Text(
-            '加载失败：$e',
-            style: TextStyle(color: tokens.textSecondary),
-          ),
-        ),
-        data: (photos) {
-          if (photos.isEmpty) {
-            return Center(
-              child: Text(
-                '这一天还没有照片',
-                style: TextStyle(color: tokens.textSecondary),
-              ),
-            );
-          }
-          return GridView.builder(
-            padding: const EdgeInsets.all(12),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              mainAxisSpacing: 4,
-              crossAxisSpacing: 4,
+      body: SafeArea(
+        child: photosAsync.when(
+          loading: () => Center(child: LumiraProgress.circular()),
+          error: (e, _) => Center(
+            child: Text(
+              '加载失败：$e',
+              style: TextStyle(color: tokens.textSecondary),
             ),
-            itemCount: photos.length,
-            itemBuilder: (context, i) {
-              final photo = photos[i];
-              return DiaryPhotoCell(
-                photo: photo,
-                aspectRatio: 1,
-                tokens: tokens,
-                onTap: () {
-                  // 传入该天全部照片 ID 作为详情页左右滑动范围，跟随拍摄日记而非整个相册
-                  final scopeIds = photos.map((p) => p.id).toList();
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => GalleryDetailPage(
-                        photoId: photo.id,
-                        scopeIds: scopeIds,
-                      ),
-                    ),
-                  );
-                },
+          ),
+          data: (photos) {
+            if (photos.isEmpty) {
+              return Center(
+                child: Text(
+                  '这一天还没有照片',
+                  style: TextStyle(color: tokens.textSecondary),
+                ),
               );
-            },
-          );
-        },
+            }
+            return GridView.builder(
+              padding: const EdgeInsets.all(12),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisSpacing: 4,
+                crossAxisSpacing: 4,
+              ),
+              itemCount: photos.length,
+              itemBuilder: (context, i) {
+                final photo = photos[i];
+                return DiaryPhotoCell(
+                  photo: photo,
+                  aspectRatio: 1,
+                  tokens: tokens,
+                  onTap: () {
+                    // 传入该天全部照片 ID 作为详情页左右滑动范围，跟随拍摄日记而非整个相册
+                    final scopeIds = photos.map((p) => p.id).toList();
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => GalleryDetailPage(
+                          photoId: photo.id,
+                          scopeIds: scopeIds,
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

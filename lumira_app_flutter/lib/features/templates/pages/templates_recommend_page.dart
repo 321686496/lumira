@@ -53,10 +53,8 @@ class _TemplatesRecommendPageState extends ConsumerState<TemplatesRecommendPage>
                 LumiraNav(
                   title: '为你推荐',
                   transparent: true,
-                  leading: _BackButton(
-                    tokens: tokens,
-                    onTap: () => _back(context),
-                  ),
+                  backFallback: () =>
+                      GoRouter.of(context).go(RouteNames.templates),
                 ),
                 Expanded(
                   child: resultAsync.when(
@@ -129,14 +127,6 @@ class _TemplatesRecommendPageState extends ConsumerState<TemplatesRecommendPage>
     }
     return result;
   }
-
-  void _back(BuildContext context) {
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      GoRouter.of(context).go(RouteNames.templates);
-    }
-  }
 }
 
 /// 背景径向渐变装饰（glass 风格 backdrop-filter 可见性）
@@ -159,28 +149,6 @@ class _BackgroundDecoration extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens, required this.onTap});
-  final ThemeTokens tokens;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(
-          Icons.arrow_back_ios_new,
-          size: 20,
-          color: tokens.textPrimary,
         ),
       ),
     );

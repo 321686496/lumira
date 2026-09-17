@@ -371,6 +371,11 @@ class CameraService {
     }
   }
 
+  // 相机会话是否已成功启动（供初始化失败后的重试判断）
+  isCameraRunning(): boolean {
+    return !this.isStop && this.photoSession != null;
+  }
+
   // 获取预览流并解析
   onImageArrival(receiver: image.ImageReceiver, channel: MethodChannel | null,
     barcodeFormats: Array<number> = []): void {
@@ -401,7 +406,7 @@ class CameraService {
   // 从ImageReceiver获取imgComponent: image.Component，预览流设置的宽高: width, height
   decodeImageBuffer(imgComponent: image.Component, width: number, height: number, channel: MethodChannel | null,
     barcodeFormats: Array<number> = []) {
-    if (MyDebounceSingletonUtil.getInstance().isDebounced(TAG + 'Debounced', 800)) {
+    if (MyDebounceSingletonUtil.getInstance().isDebounced(TAG + 'Debounced', 200)) {
       return;
     }
     let byteImg: detectBarcode.ByteImage = {

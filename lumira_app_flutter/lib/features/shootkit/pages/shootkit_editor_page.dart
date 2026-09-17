@@ -117,15 +117,6 @@ class _ShootkitEditorPageState extends ConsumerState<ShootkitEditorPage> {
 
   /// ISO 显示文本（null 显示 'AUTO'）
   String get _isoDisplay => _overrides.iso?.toString() ?? 'AUTO';
-
-  void _back() {
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      GoRouter.of(context).go(RouteNames.home);
-    }
-  }
-
   void _onSave() {
     if (_kitName.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -243,7 +234,7 @@ class _ShootkitEditorPageState extends ConsumerState<ShootkitEditorPage> {
             LumiraNav(
               title: _isEdit ? '编辑组合' : '新建组合',
               transparent: true,
-              leading: _BackButton(tokens: tokens, onTap: _back),
+              backFallback: () => GoRouter.of(context).go(RouteNames.home),
               actions: [
                 _SaveNavButton(tokens: tokens, onTap: _onSave),
               ],
@@ -312,29 +303,6 @@ class _ShootkitEditorPageState extends ConsumerState<ShootkitEditorPage> {
 // ============================================================
 // 导航按钮
 // ============================================================
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens, required this.onTap});
-  final ThemeTokens tokens;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(
-          Icons.arrow_back_ios_new,
-          size: 20,
-          color: tokens.textPrimary,
-        ),
-      ),
-    );
-  }
-}
-
 class _SaveNavButton extends StatelessWidget {
   const _SaveNavButton({required this.tokens, required this.onTap});
   final ThemeTokens tokens;

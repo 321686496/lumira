@@ -93,6 +93,107 @@ class OhosImageProcessor {
     }
   }
 
+  /// 缓存编辑页实时预览的解码源（原生侧解码一次并常驻，返回 cacheId）。
+  ///
+  /// 背景：flutter_ohos 上 Dart FragmentShader 在真机静默渲染为原图（保存链路
+  /// 「GPU 磨皮无效」的同根因），编辑页实时预览改走与拍摄成片同一套 C++
+  /// processRgba（见 [renderDetailPreview]）。[returnRgba] 为 true 时同时回传
+  /// RGBA（调用方可直接建 ui.Image，免二次解码）。
+  /// 原生侧 LRU 上限 4 条，超限自动淘汰最早缓存。
+  Future<OhosDetailCacheResult?> cacheDetailSource({
+    required String path,
+    int maxEdge = 2048,
+    bool returnRgba = false,
+  }) async {
+    try {
+      final result = await _channel.invokeMethod<Map<Object?, Object?>>(
+        'cacheDetailSource',
+        <String, Object?>{
+          'path': path,
+          'maxEdge': maxEdge,
+          'returnRgba': returnRgba,
+        },
+      );
+      if (result == null) return null;
+      if (result.containsKey('error')) return null;
+      final cacheId = result['cacheId'] as String?;
+      final width = (result['width'] as num?)?.toInt() ?? 0;
+      final height = (result['height'] as num?)?.toInt() ?? 0;
+      if (cacheId == null || cacheId.isEmpty || width <= 0 || height <= 0) {
+        return null;
+      }
+      Uint8List? rgba;
+      final raw = result['rgba'];
+      if (raw is Uint8List) rgba = raw;
+      if (raw is List<int>) rgba = Uint8List.fromList(raw);
+      if (returnRgba && rgba == null) return null;
+      return OhosDetailCacheResult(
+        cacheId: cacheId,
+        width: width,
+        height: height,
+        rgba: rgba,
+      );
+    } catch (e) {
+      debugPrint('[OhosImageProcessor] cacheDetailSource failed: $e');
+      return null;
+    }
+  }
+
+  /// 按当前增量参数渲染细节效果预览帧（C++ processRgba + swapRgba，返回展示用
+  /// RGBA）。源缓冲原生只读，可安全重复调用；cacheId 失效（LRU 淘汰）返回 null。
+  Future<OhosRgbaResult?> renderDetailPreview({
+    required String cacheId,
+    int sharpen = 0,
+    int smooth = 0,
+    int vignette = 0,
+    int grain = 0,
+    double clarity = 0,
+  }) async {
+    try {
+      final result = await _channel.invokeMethod<Map<Object?, Object?>>(
+        'renderDetailPreview',
+        <String, Object?>{
+          'cacheId': cacheId,
+          'sharpen': sharpen.clamp(0, 100),
+          'smooth': smooth.clamp(0, 100),
+          'vignette': vignette.clamp(0, 100),
+          'grain': grain.clamp(0, 100),
+          'clarity': clarity.clamp(-100.0, 100.0),
+        },
+      );
+      if (result == null) return null;
+      if (result.containsKey('error')) return null;
+      final width = (result['width'] as num?)?.toInt() ?? 0;
+      final height = (result['height'] as num?)?.toInt() ?? 0;
+      final raw = result['rgba'];
+      if (width <= 0 || height <= 0 || raw == null) return null;
+      final Uint8List rgba;
+      if (raw is Uint8List) {
+        rgba = raw;
+      } else if (raw is List<int>) {
+        rgba = Uint8List.fromList(raw);
+      } else {
+        return null;
+      }
+      return OhosRgbaResult(width: width, height: height, rgba: rgba);
+    } catch (e) {
+      debugPrint('[OhosImageProcessor] renderDetailPreview failed: $e');
+      return null;
+    }
+  }
+
+  /// 释放原生侧预览解码源缓存（编辑页销毁/切换照片时调用；未命中静默忽略）。
+  Future<void> releaseDetailSource(String cacheId) async {
+    try {
+      await _channel.invokeMethod<void>(
+        'releaseDetailSource',
+        <String, Object?>{'cacheId': cacheId},
+      );
+    } catch (_) {
+      // 释放失败无副作用（LRU 会淘汰），静默忽略
+    }
+  }
+
   /// OHOS 单次原生拍照后处理：解码→几何变换→色彩矩阵→磨皮→锐化→JPEG硬编码→写文件。
   ///
   /// 暗角/颗粒/清晰度已全部由原生 C++ 实现（矩阵含 clarity 对比度折叠 + 独立中频
@@ -176,4 +277,23 @@ class OhosRgbaResult {
   final int width;
   final int height;
   final Uint8List rgba;
+}
+
+/// OHOS 原生预览解码源缓存结果（[OhosImageProcessor.cacheDetailSource]）。
+class OhosDetailCacheResult {
+  OhosDetailCacheResult({
+    required this.cacheId,
+    required this.width,
+    required this.height,
+    this.rgba,
+  });
+
+  /// 原生缓存 id（renderDetailPreview / releaseDetailSource 使用）。
+  final String cacheId;
+
+  final int width;
+  final int height;
+
+  /// returnRgba=true 时回传的 RGBA 字节（可直接建 ui.Image）。
+  final Uint8List? rgba;
 }

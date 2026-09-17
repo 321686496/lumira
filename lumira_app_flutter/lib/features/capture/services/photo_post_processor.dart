@@ -10,6 +10,7 @@ import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart' as pp;
 
 import 'dart_photo_pipeline.dart' show applyLegStretchImg, applyPerPixelEffectsImg;
+import '../../../core/services/ohos_image_processor.dart';
 import 'preview_beauty_shader.dart' show loadFragmentProgramFromCandidates;
 import 'skin_smooth_shader.dart';
 import 'skin_smoother.dart';
@@ -61,6 +62,51 @@ class PhotoPostProcessor {
       debugPrint(
           '[post-process] 开始: ratio=$aspectRatio, screenRatio=$screenRatio, isPortrait=$isPortrait, rawMode=$rawMode');
 
+      // facing 取值：显式入参（拍摄慢管线降级路径传入）优先，否则用烘焙参数里
+      // 持久化的拍照时刻朝向（编辑保存路径，前置照片据此补做镜像）。
+      final effectiveFacing =
+          (facing == 'back' && params.facing != null) ? params.facing! : facing;
+
+      // === OHOS 原生编辑保存快速路径 ===
+      // 编辑保存此前走 Dart 管线：dart:ui JPEG 软解码极慢（1200x1600 实测 ~6s）+
+      // GPU 读回 + 逐像素 CPU，且磨皮 GPU shader 在部分真机上静默无效（保存后
+      // 「只有锐化有效果，磨皮没有效果」的根因之一）。条件允许时直接复用拍摄
+      // 成片的原生 C++ 管线（解码→cover 裁窗→矩阵→前置镜像→锐化/清晰度→颗粒→
+      // 磨皮→暗角→硬编码），与拍摄成片同代码同语义。
+      // 不满足条件（自定义裁剪嵌套 / 用户变换 / 拉腿 / rawMode）时回退 Dart 管线。
+      final ohosNativeReady = !rawMode &&
+          OhosImageProcessor.isSupported &&
+          customCropRect == null &&
+          baseCropRect == null &&
+          (transform == null || transform.isIdentity) &&
+          params.legStretch == 0;
+      if (ohosNativeReady) {
+        final targetRatio =
+            CaptureState.computeTargetRatio(aspectRatio, isPortrait) ??
+                screenRatio;
+        final nativeOk = await OhosImageProcessor.instance.processJpeg(
+          inputPath: inputPath,
+          outputPath: outputPath ?? inputPath,
+          targetRatio: targetRatio,
+          isPortrait: isPortrait,
+          isFront: effectiveFacing == 'front',
+          matrix: composePostProcessMatrix(params),
+          sharpen: params.sharpen,
+          clarity: params.color.clarity,
+          smoothStrength: params.smoothStrength,
+          vignette: params.vignette,
+          grain: params.grain,
+          maxDim: 2560,
+        );
+        if (nativeOk) {
+          sw.stop();
+          debugPrint(
+              '[post-process] OHOS 原生编辑保存快速路径完成: ${sw.elapsedMilliseconds}ms');
+          return outputPath ?? inputPath;
+        }
+        debugPrint('[post-process] OHOS 原生快速路径失败，回退 Dart 管线');
+      }
+
       // 1. 读取并解码 JPEG（硬件加速，~50ms）
       final file = File(inputPath);
       final bytes = await file.readAsBytes();
@@ -69,10 +115,11 @@ class PhotoPostProcessor {
       final srcImage = frame.image;
       codec.dispose();
       debugPrint(
-          '[post-process] 解码: ${srcImage.width}x${srcImage.height}, facing=$facing, isPortrait=$isPortrait, ${sw.elapsedMilliseconds}ms');
+          '[post-process] 解码: ${srcImage.width}x${srcImage.height}, facing=$effectiveFacing, isPortrait=$isPortrait, ${sw.elapsedMilliseconds}ms');
 
-      // 1.5. 方向对齐
-      var alignedImage = await _alignOrientation(srcImage, isPortrait, facing);
+      // 1.5. 方向对齐（前置镜像由 effectiveFacing 驱动：原图备份为 sensor 原始
+      //      横屏未镜像 JPEG，编辑保存必须补做与拍摄时一致的镜像）
+      var alignedImage = await _alignOrientation(srcImage, isPortrait, effectiveFacing);
       if (alignedImage != srcImage) {
         srcImage.dispose();
         debugPrint('[post-process] 方向对齐: '
@@ -229,58 +276,25 @@ class PhotoPostProcessor {
       debugPrint(
           '[post-process] GPU合并: ${resultImage.width}x${resultImage.height}, ${sw.elapsedMilliseconds}ms');
 
-      // 4.5. 皮肤平滑（GPU shader 优先，与预览同一 shader，保证 WYSIWYG）
+      // 4.5. 皮肤平滑（GPU shader 优先 + 像素级校验；异常/校验无效一律回退 CPU，
+      //      保证成片磨皮必然生效——此前真机 GPU shader 可能静默输出原图，
+      //      表现为「保存后只有锐化有效果，磨皮没有效果」）
       if (!rawMode && params.smoothStrength > 0) {
-        final int smoothW = resultImage.width;
-        final int smoothH = resultImage.height;
-        ui.FragmentProgram? program;
-        try {
-          // 载荷失败/渲染异常一律回退 CPU 路径，不抛出、不阻塞成片。
-          program = await loadFragmentProgramFromCandidates(
-            // asset key 带 assets/ 前缀（pubspec shaders 段声明路径原样保留，
-            // 见 detail_effects_layer.dart 同款修复说明）。
-            const [
-              'assets/shaders/skin_smooth.frag',
-              'shaders/skin_smooth.frag',
-            ],
-          );
-        } catch (_) {
-          program = null;
-        }
-        if (program != null) {
-          try {
-            final recorder = ui.PictureRecorder();
-            final canvas = ui.Canvas(recorder);
-            // 与 SkinSmoothPainter 相同的 uniform 索引约定：
-            // - float 域：uSize(vec2)→0,1；uStrength→2。
-            // - sampler 域：uTexture→0（sampler 独立索引空间）。
-            final shader = program.fragmentShader()
-              ..setFloat(0, smoothW.toDouble())
-              ..setFloat(1, smoothH.toDouble())
-              ..setFloat(2, skinStrength(params))
-              ..setImageSampler(0, resultImage);
-            canvas.drawRect(
-              ui.Rect.fromLTWH(
-                  0, 0, smoothW.toDouble(), smoothH.toDouble()),
-              ui.Paint()..shader = shader,
-            );
-            final picture = recorder.endRecording();
-            final newImage = await picture.toImage(smoothW, smoothH);
-            resultImage.dispose();
-            resultImage = newImage;
-            picture.dispose();
-            debugPrint(
-                '[post-process] 皮肤平滑 (GPU): smoothStrength=${params.smoothStrength}, ${sw.elapsedMilliseconds}ms');
-          } catch (e) {
-            debugPrint(
-                '[post-process] 皮肤平滑 (GPU) 渲染异常，回退 CPU: $e');
-            resultImage =
-                await _applyCpuSkinSmoothing(resultImage, params, sw);
-          }
+        final gpu = await _tryGpuSkinSmooth(resultImage, params, sw);
+        if (gpu == null) {
+          resultImage = await _applyCpuSkinSmoothing(resultImage, params, sw);
+        } else if (gpu.changed) {
+          // _tryGpuSkinSmooth 已在成功路径回收原输入图，这里直接替换。
+          resultImage = gpu.image;
         } else {
-          debugPrint('[post-process] 磨皮 shader 加载失败，回退 CPU');
-          resultImage =
-              await _applyCpuSkinSmoothing(resultImage, params, sw);
+          debugPrint(
+              '[post-process] 皮肤平滑 (GPU) 输出校验无效果，回退 CPU');
+          resultImage = await _applyCpuSkinSmoothing(
+            gpu.image,
+            params,
+            sw,
+            precomputedRgba: gpu.sourceRgba,
+          );
         }
       }
 
@@ -364,15 +378,18 @@ class PhotoPostProcessor {
     return frame.image;
   }
 
-  /// 皮肤平滑 CPU 回退路径（GPU shader 加载/渲染失败时使用）。
+  /// 皮肤平滑 CPU 回退路径（GPU shader 加载/渲染失败或校验无效时使用）。
   /// 消费并回收 [input]，返回磨皮后的新图。
+  /// [precomputedRgba]：调用方已读回的输入 RGBA（免重复 GPU 读回，OHOS 上每次
+  /// 读回数百 ms）；为 null 时自行读回。
   static Future<ui.Image> _applyCpuSkinSmoothing(
     ui.Image input,
     PostProcess params,
-    Stopwatch sw,
-  ) async {
+    Stopwatch sw, {
+    ByteData? precomputedRgba,
+  }) async {
     try {
-      final byteData =
+      final byteData = precomputedRgba ??
           await input.toByteData(format: ui.ImageByteFormat.rawRgba);
       if (byteData == null) return input;
       final imgImage = img.Image.fromBytes(
@@ -383,19 +400,13 @@ class PhotoPostProcessor {
         order: img.ChannelOrder.rgba,
       );
       final smoothed = SkinSmoother.smooth(imgImage, params.smoothStrength);
-      final recorder = ui.PictureRecorder();
-      final canvas = ui.Canvas(recorder);
-      final paint = ui.Paint();
-      final smoothedBytes = img.encodePng(smoothed);
-      final codec = await ui.instantiateImageCodec(smoothedBytes);
-      final frame = await codec.getNextFrame();
-      canvas.drawImage(frame.image, ui.Offset.zero, paint);
-      final picture = recorder.endRecording();
-      final newImage = await picture.toImage(smoothed.width, smoothed.height);
+      final newImage = await _rgbaBytesToUiImage(
+        smoothed.getBytes(order: img.ChannelOrder.rgba),
+        smoothed.width,
+        smoothed.height,
+      );
+      // 新图构建成功后才回收输入（失败路径 catch 需返回可用的 input）
       input.dispose();
-      frame.image.dispose();
-      codec.dispose();
-      picture.dispose();
       debugPrint(
           '[post-process] 皮肤平滑 (CPU): smoothStrength=${params.smoothStrength}, ${sw.elapsedMilliseconds}ms');
       return newImage;
@@ -403,6 +414,142 @@ class PhotoPostProcessor {
       debugPrint('[post-process] 皮肤平滑 (CPU) 失败（静默跳过）: $e');
       return input;
     }
+  }
+
+  /// GPU 磨皮渲染 + 像素级校验。
+  ///
+  /// 返回 null：shader 加载失败 / 渲染异常 / 输入读回失败（[input] 保持可用，
+  /// 调用方继续走 CPU 回退）。
+  /// 返回 changed=false：GPU 正常执行但输出与输入像素级一致（部分真机 shader
+  /// 静默失效），[image] 即原输入图（未消费），[sourceRgba] 为已读回的输入
+  /// RGBA（CPU 回退直接复用）。
+  /// 返回 changed=true：校验确认产生实际效果，[image] 为磨皮结果（调用方负责
+  /// dispose 原输入图）。
+  static Future<_GpuSmoothOutcome?> _tryGpuSkinSmooth(
+    ui.Image input,
+    PostProcess params,
+    Stopwatch sw,
+  ) async {
+    ui.FragmentProgram? program;
+    try {
+      // asset key 带 assets/ 前缀（pubspec shaders 段声明路径原样保留，
+      // 见 detail_effects_layer.dart 同款修复说明）。
+      program = await loadFragmentProgramFromCandidates(
+        const [
+          'assets/shaders/skin_smooth.frag',
+          'shaders/skin_smooth.frag',
+        ],
+      );
+    } catch (_) {
+      program = null;
+    }
+    if (program == null) {
+      debugPrint('[post-process] 磨皮 shader 加载失败，回退 CPU');
+      return null;
+    }
+
+    // 先读回输入像素（校验基准 + CPU 回退复用）
+    final ByteData sourceRgba;
+    try {
+      final read = await input.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (read == null) return null;
+      sourceRgba = read;
+    } catch (_) {
+      return null;
+    }
+
+    ui.Image? outImage;
+    try {
+      final smoothW = input.width;
+      final smoothH = input.height;
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+      // 与 SkinSmoothPainter 相同的 uniform 索引约定：
+      // - float 域：uSize(vec2)→0,1；uStrength→2。
+      // - sampler 域：uTexture→0（sampler 独立索引空间）。
+      final shader = program.fragmentShader()
+        ..setFloat(0, smoothW.toDouble())
+        ..setFloat(1, smoothH.toDouble())
+        ..setFloat(2, skinStrength(params))
+        ..setImageSampler(0, input);
+      canvas.drawRect(
+        ui.Rect.fromLTWH(0, 0, smoothW.toDouble(), smoothH.toDouble()),
+        ui.Paint()..shader = shader,
+      );
+      final picture = recorder.endRecording();
+      outImage = await picture.toImage(smoothW, smoothH);
+      picture.dispose();
+    } catch (e) {
+      debugPrint('[post-process] 皮肤平滑 (GPU) 渲染异常，回退 CPU: $e');
+      outImage?.dispose();
+      return null;
+    }
+
+    // 像素级校验：GPU 输出必须与输入存在实际差异，否则视为 shader 静默失效。
+    try {
+      final outBytes =
+          await outImage.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (outBytes == null) {
+        outImage.dispose();
+        return _GpuSmoothOutcome(input, false, sourceRgba);
+      }
+      if (_rgbaMeaningfullyChanged(sourceRgba, outBytes)) {
+        input.dispose();
+        debugPrint(
+            '[post-process] 皮肤平滑 (GPU): smoothStrength=${params.smoothStrength}, ${sw.elapsedMilliseconds}ms');
+        return _GpuSmoothOutcome(outImage, true, null);
+      }
+      outImage.dispose();
+      return _GpuSmoothOutcome(input, false, sourceRgba);
+    } catch (_) {
+      outImage.dispose();
+      return _GpuSmoothOutcome(input, false, sourceRgba);
+    }
+  }
+
+  /// 抽样对比两组 RGBA：至少 8 个采样点出现总通道差 >2 视为「实际产生效果」。
+  /// 磨皮是全图皮肤区域性的像素改动，正常渲染下远超该阈值；shader 静默失效
+  /// （输出=输入）时为 0。
+  static bool _rgbaMeaningfullyChanged(ByteData a, ByteData b) {
+    if (a.lengthInBytes != b.lengthInBytes) return false;
+    final pixelCount = a.lengthInBytes ~/ 4;
+    if (pixelCount == 0) return false;
+    const samples = 512;
+    final step = pixelCount > samples ? pixelCount ~/ samples : 1;
+    var changed = 0;
+    for (var i = 0; i < pixelCount; i += step) {
+      final o = i * 4;
+      final diff = (a.getUint8(o) - b.getUint8(o)).abs() +
+          (a.getUint8(o + 1) - b.getUint8(o + 1)).abs() +
+          (a.getUint8(o + 2) - b.getUint8(o + 2)).abs();
+      if (diff > 2) {
+        changed++;
+        if (changed >= 8) return true;
+      }
+    }
+    return false;
+  }
+
+  /// RGBA 字节直建 [ui.Image]（ImmutableBuffer + ImageDescriptor.raw，
+  /// 替代 encodePng→instantiateImageCodec 的慢速编解码往返）。
+  static Future<ui.Image> _rgbaBytesToUiImage(
+    Uint8List rgba,
+    int width,
+    int height,
+  ) async {
+    final buffer = await ui.ImmutableBuffer.fromUint8List(rgba);
+    final descriptor = ui.ImageDescriptor.raw(
+      buffer,
+      width: width,
+      height: height,
+      pixelFormat: ui.PixelFormat.rgba8888,
+    );
+    buffer.dispose();
+    final codec = await descriptor.instantiateCodec();
+    final frame = await codec.getNextFrame();
+    descriptor.dispose();
+    codec.dispose();
+    return frame.image;
   }
 
   /// 逐像素效果：Sharpen + Clarity + Grain
@@ -929,6 +1076,20 @@ class CropSavePlan {
 
   /// base ⊕ inner 组合结果（相对比例基准区域），保存后写回 DB。
   final CropRect? composedCropRect;
+}
+
+/// [_tryGpuSkinSmooth] 的结果（见方法注释了解各字段语义）。
+class _GpuSmoothOutcome {
+  const _GpuSmoothOutcome(this.image, this.changed, this.sourceRgba);
+
+  /// changed=true：磨皮结果图；changed=false：原输入图（未消费，可直接继续处理）。
+  final ui.Image image;
+
+  /// 像素级校验是否确认 GPU 产生了实际效果。
+  final bool changed;
+
+  /// 输入图已读回的 RGBA（供 CPU 回退复用，免重复 GPU 读回）。
+  final ByteData? sourceRgba;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

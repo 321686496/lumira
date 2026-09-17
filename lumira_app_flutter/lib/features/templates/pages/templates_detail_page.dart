@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +11,7 @@ import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/router/route_names.dart';
+import '../../../shared/searchengine/search_scope.dart' show SearchScope;
 import '../../../features/points/data/points_models.dart';
 import '../../../features/points/data/points_repository.dart';
 import '../../../features/gallery/data/gallery_models.dart';
@@ -24,6 +27,7 @@ import '../../../shared/widgets/poster/template_poster_widgets.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/common/lumira_loading_modal.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tags/tag_chip.dart' show TagChip, TagChipKind;
@@ -313,6 +317,9 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
 
   /// 分享当前模板：从 DAO 拉取完整 [TemplateRecord]，弹出「模板分享海报」预览
   /// （封面 + 模板名/分类 + 模板二维码），可导出到相册或分享到系统。
+  ///
+  /// 先弹全局加载模态（随主题/UI 风格自适应）完成「取模板 + 解析封面比例 +
+  /// 预渲染全部版式为位图」，再打开海报弹窗，保证滑动流畅无卡顿。
   Future<void> _goSharePoster() async {
     // 自定义模板不允许生成模板分享海报（其二维码无法定位到模板详情）。
     if (_isCustomTemplate) {
@@ -321,61 +328,76 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
     }
     final id = _template?.id ?? widget.templateId;
     if (id == null || id.isEmpty) return;
+    // 异步前同步捕获 Overlay，避免 await 之后再 use context 触发 lint。
+    final overlayState = Overlay.maybeOf(context, rootOverlay: true);
     try {
-      final dao = await ref.read(templatesDaoProvider.future);
-      final record = await dao.getById(id);
-      if (record == null) {
+      final prep = await showLumiraLoading<_SharePosterPrep?>(
+        context,
+        message: '正在生成海报…',
+        task: () async {
+          final dao = await ref.read(templatesDaoProvider.future);
+          final record = await dao.getById(id);
+          if (record == null) return null;
+          final tokens = ref.read(themeTokensProvider);
+          final shareText = buildAutoShareText(record);
+          // 由模板封面解析海报比例（coverData base64 / cover 资源 / 网络图），失败回退 9:16
+          final ratio = await PosterRatio.fromTemplateCover(record);
+          final cover = templateRecordCover(record);
+          final data = PosterStyleData(
+            ratio: ratio,
+            title: record.name,
+            category: record.category,
+            qrData: buildTemplatePosterQrData(record),
+            qrHint: '长按识别 · 查看完整模板',
+            qrSub: '打开如画，拍出同款',
+            shareText: shareText,
+            authorName: '',
+            photoBuilder: (w, h) => templateCoverImage(
+              cover,
+              width: w,
+              height: h,
+              fit: BoxFit.cover,
+              tokens: tokens,
+              cacheWidth: kPosterImageCacheWidth,
+            ),
+          );
+          // 加载模态内把全部版式预渲染为位图，弹窗一打开就是纯位图滑动。
+          final images = await PosterGenerator.renderStylePreviews(
+            kind: PosterKind.template,
+            ratio: ratio,
+            data: data,
+            overlayState: overlayState,
+          );
+          return _SharePosterPrep(
+            tokens: tokens,
+            shareText: shareText,
+            ratio: ratio,
+            data: data,
+            images: images,
+          );
+        },
+      );
+      if (!mounted) return;
+      if (prep == null) {
         _showSnack('模板未找到');
         return;
       }
-      if (!mounted) return;
-      final tokens = ref.read(themeTokensProvider);
-      final shareText = buildAutoShareText(record);
-      // 由模板封面解析海报比例（coverData base64 / cover 资源 / 网络图），失败回退 9:16
-      final ratio = await PosterRatio.fromTemplateCover(record);
-      if (!mounted) return;
-      final cover = templateRecordCover(record);
       await PosterGenerator.showPosterWithStylePicker(
         context: context,
-        tokens: tokens,
+        tokens: prep.tokens,
         title: '分享模板',
         kind: PosterKind.template,
-        ratio: ratio,
-        data: PosterStyleData(
-          ratio: ratio,
-          title: record.name,
-          category: record.category,
-          qrData: buildTemplatePosterQrData(record),
-          qrHint: '长按识别 · 查看完整模板',
-          qrSub: '打开如画，拍出同款',
-          shareText: shareText,
-          authorName: '',
-          photoBuilder: (w, h) => templateCoverImage(
-            cover,
-            width: w,
-            height: h,
-            fit: BoxFit.cover,
-            tokens: tokens,
-            cacheWidth: kPosterImageCacheWidth,
-          ),
-        ),
-        shareSubject: '模板 · ${record.name}',
-        shareText: shareText,
+        ratio: prep.ratio,
+        data: prep.data,
+        initialImages: prep.images,
+        shareSubject: '模板 · ${prep.data.title}',
+        shareText: prep.shareText,
         fileNamePrefix: 'template_share',
       );
     } catch (e) {
       _showSnack('分享失败：$e');
     }
   }
-
-  void _back() {
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      GoRouter.of(context).go(RouteNames.templates);
-    }
-  }
-
   void _showSnack(String msg) {
     LumiraToast.show(
       context,
@@ -741,7 +763,7 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
                   title: '模板详情',
                   transparent: true,
                   actionsSpacing: 10,
-                  leading: _BackButton(tokens: tokens, onTap: _back),
+                  backFallback: () => GoRouter.of(context).go(RouteNames.templates),
                   actions: _navActions(
                     tokens,
                     effectiveLocked,
@@ -814,25 +836,6 @@ class _BackgroundDecoration extends StatelessWidget {
     );
   }
 }
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens, required this.onTap});
-  final ThemeTokens tokens;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    // 返回钮：新拟态下滑面凸起表面（surface + 双向浮雕），保留浮雕凹凸感
-    return LumiraIconButton(
-      icon: Icons.arrow_back_ios_new,
-      size: 20,
-      onPressed: onTap,
-      color: tokens.textPrimary,
-      variant: LumiraIconButtonVariant.filled,
-    );
-  }
-}
-
 /// 顶部导航「更多」菜单可执行的操作。
 enum _MoreAction { favorite, sharePoster, export, edit }
 
@@ -1268,7 +1271,18 @@ class _TitleAndTags extends ConsumerWidget {
               runSpacing: 6,
               children: [
                 _GenderLabel(tokens: tokens, gender: template.gender),
-                for (final tag in template.tags) TagChip(label: tag, kind: TagChipKind.system),
+                for (final tag in template.tags)
+                  TagChip(
+                    label: tag,
+                    kind: TagChipKind.system,
+                    onTap: () => context.push(
+                      RouteNames.build(RouteNames.search, {
+                        RouteNames.paramScope: SearchScope.template.name,
+                        RouteNames.paramKeyword:
+                            Uri.encodeQueryComponent(tag),
+                      }),
+                    ),
+                  ),
               ],
             ),
           ],
@@ -2222,4 +2236,24 @@ class _TemplatePhotosSection extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// 分享海报预渲染结果：在加载模态内完成「取模板 + 解析比例 + 预渲染位图」，
+/// 再一次性（保持 idx 对齐原位图列表）交给海报弹窗。
+class _SharePosterPrep {
+  const _SharePosterPrep({
+    required this.tokens,
+    required this.shareText,
+    required this.ratio,
+    required this.data,
+    required this.images,
+  });
+
+  final ThemeTokens tokens;
+  final String shareText;
+  final PosterRatio ratio;
+  final PosterStyleData data;
+
+  /// 各版式预渲染位图（允许 null 占位，index 与样式注册顺序一致）。
+  final List<ui.Image?> images;
 }

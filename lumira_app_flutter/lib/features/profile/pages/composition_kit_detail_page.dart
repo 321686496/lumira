@@ -34,7 +34,7 @@ class CompositionKitDetailPage extends ConsumerWidget {
       appBar: LumiraNav(
         title: '套件详情',
         transparent: true,
-        leading: _BackButton(tokens: tokens),
+        backFallback: () => GoRouter.of(context).go(RouteNames.profileCompositionKits),
       ),
       body: Stack(
         children: [
@@ -554,30 +554,6 @@ class _BottomCaptureBar extends StatelessWidget {
     );
   }
 }
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens});
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        if (Navigator.of(context).canPop()) {
-          Navigator.pop(context);
-        } else {
-          GoRouter.of(context).go(RouteNames.profileCompositionKits);
-        }
-      },
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(Icons.arrow_back_ios_new, size: 20, color: tokens.textPrimary),
-      ),
-    );
-  }
-}
-
 class _NotFound extends StatelessWidget {
   const _NotFound({required this.tokens});
   final ThemeTokens tokens;

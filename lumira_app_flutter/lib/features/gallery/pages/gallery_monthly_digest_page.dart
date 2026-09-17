@@ -27,7 +27,6 @@ class GalleryMonthlyDigestPage extends ConsumerWidget {
       appBar: LumiraNav(
         title: '7月摄影手帐',
         transparent: true,
-        leading: _BackButton(tokens: tokens),
         actions: [_ExportAction(tokens: tokens)],
       ),
       body: Stack(
@@ -76,23 +75,6 @@ class GalleryMonthlyDigestPage extends ConsumerWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens});
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => Navigator.of(context).maybePop(),
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(Icons.arrow_back, size: 20, color: tokens.textPrimary),
       ),
     );
   }

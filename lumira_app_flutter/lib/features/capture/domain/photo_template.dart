@@ -744,6 +744,14 @@ class PostProcess {
   /// 处理」与首次成片一致。
   final WbResidual? wbResidual;
 
+  /// 拍摄镜头朝向（'front' / 'back'，null 视为 'back'，旧记录兼容）。
+  ///
+  /// 原图备份（originalPath）是 sensor 原始 JPEG：横屏、前置未镜像。编辑页
+  /// 「从原图重新处理」时 [_alignOrientation] 只负责旋转，前置镜像必须由
+  /// facing 驱动 —— 缺失时前置照片重保存会水平翻转（2026-09-16 修复）。
+  /// 与 wbResidual 同类：拍照时刻的曝光元数据，随 JSON 持久化。
+  final String? facing;
+
   const PostProcess({
     this.cropRatio = '3:4',
     required this.color,
@@ -757,6 +765,7 @@ class PostProcess {
     this.customCropRect,
     this.fillLight,
     this.wbResidual,
+    this.facing,
   });
 
   /// copyWith 的 systemFilter 和 customCropRect 参数使用 [_unset] 哨兵区分两种情况：
@@ -775,6 +784,7 @@ class PostProcess {
     Object? customCropRect = _unset,
     Object? fillLight = _unset,
     Object? wbResidual = _unset,
+    String? facing,
   }) =>
       PostProcess(
         cropRatio: cropRatio ?? this.cropRatio,
@@ -797,6 +807,7 @@ class PostProcess {
         wbResidual: identical(wbResidual, _unset)
             ? this.wbResidual
             : wbResidual as WbResidual?,
+        facing: facing ?? this.facing,
       );
 
   @override
@@ -814,12 +825,13 @@ class PostProcess {
           systemFilter == other.systemFilter &&
           customCropRect == other.customCropRect &&
           fillLight == other.fillLight &&
-          wbResidual == other.wbResidual;
+          wbResidual == other.wbResidual &&
+          facing == other.facing;
 
   @override
   int get hashCode => Object.hash(cropRatio, color, smoothStrength, sharpen,
       vignette, grain, legStretch, lut, systemFilter, customCropRect, fillLight,
-      wbResidual);
+      wbResidual, facing);
 
   Map<String, dynamic> toJson() => {
         'cropRatio': cropRatio,
@@ -838,6 +850,8 @@ class PostProcess {
         // 首次成片一致；旧记录无此字段 → null（无软件补足，向后兼容）。
         if (wbResidual != null)
           'wbResidual': {'r': wbResidual!.r, 'g': wbResidual!.g, 'b': wbResidual!.b},
+        // 前置/后置随 JSON 持久化：编辑页「从原图重新处理」据此补做前置镜像
+        if (facing != null) 'facing': facing,
       };
 
   /// 将另一个 PostProcess（增量）合并到当前参数上，返回全量参数。
@@ -862,6 +876,8 @@ class PostProcess {
         // 残差为会话态：增量带新残差用增量（重新拉取过），否则保留烘焙值，
         // 保证「编辑页保存→从原图重新处理」时硬件封顶削减的部分仍被补足。
         wbResidual: delta.wbResidual ?? wbResidual,
+        // facing 为拍照时刻元数据（非增量可调项）：保留烘焙值。
+        facing: delta.facing ?? facing,
       );
 
   factory PostProcess.fromJson(Map<String, dynamic> json) => PostProcess(
@@ -883,6 +899,7 @@ class PostProcess {
         wbResidual: (json['wbResidual'] as Map<String, dynamic>?) != null
             ? WbResidual.fromJson(json['wbResidual'] as Map<String, dynamic>)
             : null,
+        facing: json['facing'] as String?,
       );
 }
 

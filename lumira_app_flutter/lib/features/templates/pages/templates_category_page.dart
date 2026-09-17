@@ -119,10 +119,6 @@ class _TemplatesCategoryPageState extends ConsumerState<TemplatesCategoryPage> {
                 LumiraNav(
                   title: _typeName,
                   transparent: true,
-                  leading: _BackButton(
-                    tokens: tokens,
-                    onTap: () => Navigator.of(context).pop(),
-                  ),
                   actions: const [],
                 ),
                 Expanded(
@@ -189,28 +185,6 @@ class _BackgroundDecoration extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens, required this.onTap});
-  final ThemeTokens tokens;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(
-          Icons.arrow_back_ios_new,
-          size: 20,
-          color: tokens.textPrimary,
         ),
       ),
     );

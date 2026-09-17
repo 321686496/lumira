@@ -234,13 +234,7 @@ class _ExportDetailPageState extends ConsumerState<ExportDetailPage> {
     );
   }
 
-  void _back() {
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      GoRouter.of(context).go(RouteNames.templates);
-    }
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -260,7 +254,7 @@ class _ExportDetailPageState extends ConsumerState<ExportDetailPage> {
                 LumiraNav(
                   title: '导出详情',
                   transparent: true,
-                  leading: _BackButton(tokens: tokens, onTap: _back),
+                  backFallback: () => GoRouter.of(context).go(RouteNames.templates),
                 ),
                 Expanded(
                   child: _isLoading
@@ -811,27 +805,6 @@ class _BackgroundDecoration extends StatelessWidget {
   }
 }
 
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens, required this.onTap});
-  final ThemeTokens tokens;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(
-          Icons.arrow_back_ios_new,
-          size: 20,
-          color: tokens.textPrimary,
-        ),
-      ),
-    );
-  }
-}
 
 class _InfoRow extends StatelessWidget {
   const _InfoRow({

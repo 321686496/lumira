@@ -225,7 +225,22 @@ export struct OhosView {
   scan() {
     const cameraManager = camera.getCameraManager(this.context);
     this.cameraService!.createCamera(cameraManager);
-    this.cameraService!.initCamera(this.surfaceId);
+    // 首次初始化相机并要求会话已启动；若偶发失败（设备忙 / onLoad 与 onPageShow
+    // 时序竞争），做一次延时兜底重试，避免首次打开偶发黑屏后无恢复。重试由
+    // initCamera 内部的串行化 / 去重 / teardown 逻辑兜底，幂等安全。
+    this.cameraService!.initCamera(this.surfaceId).then(() => {
+      if (!this.cameraService!.isCameraRunning()) {
+        console.info(TAG + 'initCamera not running, retry once');
+        setTimeout(() => {
+          this.cameraService!.initCamera(this.surfaceId);
+        }, 300);
+      }
+    }).catch(() => {
+      console.error(TAG + 'initCamera failed, retry once');
+      setTimeout(() => {
+        this.cameraService!.initCamera(this.surfaceId);
+      }, 300);
+    });
   }
 
   setDisplay() {

@@ -50,15 +50,6 @@ class _TemplatesDraftsPageState extends ConsumerState<TemplatesDraftsPage> {
       setState(() => _isScrolled = scrolled);
     }
   }
-
-  void _back() {
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      GoRouter.of(context).go(RouteNames.profileMyTemplates);
-    }
-  }
-
   void _onResume(String draftId) {
     GoRouter.of(context).push('/templates/editor?draftId=$draftId');
   }
@@ -157,7 +148,7 @@ class _TemplatesDraftsPageState extends ConsumerState<TemplatesDraftsPage> {
                     title: '草稿箱',
                     transparent: true,
                     scrolled: _isScrolled,
-                    leading: _BackButton(tokens: tokens, onTap: _back),
+                    backFallback: () => GoRouter.of(context).go(RouteNames.profileMyTemplates),
                     actions: drafts.isNotEmpty
                         ? [
                             _TrashButton(
@@ -216,16 +207,7 @@ class _DraftsLoadingError extends StatelessWidget {
           LumiraNav(
             title: '草稿箱',
             transparent: true,
-            leading: _BackButton(
-              tokens: tokens,
-              onTap: () {
-                if (Navigator.of(context).canPop()) {
-                  Navigator.of(context).pop();
-                } else {
-                  GoRouter.of(context).go(RouteNames.profileMyTemplates);
-                }
-              },
-            ),
+            backFallback: () => GoRouter.of(context).go(RouteNames.profileMyTemplates),
           ),
           Expanded(
             child: Center(
@@ -283,29 +265,6 @@ class _BackgroundDecoration extends StatelessWidget {
     );
   }
 }
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens, required this.onTap});
-  final ThemeTokens tokens;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(
-          Icons.arrow_back_ios_new,
-          size: 20,
-          color: tokens.textPrimary,
-        ),
-      ),
-    );
-  }
-}
-
 class _TrashButton extends StatelessWidget {
   const _TrashButton({required this.tokens, required this.onTap});
   final ThemeTokens tokens;

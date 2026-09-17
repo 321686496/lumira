@@ -11,6 +11,20 @@ import { BusinessError } from '@ohos.base';
 // 循环下沉到 C++（170 万像素由 ~5s 降到 ~10-30ms），解码/编码仍走系统硬管线。
 import nativeProcessor from 'libphoto_processor.so';
 
+/// 编辑页细节效果实时预览的解码源缓存条目
+interface DetailCacheEntry {
+  width: number;
+  height: number;
+  buf: ArrayBuffer;
+}
+
+/// 解码结果（decodeToBuffer 返回）
+interface DecodedRgba {
+  width: number;
+  height: number;
+  buf: ArrayBuffer;
+}
+
 /**
  * OHOS 原生图像处理插件（MethodChannel "lumira/image_processor"）
  *
@@ -40,6 +54,15 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
     switch (call.method) {
       case 'decodeJpegToRgba':
         this.decodeJpegToRgba(call, result);
+        break;
+      case 'cacheDetailSource':
+        this.cacheDetailSource(call, result);
+        break;
+      case 'renderDetailPreview':
+        this.renderDetailPreview(call, result);
+        break;
+      case 'releaseDetailSource':
+        this.releaseDetailSource(call, result);
         break;
       case 'encodeJpegFromRgba':
         this.encodeJpegFromRgba(call, result);
@@ -326,19 +349,14 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
     }
   }
 
-  private async decodeJpegToRgba(call: MethodCall, result: MethodResult): Promise<void> {
+  /// 解码 JPEG → RGBA 缓冲（decodeJpegToRgba / cacheDetailSource 共用）。
+  /// 返回 null 表示失败（调用方自行兜底）。
+  private async decodeToBuffer(path: string, targetWidth: number, targetHeight: number):
+    Promise<DecodedRgba | null> {
     let fd: number = -1;
     let source: image.ImageSource | null = null;
     let pixelMap: image.PixelMap | null = null;
     try {
-      const path: string = call.argument('path');
-      const targetWidth: number = call.argument('targetWidth') ?? 1600;
-      const targetHeight: number = call.argument('targetHeight') ?? 1600;
-      if (!path) {
-        result.success({ error: 'path empty' });
-        return;
-      }
-
       const file = fs.openSync(path, fs.OpenMode.READ_ONLY);
       fd = file.fd;
       source = image.createImageSource(fd);
@@ -368,17 +386,11 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
 
       const buf = new ArrayBuffer(outW * outH * 4);
       await pixelMap.readPixelsToBuffer(buf);
-      const rgba = new Uint8Array(buf);
-
-      result.success({
-        width: outW,
-        height: outH,
-        rgba: rgba
-      });
+      return { width: outW, height: outH, buf: buf };
     } catch (e) {
       const err = e as BusinessError;
-      console.error(`[ImageProcessor] decodeJpegToRgba failed: ${err.code} ${err.message}`);
-      result.success({ error: err.message || String(e) });
+      console.error(`[ImageProcessor] decodeToBuffer failed: ${err.code} ${err.message}`);
+      return null;
     } finally {
       try {
         pixelMap?.release();
@@ -398,5 +410,125 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
         }
       }
     }
+  }
+
+  private async decodeJpegToRgba(call: MethodCall, result: MethodResult): Promise<void> {
+    const path: string = call.argument('path');
+    const targetWidth: number = call.argument('targetWidth') ?? 1600;
+    const targetHeight: number = call.argument('targetHeight') ?? 1600;
+    if (!path) {
+      result.success({ error: 'path empty' });
+      return;
+    }
+    const decoded = await this.decodeToBuffer(path, targetWidth, targetHeight);
+    if (decoded == null) {
+      result.success({ error: 'decode failed' });
+      return;
+    }
+    result.success({
+      width: decoded.width,
+      height: decoded.height,
+      rgba: new Uint8Array(decoded.buf)
+    });
+  }
+
+  // ── 编辑页细节效果实时预览（原生 C++ 管线）──
+  // 背景：flutter_ohos 上 Dart FragmentShader（skin_smooth.frag / edit_detail_effects.frag）
+  // 在真机静默渲染为原图（保存链路「GPU 磨皮无效、CPU 锐化有效」的同根因），表现为
+  // 「编辑页拖动磨皮/锐化滑块照片无实时变化」。本组方法把实时预览改走与拍摄成片
+  // 同一套 processRgba：源图原生解码一次进缓存，拖动时只传参数、C++ 全速渲染回传 RGBA。
+  // 注意：processRgba 回传缓冲为 [B,G,R,A] 次序（补偿 createPixelMap+ImagePacker 编码侧
+  // R/B 对调怪癖），预览展示前需 swapRgba 还原为 [R,G,B,A]。
+  private static detailCacheSeq: number = 0;
+  private static detailCache: Map<string, DetailCacheEntry> = new Map();
+  private static readonly detailCacheMax: number = 4;
+
+  private async cacheDetailSource(call: MethodCall, result: MethodResult): Promise<void> {
+    const path: string = call.argument('path');
+    const maxEdge: number = call.argument('maxEdge') ?? 2048;
+    const returnRgba: boolean = call.argument('returnRgba') ?? false;
+    if (!path) {
+      result.success({ error: 'path empty' });
+      return;
+    }
+    const decoded = await this.decodeToBuffer(path, maxEdge, maxEdge);
+    if (decoded == null) {
+      result.success({ error: 'decode failed' });
+      return;
+    }
+    ImageProcessorPlugin.detailCacheSeq += 1;
+    const cacheId = `detail_${ImageProcessorPlugin.detailCacheSeq}`;
+    ImageProcessorPlugin.detailCache.set(cacheId, {
+      width: decoded.width,
+      height: decoded.height,
+      buf: decoded.buf
+    });
+    // LRU：超出上限淘汰最早写入的条目
+    while (ImageProcessorPlugin.detailCache.size > ImageProcessorPlugin.detailCacheMax) {
+      const oldest = ImageProcessorPlugin.detailCache.keys().next();
+      if (!oldest.done) {
+        ImageProcessorPlugin.detailCache.delete(oldest.value);
+      } else {
+        break;
+      }
+    }
+    if (returnRgba) {
+      result.success({
+        cacheId: cacheId,
+        width: decoded.width,
+        height: decoded.height,
+        rgba: new Uint8Array(decoded.buf)
+      });
+    } else {
+      result.success({
+        cacheId: cacheId,
+        width: decoded.width,
+        height: decoded.height
+      });
+    }
+  }
+
+  private async renderDetailPreview(call: MethodCall, result: MethodResult): Promise<void> {
+    const cacheId: string = call.argument('cacheId');
+    const sharpen: number = call.argument('sharpen') ?? 0;
+    const smooth: number = call.argument('smooth') ?? 0;
+    const vignette: number = call.argument('vignette') ?? 0;
+    const grain: number = call.argument('grain') ?? 0;
+    const clarity: number = call.argument('clarity') ?? 0;
+    const entry = ImageProcessorPlugin.detailCache.get(cacheId);
+    if (entry == null) {
+      result.success({ error: 'cache miss' });
+      return;
+    }
+    try {
+      // 恒等矩阵：颜色增量由 Dart 侧 ColorFiltered 叠加，这里只做细节效果
+      const identity = new Float64Array([
+        1, 0, 0, 0, 0,
+        0, 1, 0, 0, 0,
+        0, 0, 1, 0, 0,
+        0, 0, 0, 1, 0
+      ]);
+      // 输入缓冲只读（processRgba 返回新缓冲），可安全重复渲染
+      const outBuf = nativeProcessor.processRgba(
+        new Uint8Array(entry.buf), entry.width, entry.height, identity,
+        Math.max(0, sharpen), false, Math.max(0, smooth),
+        Math.max(0, vignette), Math.max(0, grain), clarity) as ArrayBuffer;
+      // [B,G,R,A] → [R,G,B,A]（展示用）
+      const outU8 = new Uint8Array(outBuf);
+      nativeProcessor.swapRgba(outU8, outBuf.byteLength);
+      result.success({ rgba: outU8, width: entry.width, height: entry.height });
+    } catch (e) {
+      const err = e as BusinessError;
+      console.error(`[ImageProcessor] renderDetailPreview failed: ${err.message}`);
+      result.success({ error: err.message || String(e) });
+    }
+  }
+
+  private releaseDetailSource(call: MethodCall, result: MethodResult): void {
+    const cacheId: string = call.argument('cacheId');
+    if (cacheId) {
+      ImageProcessorPlugin.detailCache.delete(cacheId);
+    }
+    result.success({ ok: true });
   }
 }

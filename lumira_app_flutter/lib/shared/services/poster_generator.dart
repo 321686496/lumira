@@ -80,6 +80,7 @@ class PosterGenerator {
     required String fileNamePrefix,
     List<PosterRatio>? ratioOptions,
     PosterReorderSpec? reorder,
+    List<ui.Image?>? initialImages,
   }) async {
     await showLumiraBottomSheet<void>(
       context: context,
@@ -97,9 +98,93 @@ class PosterGenerator {
           ratioOptions: ratioOptions,
           reorder: reorder,
         ),
+        initialImages: initialImages,
       ),
     );
   }
+
+  /// 在 [context]（需处于可挂载 Overlay 的页面）下，将指定 kind + ratio 的
+  /// **全部**版式离屏预渲染为导出分辨率位图，按注册顺序返回。
+  ///
+  /// 供调用方在「加载模态」内调用（模态阻塞期间完成爬封面解码 + 海报绘制），
+  /// 再把结果通过 [showPosterWithStylePicker] 的 [initialImages] 传入，让
+  /// 海报弹窗打开时 PageView 即显示位图 → 左右滑动零卡顿。
+  /// 返回的位图所有权移交给 [showPosterWithStylePicker]（其 Sheet dispose 时释放）。
+  static Future<List<ui.Image?>> renderStylePreviews({
+    BuildContext? context,
+    required PosterKind kind,
+    required PosterRatio ratio,
+    required PosterStyleData data,
+    OverlayState? overlayState,
+  }) async {
+    final styles = PosterStyleRegistry.stylesFor(kind, ratio);
+    final overlay = overlayState ??
+        (context != null ? Overlay.maybeOf(context, rootOverlay: true) : null);
+    if (overlay == null || styles.isEmpty) {
+      return List<ui.Image?>.filled(styles.length, null);
+    }
+    final results = <ui.Image?>[];
+    for (final s in styles) {
+      results.add(await _capturePosterImage(overlay, s.builder(data)));
+    }
+    return results;
+  }
+}
+
+/// 把 [poster] 挂到屏幕外 Offstage 渲染，等图片解码完成后以 1080px 导出宽
+/// 捕获为位图。离屏复用统一的「offset + toImage」方案，位移后即刻移除。
+Future<ui.Image?> _capturePosterImage(OverlayState? overlay, Widget poster) async {
+  if (overlay == null || !overlay.mounted) return null;
+  final renderKey = GlobalKey();
+  final entry = OverlayEntry(
+    builder: (ctx) => Positioned(
+      left: 30000, // 移到屏幕外，避免渲染瞬间闪现
+      top: 0,
+      child: RepaintBoundary(key: renderKey, child: poster),
+    ),
+  );
+  overlay.insert(entry);
+  try {
+    final boundary = await _settleBoundary(renderKey);
+    if (boundary == null) return null;
+    final size = boundary.size;
+    if (size.isEmpty) return null;
+    final ratio = (_PosterSheetState.kPosterExportWidth / size.width)
+        .clamp(2.0, 4.0);
+    return boundary.toImage(pixelRatio: ratio);
+  } finally {
+    entry.remove();
+  }
+}
+
+/// 等待离屏 [GlobalKey] 布局稳定并让内部图片解码完成，最多 [timeout] 后返回。
+Future<RenderRepaintBoundary?> _settleBoundary(GlobalKey key) async {
+  final sw = Stopwatch()..start();
+  const timeout = Duration(milliseconds: 2500);
+  while (sw.elapsed < timeout) {
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+    await WidgetsBinding.instance.endOfFrame;
+    final b = key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    if (b == null || !b.attached) return null;
+    if (_treeImagesReady(b)) return b;
+  }
+  final last = key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+  return (last != null && last.attached) ? last : null;
+}
+
+/// 遍历渲染树，判定是否存在仍在加载的 [RenderImage]。
+/// true=全部就绪；false=仍有图片未完成解码（`node.image` 仍为 null）。
+bool _treeImagesReady(RenderObject root) {
+  var pending = false;
+  void visit(RenderObject node) {
+    if (!pending && node is RenderImage && node.image == null) {
+      pending = true;
+    }
+    if (!pending) node.visitChildren(visit);
+  }
+
+  visit(root);
+  return !pending;
 }
 
 /// 照片排序 / 选择配置（精选集海报专用，可选）。
@@ -166,6 +251,7 @@ class _PosterSheet extends StatefulWidget {
     this.posterKey,
     this.stylePicker,
     this.plainContentKey,
+    this.initialImages,
   });
 
   final ThemeTokens tokens;
@@ -187,6 +273,10 @@ class _PosterSheet extends StatefulWidget {
   /// 可选的扩展操作按钮，渲染在底部操作条第一位（保存/分享之前）。
   final Widget? extraAction;
 
+  /// 样式选择模式：调用方预渲染好的各版式位图（按样式页 idx，允许 null 占位）。
+  /// 非空时 Sheet 直接采用，不再后台重复预渲染。
+  final List<ui.Image?>? initialImages;
+
   /// 样式选择配置，非空时启用样式切换条。
   final _StylePickerConfig? stylePicker;
 
@@ -199,6 +289,9 @@ class _PosterSheetState extends State<_PosterSheet> {
   bool _sharing = false;
 
   late final GlobalKey _posterKey;
+
+  /// 预渲染的海报位图缓存（按样式页 idx）：PageView 直接平移位图，避免 OHOS 滑动卡顿。
+  final Map<int, ui.Image> _styleImgs = {};
 
   /// 样式选择模式：各页海报本体（设计尺寸 300~380 逻辑宽）的捕获键。
   ///
@@ -246,12 +339,53 @@ class _PosterSheetState extends State<_PosterSheet> {
           ? 0
           : (_styles.indexWhere((s) => s.id == selectedId)).clamp(0, _styles.length - 1),
     );
+    // 已有调用方预渲染好的位图（_goSharePoster 在加载模态内生成）则直接采用，
+    // 否则在首帧后后台预渲染全部版式，让 PageView 滑动变成纯位图平移。
+    final init = widget.initialImages;
+    if (init != null && init.isNotEmpty) {
+      for (var i = 0; i < init.length && i < _styles.length; i++) {
+        if (init[i] != null) _styleImgs[i] = init[i]!;
+      }
+    } else if (widget.stylePicker != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _prerenderAll());
+    }
   }
 
   @override
   void dispose() {
+    for (final img in _styleImgs.values) {
+      img.dispose();
+    }
+    _styleImgs.clear();
     _pageController.dispose();
     super.dispose();
+  }
+
+  /// 后台预渲染全部版式为位图（仅样式选择模式）。
+  ///
+  /// 顺序异步执行；每渲染完一页写缓存并刷新，未完成的页暂时回退 live widget。
+  Future<void> _prerenderAll() async {
+    if (widget.stylePicker == null) return;
+    for (var i = 0; i < _styles.length; i++) {
+      if (_styleImgs.containsKey(i)) continue;
+      final img = await _renderStyleToImage(i);
+      if (img == null) continue;
+      if (!mounted) {
+        img.dispose();
+        return;
+      }
+      setState(() => _styleImgs[i] = img);
+    }
+  }
+
+  /// 将第 [idx] 个版式离屏渲染为导出分辨率位图。
+  ///
+  /// 通过 Overlay 挂到屏幕外（大偏移定位），等内部图片解码完成后用
+  /// [RenderRepaintBoundary.toImage] 捕获；倍率按 1080px 导出宽换算，与
+  /// [_captureImage] 口径一致，保证导出一同清晰。
+  Future<ui.Image?> _renderStyleToImage(int idx) async {
+    if (idx < 0 || idx >= _styles.length) return null;
+    return _capturePosterImage(Overlay.maybeOf(context), _styles[idx].builder(_data));
   }
 
   /// 从底部缩略条选择样式：同步选中态并按需翻页到对应主卡片。
@@ -384,6 +518,10 @@ class _PosterSheetState extends State<_PosterSheet> {
     if (widget.stylePicker != null) {
       // 当前选中样式对应页的 key（onPageChanged 已同步选中态）。
       final idx = _styles.indexWhere((s) => s.id == _selectedStyleId);
+      // 有预渲染位图则直接复用（与预览显示一致的高清位图，避免重复捕获）。
+      if (idx >= 0 && _styleImgs.containsKey(idx)) {
+        return _styleImgs[idx];
+      }
       targetKey = idx >= 0 ? _styleContentKeys[idx] : null;
     } else if (widget.plainContentKey != null) {
       targetKey = widget.plainContentKey;
@@ -586,6 +724,20 @@ class _PosterSheetState extends State<_PosterSheet> {
                   itemCount: _styles.isEmpty ? 1 : _styles.length,
                   itemBuilder: (ctx, i) {
                     final style = _styles.isEmpty ? null : _styles[i];
+                    // 样式选择模式：若该页已预渲染为位图，直接用 RawImage 平移
+                    // （纯 GPU 位图合成，消除 OHOS 上「多页重海报 live 渲染」导致的
+                    // 左右滑动卡顿）；未就绪前回退 live widget。
+                    if (style != null && _styleImgs.containsKey(i)) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: RawImage(
+                            image: _styleImgs[i]!,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      );
+                    }
                     // 普通海报（无样式）：按预览区宽度渲染调用方 content 并允许纵向滚动，
                     // 保持旧版「有界宽度 + 可滚动」语义（部分 content 用 width: Infinity）。
                     // content 始终包一层内容级 RepaintBoundary 供导出捕获。

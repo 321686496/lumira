@@ -26,6 +26,7 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../profile/providers/collection_providers.dart';
 import '../../watermark/data/watermark_providers.dart';
 import '../../capture/data/template_registry.dart';
+import '../../capture/data/capture_preview_mock_data.dart';
 
 /// 原生「保存到系统相册」MethodChannel（与拍摄预览页共用同一通道，见
 /// CapturePreviewPage 同名字段）：{ 'path': <本地文件绝对路径> } -> { success, error }
@@ -37,9 +38,10 @@ const _photoSaverChannel = MethodChannel('lumira/photo_saver');
 ///
 /// 职责：
 /// - 显示照片预览（只读，应用照片已保存的 postProcess 滤镜）
-/// - 显示照片元信息：拍摄时间（相对+绝对）、心情标签、原图保留状态
-/// - 显示模板/场景信息为可点击 Chip，点击跳转对应详情页
-/// - 显示并允许更换照片分类（场景）
+/// - 显示照片元信息：拍摄时间（相对+绝对）、原图保留状态
+/// - 心情标签：点击可设置/更换/清除（与拍摄预览页同一套心情选项）
+/// - 显示模板信息为可点击 Chip，点击跳转模板详情页
+/// - 场景（分类）行始终展示并可设置/更换，未套用模板拍摄的照片同样可设置
 /// - 底部"后期修图"按钮，跳转到 /gallery/edit?photoId=xxx
 ///
 /// 编辑能力已迁移至 GalleryEditPage（lib/features/gallery/pages/gallery_edit_page.dart）
@@ -277,10 +279,66 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
         setState(() => _sceneNameById[newSceneId] = name);
       }
       ref.invalidate(collectionsListProvider);
+      // 场景被拍摄日记（穿搭视图）等下游页面使用，失效 DAO 让其重新读取
+      ref.invalidate(galleryDaoProvider);
       LumiraToast.show(context, '已更换场景', duration: const Duration(milliseconds: 1000));
     } catch (e) {
       if (mounted) {
         LumiraToast.show(context, '更换失败：$e', duration: const Duration(seconds: 2));
+      }
+    }
+  }
+
+  /// 设置/更换/清除心情：弹出底部 Sheet 选择（与拍摄预览页同一套心情选项），
+  /// 保存后同步更新当前照片记录，并失效 DAO 让日记等下游页面重新读取。
+  Future<void> _onChangeMood() async {
+    final photo = _photo;
+    if (photo == null) return;
+    final tokens = ref.read(themeTokensProvider);
+
+    final result = await showLumiraBottomSheet<String?>(
+      context: context,
+      builder: (ctx) => _MoodPickerSheet(
+        tokens: tokens,
+        currentMood: photo.mood,
+      ),
+    );
+
+    if (result == null || !mounted) return;
+
+    // result 为 '__none__' 表示清除心情；否则为新心情名
+    final newMood = result == '__none__' ? null : result;
+    if (newMood == photo.mood) return;
+
+    try {
+      final dao = await ref.read(galleryDaoProvider.future);
+      await dao.updateMood(photo.id, newMood);
+      if (!mounted) return;
+      final updatedPhoto = GalleryItemRecord(
+        id: photo.id,
+        dataUrl: photo.dataUrl,
+        filePath: photo.filePath,
+        originalPath: photo.originalPath,
+        transform: photo.transform,
+        postProcess: photo.postProcess,
+        sceneId: photo.sceneId,
+        templateId: photo.templateId,
+        kitId: photo.kitId,
+        mood: newMood,
+        lut: photo.lut,
+        isFavorite: photo.isFavorite,
+        createdAt: photo.createdAt,
+      );
+      _replaceCurrent(updatedPhoto);
+      ref.invalidate(galleryDaoProvider);
+      LumiraToast.show(
+        context,
+        newMood == null ? '已清除心情' : '已更新心情',
+        duration: const Duration(milliseconds: 1000),
+      );
+    } catch (e) {
+      if (mounted) {
+        LumiraToast.show(context, '更新失败：$e', duration: const Duration(seconds: 2));
       }
     }
   }
@@ -577,7 +635,10 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
       body: Stack(
         children: [
           const Positioned.fill(child: GlassBackground()),
+          // skipLoadingOnReload：心情/场景更新后失效 galleryDaoProvider 刷新下游页面时，
+          // 保留当前内容继续展示，避免整页闪加载圈
           daoAsync.when(
+            skipLoadingOnReload: true,
             loading: () =>
                 Center(child: LumiraProgress.circular()),
             error: (e, _) => Center(
@@ -656,9 +717,12 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
             onCompareToggle: _onCompareToggle,
             onTap: _openFullscreen,
           ),
-          // 1.5 心情独立凸显（照片正下方、信息面板之上）
-          if (photo.mood != null && photo.mood!.isNotEmpty)
-            _MoodHero(mood: photo.mood!, tokens: tokens),
+          // 1.5 心情独立凸显（照片正下方、信息面板之上），点击可设置/更换/清除心情
+          _MoodHero(
+            mood: photo.mood,
+            tokens: tokens,
+            onTap: _onChangeMood,
+          ),
           // 2. 照片信息 section（合并元信息/分类/来源）
           _PhotoInfoSection(
             photo: photo,
@@ -1197,9 +1261,10 @@ class _ReadOnlyCanvasState extends State<_ReadOnlyCanvas> {
 
 /// 照片信息 Section：合并原"元信息 / 分类 / 来源"三张卡片为一张面板，
 /// 消除卡片汤与"场景"信息的重复展示，同时保留全部原有功能：
-/// - 拍摄时间（相对 + 绝对）、心情、原图保留状态
-/// - 分类（场景）展示 + "更换"操作 + 点击场景名跳转场景详情
-/// - 拍摄模板展示 + 点击跳转模板详情
+/// - 拍摄时间（相对 + 绝对）、原图保留状态
+/// - 分类（场景）行始终展示：未设置时提供「设置」入口（未套用模板拍摄的照片
+///   也可设置场景），点击场景名跳转场景详情
+/// - 拍摄模板展示 + 点击跳转模板详情（仅套用模板拍摄的照片显示）
 class _PhotoInfoSection extends StatelessWidget {
   const _PhotoInfoSection({
     required this.photo,
@@ -1226,8 +1291,6 @@ class _PhotoInfoSection extends StatelessWidget {
     final hasOriginal =
         photo.originalPath != null && photo.originalPath!.isNotEmpty;
     final hasCategory = sceneId != null && sceneId!.isNotEmpty;
-    final showSource =
-        hasCategory || (templateName != null && templateId != null);
 
     return LumiraSurface(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1284,87 +1347,87 @@ class _PhotoInfoSection extends StatelessWidget {
             ],
           ),
           // 来源信息：分类（场景）+ 拍摄模板
-          if (showSource) ...[
-            Divider(height: 24, color: tokens.divider),
-            Row(
-              children: [
-                Icon(Icons.place_outlined, size: 16, color: tokens.brand),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: hasCategory
-                      ? GestureDetector(
-                          onTap: () => _jumpScene(context),
-                          behavior: HitTestBehavior.opaque,
-                          child: Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  sceneName ?? '未知场景',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                    color: tokens.textPrimary,
-                                  ),
+          // 场景行始终展示（未套用模板拍摄的照片同样可在此设置场景），
+          // 拍摄模板 Chip 仅在套用模板拍摄时显示
+          Divider(height: 24, color: tokens.divider),
+          Row(
+            children: [
+              Icon(Icons.place_outlined, size: 16, color: tokens.brand),
+              const SizedBox(width: 6),
+              Expanded(
+                child: hasCategory
+                    ? GestureDetector(
+                        onTap: () => _jumpScene(context),
+                        behavior: HitTestBehavior.opaque,
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                sceneName ?? '未知场景',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: tokens.textPrimary,
                                 ),
                               ),
-                              const SizedBox(width: 2),
-                              Icon(Icons.chevron_right,
-                                  size: 14, color: tokens.brand),
-                            ],
-                          ),
-                        )
-                      : Text(
-                          '未设置场景',
-                          style:
-                              TextStyle(fontSize: 14, color: tokens.textTertiary),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(Icons.chevron_right,
+                                size: 14, color: tokens.brand),
+                          ],
                         ),
-                ),
-                const SizedBox(width: 8),
-                // 更换分类
-                GestureDetector(
-                  onTap: onChangeCategory,
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: tokens.brandSubtle,
-                      borderRadius: BorderRadius.circular(1000),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.swap_horiz, size: 13, color: tokens.brand),
-                        const SizedBox(width: 4),
-                        Text(
-                          '更换',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: tokens.brand,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
+                      )
+                    : Text(
+                        '未设置场景',
+                        style:
+                            TextStyle(fontSize: 14, color: tokens.textTertiary),
+                      ),
+              ),
+              const SizedBox(width: 8),
+              // 设置/更换分类
+              GestureDetector(
+                onTap: onChangeCategory,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: tokens.brandSubtle,
+                    borderRadius: BorderRadius.circular(1000),
                   ),
-                ),
-              ],
-            ),
-            // 拍摄模板
-            if (templateName != null && templateId != null) ...[
-              const SizedBox(height: 12),
-              _SourceChip(
-                tokens: tokens,
-                icon: Icons.collections_bookmark_outlined,
-                label: templateName!,
-                onTap: () => GoRouter.of(context).push(
-                  RouteNames.build(RouteNames.templatesDetail,
-                      {RouteNames.paramTemplateId: templateId!}),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.swap_horiz, size: 13, color: tokens.brand),
+                      const SizedBox(width: 4),
+                      Text(
+                        hasCategory ? '更换' : '设置',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: tokens.brand,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
+          ),
+          // 拍摄模板
+          if (templateName != null && templateId != null) ...[
+            const SizedBox(height: 12),
+            _SourceChip(
+              tokens: tokens,
+              icon: Icons.collections_bookmark_outlined,
+              label: templateName!,
+              onTap: () => GoRouter.of(context).push(
+                RouteNames.build(RouteNames.templatesDetail,
+                    {RouteNames.paramTemplateId: templateId!}),
+              ),
+            ),
           ],
         ],
       ),
@@ -1400,35 +1463,70 @@ class _MetaLabel extends StatelessWidget {
 }
 
 /// 照片正下方的独立心情凸显区：柔和背景胶囊 + 表情图标 + 心情名，成为视觉焦点。
+/// 整区可点击弹出心情选择 Sheet：未记录心情时展示浅色占位态引导添加，
+/// 已记录时可更换或清除。
 class _MoodHero extends StatelessWidget {
-  const _MoodHero({required this.mood, required this.tokens});
-  final String mood;
+  const _MoodHero({
+    required this.mood,
+    required this.tokens,
+    required this.onTap,
+  });
+
+  /// 当前照片心情；null/空表示未记录（展示占位态）
+  final String? mood;
   final ThemeTokens tokens;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: tokens.brandSubtle,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: tokens.brandLight.withOpacity(0.5)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(_moodIconFor(mood), size: 18, color: tokens.brand),
-          const SizedBox(width: 8),
-          Text(
-            '今天的心情 · $mood',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: tokens.textPrimary,
-            ),
+    final hasMood = mood != null && mood!.isNotEmpty;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: hasMood ? tokens.brandSubtle : tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color:
+                hasMood ? tokens.brandLight.withOpacity(0.5) : tokens.divider,
           ),
-        ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    hasMood
+                        ? _moodIconFor(mood!)
+                        : Icons.add_reaction_outlined,
+                    size: 18,
+                    color: hasMood ? tokens.brand : tokens.textTertiary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    hasMood ? '今天的心情 · $mood' : '记录今天的心情',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: hasMood ? FontWeight.w600 : FontWeight.w500,
+                      color:
+                          hasMood ? tokens.textPrimary : tokens.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              hasMood ? Icons.edit_outlined : Icons.chevron_right,
+              size: 14,
+              color: hasMood ? tokens.brand : tokens.textTertiary,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1453,6 +1551,84 @@ IconData _moodIconFor(String mood) {
       return Icons.grass_outlined;
     default:
       return Icons.sentiment_satisfied;
+  }
+}
+
+/// 心情选择底部 Sheet：复用拍摄预览页的心情选项（CapturePreviewMockData.moods），
+/// 已记录心情时额外提供「不记录心情」清除项（与场景选择 Sheet 的「移除场景」同语义）。
+class _MoodPickerSheet extends StatelessWidget {
+  const _MoodPickerSheet({required this.tokens, required this.currentMood});
+
+  final ThemeTokens tokens;
+  final String? currentMood;
+
+  @override
+  Widget build(BuildContext context) {
+    const moods = CapturePreviewMockData.moods;
+    final hasMood = currentMood != null && currentMood!.isNotEmpty;
+    final maxHeight = MediaQuery.of(context).size.height * 0.7;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 顶部标题栏
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '选择心情',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(Icons.close,
+                        size: 20, color: tokens.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: tokens.divider),
+          // 心情列表
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              children: [
+                // 清除心情选项（仅在已记录心情时展示）
+                if (hasMood)
+                  _CategoryOption(
+                    tokens: tokens,
+                    icon: Icons.label_off_outlined,
+                    label: '不记录心情',
+                    selected: false,
+                    isRemove: true,
+                    onTap: () => Navigator.of(context).pop('__none__'),
+                  ),
+                // 所有心情选项
+                ...moods.map((m) => _CategoryOption(
+                      tokens: tokens,
+                      icon: m.icon,
+                      label: m.name,
+                      selected: hasMood && m.name == currentMood,
+                      onTap: () => Navigator.of(context).pop(m.name),
+                    )),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

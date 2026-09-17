@@ -239,11 +239,15 @@ class QRViewController {
   /// Starts the barcode scanner
   Future<void> _startScan(GlobalKey key, QrScannerOverlayShape? overlay,
       List<BarcodeFormat>? barcodeFormats) async {
-    // We need to update the dimension before the scan is started.
+    // 并行化：`updateDimensions` 在 iOS 内置了 300ms 延迟，若串行 `await` 会让
+    // `startScan` 延后 300ms+ 才开始出流，是「扫码识别慢」的感知起点。这里
+    // 立即发起扫描，并发的下发尺寸/扫描区域（Android/OHOS 走 changeScanArea，
+    // iOS 走 setDimensions，均不依赖 startScan 先完成）。
     try {
-      await QRViewController.updateDimensions(key, _channel, overlay: overlay);
-      return await _channel.invokeMethod(
+      final startFuture = _channel.invokeMethod(
           'startScan', barcodeFormats?.map((e) => e.asInt()).toList() ?? []);
+      unawaited(QRViewController.updateDimensions(key, _channel, overlay: overlay));
+      return await startFuture;
     } on PlatformException catch (e) {
       throw CameraException(e.code, e.message);
     }

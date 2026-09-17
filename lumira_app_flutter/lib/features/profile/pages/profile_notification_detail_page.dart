@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -27,9 +27,7 @@ class ProfileNotificationDetailPage extends ConsumerWidget {
   /// 关联业务路由：模板上新直达模板详情；无关联页面返回 null。
   String? get _route => notificationTargetRoute(item);
 
-  void _back(BuildContext context) {
-    Navigator.of(context).pop();
-  }
+
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -38,10 +36,9 @@ class ProfileNotificationDetailPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: tokens.canvas,
-      appBar: LumiraNav(
+      appBar: const LumiraNav(
         title: '通知详情',
         transparent: true,
-        leading: _BackButton(tokens: tokens, onTap: () => _back(context)),
       ),
       body: Stack(
         children: [
@@ -170,21 +167,3 @@ class _ActionCard extends StatelessWidget {
   }
 }
 
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens, required this.onTap});
-  final ThemeTokens tokens;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child:
-            Icon(Icons.arrow_back_ios_new, size: 20, color: tokens.textPrimary),
-      ),
-    );
-  }
-}
