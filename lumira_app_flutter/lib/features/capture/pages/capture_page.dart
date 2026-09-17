@@ -69,12 +69,10 @@ import '../services/white_balance.dart';
 import '../../watermark/data/watermark_providers.dart';
 import '../../watermark/models/watermark_template.dart';
 import '../../watermark/widgets/watermark_animation_overlay.dart';
-import '../widgets/aspect_ratio_selector.dart';
+import '../widgets/capture_top_pill_bar.dart';
 import '../widgets/capture_nav.dart';
 import '../widgets/camera_preview.dart';
-import '../widgets/delay_timer_button.dart';
 import '../widgets/level_indicator.dart';
-import '../widgets/param_pill_bar.dart';
 import '../widgets/shutter_feedback.dart';
 import '../widgets/template_info_card.dart';
 import '../widgets/capture_bottom_controls.dart';
@@ -2039,6 +2037,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // 模板信息卡是否被用户隐藏（持久化，用户点了隐藏后下次保持隐藏）
     final templateInfoCardHidden =
         ref.watch(CaptureState.templateInfoCardHiddenProvider);
+    // 模板信息卡是否展开（收起时顶部胶囊区左下方显示姿势切换提示标签）
+    final templateInfoCardExpanded =
+        ref.watch(CaptureState.templateInfoCardExpandedProvider);
     // 修复 Bug：watch facing 以在 facing 变化时重建 _viewfinderCaptureKey，
     // 强制 RepaintBoundary + CameraAwesomeBuilder 重建（切换 sensor）
     final facing = ref.watch(CaptureState.cameraFacingProvider);
@@ -2299,8 +2300,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
             child: CaptureNav(onBack: _onBack),
           ),
 
-          // 2.5 顶部浮层组：比例切换器 → 参数 pill 栏 → 挑战悬浮条 → 模板信息卡
-          //    比例/参数固定在顶部，模板信息卡放在最下方避免挤压上方控件
+          // 2.5 顶部浮层组：合并参数胶囊条（延时/比例/参数一行） → 挑战悬浮条 → 模板信息卡
+          //    参数固定顶部，模板信息卡放在最下方避免挤压上方控件
           //    导航栏改为毛玻璃胶囊后，需要更大的偏移量来留出间隙
           Positioned(
             top: MediaQuery.of(context).padding.top + 76,
@@ -2309,21 +2310,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // 延迟拍照按钮（iOS 原相机：取景器顶部居中，导航胶囊下方；试用模式隐藏）
-                if (!isTrialMode)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 8),
-                    child: Center(child: DelayTimerButton()),
-                  ),
-                // 比例切换器（导航栏下方居中；全屏模式下隐藏，避免全屏时仍被比例胶囊遮挡）
-                if (!isFullscreen) const Center(child: AspectRatioSelector()),
-                // 比例切换器与参数 pill 栏之间的间隙
-                const SizedBox(height: 8),
-                // 参数 pill 栏（全屏 / 试用模式隐藏）
+                // 合并参数胶囊条（延时/取景比例/EV/ISO/应用/RAW 合并为一行）
+                // 全屏 / 试用模式整条隐藏
                 if (!isFullscreen && !isTrialMode)
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: ParamPillBar(),
+                    child: CaptureTopPillBar(),
                   ),
                 // 挑战悬浮条（仅挑战拍摄模式显示）
                 if (isChallengeMode && !isFullscreen)
@@ -2335,37 +2327,70 @@ class _CapturePageState extends ConsumerState<CapturePage>
                   ),
                 // 套用模板时显示可折叠模板信息卡（移至下方，避免挤压比例/参数选项）
                 // 试用模式隐藏（仅展示效果，不暴露参数）
-                // 用户隐藏后仅在页面角落显示一个透明小图标，点击可一键恢复显示
+                // 用户隐藏后仅在页面角落显示透明浮球，点击可一键恢复显示
                 if (template != null && !isFullscreen && !isTrialMode)
                   if (templateInfoCardHidden)
-                    Align(
-                      alignment: Alignment.topRight,
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 6, top: 4),
-                        child: _TemplateInfoRestoreChip(
-                          onShow: _showTemplateInfoCard,
-                        ),
+                    // 收起到最小：姿势提示与恢复浮球「同一行」——左=姿势提示，右=恢复浮球
+                    Padding(
+                      padding:
+                          const EdgeInsets.only(left: 16, right: 6, top: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const Flexible(
+                              child: CapturePoseSwitchButton()),
+                          _TemplateInfoRestoreChip(
+                            onShow: _showTemplateInfoCard,
+                          ),
+                        ],
                       ),
                     )
                   else
-                    TemplateInfoCard(
-                      template: template,
-                      isLandscape: _isLandscape,
-                      quarterTurns: _landscapeQuarterTurns,
-                      onHide: _hideTemplateInfoCard,
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TemplateInfoCard(
+                          template: template,
+                          isLandscape: _isLandscape,
+                          quarterTurns: _landscapeQuarterTurns,
+                          onHide: _hideTemplateInfoCard,
+                        ),
+                        // 姿势切换提示标签：信息卡「展开」→隐藏；「收起」→显示在收起胶囊左下方。
+                        // 用 AnimatedSwitcher 做淡入 + 轻微上滑的显隐动画。
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 240),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          transitionBuilder: (child, animation) =>
+                              FadeTransition(
+                            opacity: animation,
+                            child: SlideTransition(
+                              position: Tween<Offset>(
+                                begin: const Offset(0, 0.25),
+                                end: Offset.zero,
+                              ).animate(animation),
+                              child: child,
+                            ),
+                          ),
+                          child: !templateInfoCardExpanded
+                              ? const Align(
+                                  key: ValueKey('pose_switch_hint'),
+                                  alignment: Alignment.centerLeft,
+                                  child: Padding(
+                                    padding: EdgeInsets.only(left: 16, top: 8),
+                                    child: CapturePoseSwitchButton(),
+                                  ),
+                                )
+                              : const SizedBox.shrink(
+                                  key: ValueKey('pose_switch_hint_hidden'),
+                                ),
+                        ),
+                      ],
                     ),
               ],
             ),
           ),
-
-          // 3. 多姿势切换按钮（仅 poses>1 的模板显示；叠照片浮层按风格自适应）
-          if (!isTrialMode)
-            Positioned(
-              // 置于取景器右侧、画面纵向约 40% 处，避开顶部浮层组与底部控制区
-              right: 12,
-              top: MediaQuery.of(context).size.height * 0.40,
-              child: const CapturePoseSwitchButton(),
-            ),
 
           // 4. 底部控制区（始终保留：含拍摄按钮 + 缩略图 + 切换摄像头）
           //    全屏模式下仅隐藏工具栏与抽屉（在 CaptureBottomBar 内部处理）
@@ -2568,6 +2593,34 @@ class _ViewfinderArea extends ConsumerWidget {
             }
           }
 
+          final poseCount =
+              ref.watch(CaptureState.editableTemplateProvider)?.poses.length ??
+                  0;
+
+          // 手势:横向滑动切换姿势(左滑下一/右滑上一,循环)。仅多姿势时启用,
+          // 避免与双击/长按/单指拖动混淆;双指捏合仍由 CameraPreview 内部处理。
+          Widget viewfinder = CameraPreview(
+            key: ValueKey('camera_preview_${rebuildKey}_$facing'),
+            onZoomChanged: onZoomChanged,
+            previewFit: CameraPreviewFit.cover,
+            rawCaptureKey: rawCaptureKey,
+            previewCaptureKey: previewCaptureKey,
+          );
+
+          if (poseCount > 1) {
+            viewfinder = GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragEnd: (details) {
+                final v = details.primaryVelocity ?? 0;
+                if (v.abs() < 200) return;
+                v > 0
+                    ? CaptureState.prevPose(ref)
+                    : CaptureState.nextPose(ref);
+              },
+              child: viewfinder,
+            );
+          }
+
           return Container(
             color: frameColor,
             child: Center(
@@ -2576,13 +2629,7 @@ class _ViewfinderArea extends ConsumerWidget {
                 curve: Curves.easeOutCubic,
                 width: vfW,
                 height: vfH,
-                child: CameraPreview(
-                  key: ValueKey('camera_preview_${rebuildKey}_$facing'),
-                  onZoomChanged: onZoomChanged,
-                  previewFit: CameraPreviewFit.cover,
-                  rawCaptureKey: rawCaptureKey,
-                  previewCaptureKey: previewCaptureKey,
-                ),
+                child: viewfinder,
               ),
             ),
           );
@@ -2639,6 +2686,9 @@ class _FloatingViewfinderState extends ConsumerState<_FloatingViewfinder> {
     final savedOffset =
         ref.watch(CaptureState.fillLightViewfinderOffsetProvider);
     final ratioId = ref.watch(CaptureState.aspectRatioProvider);
+    // 多姿势模板才启用「颜色区域滑动切姿势」（见下方手势）
+    final poseCount =
+        ref.watch(CaptureState.editableTemplateProvider)?.poses.length ?? 0;
 
     final sw = widget.screenSize.width;
     final sh = widget.screenSize.height;
@@ -2664,13 +2714,30 @@ class _FloatingViewfinderState extends ConsumerState<_FloatingViewfinder> {
         ? Color.lerp(color, Colors.white, (intensity - 1.0).clamp(0.0, 0.5))!
         : color.withOpacity(intensity.clamp(0.0, 1.0));
 
+    // 1. 全屏补光色背景（整个屏幕都是补光色，无黑色）
+    //    多姿势模板：在「颜色区域」横向滑动切换姿势（左滑下一/右滑上一,循环），
+    //    因为补光模式下取景框被用来拖动位置，不在此触发切姿势。
+    Widget bgArea = Positioned.fill(child: ColoredBox(color: bgFull));
+    if (poseCount > 1) {
+      bgArea = Positioned.fill(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragEnd: (details) {
+            final v = details.primaryVelocity ?? 0;
+            if (v.abs() < 200) return;
+            v > 0 ? CaptureState.prevPose(ref) : CaptureState.nextPose(ref);
+          },
+          child: ColoredBox(color: bgFull),
+        ),
+      );
+    }
+
     // clipBehavior: Clip.none 让窗口可溢出屏幕边缘（拖动时部分超出仍可见）
     return Stack(
       fit: StackFit.expand,
       clipBehavior: Clip.none,
       children: [
-        // 1. 全屏补光色背景（整个屏幕都是补光色，无黑色）
-        Positioned.fill(child: ColoredBox(color: bgFull)),
+        bgArea,
 
         // 2. 悬浮取景器窗口：独立小窗，可拖动，浮在补光色背景之上
         //    用 Listener（而非 GestureDetector）直接处理指针事件，
@@ -2715,13 +2782,19 @@ class _FloatingViewfinderState extends ConsumerState<_FloatingViewfinder> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: CameraPreview(
-                  key: ValueKey(
-                      'camera_preview_${widget.rebuildKey}_${widget.facing}'),
-                  onZoomChanged: widget.onZoomChanged,
-                  previewFit: CameraPreviewFit.cover,
-                  rawCaptureKey: widget.rawCaptureKey,
-                  previewCaptureKey: widget.previewCaptureKey,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  // 消费窗口内的横向拖动手势：切姿势改由背景「颜色区域」承担，
+                  // 窗口上的横向滑动仍用于拖动取景框（经外层 Listener），不误触切姿势。
+                  onHorizontalDragEnd: (_) {},
+                  child: CameraPreview(
+                    key: ValueKey(
+                        'camera_preview_${widget.rebuildKey}_${widget.facing}'),
+                    onZoomChanged: widget.onZoomChanged,
+                    previewFit: CameraPreviewFit.cover,
+                    rawCaptureKey: widget.rawCaptureKey,
+                    previewCaptureKey: widget.previewCaptureKey,
+                  ),
                 ),
               ),
             ),

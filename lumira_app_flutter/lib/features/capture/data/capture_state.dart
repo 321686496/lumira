@@ -381,6 +381,10 @@ class CaptureState {
   static int nextPoseIndex(int cur, int count) =>
       count <= 1 ? 0 : (cur + 1) % count;
 
+  /// 计算上一个姿势下标（纯函数，便于单测）。count<=1 时不切换（保持 0）。
+  static int prevPoseIndex(int cur, int count) =>
+      count <= 1 ? 0 : (cur - 1 + count) % count;
+
   /// 切换到下一个姿势（循环）。仅 poses>1 有意义。
   static void nextPose(WidgetRef ref) {
     final editable = ref.read(editableTemplateProvider);
@@ -389,6 +393,16 @@ class CaptureState {
     final cur = ref.read(currentPoseIndexProvider);
     ref.read(currentPoseIndexProvider.notifier).state =
         nextPoseIndex(cur, poses.length);
+  }
+
+  /// 切换到上一个姿势（循环）。仅 poses>1 有意义。
+  static void prevPose(WidgetRef ref) {
+    final editable = ref.read(editableTemplateProvider);
+    final poses = editable?.poses ?? const <Pose>[];
+    if (poses.length <= 1) return;
+    final cur = ref.read(currentPoseIndexProvider);
+    ref.read(currentPoseIndexProvider.notifier).state =
+        prevPoseIndex(cur, poses.length);
   }
 
   /// 当前生效姿势的相机方向（'front' | 'back' | null=不强制）。
@@ -464,6 +478,11 @@ class CaptureState {
   /// 套用模板时顶部的可折叠模板信息卡是否被用户隐藏（持久化到 user_settings）。
   /// true=隐藏；false=显示（默认）。用户点了隐藏后，下次进入拍摄页保持隐藏。
   static final templateInfoCardHiddenProvider = StateProvider<bool>((ref) => false);
+
+  /// 模板信息卡当前是否展开（仅卡片可见时有意义；隐藏态忽略）。
+  /// 拍摄页据此显隐「姿势切换提示标签」：展开=隐藏；收起=显示在收起胶囊左下方。
+  static final templateInfoCardExpandedProvider =
+      StateProvider<bool>((ref) => true);
 
   /// 模板信息卡内「场景指南 / 道具信息 / 姿势描述」tab 的最后一次选择（持久化到 user_settings）。
   /// 取值 'scene' | 'props' | 'pose'；null=用户未选择过 → 按默认优先级（姿势 > 场景 > 道具）

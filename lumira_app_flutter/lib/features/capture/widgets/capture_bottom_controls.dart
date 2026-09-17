@@ -2186,9 +2186,9 @@ class CameraPermissionGuide extends ConsumerWidget {
   }
 }
 
-/// 多姿势模板的「切换姿势」按钮（叠照片浮层）。
-/// 仅在 `editableTemplateProvider.poses.length > 1` 时渲染；点击调用
-/// [CaptureState.nextPose] 循环切换，剪影随 [CaptureState.currentPoseIndexProvider] 跟随。
+/// 多姿势模板的「姿势提示标签」（叠照片浮层，纯展示不可点）。
+/// 仅在 `editableTemplateProvider.poses.length > 1` 时渲染；告诉用户当前是第几个姿势、
+/// 以及如何切换（在取景框左右滑动）。姿势切换由取景框横向滑动手势完成。
 /// 背景/描边随当前 UI 风格派生（实心/半透明 surface + 细边，无外阴影、无毛玻璃、不硬编码颜色）。
 class CapturePoseSwitchButton extends ConsumerWidget {
   const CapturePoseSwitchButton();
@@ -2226,33 +2226,37 @@ class CapturePoseSwitchButton extends ConsumerWidget {
     }
 
     return Semantics(
-      label: '切换姿势，当前 ${idx + 1} / ${poses.length}',
-      button: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => CaptureState.nextPose(ref),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(999),
-            border: border,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.swap_horiz, size: 16, color: tokens.textPrimary),
-              const SizedBox(width: 4),
-              Text(
-                '${idx + 1}/${poses.length}',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
+      label: '当前 ${idx + 1} / ${poses.length}，左右滑动切换',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(999),
+          border: border,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.swipe, size: 16, color: tokens.textPrimary),
+            const SizedBox(width: 6),
+            Text(
+              '${idx + 1}/${poses.length}',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: tokens.textPrimary,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 2),
+            Text(
+              '左右滑动切换',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: tokens.textSecondary,
+              ),
+            ),
+          ],
         ),
       ),
     );

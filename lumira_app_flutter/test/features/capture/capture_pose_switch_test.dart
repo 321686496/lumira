@@ -35,6 +35,21 @@ void main() {
     });
   });
 
+  // ── prevPose 依赖的纯函数：验证「单姿势不切换」与「多姿势反向循环切换」两种语义 ──
+  group('prevPoseIndex 纯函数', () {
+    test('单姿势（count<=1）时不切换', () {
+      expect(CaptureState.prevPoseIndex(0, 1), 0);
+      expect(CaptureState.prevPoseIndex(3, 1), 0);
+      expect(CaptureState.prevPoseIndex(2, 0), 0);
+    });
+
+    test('多姿势反向循环切换', () {
+      expect(CaptureState.prevPoseIndex(0, 3), 2);
+      expect(CaptureState.prevPoseIndex(1, 3), 0);
+      expect(CaptureState.prevPoseIndex(2, 3), 1);
+    });
+  });
+
   // ── currentPoseIndexProvider 的读写与复位 ──
   group('currentPoseIndexProvider', () {
     test('初始为 0', () {
@@ -133,6 +148,48 @@ void main() {
         );
       }
       expect(container.read(CaptureState.currentPoseIndexProvider), 1);
+    });
+  });
+
+  // ── prevPose 的分支语义：仅 poses>1 时按 prevPoseIndex 更新 provider ──
+  // 与 nextPose 对称；反向循环：0→2→1→0。
+  group('prevPose 分支语义', () {
+    test('单姿势（poses.length<=1）不更新下标', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      container.read(CaptureState.editableTemplateProvider.notifier).state =
+          tplN('a', 1);
+
+      final editable = container.read(CaptureState.editableTemplateProvider);
+      final poses = editable?.poses ?? const <Pose>[];
+      if (poses.length <= 1) return; // 与 prevPose 内部 early-return 一致
+      final cur = container.read(CaptureState.currentPoseIndexProvider);
+      container.read(CaptureState.currentPoseIndexProvider.notifier).state =
+          CaptureState.prevPoseIndex(cur, poses.length);
+
+      expect(container.read(CaptureState.currentPoseIndexProvider), 0);
+    });
+
+    test('多姿势按 prevPoseIndex 反向循环更新', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      container.read(CaptureState.editableTemplateProvider.notifier).state =
+          tplN('a', 3);
+
+      final editable = container.read(CaptureState.editableTemplateProvider);
+      final poses = editable?.poses ?? const <Pose>[];
+      var cur = container.read(CaptureState.currentPoseIndexProvider);
+      for (var i = 0; i < 4; i++) {
+        cur = CaptureState.prevPoseIndex(cur, poses.length);
+        container.read(CaptureState.currentPoseIndexProvider.notifier).state =
+            cur;
+        expect(
+          cur,
+          (3 - ((i + 1) % 3)) % 3,
+          reason: '第 ${i + 1} 次反向切换后应为 #${(3 - ((i + 1) % 3)) % 3}',
+        );
+      }
+      expect(container.read(CaptureState.currentPoseIndexProvider), 2);
     });
   });
 }

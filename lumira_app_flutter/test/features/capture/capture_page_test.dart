@@ -22,7 +22,7 @@ import 'package:lumira_app_flutter/features/capture/widgets/capture_nav.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/filter_picker.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/level_indicator.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/param_panel.dart';
-import 'package:lumira_app_flutter/features/capture/widgets/param_pill_bar.dart';
+import 'package:lumira_app_flutter/features/capture/widgets/capture_top_pill_bar.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/template_strip.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
@@ -386,7 +386,7 @@ void main() {
     );
     await pumpWithPermission(tester);
 
-    expect(find.byType(ParamPillBar), findsOneWidget);
+    expect(find.byType(CaptureTopPillBar), findsOneWidget);
     // 参数面板已并入底部抽屉；默认 activeTool=null 时不渲染
     expect(find.byType(ParamPanel), findsNothing);
     // FilterPicker 仅在 activeTool == 'filter' 时由 _AnimatedToolDrawer 渲染，

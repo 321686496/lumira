@@ -131,9 +131,8 @@ void main() {
 
       // 桥接生效后 currentTemplateIdProvider 非空 → CaptureNav 显示「模板拍摄」
       expect(find.text('模板拍摄'), findsOneWidget);
-      // 参数 pill 栏（EV / ISO；参数面板提示文案也含 "EV"，故只需 ≥1）
+      // 参数 pill 栏（EV；参数面板提示文案也含 "EV"，故只需 ≥1）
       expect(find.textContaining('EV'), findsWidgets);
-      expect(find.textContaining('ISO'), findsWidgets);
     });
 
     testWidgets('loads draft by draftId', (tester) async {

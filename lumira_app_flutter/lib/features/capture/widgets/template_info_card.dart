@@ -80,9 +80,6 @@ enum _InfoTab {
 }
 
 class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
-  /// 默认展开，让用户第一时间看到拍摄要点
-  bool _expanded = true;
-
   /// 内容区 PageView 控制器（与 tab 双向同步）。
   late PageController _pageController = PageController();
 
@@ -107,12 +104,15 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
     super.didUpdateWidget(oldWidget);
     // 切换模板（id 变化）时重置为展开
     if (oldWidget.template.meta.id != widget.template.meta.id) {
-      _expanded = true;
+      ref.read(CaptureState.templateInfoCardExpandedProvider.notifier).state =
+          true;
     }
   }
 
   void _toggle() {
-    setState(() => _expanded = !_expanded);
+    final expanded = ref.read(CaptureState.templateInfoCardExpandedProvider);
+    ref.read(CaptureState.templateInfoCardExpandedProvider.notifier).state =
+        !expanded;
   }
 
   void _selectTab(_InfoTab tab, {bool animate = true}) {
@@ -244,6 +244,8 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
   Widget _buildBody(AppThemeData appTheme, CaptureOverlayVisual visual) {
     final tokens = appTheme.tokens;
     final template = widget.template;
+    // 展开态跟随共享 provider（拍摄页据此显隐姿势切换提示标签）
+    final expanded = ref.watch(CaptureState.templateInfoCardExpandedProvider);
 
     // 多姿势模板跟随「当前姿势下标」（与拍摄页姿势切换按钮同源）
     final poses = template.poses;
@@ -272,7 +274,7 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
     }
     _lastAvailable = available;
 
-    final radius = BorderRadius.circular(_expanded ? 14 : 24);
+    final radius = BorderRadius.circular(expanded ? 14 : 24);
 
     final Widget card = AnimatedSize(
             duration: const Duration(milliseconds: 240),
@@ -285,7 +287,7 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               padding: EdgeInsets.symmetric(
                 horizontal: 14,
-                vertical: _expanded ? 12 : 10,
+                vertical: expanded ? 12 : 10,
               ),
               // 统一走 resolver：immersive=暗色 / theme=当前风格浮层；
               // 品牌描边两模式均保留（tokens.brand 已随主题变化）
@@ -321,14 +323,14 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
                         ),
                       ),
                       // tab 仅在展开态 + 存在多个分区时出现（单个分区无需切换）
-                      if (_expanded && selected != null && available.length > 1)
+                      if (expanded && selected != null && available.length > 1)
                         Padding(
                           padding: const EdgeInsets.only(left: 8),
                           child: _buildTabs(available, selected, visual),
                         ),
                       const SizedBox(width: 8),
                       AnimatedRotation(
-                        turns: _expanded ? 0.5 : 0,
+                        turns: expanded ? 0.5 : 0,
                         duration: const Duration(milliseconds: 200),
                         child: Icon(
                           Icons.keyboard_arrow_down,
@@ -354,7 +356,7 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
                     ],
                   ),
                   // 展开态：整个内容区为可左右滑动的 PageView（每页可独立上下滚动）
-                  if (_expanded && selected != null) ...[
+                  if (expanded && selected != null) ...[
                     const SizedBox(height: 10),
                     Container(
                       height: 1,
