@@ -39,6 +39,8 @@ export interface DeviceRecord {
   avatarUrl: string | null;
   profileUpdatedAt: number | null;
   pointsBalance: number | null;
+  /** 该用户作为邀请人邀请的新用户数 */
+  invitedCount: number;
 }
 
 export interface UserPointsDetail {

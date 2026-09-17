@@ -16,9 +16,9 @@ const INVITE_DAILY_LIMIT = 3;
 // 超过该窗口视为老用户，禁止再绑定，防止老用户互刷/复用（违背裂变初衷）。
 const INVITE_BIND_WINDOW_SECONDS = 24 * 60 * 60; // 24h
 
-// 邀请达成条件文案：新用户绑定后需首次完成拍照/成片，邀请才成立、奖励才发放
+// 邀请达成条件文案（新用户视角）：绑定即得，好友奖励延后到新用户首次成片
 const INVITE_CONDITION_TEXT =
-  '绑定成功后，完成首次拍照/成片，你和好友即可各得 30 积分奖励';
+  '绑定成功即可获得 30 积分；完成首次拍照/成片后，你的好友也将获得 30 积分奖励';
 
 // 里程碑奖励 item 结构
 interface MilestoneRewardItem {
@@ -139,7 +139,7 @@ export class InviteService {
       throw new BadRequestException('Invite cycle detected');
     }
 
-    // 6. 写入「待达成」绑定记录（不发放任何奖励）
+    // 6. 写入「待达成」绑定记录；邀请人奖励延后到新用户首次成片后兑现
     await db.insert(inviteRecords).values({
       inviterDeviceId,
       inviteeDeviceId,
@@ -152,13 +152,28 @@ export class InviteService {
       inviteeIp,
     });
 
+    // 7. 新用户（被邀请人）绑定即得全部奖励；邀请人奖励在 completeInvite 首次成片后发放
+    let inviteeGranted = false;
+    try {
+      await this.pointsService.earnPoints(
+        inviteeDeviceId, INVITE_INSTANT_POINTS, 'invite', inviterDeviceId,
+      );
+      inviteeGranted = true;
+    } catch (e) {
+      console.error('[invite] assign invitee instant points failed', e);
+    }
+
     return {
       inviterDeviceId,
       status: 'pending',
       tierReached: null,
       rewards: null,
       condition: INVITE_CONDITION_TEXT,
-      // 达成后可获得的奖励（被邀请人视角，供绑定成功弹窗展示）
+      // 被邀请人绑定即得的奖励（供绑定成功弹窗展示「已到账」）
+      grantedRewards: inviteeGranted
+        ? [{ type: 'points', value: INVITE_INSTANT_POINTS, label: '邀请奖励' }]
+        : [],
+      // 兼容字段：达成后可获得的奖励
       achievableRewards: [
         { type: 'points', value: INVITE_INSTANT_POINTS, label: '邀请奖励' },
       ],
@@ -166,7 +181,8 @@ export class InviteService {
   }
 
   // 新用户首次完成拍照/成片后，由前端调用：将 pending 关系置为 success，
-  // 此时邀请成立，发放双方即时积分 + 邀请人里程碑奖励。
+  // 此时邀请成立，发放邀请人即时积分 + 邀请人里程碑奖励。
+  // （被邀请人的奖励已在绑定成功（activateInvite）时发放，此处不再重复发放。）
   // 幂等：未绑定返回 status:'none'；已达成返回 status:'success' 且 alreadyAchieved=true。
   async completeInvite(inviteeDeviceId: string) {
     const db = this.dbService.getDb();
@@ -195,7 +211,8 @@ export class InviteService {
 
     const inviterDeviceId = rec.inviterDeviceId;
 
-    // 发放即时积分：邀请人受每日上限（按当天成功数）；被邀请人达成即给。
+    // 发放邀请人即时积分（受每日上限约束，按当天成功数）。
+    // 被邀请人的奖励已在绑定成功时发放，不在此处重复发放。
     let inviterInstantGranted = false;
     try {
       const todayCount = await db.select({ value: count() })
@@ -212,9 +229,6 @@ export class InviteService {
         );
         inviterInstantGranted = true;
       }
-      await this.pointsService.earnPoints(
-        inviteeDeviceId, INVITE_INSTANT_POINTS, 'invite', inviterDeviceId,
-      );
     } catch (e) {
       console.error('[invite] complete instant points failed', e);
     }
@@ -287,10 +301,8 @@ export class InviteService {
       achievedAt: now,
       inviterDeviceId,
       inviterInstantGranted,
-      // 被邀请人本次实际获得的奖励
-      myRewards: [
-        { type: 'points', value: INVITE_INSTANT_POINTS, label: '邀请奖励' },
-      ],
+      // 被邀请人本次无新增奖励（已在绑定成功时发放）
+      myRewards: [],
       tierReached,
       rewards,
     };
