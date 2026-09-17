@@ -105,8 +105,16 @@ TextStyle posterSerif(
   double? height,
 }) {
   return TextStyle(
-    fontFamily: 'Noto Serif SC',
-    fontFamilyFallback: const ['Songti SC', 'SimSun', 'STSong'],
+    fontFamily: 'NotoSerifSC',
+    fontFamilyFallback: const [
+      'Noto Serif CJK SC',
+      'Source Han Serif SC',
+      'Noto Serif',
+      'Songti SC',
+      'STSong',
+      'SimSun',
+      'serif',
+    ],
     fontSize: size,
     fontWeight: weight,
     color: color,
@@ -123,7 +131,8 @@ TextStyle posterSerifEn(
   FontWeight weight = FontWeight.w600,
 }) {
   return TextStyle(
-    fontFamily: 'Georgia',
+    fontFamily: 'NotoSerifSC',
+    fontFamilyFallback: const ['Georgia', 'Times New Roman', 'serif'],
     fontSize: size,
     fontWeight: weight,
     color: color,

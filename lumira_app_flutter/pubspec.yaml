@@ -207,3 +207,11 @@ flutter:
     - assets/images/academy/
     - assets/images/tutorials/
     - assets/logos/
+
+  fonts:
+    - family: NotoSerifSC
+      fonts:
+        - asset: assets/fonts/NotoSerifSC-Regular.otf
+          weight: 400
+        - asset: assets/fonts/NotoSerifSC-Bold.otf
+          weight: 700

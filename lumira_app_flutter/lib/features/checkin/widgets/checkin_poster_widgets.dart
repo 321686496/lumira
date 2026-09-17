@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/poster/poster_common.dart';
@@ -136,8 +136,10 @@ class GoldNotchedFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     final len = cornerLen ?? 18.0;
     final color = cornerColor ?? PosterPalette.goldDeep;
-    return CustomPaint(
-      painter: _NotchedFramePainter(notch: notch, notchPx: notchPx),
+    return ClipPath(
+      // 用 ClipPath 裁掉左上/右下缺角，才能真正切开 child（照片）。
+      // 旧实现用 CustomPaint 的 canvas.clipPath 只裁剪 painter 自身图层，无法裁剪 child。
+      clipper: _NotchedClipper(notch: notch, notchPx: notchPx),
       child: Stack(
         children: [
           child,
@@ -218,31 +220,30 @@ class _LMarkerPainter extends CustomPainter {
       o.lower != lower || o.stroke != stroke || o.len != len || o.color != color;
 }
 
-class _NotchedFramePainter extends CustomPainter {
-  const _NotchedFramePainter({required this.notch, this.notchPx});
+/// 缺角裁剪器：仅裁左上角与右下角（对齐 v2.html/m4.html 的
+/// `clip-path: polygon(...)`，右上/左下为直角）。
+class _NotchedClipper extends CustomClipper<Path> {
+  const _NotchedClipper({required this.notch, this.notchPx});
   final double notch;
   final double? notchPx;
 
   @override
-  void paint(Canvas canvas, Size size) {
+  Path getClip(Size size) {
     final w = size.width;
     final h = size.height;
     final n = notchPx ?? (w < h ? w : h) * notch;
-    final path = Path()
-      ..moveTo(n, 0)
-      ..lineTo(w, 0)
-      ..lineTo(w, n)
-      ..lineTo(w, h)
-      ..lineTo(w - n, h)
-      ..lineTo(0, h)
-      ..lineTo(0, h - n)
-      ..lineTo(0, 0)
+    return Path()
+      ..moveTo(n, 0) // 左上：顶边从此 x 开始，左角被切
+      ..lineTo(w, 0) // 顶边 → 右上直角
+      ..lineTo(w, h - n) // 右边下行，到右下缺角上点
+      ..lineTo(w - n, h) // 右下缺角斜切
+      ..lineTo(0, h) // 底边 → 左下直角
+      ..lineTo(0, n) // 左边上行，到左上缺角下点
       ..close();
-    canvas.clipPath(path);
   }
 
   @override
-  bool shouldRepaint(_NotchedFramePainter o) =>
+  bool shouldReclip(_NotchedClipper o) =>
       o.notch != notch || o.notchPx != notchPx;
 }
 
