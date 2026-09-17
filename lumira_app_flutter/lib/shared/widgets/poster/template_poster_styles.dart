@@ -771,7 +771,7 @@ class _DDCinema extends StatelessWidget {
             width: double.infinity,
             padding: EdgeInsets.symmetric(vertical: 14 * k),
             decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: PosterPalette.line), bottom: BorderSide(color: PosterPalette.line)),
+              border: Border(top: BorderSide(color: PosterPalette.line)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,

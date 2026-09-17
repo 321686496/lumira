@@ -1,5 +1,5 @@
-﻿import 'dart:math' as math;
-import 'dart:ui' as ui show ImageFilter;
+import 'dart:math' as math;
+import 'dart:ui' as ui show MaskFilter, BlurStyle;
 
 import 'package:flutter/material.dart';
 
@@ -91,43 +91,62 @@ Widget _bracket({
   );
 }
 
-/// 柔和光晕圆点（对应设计稿 `filter:blur(6px)` 的装饰圆）。
-class _BlurDot extends StatelessWidget {
-  const _BlurDot({
-    required this.size,
-    required this.color,
+/// ckF 温柔手账：用 painter 在内容之下绘制「渐变之上的柔和圆点」。
+/// 相比把 _BlurDot( Positioned ) 放进多层 Stack：painter 永远垫在 child 之下，
+/// 既向画布圆角出血、又不盖住大图/文字、也不会让内容高度塌陷（此前全白根因）。
+class _SoftJournalDotsPainter extends CustomPainter {
+  const _SoftJournalDotsPainter({
+    required this.dot1Radius,
+    required this.dot2Radius,
+    required this.dot1Dx,
+    required this.dot1Cy,
+    required this.dot2Cx,
+    required this.dot2CyBtm,
+    required this.color1,
+    required this.color2,
     required this.sigma,
-    this.top,
-    this.right,
-    this.bottom,
-    this.left,
+    required this.radius,
   });
 
-  final double size;
-  final Color color;
+  final double dot1Radius;
+  final double dot2Radius;
+  final double dot1Dx;
+  final double dot1Cy;
+  final double dot2Cx;
+  final double dot2CyBtm;
+  final Color color1;
+  final Color color2;
   final double sigma;
-  final double? top;
-  final double? right;
-  final double? bottom;
-  final double? left;
+  final double radius;
 
   @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      top: top,
-      right: right,
-      bottom: bottom,
-      left: left,
-      child: ImageFiltered(
-        imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-      ),
+  void paint(Canvas canvas, Size size) {
+    // 按画布圆角裁切，圆点出血部分会被圆角弧自然切掉（对齐 f.html）。
+    canvas.clipRRect(
+      RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius)),
+    );
+    final blur = ui.MaskFilter.blur(ui.BlurStyle.normal, sigma);
+    // 右上出血圆点：圆心 (w - dot1Dx, dot1Cy)
+    canvas.drawCircle(
+      Offset(size.width - dot1Dx, dot1Cy),
+      dot1Radius,
+      Paint()..color = color1..maskFilter = blur,
+    );
+    // 左下出血圆点：圆心 (dot2Cx, h - dot2CyBtm)
+    canvas.drawCircle(
+      Offset(dot2Cx, size.height - dot2CyBtm),
+      dot2Radius,
+      Paint()..color = color2..maskFilter = blur,
     );
   }
+
+  @override
+  bool shouldRepaint(_SoftJournalDotsPainter o) =>
+      o.dot1Radius != dot1Radius ||
+      o.dot2Radius != dot2Radius ||
+      o.color1 != color1 ||
+      o.color2 != color2 ||
+      o.sigma != sigma;
 }
 
 /// 虚线描边（f2 的「+ 更多」格）。
@@ -209,7 +228,7 @@ Widget _buildSoftJournal(PosterStyleData d) {
   return SizedBox(
     width: _kCkW,
     child: Container(
-      padding: EdgeInsets.fromLTRB(padH, px(32), padH, px(26)),
+      // 内边距已下移到 CustomPaint 内的 Padding（圆点 painter 相对整幅画布定位）
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         // 设计稿 linear-gradient(160deg, ...)
@@ -220,23 +239,24 @@ Widget _buildSoftJournal(PosterStyleData d) {
         ),
         borderRadius: BorderRadius.circular(px(34)),
       ),
-      child: Stack(
-        children: [
-          _BlurDot(
-            size: px(220),
-            color: const Color(0xFFFBE3DF),
-            sigma: px(6),
-            top: -px(60),
-            right: -px(50),
-          ),
-          _BlurDot(
-            size: px(180),
-            color: const Color(0xFFF4EEE0),
-            sigma: px(6),
-            bottom: -px(70),
-            left: -px(60),
-          ),
-          Column(
+      child: CustomPaint(
+        // 圆点用 painter 垫在内容之下绘制：既能向画布圆角出血，又绝不盖住大图/
+        // 文字，也不会让内容高度塌陷。此前用多层「背景 Stack」反而导致整页全白。
+        painter: _SoftJournalDotsPainter(
+          dot1Radius: px(110),
+          dot2Radius: px(90),
+          dot1Dx: px(60),
+          dot1Cy: px(50),
+          dot2Cx: px(30),
+          dot2CyBtm: px(20),
+          color1: const Color(0xFFFBE3DF),
+          color2: const Color(0xFFF4EEE0),
+          sigma: px(6),
+          radius: px(34),
+        ),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(padH, px(32), padH, px(26)),
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -395,7 +415,7 @@ Widget _buildSoftJournal(PosterStyleData d) {
               ),
             ],
           ),
-        ],
+        ),
       ),
     ),
   );
@@ -434,7 +454,9 @@ Widget _buildMorandi(PosterStyleData d) {
 
   final padH = px(44);
   final framePad = px(20);
-  final inner = _kCkW - padH * 2 - framePad * 2;
+  // 细线卡纸框带 1px 描边（左右各 1px 共 2px），须从可用宽度中扣减，
+  // 否则下方缩略图 Row 会向右溢出约 2×px(1)（渲染成 debug 黄色条纹）。
+  final inner = _kCkW - padH * 2 - framePad * 2 - px(2);
   final mainH = px(360);
   final thumbs = d.thumbBuilders ?? const <Widget Function(double, double)>[];
   final gap = px(12);
@@ -539,12 +561,6 @@ Widget _buildMorandi(PosterStyleData d) {
                         Container(
                           width: double.infinity,
                           padding: EdgeInsets.symmetric(horizontal: px(10), vertical: px(14)),
-                          decoration: BoxDecoration(
-                            border: Border(
-                              top: BorderSide(color: line, width: px(1)),
-                              bottom: BorderSide(color: line, width: px(1)),
-                            ),
-                          ),
                           child: Text(
                             d.note,
                             textAlign: TextAlign.center,
@@ -758,14 +774,20 @@ Widget _buildGoldFrame(PosterStyleData d) {
                   ),
                 ),
                 SizedBox(height: px(10)),
-                _separatedMeta(
-                  d,
-                  size: fs(14),
-                  gapPx: px(2),
-                  color: ink2,
-                  sepColor: gold,
-                  includeDate: false,
-                ),
+                // v2.html：meta 行只放地点（衬线、金色中文字距），分类仅在下方信息卡 cat-tag。
+                if (d.place.isNotEmpty)
+                  Text(
+                    d.place,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: posterSerif(
+                      fs(14),
+                      color: ink2,
+                      letterSpacing: px(2),
+                      weight: FontWeight.w500,
+                    ),
+                  ),
                 if (d.dateText.isNotEmpty) ...[
                   SizedBox(height: px(6)),
                   Text(
@@ -814,9 +836,10 @@ Widget _buildGoldFrame(PosterStyleData d) {
                   width: contentW,
                   padding: EdgeInsets.symmetric(vertical: px(16)),
                   decoration: BoxDecoration(
+                    // 只保留上方金线分隔，去掉底边——底边正好横在心得文字下方，
+                    // 呈现为讨厌的「文字下方黄色横线」。
                     border: Border(
                       top: BorderSide(color: line, width: px(1)),
-                      bottom: BorderSide(color: line, width: px(1)),
                     ),
                   ),
                   child: Column(
@@ -1002,6 +1025,16 @@ Widget _buildAsymmetric(PosterStyleData d) {
       padding: EdgeInsets.fromLTRB(padH, px(32), padH, px(28)),
       child: Stack(
         children: [
+          // 细金内框（对应 m4.html outline-offset:-12px）。先于内容绘制，
+          // 让内容压在金色细线之上，避免「金色细线与内容重叠」。
+          Positioned.fill(
+            child: Padding(
+              padding: EdgeInsets.all(px(12)),
+              child: Container(
+                decoration: BoxDecoration(border: Border.all(color: hair, width: px(1))),
+              ),
+            ),
+          ),
           Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1223,12 +1256,6 @@ Widget _buildAsymmetric(PosterStyleData d) {
                 SizedBox(height: px(24)),
                 Container(
                   padding: EdgeInsets.symmetric(horizontal: px(2), vertical: px(14)),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      top: BorderSide(color: hair, width: px(1)),
-                      bottom: BorderSide(color: hair, width: px(1)),
-                    ),
-                  ),
                   child: Text(
                     d.note,
                     textAlign: TextAlign.justify,
@@ -1275,15 +1302,6 @@ Widget _buildAsymmetric(PosterStyleData d) {
                 ],
               ),
             ],
-          ),
-          // 细金内框（outline-offset: -12px）
-          Positioned.fill(
-            child: Padding(
-              padding: EdgeInsets.all(px(12)),
-              child: Container(
-                decoration: BoxDecoration(border: Border.all(color: hair, width: px(1))),
-              ),
-            ),
           ),
         ],
       ),
