@@ -96,15 +96,25 @@ export function StepCover({
         .sort((a, b) => a.index - b.index)
         .map((result) => result.file);
       const errors = results.filter((result) => result.error);
-      errors.forEach((result) => {
-        toast({
-          variant: 'destructive',
-          title: `第 ${result.index + 1} 张姿势图生成失败`,
-          description: result.error || '请稍后重试',
-        });
-      });
+      if (errors.length > 0) {
+        // 调试排查：完整明细进控制台。index 0 为锚点，其 error 是真实根因；index≥1 多为「锚点失败」的连锁文案。
+        console.log(
+          '[ai-pose] 生成结果明细',
+          results.map((r) => ({ index: r.index, error: r.error ?? null })),
+        );
+      }
       if (files.length > 0) {
         toast({ title: '姿势图生成完成', description: `成功 ${files.length} 张，已置顶为封面候选` });
+      }
+      if (errors.length > 0) {
+        // 聚合为单条且「不自动关闭」的错误提示（需点右上角 × 手动关闭），优先展示 index 最小（即锚点）的真实错误
+        const real = [...errors].sort((a, b) => a.index - b.index)[0];
+        toast({
+          variant: 'destructive',
+          duration: Infinity, // 不自动关闭，避免用户来不及看到真实原因
+          title: `姿势图生成失败（${errors.length}/${results.length} 张）`,
+          description: real?.error || '请稍后重试',
+        });
       }
     } catch (e) {
       // server action 抛错（网络中断 / 框架层错误）也必须恢复按钮，避免永久"生成中"
