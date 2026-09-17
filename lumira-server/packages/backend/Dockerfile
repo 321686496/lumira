@@ -8,10 +8,13 @@ FROM node:20-slim AS base
 # 切换为阿里云 Debian 镜像源（解决国内服务器无法访问 deb.debian.org 的问题）
 # node:20-slim (bookworm) 使用 deb822 格式的 debian.sources；|| true 兼容旧格式。
 # libstdc++6：onnxruntime-node / sharp 原生模块运行时依赖。
+# python3 + build-essential：better-sqlite3 在 github 二进制不可达时，回退
+# node-gyp 从源码编译所需（仅 base/builder 阶段需要，runner 用 COPY 复用产物、
+# 本身仍是精简的 node:20-slim，不会把这些编译工具带进生产镜像）。
 RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources || true \
     && sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list || true \
     && apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl libstdc++6 \
+    && apt-get install -y --no-install-recommends ca-certificates curl libstdc++6 python3 build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # 配置 pnpm 使用淘宝 npm 镜像加速（国内服务器拉取 npm 包更快）
@@ -28,11 +31,18 @@ WORKDIR /app
 # 该下载必然超时失败。但运行时用的是 CPU 推理（silhouette.pipeline.ts 未指定
 # executionProviders），CPU 的 libonnxruntime.so 已随 npm 包自带到
 # bin/napi-v3/linux/x64/，无需额外下载。故按官方跳过机制
-# （install.js: `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`，见脚本内错误提示
-#  "You will still be able to use ONNX Runtime, but the CUDA EP will not be
-#  available"）跳过 CUDA 下载，消除对 github.com 的依赖。
+# （install.js: `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`）跳过 CUDA 下载。
 # 该 ENV 会传递给 base 阶段及由 base 派生的 builder 阶段的所有 pnpm install。
 ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
+
+# ⚠️ better-sqlite3 仅为 drizzle-orm 的“可选 peer”（后端用 mysql2，运行时不加载），
+# 但必须保留在 allowBuilds 里（否则 pnpm 11 会在 CI 报 ERR_PNPM_IGNORED_BUILDS，
+# 导致 Vercel 后台构建失败），故其 install 脚本 `prebuild-install || node-gyp rebuild`
+# 会在服务器上执行。prebuild 默认去 github.com 下载 node-v115(ABI 115) 二进制，
+# 服务器无法访问 github.com。把二进制镜像指向 npmmirror：host 上无 ABI115 的
+# 预编译包，会快速 404 失败 → 落到 node-gyp 从源码编译（better-sqlite3 自带
+# sqlite 源码，只需 C++ 工具链）。Base 阶段已安装 build-essential + python3。
+ENV npm_config_better_sqlite3_binary_host_mirror=https://registry.npmmirror.com/-/binary/better-sqlite3
 
 # Copy workspace manifests first for better layer caching
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
