@@ -13,13 +13,11 @@ import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
 import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
-import '../widgets/aspect_ratio_selector.dart';
+import '../widgets/capture_top_pill_bar.dart';
 import '../widgets/camera_preview.dart';
 import '../widgets/capture_bottom_controls.dart';
 import '../widgets/capture_nav.dart';
-import '../widgets/delay_timer_button.dart';
 import '../widgets/level_indicator.dart';
-import '../widgets/param_pill_bar.dart';
 import '../widgets/shutter_feedback.dart';
 
 /// 模板预览页（对齐拍摄页 capture_page.dart）
@@ -324,7 +322,8 @@ class _CapturePreviewTemplatePageState
             child: CaptureNav(onBack: _onSyncBack),
           ),
 
-          // 3. 顶部浮层组：延时 / 比例切换 / 参数 pill
+          // 3. 顶部合并参数胶囊条（延时/比例/参数一行）+ 姿势切换提示标签
+          //    预览页不渲染模板信息卡，提示标签固定显示在胶囊条左下方
           Positioned(
             top: MediaQuery.of(context).padding.top + 76,
             left: 0,
@@ -332,29 +331,23 @@ class _CapturePreviewTemplatePageState
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (!isTrialMode)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 8),
-                    child: Center(child: DelayTimerButton()),
-                  ),
-                if (!isFullscreen) const Center(child: AspectRatioSelector()),
-                const SizedBox(height: 8),
                 if (!isFullscreen && !isTrialMode)
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: ParamPillBar(),
+                    child: CaptureTopPillBar(),
+                  ),
+                // 姿势切换提示标签（仅多姿势模板显示；自带 poses>1 判断）
+                if (!isFullscreen && !isTrialMode)
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: EdgeInsets.only(left: 16, top: 8),
+                      child: CapturePoseSwitchButton(),
+                    ),
                   ),
               ],
             ),
           ),
-
-          // 4. 多姿势切换按钮（仅 poses>1 的模板显示）
-          if (!isTrialMode)
-            Positioned(
-              right: 12,
-              top: MediaQuery.of(context).size.height * 0.40,
-              child: const CapturePoseSwitchButton(),
-            ),
 
           // 5. 底部控制区（缩放轮盘 + 5 页签工具栏 + 抽屉 + 拍摄按钮行）
           Positioned(
@@ -482,6 +475,33 @@ class _PreviewViewfinderArea extends ConsumerWidget {
               vfH = vfW / targetRatio;
             }
           }
+          final poseCount =
+              ref.watch(CaptureState.editableTemplateProvider)?.poses.length ??
+                  0;
+
+          // 手势:横向滑动切换姿势(左滑下一/右滑上一,循环)。仅多姿势时启用,
+          // 避免与双击/长按/单指拖动混淆;双指捏合仍由 CameraPreview 内部处理。
+          Widget viewfinder = CameraPreview(
+            key: ValueKey('camera_preview_preview_$facing'),
+            onZoomChanged: onZoomChanged,
+            previewFit: CameraPreviewFit.cover,
+            rawCaptureKey: rawCaptureKey,
+          );
+
+          if (poseCount > 1) {
+            viewfinder = GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragEnd: (details) {
+                final v = details.primaryVelocity ?? 0;
+                if (v.abs() < 200) return;
+                v > 0
+                    ? CaptureState.prevPose(ref)
+                    : CaptureState.nextPose(ref);
+              },
+              child: viewfinder,
+            );
+          }
+
           return Container(
             color: Colors.black,
             child: Center(
@@ -490,12 +510,7 @@ class _PreviewViewfinderArea extends ConsumerWidget {
                 curve: Curves.easeOutCubic,
                 width: vfW,
                 height: vfH,
-                child: CameraPreview(
-                  key: ValueKey('camera_preview_preview_$facing'),
-                  onZoomChanged: onZoomChanged,
-                  previewFit: CameraPreviewFit.cover,
-                  rawCaptureKey: rawCaptureKey,
-                ),
+                child: viewfinder,
               ),
             ),
           );

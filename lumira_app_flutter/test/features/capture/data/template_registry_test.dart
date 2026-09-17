@@ -38,7 +38,7 @@ void main() {
       expect(tpl!.meta.name, '窗边柔光人像');
       expect(tpl.meta.price, 0);
       expect(tpl.camera.iso, 200);
-      expect(tpl.postProcess.lut, 'pastel');
+      expect(tpl.postProcess.lut, 'cream');
     });
 
     test('56 free + 13 paid suites', () {
