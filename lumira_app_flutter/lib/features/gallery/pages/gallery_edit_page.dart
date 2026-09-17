@@ -102,6 +102,11 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
           _isReadOnly = photo?.originalPath == null;
           _isLoading = false;
         });
+        // 预热细节效果层（解码 + shader 程序）：首次拖动磨皮/锐化滑块即实时生效
+        final prewarmUrl = photo?.dataUrl ?? photo?.filePath;
+        if (prewarmUrl != null && prewarmUrl.isNotEmpty) {
+          DetailEffectsLayer.prewarm(prewarmUrl);
+        }
         await _initLocalCropRatio();
       }
     } catch (e, st) {

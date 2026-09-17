@@ -17,7 +17,8 @@ import 'dart:ui' as ui
         PixelFormat,
         instantiateImageCodec;
 
-import 'package:flutter/foundation.dart' show compute, defaultTargetPlatform;
+import 'package:flutter/foundation.dart'
+    show compute, defaultTargetPlatform, kDebugMode;
 import 'package:flutter/services.dart'
     show SystemChrome, DeviceOrientation, SystemSound, SystemSoundType;
 
@@ -116,6 +117,36 @@ class _TemplateParamSnapshot {
 // 传一个足够覆盖 5MP 竖屏档的大值，插件端「防放大糊」guard 会自动 fit 回源分辨率，
 // 让成片保持源图清晰度（960px 宽成片在现代屏幕上放大 1.4x+ 是「糊」的主因）。
 const int _ohosNativeMaxDim = 2560;
+
+// 早帧「初版成片」的输出上限：与成片快速路径同值。原生端「防放大糊」guard 会
+// 自动 fit 回源分辨率，早帧源分辨率低于成片，不会被放大。
+const int _earlyFrameMaxDim = _ohosNativeMaxDim;
+
+/// 早帧「初版成片」处理快照：快门时刻的有效参数（与成片原生快速路径同源同语义），
+/// 供早帧到达时直接走原生 processJpeg，无需再读 provider。
+class _EarlyFrameInterimJob {
+  const _EarlyFrameInterimJob({
+    required this.targetRatio,
+    required this.isPortrait,
+    required this.isFront,
+    required this.matrix,
+    required this.sharpen,
+    required this.clarity,
+    required this.smoothStrength,
+    required this.vignette,
+    required this.grain,
+  });
+
+  final double targetRatio;
+  final bool isPortrait;
+  final bool isFront;
+  final List<double> matrix;
+  final int sharpen;
+  final double? clarity;
+  final int smoothStrength;
+  final int vignette;
+  final int grain;
+}
 
 class CapturePage extends ConsumerStatefulWidget {
   const CapturePage(
@@ -263,6 +294,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
   /// 先快后真：当前这次快门的 photoId（提前生成，interim→final→DB→预览升级复用）。
   String? _currentShutterPhotoId;
+
+  /// 本次快门的早帧「初版成片」处理上下文（仅 OHOS）：早帧到达时用快门时刻的
+  /// 参数快照走原生 processJpeg 出可见 interim（~800ms 上屏），成片（~2s）就绪后
+  /// 原位替换。null = 本次不适用（横屏/拉腿/自定义裁剪/非 OHOS），早帧退回仅点击预览。
+  _EarlyFrameInterimJob? _earlyFrameJob;
+
+  /// 本轮早帧临时文件（原生 cacheDir）：下一次快门时清理，避免残留堆积。
+  String? _earlyFrameRawPath;
+  String? _earlyFrameProcPath;
 
   /// 角标缩略图的 GlobalKey：水印动画淡出后跳预览页之前，
   /// 需要确保后处理落库完成（读取 finalPath/photoId）。
@@ -888,12 +928,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
     // OHOS 分阶段拍照：订阅早帧通道（常驻一次）。一阶段低质量帧（~672ms）先于成片
     // capture()（~1.9s）返回到达。
-    // 先快后真：早帧无条件作为 interim 先顶屏（缩略图/预览）。
-    // 水印动画源不再用原生早帧（FAST_MODE 走相册增强链路，与取景器不符），
-    // 改为快门时刻冻结取景器帧（_captureShutterViewfinderFrame，WYSIWYG）。
+    // 先快后真：早帧经原生 processJpeg 调色后作为「初版成片」可见 interim（~800ms 上屏，
+    // 缩略图/预览立即可见），成片就绪后原位替换；不满足原生快路径条件（横屏/拉腿/
+    // 自定义裁剪）时退回仅点击预览（不进缩略图）。
+    // 水印动画源用快门时刻冻结取景器帧（_captureShutterViewfinderFrame，WYSIWYG）。
     // _expectingEarlyFrame 标记本次拍摄期望早帧，防止上一帧残留事件误触发 interim。
     final isOhos = !isIos && !Platform.isAndroid;
     _expectingEarlyFrame = isOhos;
+    _cleanupEarlyFrameFiles();
+    _earlyFrameJob = isOhos ? _buildEarlyFrameInterimJob() : null;
     if (isOhos) {
       try {
         _earlyFrameSub ??= cameraService.photoEarlyFrames().listen((path) {
@@ -904,10 +947,54 @@ class _CapturePageState extends ConsumerState<CapturePage>
           _expectingEarlyFrame = false;
           final pid = _currentShutterPhotoId;
           debugPrint('[capture] OHOS early frame arrived: $path pid=$pid');
+          _earlyFrameRawPath = path;
           if (pid != null) {
-            ref
-                .read(captureThumbnailProvider.notifier)
-                .setInterimResult(path, photoId: pid);
+            final job = _earlyFrameJob;
+            if (job != null) {
+              // 早帧 → 原生管线出「初版成片」：与成片同一套 C++ 处理器（解码→几何→
+              // 色彩矩阵→锐化→...→硬编码），观感与最终成片一致（仅分辨率低一档）。
+              // 失败回退：把原始早帧挂为仅点击预览的 interim，不阻塞成片链路。
+              OhosImageProcessor.instance
+                  .processJpeg(
+                inputPath: path,
+                outputPath: '$path.proc.jpg',
+                targetRatio: job.targetRatio,
+                isPortrait: job.isPortrait,
+                isFront: job.isFront,
+                matrix: job.matrix,
+                sharpen: job.sharpen,
+                clarity: job.clarity,
+                smoothStrength: job.smoothStrength,
+                vignette: job.vignette,
+                grain: job.grain,
+                maxDim: _earlyFrameMaxDim,
+              )
+                  .then((ok) {
+                if (!mounted) return;
+                final notifier = ref.read(captureThumbnailProvider.notifier);
+                if (ok) {
+                  _earlyFrameProcPath = '$path.proc.jpg';
+                  notifier.setInterimResult('$path.proc.jpg',
+                      photoId: pid, visible: true);
+                  debugPrint(
+                      '[capture] 早帧初版成片就绪(可见 interim): $path.proc.jpg');
+                } else {
+                  notifier.setInterimResult(path, photoId: pid);
+                  debugPrint('[capture] 早帧原生处理失败，interim 退回仅点击预览');
+                }
+              }).catchError((Object e) {
+                debugPrint('[capture] 早帧初版成片异常: $e');
+                if (mounted) {
+                  ref
+                      .read(captureThumbnailProvider.notifier)
+                      .setInterimResult(path, photoId: pid);
+                }
+              });
+            } else {
+              ref
+                  .read(captureThumbnailProvider.notifier)
+                  .setInterimResult(path, photoId: pid);
+            }
           }
         });
       } catch (e) {
@@ -1002,27 +1089,19 @@ class _CapturePageState extends ConsumerState<CapturePage>
         _expectingEarlyFrame = false;
       }
 
-      // 【抗手抖-单帧选帧】对成片做清晰度评分（拉普拉斯方差），用于角标渐进预览和
-      // 选帧诊断。防糊由系统层解决（OHOS 8.2MP 档位 + HIGH_QUALITY，project_memory
-      // 硬约束），应用层不据此叠加锐化去模糊。
-      // 【OHOS 性能优化】用主 isolate 的 dart:ui（OS 加速解码）把该帧降采样到
-      // 240px rawRgba 传给 worker 直接评分，避免 worker 纯 Dart 全量解码
-      // 4000px JPEG（每帧 0.3-0.8s，是 OHOS 变慢的主因）。
-      final swScore = Stopwatch()..start();
-      final smallFrames = await _decodeBurstThumbnails([result.filePath]);
-      final scoreResult = await CaptureWorker.instance.scoreFrames(
-        [result.filePath],
-        smallRgba: smallFrames?.rgbaList,
-        smallW: smallFrames?.widthList,
-        smallH: smallFrames?.heightList,
-      );
-      debugPrint('[perf] scoreFrames: ${swScore.elapsedMilliseconds}ms '
-          'score=${scoreResult.bestScore}');
-
-      // 成品就绪前，先记录原图路径供点击预览；角标保持加载态。
+      // 成品就绪前，先记录原图路径供点击预览。OHOS 早帧通常已先一步提供可见
+      // interim（缩略图 notifier 的 final 防降级 + interim 保持逻辑会正确处理：
+      // 可见 interim 不被打回转圈，final 就绪后本路径被丢弃），其余平台角标
+      // 保持加载态直到成品。
       ref
           .read(captureThumbnailProvider.notifier)
           .setInterimResult(result.filePath, photoId: _currentShutterPhotoId);
+
+      // 【抗手抖-单帧选帧】清晰度评分（拉普拉斯方差）仅用于诊断日志，选帧/锐化
+      // 决策不依赖单帧结果（防糊由系统层解决：OHOS 5MP 档位 + HIGH_QUALITY，
+      // 应用层不据此叠加锐化去模糊）。单帧场景评分移出成片关键路径，后台执行；
+      // 连拍多帧选帧仍走同步评分（burst 流程另行处理）。
+      unawaited(_scoreSingleFrameDiagnostics(result.filePath));
 
       // 仅选中的一帧进入后处理队列（后处理异步执行，不阻塞下次 capture 调用）
       final postProcess = ref.read(CaptureState.effectivePostProcessProvider);
@@ -1072,6 +1151,25 @@ class _CapturePageState extends ConsumerState<CapturePage>
         .any((preset) => preset.color.value == color.value);
     if (isSystemPreset) return;
     ref.read(recentFillLightColorsProvider.notifier).recordUse(color);
+  }
+
+  /// 单帧清晰度评分（纯诊断）：后台解码 240px 小图 + worker 拉普拉斯评分，仅打日志。
+  /// 失败静默——评分结果不参与任何成片决策。
+  Future<void> _scoreSingleFrameDiagnostics(String path) async {
+    try {
+      final swScore = Stopwatch()..start();
+      final smallFrames = await _decodeBurstThumbnails([path]);
+      final scoreResult = await CaptureWorker.instance.scoreFrames(
+        [path],
+        smallRgba: smallFrames?.rgbaList,
+        smallW: smallFrames?.widthList,
+        smallH: smallFrames?.heightList,
+      );
+      debugPrint('[perf] scoreFrames: ${swScore.elapsedMilliseconds}ms '
+          'score=${scoreResult.bestScore}');
+    } catch (e) {
+      debugPrint('[capture] 单帧评分失败（不影响成片）: $e');
+    }
   }
 
   static const int _kBurstThumbDim = 240;
@@ -1396,16 +1494,20 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
       // [偏黄诊断] 把原始图 / 处理结果 / 分阶段 RGB 报告写入 Documents，
       // 便于在 iOS「文件」App 中人工核对黄色从哪一步进入（无需看控制台日志）。
-      try {
-        await _writeColorDiagnostics(
-          rawPath: originalPath,
-          outputPath: finalPath,
-          sourceAvgRgb: gpuSourceAvgRgb,
-          diagBefore: diagBefore,
-          diagAfter: diagAfter,
-        );
-      } catch (e) {
-        debugPrint('[capture] 颜色诊断写盘失败（不影响拍照）: $e');
+      // 仅 debug 构建：每次拍照整文件拷贝 x2（~5MB）是关键路径纯开销，
+      // 且诊断文件暴露在用户文件 App 里，release 不应产出。
+      if (kDebugMode) {
+        try {
+          await _writeColorDiagnostics(
+            rawPath: originalPath,
+            outputPath: finalPath,
+            sourceAvgRgb: gpuSourceAvgRgb,
+            diagBefore: diagBefore,
+            diagAfter: diagAfter,
+          );
+        } catch (e) {
+          debugPrint('[capture] 颜色诊断写盘失败（不影响拍照）: $e');
+        }
       }
 
       // 落库到相册（原图备份 + GalleryItemRecord + provider 失效）
@@ -1420,8 +1522,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
           originalPath: originalPath,
           // cropRatio 持久化拍摄实际使用的比例 id（此前为构造默认 '3:4'，
           // fullscreen 等成片编辑时基准区域错位 → 裁剪与框选不一致）
+          // facing 持久化镜头朝向：编辑页「从原图重新处理」据此补做前置镜像
+          //（原图备份为 sensor 原始 JPEG，前置未镜像；缺失时重保存会水平翻转）
           postProcess: params.postProcess.copyWith(
             cropRatio: params.ratioId,
+            facing: params.isFront ? 'front' : 'back',
           ),
           dataUrl: null,
           sceneId: sceneId,
@@ -1490,15 +1595,18 @@ class _CapturePageState extends ConsumerState<CapturePage>
           .setFinalResult(finalPath, photoId);
       ref.read(CaptureState.lastPhotoPathProvider.notifier).state = finalPath;
 
-      // 诊断：确认最终照片文件的实际像素尺寸（排查横向拉伸）
-      try {
-        final fb = await File(finalPath).readAsBytes();
-        final decoder = img.findDecoderForData(fb);
-        final info = decoder?.startDecode(fb);
-        debugPrint('[capture] 照片文件实际尺寸: ${info?.width}x${info?.height} '
-            'ratio=${info != null && info.height != 0 ? (info.width / info.height).toStringAsFixed(4) : "?"}');
-      } catch (e) {
-        debugPrint('[capture] 读取照片尺寸失败: $e');
+      // 诊断：确认最终照片文件的实际像素尺寸（排查横向拉伸）。
+      // 仅 debug：整文件读入 + 软件解码头解析是成片链路末尾的纯诊断开销。
+      if (kDebugMode) {
+        try {
+          final fb = await File(finalPath).readAsBytes();
+          final decoder = img.findDecoderForData(fb);
+          final info = decoder?.startDecode(fb);
+          debugPrint('[capture] 照片文件实际尺寸: ${info?.width}x${info?.height} '
+              'ratio=${info != null && info.height != 0 ? (info.width / info.height).toStringAsFixed(4) : "?"}');
+        } catch (e) {
+          debugPrint('[capture] 读取照片尺寸失败: $e');
+        }
       }
     } catch (e) {
       debugPrint('[capture] process failed: $e');
@@ -1579,6 +1687,58 @@ class _CapturePageState extends ConsumerState<CapturePage>
           '[capture] shutterFrame getApplicationDocumentsDirectory 不可用: $e');
     }
     return bases;
+  }
+
+  /// 构造早帧「初版成片」处理快照（仅 OHOS）。
+  ///
+  /// 与成片原生快速路径（fastNative）同条件同参数：仅竖屏、无拉腿、无自定义裁剪
+  /// 时启用——早帧与成片走同一套 C++ 处理器（解码→几何→色彩矩阵→锐化→清晰度→
+  /// 颗粒→磨皮→暗角→硬编码），观感与最终成片一致。不满足条件返回 null，
+  /// 早帧退回「仅点击预览」，成片链路不受任何影响。
+  _EarlyFrameInterimJob? _buildEarlyFrameInterimJob() {
+    if (!_isOhos) return null;
+    final screenSize = MediaQuery.of(context).size;
+    final isPortrait =
+        _devicePortrait ?? (screenSize.height >= screenSize.width);
+    final postProcess = ref.read(CaptureState.effectivePostProcessProvider);
+    if (!isPortrait ||
+        postProcess.legStretch != 0 ||
+        postProcess.customCropRect != null) {
+      return null;
+    }
+    final ratioId = ref.read(CaptureState.aspectRatioProvider);
+    var screenRatio = screenSize.width / screenSize.height;
+    if (!screenRatio.isFinite || screenRatio <= 0) {
+      screenRatio = isPortrait ? 9.0 / 19.5 : 19.5 / 9.0;
+    }
+    return _EarlyFrameInterimJob(
+      targetRatio:
+          CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio,
+      isPortrait: isPortrait,
+      isFront: ref.read(CaptureState.cameraFacingProvider) == 'front',
+      matrix: composePostProcessMatrix(postProcess),
+      sharpen: postProcess.sharpen,
+      clarity: postProcess.color.clarity,
+      smoothStrength: postProcess.smoothStrength,
+      vignette: postProcess.vignette,
+      grain: postProcess.grain,
+    );
+  }
+
+  /// 清理上一轮早帧临时文件（原生 cacheDir 的早帧源 + 初版成片），下次快门时调用。
+  /// 文件在 cacheDir，系统也可回收；这里主动删除避免连拍场景堆积。
+  void _cleanupEarlyFrameFiles() {
+    for (final path in [_earlyFrameRawPath, _earlyFrameProcPath]) {
+      if (path == null) continue;
+      try {
+        final f = File(path);
+        if (f.existsSync()) f.deleteSync();
+      } catch (e) {
+        debugPrint('[capture] 早帧临时文件清理失败（忽略）: $path $e');
+      }
+    }
+    _earlyFrameRawPath = null;
+    _earlyFrameProcPath = null;
   }
 
   /// 触发水印定格动画（用指定「动画内容源帧」路径 + 水印模板）。

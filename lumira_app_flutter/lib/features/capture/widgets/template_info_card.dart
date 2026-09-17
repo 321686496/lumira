@@ -18,6 +18,8 @@ import '../domain/photo_template.dart';
 ///   - 场景指南：光线 / 距离 / 背景 / 时段 + 拍摄注意点（sceneGuide.tips）
 ///   - 道具信息：sceneGuide.props 道具标签
 ///   - 姿势描述：当前姿势的描述（多姿势模板跟随当前姿势下标）
+/// - tab 按钮与内容区左右滑动（PageView）双向同步切换分区
+/// - 内容区有最大高度限制（见 _maxContentHeight）：未超限按内容自收缩，超限则内部滚动查看
 /// - 仅渲染「当前模板有内容」的分区；默认选中优先级：姿势描述 > 场景指南 > 道具信息
 /// - 用户手动选中的 tab 会持久化（user_settings），下次进入拍摄页沿用；
 ///   若该 tab 在当前模板无内容，则回落到默认优先级
@@ -81,6 +83,25 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
   /// 默认展开，让用户第一时间看到拍摄要点
   bool _expanded = true;
 
+  /// 内容区 PageView 控制器（与 tab 双向同步）。
+  late PageController _pageController = PageController();
+
+  /// 分辨何时需要重建控制器（模板 id / 姿势下标 / 可用分区变化时重建，恢复选中页）。
+  String _pageKey = '';
+
+  /// 内容区 CSS 式 max-height 的「视口高度」：= 当前可见页面的自然高度被上限截断后的值。
+  /// 0 表示尚未测量，先用上限占位；滑动翻页 / 切换姿势后自动重新自适应。
+  double _pageHeight = 0;
+
+  /// 最近一次 build 的可用分区，供滑动回调（onPageChanged）使用。
+  List<_InfoTab> _lastAvailable = const <_InfoTab>[];
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
   @override
   void didUpdateWidget(covariant TemplateInfoCard oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -94,12 +115,40 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
     setState(() => _expanded = !_expanded);
   }
 
-  void _selectTab(_InfoTab tab) {
+  void _selectTab(_InfoTab tab, {bool animate = true}) {
     ref.read(CaptureState.templateInfoCardTabProvider.notifier).state = tab.key;
     CaptureState.persistTemplateInfoCardTab(
       ProviderScope.containerOf(context, listen: false),
       tab.key,
     );
+    if (animate) {
+      final idx = _lastAvailable.indexOf(tab);
+      final current = _pageController.page?.round() ?? -1;
+      if (idx >= 0 && idx != current) {
+        _pageController.animateToPage(
+          idx,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    }
+  }
+
+  /// 内容区滑动切换：仅持久化选中态，不再动画（页面已滑动到位）。
+  void _onPageChanged(int index) {
+    if (index < 0 || index >= _lastAvailable.length) return;
+    final tab = _lastAvailable[index];
+    if (tab.key == ref.read(CaptureState.templateInfoCardTabProvider)) return;
+    _selectTab(tab, animate: false);
+  }
+
+  /// 内容区最大高度：竖屏取屏高的一定比例；横屏卡片已被 RotatedBox 旋转，
+  /// 内容纵向对应画布横向跨度，故按屏宽取比例（值仅左右视觉观感，越界由内部滚动兜底）。
+  double _maxContentHeight() {
+    final size = MediaQuery.of(context).size;
+    return size.height >= size.width
+        ? size.height * 0.36
+        : size.width * 0.5;
   }
 
   /// 当前模板下「有内容」的分区（按展示顺序）。
@@ -209,6 +258,19 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
     final selected = (persisted != null && available.contains(persisted))
         ? persisted
         : _defaultTab(available);
+    final selectedIndex =
+        selected == null ? -1 : available.indexOf(selected);
+
+    // 控制器生命周期：模板 / 姿势 / 可用分区变化时重建（初始页=选中 tab）。
+    final pageKey = '${template.meta.id}|$poseIndex|${available.join('/')}';
+    if (pageKey != _pageKey) {
+      _pageKey = pageKey;
+      _pageController.dispose();
+      _pageController = PageController(
+        initialPage: selectedIndex < 0 ? 0 : selectedIndex,
+      );
+    }
+    _lastAvailable = available;
 
     final radius = BorderRadius.circular(_expanded ? 14 : 24);
 
@@ -291,7 +353,7 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
                         ),
                     ],
                   ),
-                  // 展开态：当前 tab 对应分区的内容
+                  // 展开态：整个内容区为可左右滑动的 PageView（每页可独立上下滚动）
                   if (_expanded && selected != null) ...[
                     const SizedBox(height: 10),
                     Container(
@@ -299,8 +361,9 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
                       color: visual.fillSubtle,
                     ),
                     const SizedBox(height: 10),
-                    _buildTabContent(
-                      tab: selected,
+                    _buildTabPager(
+                      available: available,
+                      selectedIndex: selectedIndex,
                       guide: template.sceneGuide,
                       pose: pose,
                       poseIndex: poseIndex,
@@ -375,7 +438,95 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
     );
   }
 
-  Widget _buildTabContent({
+  /// 内容区：可左右滑动的 PageView + CSS 式 max-height 自适应高度。
+  ///
+  /// - 不设固定高度：PageView 的视口高度 = 当前可见页面「自然高度 与 [_maxContentHeight] 的较小值」。
+  /// - 内容未到上限 → 高度即内容高度（卡片自收缩）；内容超过上限 → 卡在上限、内部上下滚动。
+  /// - 滑动翻页 / 切换姿势后重新测量，经外层 AnimatedSize 平滑伸缩。
+  Widget _buildTabPager({
+    required List<_InfoTab> available,
+    required int selectedIndex,
+    required SceneGuide guide,
+    required Pose pose,
+    required int poseIndex,
+    required int poseCount,
+    required CaptureOverlayVisual visual,
+    required ThemeTokens tokens,
+  }) {
+    final cap = _maxContentHeight();
+    final currentIndex = available.isEmpty
+        ? 0
+        : (selectedIndex >= 0 && selectedIndex < available.length
+            ? selectedIndex
+            : 0);
+    final currentTab = available[currentIndex];
+    final measureKey = GlobalKey();
+
+    // 每页内容（自然高度，供展示页与测量复用）
+    Widget buildNatural(_InfoTab tab) => _buildNaturalTabContent(
+          tab: tab,
+          guide: guide,
+          pose: pose,
+          poseIndex: poseIndex,
+          poseCount: poseCount,
+          visual: visual,
+          tokens: tokens,
+        );
+
+    // 视口宽需有界（内容页内部用 Expanded / 换行），故在 LayoutBuilder 中取卡片内容宽并统一约束。
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.hasBoundedWidth
+            ? constraints.maxWidth
+            : MediaQuery.of(context).size.width;
+
+        // CSS 式测量：把「当前页」放进 ConstrainedBox(maxHeight)+SingleChildScrollView，
+        // 其尺寸自动 = min(自然高度, 上限) —— 这正是 max-height 的布局结果，无需手算。
+        // 每帧后读取并更新视口高度（仅当有差异才 setState，动画由外层 AnimatedSize 承担）。
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final ctx = measureKey.currentContext;
+          if (ctx == null) return;
+          final height = ctx.size?.height;
+          if (height == null) return;
+          if ((_pageHeight - height).abs() > 0.5) {
+            setState(() => _pageHeight = height);
+          }
+        });
+
+        final measureCurrent = ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: cap),
+          child: SingleChildScrollView(child: buildNatural(currentTab)),
+        );
+
+        return Stack(
+          fit: StackFit.passthrough,
+          children: [
+            SizedBox(
+              width: width,
+              height: _pageHeight > 0 ? _pageHeight : cap,
+              child: PageView(
+                controller: _pageController,
+                onPageChanged: _onPageChanged,
+                children: [
+                  for (final tab in available)
+                    SingleChildScrollView(child: buildNatural(tab)),
+                ],
+              ),
+            ),
+            // 离屏测量当前页：同名宽约束下结果 = min(自然高度, 上限)
+            Offstage(
+              offstage: true,
+              child: SizedBox(key: measureKey, width: width, child: measureCurrent),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 单个分区的「自然高度」内容（不带滚动容器，供 PageView 与测量复用）。
+  Widget _buildNaturalTabContent({
     required _InfoTab tab,
     required SceneGuide guide,
     required Pose pose,

@@ -255,14 +255,6 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
     GoRouter.of(context).push(RouteNames.templatesEditor);
   }
 
-  void _back() {
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      GoRouter.of(context).go(RouteNames.templates);
-    }
-  }
-
   /// 下拉刷新：重新拉取远程模板/分类并同步到本地，随后重载并重新筛选列表。
   Future<void> _onRefresh() async {
     ref.invalidate(remoteCategoriesSyncProvider);
@@ -356,10 +348,8 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
                   // v4level（spec 2026-08-17-template-category-4level-design.md §6.2）：
                   // 本页通过 push 进入（概览页 / 二级分类独立页 / 带 category 的模板列表），
                   // 返回一律 pop 回上一页；无法 pop 时回退到模板入口页。
-                  leading: _BackButton(
-                    tokens: tokens,
-                    onTap: _back,
-                  ),
+                  backFallback: () =>
+                      GoRouter.of(context).go(RouteNames.templates),
                   actions: [
                     GestureDetector(
                       onTap: () => GoRouter.of(context).push(
@@ -496,28 +486,6 @@ class _BackgroundDecoration extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens, required this.onTap});
-  final ThemeTokens tokens;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(
-          Icons.arrow_back_ios_new,
-          size: 20,
-          color: tokens.textPrimary,
         ),
       ),
     );

@@ -52,7 +52,7 @@ class _ProfileFragmentDetailPageState
       appBar: LumiraNav(
         title: '碎片收集',
         transparent: true,
-        leading: _BackButton(tokens: tokens),
+        backFallback: () => GoRouter.of(context).go(RouteNames.profile),
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -123,30 +123,6 @@ class _ProfileFragmentDetailPageState
     );
   }
 }
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens});
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        if (Navigator.of(context).canPop()) {
-          Navigator.pop(context);
-        } else {
-          GoRouter.of(context).go(RouteNames.profile);
-        }
-      },
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(Icons.arrow_back_ios_new, size: 20, color: tokens.textPrimary),
-      ),
-    );
-  }
-}
-
 /// 顶部汇总卡片
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({required this.tokens, required this.collected, required this.total});
@@ -257,18 +233,22 @@ class _FragmentDetailCard extends StatelessWidget {
   void _showFullGrid(BuildContext context, List<String> urls) {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => Scaffold(
-        appBar: AppBar(title: const Text('全部图片')),
-        body: GridView.builder(
-          padding: const EdgeInsets.all(8),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            mainAxisSpacing: 4,
-            crossAxisSpacing: 4,
-          ),
-          itemCount: urls.length,
-          itemBuilder: (_, i) => ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: _buildGridImage(urls[i]),
+        backgroundColor: tokens.canvas,
+        extendBodyBehindAppBar: true,
+        appBar: LumiraNav(title: '全部图片', transparent: true),
+        body: SafeArea(
+          child: GridView.builder(
+            padding: const EdgeInsets.all(8),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: 4,
+              crossAxisSpacing: 4,
+            ),
+            itemCount: urls.length,
+            itemBuilder: (_, i) => ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: _buildGridImage(urls[i]),
+            ),
           ),
         ),
       ),

@@ -247,6 +247,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'search',
         builder: (context, state) => GlobalSearchPage(
           scope: SearchScopeExt.fromName(state.queryParams[RouteNames.paramScope]),
+          initialKeyword: state.queryParams[RouteNames.paramKeyword],
         ),
       ),
       // 模板照片网格页：某模板在本机拍摄的全部照片（从模板详情页「查看全部」进入）

@@ -38,9 +38,11 @@ import '../widgets/search_result_card.dart';
 /// 统一全局搜索页。
 /// [scope] 决定初始范围；页面内 scope 切换栏可随时切换。
 class GlobalSearchPage extends ConsumerStatefulWidget {
-  const GlobalSearchPage({super.key, required this.scope});
+  const GlobalSearchPage({super.key, required this.scope, this.initialKeyword});
 
   final SearchScope scope;
+
+  final String? initialKeyword;
 
   @override
   ConsumerState<GlobalSearchPage> createState() => _GlobalSearchPageState();
@@ -146,6 +148,11 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       _store = store;
       _loaded = true;
     });
+    // 若带初始关键词（如模板标签跳转），数据就绪后自动搜索
+    final initKw = widget.initialKeyword;
+    if (initKw != null && initKw.trim().isNotEmpty) {
+      _submitSearch(initKw.trim());
+    }
   }
 
   /// 标签库：聚合全部模板 tags（去重计数），按模板数量降序、同数量按名称。

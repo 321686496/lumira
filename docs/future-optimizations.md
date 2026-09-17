@@ -544,3 +544,89 @@
 - **背景/动机**：本次重构仅落地搜索入口（解决首页无搜索入口问题）；文案动态化依赖运营配置通道（如后端下发），超出本次范围。
 - **目标状态**：占位文案由远端运营配置下发（离线回退静态默认文案），点击后的搜索页 scope 保持不变。
 - **状态**：⏳ 待优化
+
+---
+
+## 扫一扫优化（2026-09-16）
+
+### P1 · OHOS ScanKit 识别流分辨率降档提速（本次仅降防抖，未降分辨率）
+
+- **模块**：扫一扫 · OHOS（`packages/qr_code_scanner/ohos/src/main/ets/components/plugin/libs/CameraService.ets`）
+- **优化点**：首页扫一扫本次优化只把 `decodeImageBuffer` 的识别防抖窗口 800→200ms（约 4× 识别频率）。每帧识别仍是全 1920x1080 JPEG 解码 + ScanKit `decodeImage` 全图解码，单帧耗时仍偏高；进一步提速需把预览流2（imageReceiver 扫码流）降档到 ~720p，并按新尺寸匹配 `previewProfiles` / imageReceiver 尺寸，减少每帧解码量。
+- **背景/动机**：降档会牵动 preview profile 匹配与 `imageReceiver` 创建尺寸联动，风险较高且需真机验证，本次刻意不展开，仅作后续优化登记。
+- **目标状态**：预览流2 用镜头支持的较低档 profile（如 1280x720 或更小）创建 `imageReceiver`，`previewOutput2` 用同尺寸 profile，`decodeImageBuffer` 按实际宽高传参；真机验证识别速度提升与远距/小码识别不 loss。同时核对 `ByteImage.format` 与接收 buffer 实际编码（当前标 NV21）是否匹配，避免解码耗时或失败。
+- **状态**：⏳ 待优化
+
+---
+
+## 拍摄速度优化（2026-09-16）
+
+> 见 `docs/specs/` 无专项文档；官方依据：华为最佳实践《相机分段式拍照性能优化》（bpta-camera-shot2see，分段式 672ms vs 单段式 1900ms）。本次已落地：早帧→原生 processJpeg 出「初版成片」可见 interim（~800ms 上屏）、单帧评分移出成片关键路径、偏黄诊断/尺寸诊断 debug 化、增强兜底 directDone 防护（防晚到增强图覆盖原始直出 JPEG）、早帧临时文件轮转清理。成片链路（photoAvailable 原始 JPEG → C++ 管线）未动，成片质量与优化前一致。
+
+### P1 · 水印合成折叠进 C++ processJpeg 单 pass
+
+- **模块**：拍摄页后处理（`capture_page.dart` + `ohos/entry/src/main/cpp/photo_processor.cpp`）
+- **优化点**：开水印时 OHOS 走「原生出底片 → 原生解码 → Flutter 渲染水印 → 原生编码」多一次 decode+encode 往返；可把预渲染的水印 overlay 位图传入 C++，在 processJpeg 内一次合成。
+- **背景/动机**：水印路径节省一次解码+编码（数百 ms 级），但当前感知速度主要被 2s 水印定格动画掩盖（动画期间后台完成合成），直接收益被动画时长吞掉；且 C++ 混合绘制引入缩放/混合语义风险，需真机逐像素比对。
+- **目标状态**：水印 overlay 预合成为带 alpha 的位图传入原生，尺寸不匹配（旋转/镜像 guard）时回退现有 Dart 合成路径；真机验证水印位置/清晰度与现路径一致。
+- **状态**：⏳ 待优化
+
+### P2 · 横屏/拉腿/自定义裁剪场景下沉 C++ 快速路径
+
+- **模块**：拍摄页后处理（`capture_page.dart` fastNative 条件 + `photo_processor.cpp`）
+- **优化点**：横屏（需真 90° 旋转）、拉腿（legStretch>0）、自定义裁剪（customCropRect）目前回退 GPU+isolate 慢管线；原生 processJpeg 仅支持 center-cover 近似裁窗。
+- **背景/动机**：横屏拍摄成片延迟显著高于竖屏（慢管线逐像素 CPU）；C++ 补齐旋转/拉腿后三场景可全部走快速路径。
+- **目标状态**：processJpeg 支持按 isPortrait 的 90° 旋转与拉腿变换；fastNative 条件放宽；真机验证横屏成片方向与现管线一致。
+- **状态**：⏳ 待优化
+
+### P2 · 早帧「初版成片」与成片的色彩一致性校准
+
+- **模块**：拍摄页先快后真链路（`capture_page.dart` 早帧处理 + 相机 fork `CameraState.ets`）
+- **优化点**：早帧走相册增强管线（FAST_MODE），叠加用户色彩矩阵后的 interim 与最终成片（photoAvailable 原始 JPEG + 同矩阵）存在不可控色差，本次以「约 1s 后原位替换」接受该差异。
+- **背景/动机**：根治需拿到未经增强的一阶段原始帧（官方未开放三方通道）或自建 ISP（YUV 拍照，API 23+），改动大。
+- **目标状态**：评估 YUV 拍照直出（绕过 JPEG 编解码 + 自建色彩链路）的可行性与画质收益；或调研分段式一阶段图是否可配置关闭增强。
+- **状态**：⏳ 待优化
+
+---
+
+## 编辑保存与实时预览修复（2026-09-16）
+
+> 背景：后期修图页 / 照片预览页「拖动磨皮/锐化滑块无实时效果、保存后只有锐化有效果、保存后前置照片水平翻转」三问题修复。已落地：facing 随 PostProcess JSON 持久化（PostProcess + gallery_dao 扁平序列化补全 facing/fillLight/wbResidual）并在 processFile 驱动前置镜像；OHOS 编辑保存接原生 processJpeg 快速路径（无自定义裁剪/变换/拉腿时）；Dart 管线磨皮 GPU 输出加像素级校验、无效即回退 CPU，CPU 回退改 RGBA 直建（去 PNG 编解码往返）；DetailEffectsLayer 修复 core/full shader 程序错配（磨皮值写进暗角槽位）并支持 prewarm 预热（编辑页进入即解码+加载 shader，首拖滑块即实时生效）。
+
+### P2 · 旧照片记录（无 facing）前置照片再编辑保存仍会水平翻转
+
+- **模块**：编辑保存（`photo_post_processor.dart` / `photo_template.dart`）
+- **优化点**：facing 于 2026-09-16 起随拍摄落库写入 PostProcess JSON；此前的存量照片记录无该字段，其前置照片在编辑页「从原图重新处理」时无法区分朝向，默认按后置处理，再保存仍会水平翻转（后置照片不受影响）。
+- **背景/动机**：如做一次性数据迁移，需要对存量 JPEG 做人脸方向/对称性推断（不可靠）或全量回扫重写 post_process 列（改动大、有写坏数据风险），本次选择只对新拍摄照片生效。
+- **目标状态**：评估按「originalPath 与 filePath 像素级镜像比对」（抽样行/列相关性）自动推断存量记录朝向并回填，或接受旧照片一次性翻转缺陷自然淘汰。
+- **状态**：⏳ 待优化
+
+### P3 · 编辑保存 OHOS 原生快速路径覆盖自定义裁剪/用户变换/拉腿场景
+
+- **模块**：编辑保存（`photo_post_processor.dart` + `photo_processor.cpp`）
+- **优化点**：OHOS 原生编辑保存快速路径当前仅覆盖「无自定义裁剪嵌套、无用户变换、无拉腿」的场景；带裁剪框/旋转翻转/拉腿的编辑保存仍走 Dart 慢管线（含 dart:ui 慢解码与 GPU 读回）。
+- **背景/动机**：原生 processJpeg 的几何变换是 center-cover 近似裁窗，不支持嵌套自定义裁剪与任意用户变换；与「拍摄速度优化」P2（横屏/拉腿/自定义裁剪下沉 C++）为同一能力项，补齐后两侧同时受益。
+- **目标状态**：processJpeg 支持精确自定义裁剪窗口与用户变换入参，编辑保存全场景走原生；真机验证框选内容与导出一致（WYSIWYG）。
+- **状态**：⏳ 待优化
+
+---
+
+## 编辑页细节效果实时预览改走 OHOS 原生管线（2026-09-17）
+
+> 背景：保存链路修复后真机验证发现「拖动磨皮/锐化滑块照片仍无实时变化」。根因确认为 flutter_ohos 引擎上 Dart FragmentShader（skin_smooth.frag / edit_detail_effects.frag / edit_smooth_sharpen.frag）在该真机静默渲染为原图（无异常、无日志）——与此前「保存后 GPU 磨皮无效、CPU 锐化有效」同根因；取景器可用是因为走原生 libpreview_fx，保存可用是因为走原生 processJpeg。已落地：编辑页实时预览在 OHOS 上改走与拍摄成片同一套 C++ processRgba —— ImageProcessorPlugin 新增 cacheDetailSource（原生解码一次入缓存，LRU 上限 4）/ renderDetailPreview（恒等矩阵 + 细果参数渲染，swapRgba 还原展示序）/ releaseDetailSource；DetailEffectsLayer 获取缓存后按参数指纹增量渲染 RawImage（渲染中合并最新参数，LRU 淘汰自动重建重试），prewarm 同步预热原生缓存；非 OHOS 平台与拉腿增量场景仍走 shader 路径。
+
+### P2 · 原生实时预览补齐拉腿几何与色彩增量
+
+- **模块**：编辑页实时预览（`ImageProcessorPlugin.ets` / `detail_effects_layer.dart`）
+- **优化点**：原生预览帧只渲染细节增量（锐化/磨皮/暗角/颗粒），色彩增量仍由外层 ColorFiltered 叠加、拉腿增量非零时回落 Dart shader 路径（该真机上等价于无预览）。
+- **背景/动机**：processRgba 无几何变换能力；拉腿是低频功能，本次以「拉腿预览降级」换取主路径稳定。
+- **目标状态**：renderDetailPreview 支持 0.2 档纵向拉伸参数（或复用成片 legStretchRgba 逻辑），色彩矩阵参数透传（替代外层 ColorFiltered，消除双层合成色差）。
+- **状态**：⏳ 待优化
+
+### P3 · 查明 flutter_ohos FragmentShader 静默失效的引擎根因
+
+- **模块**：跨模块（flutter_ohos 引擎 / Skia backend）
+- **优化点**：本项目三处 FragmentShader 消费点（编辑页细节预览、保存磨皮、已停用的取景器美颜）在同一真机上全部表现为「shader 输出=输入」，单元测试（tester 环境）则正常。
+- **背景/动机**：本次以「绕过」（原生管线）交付，但 shader 能力缺失影响后续任何 GPU 效果方案（曲线/LUT 实时预览等 v2 计划均依赖）。
+- **目标状态**：在 flutter_ohos 真机上定位（impeller/skia 差异、驱动兼容、shader 编译产物缓存），或升级引擎版本验证；修复后编辑页可回退纯 shader 路径（保留原生路径作性能优选）。
+- **状态**：⏳ 待优化

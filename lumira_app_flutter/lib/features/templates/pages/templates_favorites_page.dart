@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
-import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
@@ -30,7 +29,7 @@ class TemplatesFavoritesPage extends ConsumerWidget {
       appBar: LumiraNav(
         title: '我的收藏',
         transparent: true,
-        leading: _BackButton(tokens: tokens),
+        backFallback: () => GoRouter.of(context).go(RouteNames.templates),
       ),
       body: Stack(
         children: [
@@ -65,33 +64,6 @@ class TemplatesFavoritesPage extends ConsumerWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens});
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        if (Navigator.of(context).canPop()) {
-          Navigator.pop(context);
-        } else {
-          GoRouter.of(context).go(RouteNames.templates);
-        }
-      },
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(
-          Icons.arrow_back_ios_new,
-          size: 20,
-          color: tokens.textPrimary,
-        ),
       ),
     );
   }

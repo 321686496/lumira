@@ -191,7 +191,7 @@ class _ChallengeHistoryDetailPageState
                       title: '挑战记录详情',
                       scrolled: _scrolled,
                       transparent: true,
-                      leading: _BackButton(tokens: tokens, onBack: _back),
+                      backFallback: () => GoRouter.of(context).go(RouteNames.challengeHistory),
                     ),
                     Expanded(
                       child: ListView(
@@ -283,23 +283,6 @@ class _ChallengeHistoryDetailPageState
   }
 }
 
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens, required this.onBack});
-  final ThemeTokens tokens;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onBack,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(Icons.arrow_back_ios_new, size: 20, color: tokens.textPrimary),
-      ),
-    );
-  }
-}
 
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle({required this.text});

@@ -43,7 +43,7 @@ import { BusinessError } from '@ohos.base';
 import UIAbility from '@ohos.app.ability.UIAbility';
 import { CameraPermissions } from '../cameraX/CameraPermissions';
 import { CameraAbilityLifecycle } from '../cameraX/CameraAbilityLifecycle';
-import { CameraState, CaptureMode, PhotoEarlyFrameStreamListener } from '../cameraX/CameraState';
+import { CameraState, CaptureMode, PhotoCaptureContext, PhotoEarlyFrameStreamListener } from '../cameraX/CameraState';
 import { PhysicalButtonsHandler } from '../cameraX/PhysicalButtonsHandler';
 import { camera } from '@kit.CameraKit';
 import { abilityAccessCtrl } from '@kit.AbilityKit';
@@ -202,8 +202,8 @@ export default class CameraAwesomeX extends CameraInterface
     // 接收「队列配对的本帧 path/result」，不再闭包捕获——连拍时闭包会被后一次
     // 调用覆盖，导致增强图写错路径/错误回调（部分照片内容错位、方向异常）。
     this.cameraState!!.photoPathResult = { path: path, result: result }
-    this.cameraState!!.handlePhotoCb = async (photoAsset: photoAccessHelper.PhotoAsset, p: string, r: Result<boolean>) => {
-      await this.cameraState?.saveCameraPhoto(p, photoAsset, r)
+    this.cameraState!!.handlePhotoCb = async (photoAsset: photoAccessHelper.PhotoAsset, p: string, r: Result<boolean>, ctx?: PhotoCaptureContext) => {
+      await this.cameraState?.saveCameraPhoto(p, photoAsset, r, ctx)
     }
     this.cameraState?.takePhoto()
   }

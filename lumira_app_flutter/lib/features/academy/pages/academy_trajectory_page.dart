@@ -39,7 +39,7 @@ class AcademyTrajectoryPage extends ConsumerWidget {
       appBar: LumiraNav(
         title: '学习轨迹',
         transparent: true,
-        leading: _BackButton(tokens: tokens),
+        backFallback: () => GoRouter.of(context).go(RouteNames.profileAcademy),
       ),
       body: SafeArea(
         child: trajectoryAsync.when(
@@ -91,30 +91,6 @@ class AcademyTrajectoryPage extends ConsumerWidget {
     );
   }
 }
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens});
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        } else {
-          GoRouter.of(context).go(RouteNames.profileAcademy);
-        }
-      },
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(Icons.arrow_back_ios_new, size: 20, color: tokens.textPrimary),
-      ),
-    );
-  }
-}
-
 class _StatsCard extends StatelessWidget {
   const _StatsCard({
     required this.tokens,

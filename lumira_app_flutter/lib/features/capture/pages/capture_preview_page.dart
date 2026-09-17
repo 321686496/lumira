@@ -244,7 +244,11 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     }
     // 首帧后按照片实际宽高比校正裁剪比例（兜底：拍摄比例参数缺失/不符时）
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _initLocalCropRatio();
+      if (mounted) {
+        _initLocalCropRatio();
+        // 预热细节效果层（解码 + shader 程序）：首次拖动磨皮/锐化滑块即实时生效
+        DetailEffectsLayer.prewarm(_photoUrl);
+      }
     });
   }
 
@@ -365,6 +369,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     });
     // 按该照片实际宽高比初始化裁剪比例（默认选框 = 满幅，无操作 = 无裁剪）
     _initLocalCropRatio();
+    // 预热该照片的细节效果层（左右滑动切换后首次拖滑块即实时生效）
+    if (_photoUrl.isNotEmpty) DetailEffectsLayer.prewarm(_photoUrl);
   }
 
   /// PageView 页面切换回调：更新当前索引并恢复该照片的状态
@@ -499,6 +505,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     if (prevUrl != null && prevUrl.isNotEmpty && prevUrl != finalPath) {
       PaintingBinding.instance.imageCache.evict(FileImage(File(prevUrl)));
     }
+    // 预热升级后的高清成片（替换早帧的预热缓存）
+    DetailEffectsLayer.prewarm(finalPath);
     // full-res 已落库：重载历史，恢复 originalPath / bakedPostProcess / 只读位
     _loadHistoryPhotos();
   }
@@ -1678,6 +1686,10 @@ class _PreviewNav extends StatelessWidget {
       child: LumiraNav(
         title: '照片预览',
         transparent: true,
+        // 沉浸式预览：即使玻璃拟态风格也强制真透明——
+        // 玻璃默认的 50% 白毛玻璃叠在深色照片上会显示为灰色矩形，
+        // iOS 上 BackdropFilter 还可能造成右侧缺口（宽度不满）。
+        forceTransparent: true,
         // 沉浸式预览页：左右内边距收窄到 12（与下方对比按钮的 right:12 对齐），
         // 给居中标题留出更多可用宽度
         horizontalPadding: 12,

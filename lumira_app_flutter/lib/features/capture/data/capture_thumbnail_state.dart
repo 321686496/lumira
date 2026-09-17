@@ -50,9 +50,17 @@ class CaptureThumbnailNotifier extends StateNotifier<CaptureThumbnailState> {
   }
 
   /// 先快后真：早帧/原图路径先支持点击预览，缩略图保持加载态，成品就绪后一次替换。
-  void setInterimResult(String path, {String? photoId}) {
+  ///
+  /// [visible]：该 interim 是否直接作为缩略图可见图（OHOS 早帧经原生管线调色后的
+  /// 「初版成片」）。一旦可见，后续低优先级 interim 不再把状态打回转圈（只换路径），
+  /// 直到 [setFinalResult] 整体重置。final 已就绪时晚到的早帧直接丢弃，不降级。
+  void setInterimResult(String path, {String? photoId, bool visible = false}) {
+    if (state.status == CaptureThumbnailStatus.final_) return;
+    final nextStatus = visible || state.status == CaptureThumbnailStatus.interim
+        ? CaptureThumbnailStatus.interim
+        : CaptureThumbnailStatus.processing;
     state = state.copyWith(
-      status: CaptureThumbnailStatus.processing,
+      status: nextStatus,
       interimPath: path,
       photoId: photoId ?? state.photoId,
     );

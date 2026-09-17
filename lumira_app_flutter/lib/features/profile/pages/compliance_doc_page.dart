@@ -34,7 +34,7 @@ class ComplianceDocPage extends ConsumerWidget {
       appBar: LumiraNav(
         title: title,
         transparent: true,
-        leading: _BackButton(tokens: tokens),
+        backFallback: () => GoRouter.of(context).go(RouteNames.profileSettings),
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -96,30 +96,6 @@ class ComplianceDocPage extends ConsumerWidget {
     );
   }
 }
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens});
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        } else {
-          GoRouter.of(context).go(RouteNames.profileSettings);
-        }
-      },
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(Icons.arrow_back_ios_new, size: 20, color: tokens.textPrimary),
-      ),
-    );
-  }
-}
-
 class _SectionCard extends StatelessWidget {
   const _SectionCard({required this.section, required this.tokens});
   final ComplianceSection section;

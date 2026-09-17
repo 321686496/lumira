@@ -18,10 +18,16 @@ public class QRView:NSObject,FlutterPlatformView {
     /// setDimensions 阶段缓存、会话启动后应用的扫描区域（仅识别框内二维码）。
     var pendingScanRect: CGRect?
 
-    /// 是否已在原生端识别到首个有效码。识别后立即清空 resultBlock 停止每帧
+    /// 是否已识别到首个有效码。识别后立即清空 resultBlock 停止每帧
     /// 重复回调（MTBBarcodeScanner 的 resultBlock 每帧都会被调用），避免经平台
     /// 通道高频回调打爆主线程；同时避免 pop 转场期间触发重型 stopScanning。
     var didDetect = false
+
+    /// 是否已执行过一次高清晰度 session 配置（preset 提升）。preset 变更会触发
+    /// AVFoundation 会话异步重建并冲掉刚设好的连续自动对焦/近距限制，反复变更
+    /// preset 会让近距重新拉焦、画面发虚。该守卫保证 preset 只提升一次，对焦则
+    /// 在每次 didStartScanningBlock 中重复补（见 configureHighQualityScanning）。
+    private var didConfigureHighQuality = false
     
     // Codabar, maxicode, rss14 & rssexpanded not supported. Replaced with qr.
     // UPCa uses ean13 object.
@@ -258,19 +264,24 @@ public class QRView:NSObject,FlutterPlatformView {
         // 1. 提高取景分辨率：1080p。MTBBarcodeScanner 默认 AVCaptureSessionPresetHigh
         //    (720p)，在 2x/3x 高分屏上放大预览会明显发虚；1080p 是扫码元数据输出
         //    最稳定清晰的档位（不使用 .photo 以规避大分辨率下识别偶发缺失）。
-        session.beginConfiguration()
-        let preferred: AVCaptureSession.Preset = .hd1920x1080
-        if session.canSetSessionPreset(preferred) {
-            session.sessionPreset = preferred
+        //    仅在首次执行——preset 变更会触发会话重建并冲掉连续对焦/近距限制，
+        //    重复变更反而让画面反复拉焦。对焦已在下方每次 didStartScanningBlock
+        //    重复补，无需再次触发重建。
+        if !didConfigureHighQuality {
+            session.beginConfiguration()
+            let preferred: AVCaptureSession.Preset = .hd1920x1080
+            if session.canSetSessionPreset(preferred) {
+                session.sessionPreset = preferred
+            }
+            session.commitConfiguration()
+            didConfigureHighQuality = true
         }
-        session.commitConfiguration()
 
         // 2. 连续自动对焦/自动曝光 + 中央聚焦 + 近距优先。
-        //    MTBBarcodeScanner 虽在设备创建时已设 continuousAutoFocus，但上面把预览
-        //    preset 从默认 High(720p) 提升到 1080p，会让 AVFoundation 重建会话连接，
-        //    从而把刚设好的自动对焦/曝光重置回默认——这正是「手机拉近二维码后画面
-        //    仍发虚」的根因之一。这里立即应用一次，并在会话稳定后再延时补一次，
-        //    确保连续对焦在分辨率提升之后依然生效（近距离取景保持清晰）。
+        //    preset 提升会让 AVFoundation 重建会话连接，从而把刚设好的自动对焦/
+        //    曝光重置回默认——这是「手机拉近二维码后画面仍发虚」的核心根因。这里
+        //    立即应用一次，并在接下来的 ~1.5s 内短周期重复补对焦，确保连续对焦在
+        //    分辨率提升之后依然生效（近距取景保持清晰，且对设备/时序差异更鲁棒）。
         if #available(iOS 10.0, *) {
             let device = (session.inputs.compactMap { $0 as? AVCaptureDeviceInput }
                 .first?.device)
@@ -279,14 +290,20 @@ public class QRView:NSObject,FlutterPlatformView {
                     position: (self.cameraFacing == MTBCamera.front) ? .front : .back)
             guard let device = device else { return }
             self.applyBestFocus(on: device)
-            // preset 提升引发的连接重建是异步完成的，延时再补两次对焦/曝光配置，
-            // 避免刚设好的连续自动对焦被重建过程清掉（部分机型重建耗时超过
-            // 0.2s，故 0.2s 与 0.8s 各补一次）。
+            // 覆盖会话重建窗口的大致时长：0.2s/0.5s/1.0s/1.5s 各补一次。
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
                 guard let self = self else { return }
                 self.applyBestFocus(on: device)
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self = self else { return }
+                self.applyBestFocus(on: device)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                guard let self = self else { return }
+                self.applyBestFocus(on: device)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                 guard let self = self else { return }
                 self.applyBestFocus(on: device)
             }

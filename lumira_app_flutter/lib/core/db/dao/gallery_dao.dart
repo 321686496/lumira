@@ -110,6 +110,13 @@ class GalleryItemRecord {
         legStretch: (map['legStretch'] as num?)?.toInt() ?? 0,
         lut: map['lut'] as String? ?? 'none',
         systemFilter: map['systemFilter'] as String?,
+        facing: map['facing'] as String?,
+        fillLight: (map['fillLight'] as Map<String, dynamic>?) != null
+            ? FillLightParams.fromJson(map['fillLight'] as Map<String, dynamic>)
+            : null,
+        wbResidual: (map['wbResidual'] as Map<String, dynamic>?) != null
+            ? WbResidual.fromJson(map['wbResidual'] as Map<String, dynamic>)
+            : null,
         customCropRect: (map['customCropRect'] as Map<String, dynamic>?) != null
             ? CropRect.fromJson(map['customCropRect'] as Map<String, dynamic>)
             : null,
@@ -140,6 +147,10 @@ class GalleryItemRecord {
       'legStretch': p.legStretch,
       'lut': p.lut,
       'systemFilter': p.systemFilter,
+      if (p.facing != null) 'facing': p.facing,
+      if (p.fillLight != null) 'fillLight': p.fillLight!.toJson(),
+      if (p.wbResidual != null)
+        'wbResidual': {'r': p.wbResidual!.r, 'g': p.wbResidual!.g, 'b': p.wbResidual!.b},
       if (p.customCropRect != null) 'customCropRect': p.customCropRect!.toJson(),
     };
   }

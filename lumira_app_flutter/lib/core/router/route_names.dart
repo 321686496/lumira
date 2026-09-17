@@ -114,6 +114,8 @@ class RouteNames {
   static const String paramFrom = 'from';
   static const String paramTrial = 'trial';
   static const String paramScope = 'scope';
+  // 搜索页预填关键词：点击模板详情页标签跳转搜索时自动搜索
+  static const String paramKeyword = 'keyword';
   // 首页「扫一扫」跳转预填用：恢复码 secret、邀请码 code
   static const String paramSecret = 'secret';
   static const String paramInviteCode = 'code';

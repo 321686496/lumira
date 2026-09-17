@@ -139,6 +139,90 @@ void main() {
     // 原图未保留时底部为只读提示（编辑能力已迁移至 GalleryEditPage）
     expect(find.text('原图未保留'), findsWidgets);
   });
+
+  testWidgets('未记录心情的照片展示占位态，选择心情后保存并凸显展示', (tester) async {
+    tester.binding.window.physicalSizeTestValue = const Size(800, 1800);
+    tester.binding.window.devicePixelRatioTestValue = 1.0;
+    addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+    addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
+
+    await initContainer();
+    await dao.insert(GalleryItemRecord(
+      id: 'p1',
+      dataUrl: 'https://example.com/p1.jpg',
+      mood: null,
+      createdAt: 1700000000000,
+    ));
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: GalleryDetailPage(photoId: 'p1')),
+    ));
+    await tester.pumpAndSettle();
+
+    // 未记录心情 → 展示占位态引导添加，而非整块隐藏
+    expect(find.text('记录今天的心情'), findsOneWidget);
+
+    // 点击占位态 → 弹出心情选择 Sheet（复用拍摄预览页同一套心情选项）
+    await tester.tap(find.text('记录今天的心情'));
+    await tester.pumpAndSettle();
+    expect(find.text('选择心情'), findsOneWidget);
+
+    // 选择「开心」→ Sheet 关闭、心情凸显区更新、DB 落库
+    await tester.tap(find.text('开心'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('今天的心情 · 开心'), findsOneWidget);
+    final record = await dao.getById('p1');
+    expect(record?.mood, '开心');
+  });
+
+  testWidgets('未套用模板拍摄的照片也可在详情页设置场景', (tester) async {
+    tester.binding.window.physicalSizeTestValue = const Size(800, 1800);
+    tester.binding.window.devicePixelRatioTestValue = 1.0;
+    addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+    addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
+
+    await initContainer();
+    await db.insert(Tables.scenes, {
+      Tables.colId: 'cafe',
+      Tables.colName: '咖啡馆',
+      Tables.colCategory: '室内',
+      Tables.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
+      Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+    });
+    await dao.insert(GalleryItemRecord(
+      id: 'p1',
+      dataUrl: 'https://example.com/p1.jpg',
+      sceneId: null,
+      templateId: null,
+      mood: null,
+      createdAt: 1700000000000,
+    ));
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: GalleryDetailPage(photoId: 'p1')),
+    ));
+    await tester.pumpAndSettle();
+
+    // 无模板、无场景的照片：场景行仍展示（不再整块隐藏），提供「设置」入口
+    expect(find.text('未设置场景'), findsOneWidget);
+    expect(find.text('设置'), findsOneWidget);
+
+    // 点击「设置」→ 弹出场景选择 Sheet → 选择「咖啡馆」
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    expect(find.text('选择场景'), findsOneWidget);
+
+    await tester.tap(find.text('咖啡馆'));
+    await tester.pumpAndSettle();
+
+    // 场景保存并展示（未套用模板的照片同样生效）
+    expect(find.text('咖啡馆'), findsOneWidget);
+    final record = await dao.getById('p1');
+    expect(record?.sceneId, 'cafe');
+  });
 }
 
 Future<void> _onCreate(Database db, int version) async {
@@ -156,6 +240,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colMood} TEXT,
       ${Tables.colLut} TEXT,
       ${Tables.colGalleryItemIsFavorite} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colGalleryItemHidden} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colCreatedAt} INTEGER NOT NULL
     )
   ''');

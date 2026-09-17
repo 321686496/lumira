@@ -108,8 +108,10 @@ export class CameraState implements StreamHandler {
   private backActiveColorSpace: number = -1
   private _imageAnalysisBuilder: ImageAnalysisBuilder | undefined = undefined
   // 拍照结果监听（photoAssetAvailable 增强兜底时调用，按队列配对的本帧
-  // path/result 落盘，不由注入方闭包捕获——连拍时闭包会被后一次调用覆盖）
-  private _handlePhotoCb: (photoAsset: photoAccessHelper.PhotoAsset, path: string, result: Result<boolean>) => void = () => {
+  // path/result 落盘，不由注入方闭包捕获——连拍时闭包会被后一次调用覆盖）。
+  // ctx 透传本帧请求上下文：saveCameraPhoto 在途期间若 photoAvailable 直出完成
+  // （directDone 置位），MediaDataHandler 据此跳过增强图写盘，防止覆盖原始 JPEG。
+  private _handlePhotoCb: (photoAsset: photoAccessHelper.PhotoAsset, path: string, result: Result<boolean>, ctx?: PhotoCaptureContext) => void = () => {
   }
   // 连拍安全的拍照请求队列（替代原单槽位 _photoPath/_photoResult/_photoDirectDone）：
   // - directQueue 供 photoAvailable 逐帧消费（直出原始 JPEG 写盘）；
@@ -1185,14 +1187,14 @@ export class CameraState implements StreamHandler {
             this.requestEarlyFrameForAnimation(photoAsset);
             return;
           }
-          this._handlePhotoCb(photoAsset, ctx.path, ctx.result);
+          this._handlePhotoCb(photoAsset, ctx.path, ctx.result, ctx);
         });
     } catch (err) {
       Logger.error(TAG, 'photoOutputCallBack error');
     }
   }
 
-  async saveCameraPhoto(path: string, photoAsset: photoAccessHelper.PhotoAsset, result: Result<boolean>) {
+  async saveCameraPhoto(path: string, photoAsset: photoAccessHelper.PhotoAsset, result: Result<boolean>, ctx?: PhotoCaptureContext) {
     Logger.info(TAG, 'saveCameraPhoto');
     if (photoRequestId) {
       Logger.debug(TAG, 'saveCameraPhoto has photoRequestId = ' + photoRequestId);
@@ -1206,6 +1208,7 @@ export class CameraState implements StreamHandler {
         deliveryMode: photoAccessHelper.DeliveryMode.HIGH_QUALITY_MODE,
       }
       savePhotoPath = path
+      savePhotoCtx = ctx
       takePhotoResult = result
 
       let handler = new MediaDataHandler();
@@ -1750,11 +1753,24 @@ let savePhotoPath: string | undefined = undefined
 let takePhotoResult: Result<boolean> | undefined = undefined
 let photoRequestId: string | undefined = undefined
 let takePhotoStartAt: number = 0
+// 在途增强兜底请求的本帧上下文：MediaDataHandler.onDataPrepared 据此判断
+// photoAvailable 直出是否已在请求在途期间完成（directDone），完成则跳过写盘。
+let savePhotoCtx: PhotoCaptureContext | undefined = undefined
 
 class MediaDataHandler implements photoAccessHelper.MediaAssetDataHandler<ArrayBuffer> {
   async onDataPrepared(data: ArrayBuffer) {
     if (data === undefined || savePhotoPath === undefined || takePhotoResult === undefined) {
       Logger.error('Error occurred when preparing data');
+      return;
+    }
+    // directDone 防护：请求在途期间 photoAvailable 已直出写盘成功（同帧 ctx.directDone
+    // 置位）时，此处晚到/交错的增强图必须跳过——否则会覆盖已直出的原始 JPEG，
+    // 成片被相册增强管线二次处理（破坏「原始直出、色彩与取景器一致」契约）。
+    // 正常时序下增强兜底仅在直出失败时发起；此防护覆盖任意事件交错场景。
+    if (savePhotoCtx?.directDone) {
+      Logger.info(`photoAssetAvailable: skip enhanced overwrite (direct JPEG saved) elapsed=${Date.now() - takePhotoStartAt}ms`);
+      photoRequestId = undefined;
+      savePhotoCtx = undefined;
       return;
     }
     // 直接落盘全质量 JPEG buffer，不做 createPixelMap + effectKit 重编码：
@@ -1771,6 +1787,7 @@ class MediaDataHandler implements photoAccessHelper.MediaAssetDataHandler<ArrayB
       takePhotoResult?.success(false);
     } finally {
       photoRequestId = undefined;
+      savePhotoCtx = undefined;
     }
   }
 }

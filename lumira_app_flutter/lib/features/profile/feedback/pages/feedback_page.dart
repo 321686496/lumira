@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+﻿import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -107,10 +107,9 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
     return Scaffold(
       backgroundColor: tokens.canvas,
       extendBodyBehindAppBar: true,
-      appBar: LumiraNav(
+      appBar: const LumiraNav(
         title: '意见反馈',
         transparent: true,
-        leading: _BackButton(tokens: tokens),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -278,24 +277,3 @@ class _Thumb extends StatelessWidget {
   }
 }
 
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.tokens});
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        }
-      },
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(Icons.arrow_back_ios_new,
-            size: 20, color: tokens.textPrimary),
-      ),
-    );
-  }
-}
