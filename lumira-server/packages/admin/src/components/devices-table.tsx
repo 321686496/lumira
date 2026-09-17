@@ -9,6 +9,7 @@ import { toAssetUrl } from '@/lib/asset-url';
 import { genderLabels } from '@/lib/profile-labels';
 import { Coins } from '@phosphor-icons/react/dist/ssr/Coins';
 import { UserCircle } from '@phosphor-icons/react/dist/ssr/UserCircle';
+import { Users } from '@phosphor-icons/react/dist/ssr/Users';
 import type { DeviceListResponse, DeviceRecord } from '@/types/admin';
 
 const platformLabels: Record<string, string> = {
@@ -55,6 +56,7 @@ export function DevicesTable({
             <TableHead>系统版本</TableHead>
             <TableHead>设备型号</TableHead>
             <TableHead>积分</TableHead>
+            <TableHead>邀请</TableHead>
             <TableHead>首次注册</TableHead>
             <TableHead>最后活跃</TableHead>
             <TableHead>IP区域</TableHead>
@@ -64,7 +66,7 @@ export function DevicesTable({
         <TableBody>
           {data.data.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={13} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={14} className="text-center text-muted-foreground py-8">
                 无设备记录
               </TableCell>
             </TableRow>
@@ -97,6 +99,12 @@ export function DevicesTable({
                   <span className="inline-flex items-center gap-1 text-sm font-medium">
                     <Coins size={14} className="text-amber-500" />
                     {row.pointsBalance ?? 0}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span className="inline-flex items-center gap-1 text-sm">
+                    <Users size={14} className="text-primary" />
+                    {row.invitedCount ?? 0}
                   </span>
                 </TableCell>
                 <TableCell className="text-sm">{formatUnixTime(row.firstSeenAt)}</TableCell>

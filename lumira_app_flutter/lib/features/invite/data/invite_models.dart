@@ -69,8 +69,9 @@ class ActivateRewards {
 
 /// POST /invite/activate 响应体
 ///
-/// 自「成就条件」机制起：绑定成功仅建立待达成(pending)关系，`rewards/tierReached`
-/// 为空；`condition` 说明达成条件，`achievableRewards` 为达成后可得奖励列表。
+/// 绑定成功即建立待达成(pending)关系。自「绑定即得」机制起：
+/// `grantedRewards` 为被邀请人**绑定当刻已到账**的奖励；`condition` 说明好友侧
+/// 达成条件；`achievableRewards` 为兼容字段（好友达成后可得）。
 @immutable
 class ActivateInviteResponse {
   final String inviterDeviceId;
@@ -81,8 +82,11 @@ class ActivateInviteResponse {
   final int? tierReached;
   final ActivateRewards? rewards;
 
-  /// 达成条件文案（如「完成首次拍照/成片后双方各得30积分」）
+  /// 达成条件文案（如「绑定成功即可获得 30 积分；完成首次拍照后好友也得 30」）
   final String? condition;
+
+  /// 被邀请人绑定即得的奖励列表（供绑定成功弹窗展示「已到账」）
+  final List<RewardItem> grantedRewards;
 
   /// 达成后可得奖励（被邀请人视角）列表
   final List<RewardItem> achievableRewards;
@@ -93,11 +97,13 @@ class ActivateInviteResponse {
     this.tierReached,
     this.rewards,
     this.condition,
+    this.grantedRewards = const [],
     this.achievableRewards = const [],
   });
 
   factory ActivateInviteResponse.fromJson(Map<String, dynamic> j) {
     final rewardsRaw = j['rewards'] as Map<String, dynamic>?;
+    final grantedRaw = j['grantedRewards'] as List<dynamic>? ?? const [];
     final achievableRaw = j['achievableRewards'] as List<dynamic>? ?? const [];
     return ActivateInviteResponse(
       inviterDeviceId: j['inviterDeviceId'] as String,
@@ -105,6 +111,9 @@ class ActivateInviteResponse {
       tierReached: j['tierReached'] as int?,
       rewards: rewardsRaw == null ? null : ActivateRewards.fromJson(rewardsRaw),
       condition: j['condition'] as String?,
+      grantedRewards: grantedRaw
+          .map((e) => RewardItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
       achievableRewards: achievableRaw
           .map((e) => RewardItem.fromJson(e as Map<String, dynamic>))
           .toList(),

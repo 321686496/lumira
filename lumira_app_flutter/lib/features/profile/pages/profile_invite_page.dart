@@ -94,12 +94,14 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
       final repo = await ref.read(inviteRepositoryProvider.future);
       final resp = await repo.activate(ActivateInviteRequest(inviteCode: code));
       if (!mounted) return;
-      // 绑定成功：弹窗展示达成条件与「达成后」可获得的奖励明细
+      // 绑定成功：弹窗展示「已到账」的奖励明细 + 好友侧达成条件说明
       await showInviteBindSuccessSheet(
         context,
         conditionText:
-            resp.condition ?? '绑定成功后，完成首次拍照/成片，你与好友将各得 30 积分奖励',
-        rewards: resp.achievableRewards,
+            resp.condition ?? '绑定成功即可获得 30 积分；完成首次拍照后，好友也将获得 30 积分',
+        rewards: resp.grantedRewards.isNotEmpty
+            ? resp.grantedRewards
+            : resp.achievableRewards,
         inviterDeviceId: resp.inviterDeviceId,
       );
       if (!mounted) return;

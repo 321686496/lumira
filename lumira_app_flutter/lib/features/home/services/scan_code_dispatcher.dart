@@ -3,8 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/db/database_provider.dart';
+import '../../../core/network/api_error.dart';
 import '../../../core/router/route_names.dart';
+import '../../invite/data/invite_models.dart';
 import '../../invite/data/invite_repository.dart';
+import '../../invite/widgets/invite_bind_failure_sheet.dart';
+import '../../invite/widgets/invite_bind_success_sheet.dart';
 import '../../../shared/widgets/lumira/lumira.dart' as lumira;
 import '../../templates/services/template_share_code.dart';
 import '../../templates/services/template_share_service.dart';
@@ -187,17 +191,8 @@ class ScanCodeDispatcher {
         ));
         break;
       case ScanCodeType.inviteCode:
-        final blockReason = await inviteScanBlockReason(ref, result.payload);
-        // ignore: use_build_context_synchronously
-        if (!context.mounted) return;
-        if (blockReason != null) {
-          lumira.LumiraToast.show(context, blockReason);
-          break;
-        }
-        GoRouter.of(context).push(RouteNames.build(
-          RouteNames.profileInvite,
-          {RouteNames.paramInviteCode: result.payload ?? ''},
-        ));
+        // 扫到好友邀请海报 → 直接尝试绑定：成功弹成功窗（已到账奖励），失败弹失败窗（原因）
+        await _handleInviteScan(context, ref, result.payload);
         break;
       case ScanCodeType.unknown:
         lumira.LumiraToast.show(context, '无法识别的码');
@@ -227,5 +222,72 @@ class ScanCodeDispatcher {
     } catch (_) {
       return null;
     }
+  }
+
+  /// 扫到好友邀请码后直接尝试绑定，并弹出结果弹窗：
+  /// - 自己的码 / 已绑定 → 失败弹窗（原因）
+  /// - 绑定成功 → 成功弹窗（展示「已到账」的奖励）
+  /// - 绑定失败（无效 / 老用户 / 网络等）→ 失败弹窗（映射原因）
+  static Future<void> _handleInviteScan(
+    BuildContext context,
+    WidgetRef ref,
+    String? payload,
+  ) async {
+    final code = payload?.trim().toUpperCase();
+    if (code == null || code.isEmpty) {
+      lumira.LumiraToast.show(context, '无法识别的邀请码');
+      return;
+    }
+
+    // 前置拦截：自己的码 / 已绑定 → 弹失败窗说明原因
+    final blockReason = await inviteScanBlockReason(ref, code);
+    // ignore: use_build_context_synchronously
+    if (!context.mounted) return;
+    if (blockReason != null) {
+      await showInviteBindFailureSheet(context, reason: blockReason);
+      return;
+    }
+
+    final repo = await ref.read(inviteRepositoryProvider.future);
+    try {
+      final resp = await repo.activate(ActivateInviteRequest(inviteCode: code));
+      // ignore: use_build_context_synchronously
+      if (!context.mounted) return;
+      await showInviteBindSuccessSheet(
+        context,
+        conditionText:
+            resp.condition ?? '绑定成功即可获得 30 积分；完成首次拍照后，好友也将获得 30 积分',
+        rewards: resp.grantedRewards.isNotEmpty
+            ? resp.grantedRewards
+            : resp.achievableRewards,
+        inviterDeviceId: resp.inviterDeviceId,
+      );
+      ref.invalidate(inviteStatsProvider);
+    } on ApiException catch (e) {
+      // ignore: use_build_context_synchronously
+      if (!context.mounted) return;
+      await showInviteBindFailureSheet(
+        context,
+        reason: _inviteFailureReason(e),
+      );
+    } catch (_) {
+      // ignore: use_build_context_synchronously
+      if (!context.mounted) return;
+      await showInviteBindFailureSheet(context, reason: '绑定失败，请稍后重试');
+    }
+  }
+
+  /// 把后端激活错误映射为友好的失败原因。
+  static String _inviteFailureReason(ApiException e) {
+    if (e.isNetworkError) return '网络异常，请检查网络后重试';
+    final msg = e.message;
+    if (msg.contains('仅限新用户')) return '仅限新用户首次使用时可绑定，当前设备不满足条件';
+    const map = <String, String>{
+      'Invalid invite code': '邀请码无效，请核对后重试',
+      'Cannot use your own invite code': '不能绑定自己的邀请码',
+      'This device has already activated an invite': '该设备已绑定过邀请码，不能重复绑定',
+      'Invite cycle detected': '抱歉，无法建立该邀请关系',
+    };
+    return map[msg] ?? msg;
   }
 }

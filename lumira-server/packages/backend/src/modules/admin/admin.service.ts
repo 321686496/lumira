@@ -111,6 +111,16 @@ export class AdminService {
   async getDeviceList(page: number = 1, pageSize: number = 20, search?: string) {
     const db = this.dbService.getDb();
 
+    // 每个设备作为邀请人发起邀请的用户数（pending + success 都计入「邀请过的新用户」）
+    const invitedSubquery = db
+      .select({
+        inviterDeviceId: inviteRecords.inviterDeviceId,
+        invitedCount: sql<number>`COUNT(${inviteRecords.id})`,
+      })
+      .from(inviteRecords)
+      .groupBy(inviteRecords.inviterDeviceId)
+      .as('invited_sub');
+
     let query = db
       .select({
         deviceId: devices.deviceId,
@@ -135,10 +145,12 @@ export class AdminService {
         avatarUrl: userProfiles.avatarUrl,
         profileUpdatedAt: userProfiles.updatedAt,
         pointsBalance: userPoints.balance,
+        invitedCount: invitedSubquery.invitedCount,
       })
       .from(devices)
       .leftJoin(userProfiles, eq(devices.deviceId, userProfiles.deviceId))
       .leftJoin(userPoints, eq(devices.deviceId, userPoints.deviceId))
+      .leftJoin(invitedSubquery, eq(devices.deviceId, invitedSubquery.inviterDeviceId))
       .$dynamic();
 
     if (search) {
@@ -162,6 +174,7 @@ export class AdminService {
     return {
       data: records.map((r) => ({
         ...r,
+        invitedCount: (r.invitedCount as number | null) ?? 0,
         favoriteCategories: parseArr(r.favoriteCategoriesJson),
         painPoints: parseArr(r.painPointsJson),
         expectations: parseArr(r.expectationsJson),

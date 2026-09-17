@@ -114,7 +114,7 @@ class InviteBindSuccessSheet extends ConsumerWidget {
             if (rewards.isNotEmpty) ...[
               const SizedBox(height: 14),
               Text(
-                '完成首次拍照后，你将获得：',
+                '恭喜！你已获得：',
                 style: TextStyle(fontSize: 13, color: tokens.textSecondary),
               ),
               const SizedBox(height: 8),
