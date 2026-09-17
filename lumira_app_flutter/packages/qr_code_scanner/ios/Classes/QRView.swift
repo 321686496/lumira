@@ -309,22 +309,17 @@ public class QRView:NSObject,FlutterPlatformView {
                     position: (self.cameraFacing == MTBCamera.front) ? .front : .back)
             guard let device = device else { return }
             self.applyBestFocus(on: device)
-            // 覆盖会话重建窗口的大致时长：0.2s/0.5s/1.0s/1.5s 各补一次。
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-                guard let self = self else { return }
-                self.applyBestFocus(on: device)
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                guard let self = self else { return }
-                self.applyBestFocus(on: device)
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                guard let self = self else { return }
-                self.applyBestFocus(on: device)
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                guard let self = self else { return }
-                self.applyBestFocus(on: device)
+            // 覆盖会话重建窗口：preset 提升（本方法内）、以及 setDimensions 在 ~0.3s
+            // 时实时应用 scanRect，都会触发 AVFoundation 重建连接从而把连续对焦/近距
+            // 限制重置回默认。固定 1.5s 的短窗口在时序上较紧，这里把「近距优先的连续
+            // 对焦」在 ~3s 内多次密集重补，确保上手的初期画面持续保持近焦清晰，且对
+            // 设备/时序差异更鲁棒。连续对焦一旦生效即可长驻，定时器到期即停、不常驻。
+            let retryDelays: [TimeInterval] = [0.1, 0.25, 0.4, 0.6, 0.9, 1.2, 1.5, 2.0, 2.5, 3.0]
+            for delay in retryDelays {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    guard let self = self else { return }
+                    self.applyBestFocus(on: device)
+                }
             }
         }
 
