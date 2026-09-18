@@ -5,6 +5,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumira_app_flutter/features/capture/domain/filter_recipe.dart';
 import 'package:lumira_app_flutter/features/capture/domain/photo_template.dart';
+import 'package:lumira_app_flutter/features/capture/services/white_balance.dart';
 
 void main() {
   group('composePostProcessMatrix wbResidual', () {
@@ -86,6 +87,61 @@ void main() {
       );
       expect(WbResidual.fromPlatformMap(null), isNull);
       expect(WbResidual.fromPlatformMap({'r': 1.5}), isNull);
+    });
+  });
+
+  group('OHOS 前置白平衡补偿 frontWbCompensation', () {
+    test('auto → 不补偿；各预设档位 → 非恒等对角补偿', () {
+      expect(ohosFrontWhiteBalanceCompensation(WhiteBalanceMode.auto), isNull);
+      for (final mode in [
+        WhiteBalanceMode.daylight,
+        WhiteBalanceMode.cloudy,
+        WhiteBalanceMode.fluorescent,
+        WhiteBalanceMode.incandescent,
+      ]) {
+        final comp = ohosFrontWhiteBalanceCompensation(mode);
+        expect(comp, isNotNull);
+        expect(comp!.isIdentity, isFalse);
+      }
+    });
+
+    test('composePostProcessMatrix 把 frontWbCompensation 乘在最内层', () {
+      // brightness=100 → 系数 2.0；补偿在内层 → R 对角 = 2.0 × 0.90 = 1.8
+      const post = PostProcess(
+        color: PostProcessColor(brightness: 100),
+        frontWbCompensation: WbResidual(r: 0.90, g: 1.0, b: 1.10),
+      );
+      final m = composePostProcessMatrix(post);
+      expect(m[0], closeTo(1.8, 1e-9));
+      expect(m[6], closeTo(2.0, 1e-9));
+      expect(m[12], closeTo(2.2, 1e-9));
+    });
+
+    test('序列化往返保留 frontWbCompensation；旧记录无字段 → null', () {
+      const post = PostProcess(
+        color: PostProcessColor(),
+        frontWbCompensation: WbResidual(r: 0.90, g: 1.0, b: 1.10),
+      );
+      final restored = PostProcess.fromJson(post.toJson());
+      expect(restored.frontWbCompensation,
+          const WbResidual(r: 0.90, g: 1.0, b: 1.10));
+
+      final legacy = PostProcess.fromJson(<String, dynamic>{
+        'cropRatio': '3:4',
+        'color': <String, dynamic>{},
+      });
+      expect(legacy.frontWbCompensation, isNull);
+    });
+
+    test('merge：增量无补偿时保留烘焙补偿', () {
+      const baked = PostProcess(
+        color: PostProcessColor(),
+        frontWbCompensation: WbResidual(r: 0.90, g: 1.0, b: 1.10),
+      );
+      const local = PostProcess(color: PostProcessColor(brightness: 10));
+      final merged = baked.merge(local);
+      expect(merged.frontWbCompensation,
+          const WbResidual(r: 0.90, g: 1.0, b: 1.10));
     });
   });
 }

@@ -75,6 +75,11 @@ export interface PhotoCaptureContext {
 
 const TAG: string = 'CameraState'
 
+// 后置相机会话的活动色彩空间（模块级持久，跨 CameraState 实例存活）。
+// setupCamera 每次创建新的 CameraState，若用实例字段，App 直接以前置启动
+// （持久化 facing）时后置参考将永远缺失，前置色彩空间对齐无法生效。
+let backActiveColorSpace: number = -1
+
 export class CameraState implements StreamHandler {
   private events: EventSink | null = null
   private textureEntry: SurfaceTextureEntry | undefined = undefined
@@ -105,7 +110,6 @@ export class CameraState implements StreamHandler {
   private previewProfilesArray: Array<camera.Profile> | undefined = undefined
   private photoProfilesArray: Array<camera.Profile> | undefined = undefined
   private _colorMatrix: Array<number> = []
-  private backActiveColorSpace: number = -1
   private _imageAnalysisBuilder: ImageAnalysisBuilder | undefined = undefined
   // 拍照结果监听（photoAssetAvailable 增强兜底时调用，按队列配对的本帧
   // path/result 落盘，不由注入方闭包捕获——连拍时闭包会被后一次调用覆盖）。
@@ -320,6 +324,12 @@ export class CameraState implements StreamHandler {
         Logger.error(TAG, 'Failed to addOutput(previewOutput). errorCode = ' + err.code);
       }
 
+      // 前后置色彩空间对齐必须在 config 状态完成（beginConfig 与 commitConfig 之间）。
+      // setColorSpace/getActiveColorSpace/getSupportedColorSpaces 仅在此窗口有效；
+      // commitConfig 之后调用会抛 7400103 "Session not config"，导致前置白平衡档位
+      // 在 ISP 默认色彩空间不同的设备上呈现错误色偏。
+      this.applyColorSpaceAlignment()
+
       // 提交会话配置
       await this.session.commitConfig();
 
@@ -361,7 +371,6 @@ export class CameraState implements StreamHandler {
         // 启动会话
         await this.session.start().then(() => {
           Logger.info(TAG, 'Promise returned to indicate the session start success.');
-          this.alignColorSpaceWithBackCamera()
           // 注册对焦状态监听（仅日志观测），确认触控对焦是否真正触发
           this.registerFocusStateListener()
           if (this.enableImageStream && this.imageAnalysisBuilder) {
@@ -1347,6 +1356,18 @@ export class CameraState implements StreamHandler {
         this.setManualWhiteBalance(k)
         return
       }
+      // 前置 ISP 的预设白平衡增益与后置存在明显差异（实测前置 DAYLIGHT 明显偏红）。
+      // 前置切预设档位时改用「MANUAL + 映射色温」（与 iOS 增益锁定思路一致），
+      // 绕开前置 ISP 预设增益的异常渲染；MANUAL 不可用时自动回退预设模式，不退化。
+      if (this.cameraPosition === camera.CameraPosition.CAMERA_POSITION_FRONT) {
+        const kelvin: number | undefined = this.presetToKelvin(mode)
+        if (kelvin !== undefined && this.setManualWhiteBalance(kelvin)) {
+          return
+        }
+        if (kelvin !== undefined) {
+          Logger.info(TAG, `setWhiteBalanceFn: front manual failed, fallback to preset mode, mode=${mode}`)
+        }
+      }
       // 预设模式映射
       let wbMode: camera.WhiteBalanceMode = camera.WhiteBalanceMode.AUTO
       switch (mode) {
@@ -1381,14 +1402,36 @@ export class CameraState implements StreamHandler {
     }
   }
 
+  /** 预设白平衡档位 → 色温(K)。与 iOS 映射保持一致；auto 返回 undefined（走 AUTO 模式）。 */
+  private presetToKelvin(mode: string): number | undefined {
+    switch (mode) {
+      case 'daylight':
+        return 5500
+      case 'cloudy':
+        return 6500
+      case 'fluorescent':
+        return 4200
+      case 'incandescent':
+        return 3000
+      default:
+        return undefined
+    }
+  }
+
   /**
-   * 前置相机输出颜色继承后置相机会话的颜色空间。
+   * 前置相机输出颜色继承后置相机会话的颜色空间（必须在 config 状态调用）。
    *
    * 同一场景下前后置 ISP 的默认 color space 可能不同，导致相同白平衡档位在
    * 前置呈现不同色偏。后置已与系统相机一致，因此在后置启动时记录其活动
-   * color space；前置启动时优先切换到该空间。
+   * color space（模块级 backActiveColorSpace，跨 CameraState 实例存活）；
+   * 前置启动时优先切换到该空间。
+   *
+   * 时序铁律：setColorSpace/getActiveColorSpace/getSupportedColorSpaces 只在
+   * config 状态有效（beginConfig 与 commitConfig 之间）；commitConfig 之后调用
+   * 会抛 7400103 "Session not config"。此方法必须在 addOutput 之后、
+   * commitConfig 之前调用。
    */
-  private alignColorSpaceWithBackCamera(): void {
+  private applyColorSpaceAlignment(): void {
     const session = this.session
     if (!session) {
       return
@@ -1399,22 +1442,26 @@ export class CameraState implements StreamHandler {
       active = session.getActiveColorSpace()
       supported = session.getSupportedColorSpaces().map((item: colorSpaceManager.ColorSpace): number => item)
     } catch (e) {
-      Logger.info(TAG, `alignColorSpace: query failed, keep default, err=${JSON.stringify(e)}`)
+      Logger.info(TAG, `applyColorSpaceAlignment: query failed, keep default, err=${JSON.stringify(e)}`)
       return
     }
-    Logger.info(TAG, `alignColorSpace: position=${this.cameraPosition}; active=${active}; supported=${JSON.stringify(supported)}; back=${this.backActiveColorSpace}`)
+    Logger.info(TAG, `applyColorSpaceAlignment: position=${this.cameraPosition}; active=${active}; supported=${JSON.stringify(supported)}; back=${backActiveColorSpace}`)
     if (this.cameraPosition !== camera.CameraPosition.CAMERA_POSITION_FRONT) {
-      this.backActiveColorSpace = active
+      backActiveColorSpace = active
       return
     }
-    let target = this.backActiveColorSpace >= 0
-      ? this.backActiveColorSpace
+    let target = backActiveColorSpace >= 0
+      ? backActiveColorSpace
       : colorSpaceManager.ColorSpace.SRGB
     if (active === target || !supported.includes(target)) {
       return
     }
-    session.setColorSpace(target as colorSpaceManager.ColorSpace)
-    Logger.info(TAG, `alignColorSpace: set front active ${active} -> ${target}`)
+    try {
+      session.setColorSpace(target as colorSpaceManager.ColorSpace)
+      Logger.info(TAG, `applyColorSpaceAlignment: set front active ${active} -> ${target}`)
+    } catch (e) {
+      Logger.error(TAG, `applyColorSpaceAlignment: setColorSpace failed, err=${JSON.stringify(e)}`)
+    }
   }
 
   private setManualWhiteBalance(k: number): boolean {

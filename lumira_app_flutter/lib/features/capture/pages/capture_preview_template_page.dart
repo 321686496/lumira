@@ -13,6 +13,7 @@ import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
 import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
+import '../services/white_balance.dart';
 import '../widgets/capture_top_pill_bar.dart';
 import '../widgets/camera_preview.dart';
 import '../widgets/capture_bottom_controls.dart';
@@ -69,6 +70,14 @@ class _CapturePreviewTemplatePageState
   /// 取景器 RepaintBoundary key（facing 变化时重建以切换传感器）
   GlobalKey? _viewfinderCaptureKey;
   String _lastFacingForKey = '';
+
+  /// 白平衡会话基线（= 表单原值映射），用于同步回写时检测用户是否改过白平衡，
+  /// 避免把编辑器特有值（如 shade/tungsten/custom）误归一成 auto 覆盖。
+  WhiteBalanceSettings? _seededWb;
+
+  /// 用户手动切换摄像头的记录（姿势下标 → 最终朝向）。姿势切换的自动跟随
+  /// 不记录；仅「同步到编辑器」时按此更新当前姿势的 cameraDirection。
+  final Map<int, String> _facingByPose = {};
 
   @override
   void initState() {
@@ -152,6 +161,16 @@ class _CapturePreviewTemplatePageState
     if (poses.isNotEmpty && poses[0].cameraDirection == 'front') {
       ref.read(CaptureState.cameraFacingProvider.notifier).state = 'front';
     }
+    // 6. 播种会话基线：闪光灯 / 白平衡会话与表单对齐。预览页的白平衡/闪光灯
+    //    只写松散会话 provider（不写 editableTemplate），播种后「会话 == 表单」，
+    //    同步回写（_overlayPreviewSession）在未触碰时无操作，避免误覆盖。
+    ref.read(CaptureState.flashModeProvider.notifier).state =
+        _flashModeFromString(form.camera.flashMode);
+    _seededWb = WhiteBalanceSettings(
+      mode: whiteBalanceModeFromString(form.camera.whiteBalance),
+      temperatureK: form.camera.whiteBalanceK,
+    );
+    ref.read(whiteBalanceSessionProvider.notifier).state = _seededWb!;
 
     _hasBridged = true;
   }
@@ -180,6 +199,14 @@ class _CapturePreviewTemplatePageState
     }
   }
 
+  /// 表单闪光灯字符串（'off'/'on'/'auto'/'torch'）→ 会话枚举。
+  CaptureFlashMode _flashModeFromString(String value) {
+    return CaptureFlashMode.values.firstWhere(
+      (m) => m.name == value,
+      orElse: () => CaptureFlashMode.off,
+    );
+  }
+
   void _onZoomChanged(double multiplier) {
     final minZoom = ref.read(CaptureState.deviceMinZoomProvider) ?? 1.0;
     final maxZoom = ref.read(CaptureState.deviceMaxZoomProvider) ?? 10.0;
@@ -193,6 +220,8 @@ class _CapturePreviewTemplatePageState
     final current = ref.read(CaptureState.cameraFacingProvider);
     final next = current == 'back' ? 'front' : 'back';
     ref.read(CaptureState.cameraFacingProvider.notifier).state = next;
+    // 记录用户手动切换的朝向（按当前姿势），供「同步到编辑器」写回姿势方向
+    _facingByPose[ref.read(CaptureState.currentPoseIndexProvider)] = next;
 
     // 前置无闪光灯硬件，切换时关闭
     if (next == 'front' &&
@@ -236,10 +265,98 @@ class _CapturePreviewTemplatePageState
     final bridge = ref.read(CaptureState.editableTemplateProvider);
     final base = _template;
     if (bridge != null && base != null) {
-      final merged = TemplateMapper.photoTemplateToEditorFormMerge(bridge, base);
+      final overlaid = _overlayPreviewSession(bridge);
+      final merged = TemplateMapper.photoTemplateToEditorFormMerge(overlaid, base);
       ref.read(previewEditorFormProvider.notifier).state = merged;
     }
     _finishAndPop();
+  }
+
+  /// 把「松散会话状态」叠加到桥接模板上，供同步回写合并。
+  ///
+  /// 比例 / 前后置 / 闪光灯 / 白平衡 / 补光这 5 类参数只存在独立 provider，
+  /// 从不写入 editableTemplate，若不在此叠加，photoTemplateToEditorFormMerge
+  /// 只会读到桥接时的原值 → 用户在预览页的调整全部丢失。
+  PhotoTemplate _overlayPreviewSession(PhotoTemplate bridge) {
+    final seededRatio = bridge.postProcess.cropRatio.isNotEmpty
+        ? bridge.postProcess.cropRatio
+        : bridge.composition.aspectRatio;
+    final ratio = ref.read(CaptureState.aspectRatioProvider);
+    final wbSession = ref.read(whiteBalanceSessionProvider);
+    final fillLightEnabled = ref.read(CaptureState.fillLightEnabledProvider);
+
+    var composition = bridge.composition;
+    var camera = bridge.camera;
+    var postProcess = bridge.postProcess;
+    var poses = bridge.poses;
+
+    // 1. 宽高比与剪裁比：用户手动切换过比例 → 构图宽高比与剪裁比跟随。
+    //    未触碰时保持表单原值（种子比例 = cropRatio，避免误覆盖 composition.aspectRatio）。
+    if (ratio != seededRatio) {
+      composition = composition.copyWith(aspectRatio: ratio);
+      postProcess = postProcess.copyWith(cropRatio: ratio);
+    }
+
+    // 2. 闪光灯：以会话当前值为准（桥接时已播种表单值，未触碰时无操作）。
+    camera = camera.copyWith(
+      flashMode: ref.read(CaptureState.flashModeProvider).name,
+    );
+
+    // 3. 白平衡：仅用户改过才写回（会话基线 = 表单原值映射，见 _seededWb）。
+    if (wbSession != _seededWb) {
+      camera = camera.copyWith(
+        whiteBalance: wbSession.mode.name,
+        whiteBalanceK: wbSession.temperatureK ?? camera.whiteBalanceK,
+      );
+    }
+
+    // 4. 补光：启用 → 当前颜色/强度；关闭且模板原带 → enabled:false；模板无 → 保持 null。
+    final originalFillLight = bridge.postProcess.fillLight;
+    if (fillLightEnabled) {
+      postProcess = postProcess.copyWith(
+        fillLight: FillLightParams(
+          enabled: true,
+          color: ref.read(CaptureState.fillLightColorProvider).value,
+          intensity: ref.read(CaptureState.fillLightIntensityProvider),
+        ),
+      );
+    } else if (originalFillLight != null) {
+      postProcess = postProcess.copyWith(
+        fillLight: FillLightParams(
+          enabled: false,
+          color: originalFillLight.color,
+          intensity: originalFillLight.intensity,
+        ),
+      );
+    }
+
+    // 5. 前后置：仅用户手动切换过的姿势更新 cameraDirection。
+    final poseIdx = ref.read(CaptureState.currentPoseIndexProvider);
+    if (poseIdx >= 0 && poseIdx < poses.length) {
+      final manualFacing = _facingByPose[poseIdx];
+      if (manualFacing != null &&
+          poses[poseIdx].cameraDirection != manualFacing) {
+        final updated = List<Pose>.of(poses);
+        updated[poseIdx] =
+            poses[poseIdx].copyWith(cameraDirection: manualFacing);
+        poses = updated;
+      }
+    }
+
+    return bridge.copyWith(
+      composition: composition,
+      camera: camera,
+      postProcess: postProcess,
+      poses: poses,
+    );
+  }
+
+  /// 姿势指定相机方向 → 自动切换前后摄像头（模板/姿势驱动，不记录手动切换）。
+  void _applyPoseCameraDirection(String? direction) {
+    if (direction == null) return;
+    final current = ref.read(CaptureState.cameraFacingProvider);
+    if (current == direction) return;
+    ref.read(CaptureState.cameraFacingProvider.notifier).state = direction;
   }
 
   void _finishAndPop() {
@@ -288,6 +405,14 @@ class _CapturePreviewTemplatePageState
         final multiplier = ref.read(CaptureState.zoomProvider);
         ref.read(cameraServiceProvider).setZoomMultiplier(multiplier);
       }
+    });
+
+    // 姿势指定相机方向 → 自动切换前后摄像头（对齐拍摄页，不记录手动切换）。
+    // 多姿势模板切换姿势时取景器跟随姿势朝向，同步回写时以手动切换记录为准。
+    ref.listen<String?>(CaptureState.currentPoseCameraDirectionProvider,
+        (prev, next) {
+      if (prev == next) return;
+      _applyPoseCameraDirection(next);
     });
 
     // facing 变化时重建取景器 RepaintBoundary + CameraAwesomeBuilder

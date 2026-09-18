@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:ui' as ui;
 
 import 'package:camerawesome_ohos/camerawesome_plugin.dart';
@@ -18,6 +19,9 @@ import '../services/white_balance.dart';
 
 /// 闪光灯模式
 enum CaptureFlashMode { off, on, auto, torch }
+
+/// 上次已打印「OHOS 前置白平衡补偿生效」日志的档位键（避免每个 rebuild 刷屏）。
+String? _lastFrontWbCompLog;
 
 /// 拍摄页状态 providers
 class CaptureState {
@@ -668,12 +672,39 @@ class CaptureState {
   ///（[wbResidualSessionProvider]）：极值色温下硬件增益被软封顶削减的
   /// 部分由 composePostProcessMatrix 的残差对角矩阵补足，取景器与成片
   /// 同源一致。总是覆盖源值（auto → null），避免模板 JSON 带入陈旧残差。
+  ///
+  /// 另按「OHOS + 前置 + 非 auto 档位」注入 OHOS 前置白平衡「软件色彩
+  /// 补偿」（[ohosFrontWhiteBalanceCompensation]）：前置 ISP 预设增益渲染
+  /// 与后置不同导致的偏色由该最内层对角矩阵抵消（取景器 FX 与成片同源）。
+  /// 切换档位/前后置时本 provider 自动重算并驱动预览 FX 更新。
   static final effectivePostProcessProvider = Provider<PostProcess>((ref) {
     final editable = ref.watch(editableTemplateProvider);
     final base = editable != null
         ? editable.postProcess
         : ref.watch(freeModePostProcessProvider);
-    return base.copyWith(wbResidual: ref.watch(wbResidualSessionProvider));
+    final wb = ref.watch(whiteBalanceSessionProvider);
+    WbResidual? frontComp;
+    // TEMP-DIAG: 临时去掉 facing=='front' 限制，让后置也注入强矩阵，
+    // 用「后置 + 手电筒光」验证管线是否真正应用 frontWbCompensation。
+    if (Platform.operatingSystem == 'ohos' && !wb.isAuto) {
+      final comp = ohosFrontWhiteBalanceCompensation(wb.mode);
+      if (comp != null) {
+        frontComp = comp;
+        final key = '${ref.watch(CaptureState.cameraFacingProvider)}/${wb.mode.name}';
+        if (key != _lastFrontWbCompLog) {
+          _lastFrontWbCompLog = key;
+          debugPrint('[wb] OHOS 前置白平衡软件补偿生效: '
+              'facing=${ref.watch(CaptureState.cameraFacingProvider)} '
+              'mode=${wb.mode.name} r=${comp.r} g=${comp.g} b=${comp.b}');
+        }
+      }
+    } else {
+      _lastFrontWbCompLog = null;
+    }
+    return base.copyWith(
+      wbResidual: ref.watch(wbResidualSessionProvider),
+      frontWbCompensation: frontComp,
+    );
   });
 
   /// 统一的可编辑构图参数（无论是否有模板）

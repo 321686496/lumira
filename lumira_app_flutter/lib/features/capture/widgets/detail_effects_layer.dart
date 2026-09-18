@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -286,7 +287,7 @@ class DetailEffectsLayer extends StatefulWidget {
     required this.url,
     required this.effects,
     required this.fallback,
-    this.maxEdge = 2048,
+    this.maxEdge = 1024,
   });
 
   final String url;
@@ -303,7 +304,7 @@ class DetailEffectsLayer extends StatefulWidget {
   /// 动机：滑块首次拖动时 DetailEffectsLayer 才进入 widget 树，若此刻才开始
   /// 解码，拖动期间一直显示 fallback 原图，表现为「拖动磨皮/锐化滑块无实时
   /// 变化」。页面加载完成后调用本方法，首次拖动即命中 [url] 的预热缓存。
-  static Future<void> prewarm(String url, {int maxEdge = 2048}) async {
+  static Future<void> prewarm(String url, {int maxEdge = 1024}) async {
     // shader 程序为进程级单例，预热即触发加载。
     _loadDetailProgram();
     _loadCoreDetailProgram();
@@ -341,6 +342,29 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
   ui.FragmentProgram? _program;
   ui.FragmentProgram? _coreProgram;
 
+  // ── 效果节流合并 ──
+  // 滑块 onChanged 以指针事件速率（60-120Hz）触发页面 setState，若每个事件都
+  // 触发全量重绘（OHOS 原生整图渲染 / shader 22 tap 磨皮）必然卡顿。这里把
+  // 「已应用的参数」从 widget.effects 解耦：didUpdateWidget 只记录最新值，
+  // 由节流器以 ~30fps（最新值胜出）合并应用，拖动依旧实时、渲染量降一半。
+  /// 应用间隔：~30fps
+  static const Duration _effectThrottle = Duration(milliseconds: 33);
+  /// 距上次应用 ≥ 此毫秒数时立即应用（首次点击 / 慢拖无额外延迟）
+  static const int _fastPathMs = 80;
+
+  /// 当前已应用的效果参数（painter / 原生渲染消费此值，非 widget.effects）。
+  DetailEffectsParams _applied = const DetailEffectsParams();
+  /// 最近一次 widget.effects 的待应用值（合并窗口内保留最新）。
+  DetailEffectsParams? _pendingApply;
+  Timer? _applyTimer;
+  DateTime? _lastApplyAt;
+
+  /// 拖动中标志：参数持续变化时 shader 走 0.5x 降采样画布，静止
+  /// [_busySettleMs] 后回全分辨率，保证静止时预览与成片观感一致。
+  bool _effectBusy = false;
+  Timer? _idleTimer;
+  static const int _busySettleMs = 200;
+
   // ── OHOS 原生实时预览（与成片同一 C++ 管线）──
   // flutter_ohos 上 Dart FragmentShader 在部分真机静默渲染为原图，拖动滑块
   // 照片无变化；该路径用原生 processRgba 增量渲染保证实时效果可见。
@@ -361,6 +385,7 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
   @override
   void initState() {
     super.initState();
+    _applied = widget.effects;
     _decode();
     _loadProgram();
     _loadCoreProgram();
@@ -369,24 +394,67 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
   @override
   void didUpdateWidget(DetailEffectsLayer old) {
     super.didUpdateWidget(old);
-    // 仅来源变化才重新解码；effects 变化复用已解码 _image，
-    // build 自动以新参数触发 shader 重绘。
+    // 仅来源变化才重新解码；effects 变化节流合并后应用，
+    // 复用已解码 _image，build 以新参数触发 shader 重绘。
     if (old.url != widget.url) {
       final oldImg = _image;
       _image = null;
       oldImg?.dispose();
       _resetOhosPreview(oldUrl: old.url);
       _decode();
+      _applied = widget.effects;
+      _pendingApply = null;
     } else if (_sigOf(old.effects) != _sigOf(widget.effects)) {
-      _scheduleOhosRender();
+      _scheduleEffectsApply();
     }
   }
 
   @override
   void dispose() {
+    _applyTimer?.cancel();
+    _idleTimer?.cancel();
     _resetOhosPreview(oldUrl: widget.url);
     _image?.dispose();
     super.dispose();
+  }
+
+  /// 节流合并入口：记录最新参数，快速路径立即应用，否则 ~30fps 合并。
+  void _scheduleEffectsApply() {
+    _pendingApply = widget.effects;
+    if (_applyTimer != null) return; // 已排队：最新值已记录，稍后由 timer 应用
+    final now = DateTime.now();
+    final sinceLast = _lastApplyAt == null
+        ? _fastPathMs + 1
+        : now.difference(_lastApplyAt!).inMilliseconds;
+    if (sinceLast >= _fastPathMs) {
+      _flushPendingEffects();
+    } else {
+      _applyTimer = Timer(_effectThrottle, () {
+        _applyTimer = null;
+        _flushPendingEffects();
+      });
+    }
+  }
+
+  /// 应用合并窗口内最新的效果参数（setState 触发 painter 重绘 / 原生渲染）。
+  void _flushPendingEffects() {
+    final pending = _pendingApply;
+    if (pending == null) return;
+    _pendingApply = null;
+    _lastApplyAt = DateTime.now();
+    if (_sigOf(pending) == _sigOf(_applied)) return;
+    setState(() {
+      _applied = pending;
+      _effectBusy = true;
+    });
+    // 拖动停止一段时间后回到全分辨率（静止预览与成片观感一致）
+    _idleTimer?.cancel();
+    _idleTimer = Timer(const Duration(milliseconds: _busySettleMs), () {
+      if (mounted && _effectBusy) {
+        setState(() => _effectBusy = false);
+      }
+    });
+    _scheduleOhosRender();
   }
 
   /// 释放 OHOS 原生预览状态（换图/销毁时调用）。
@@ -405,9 +473,10 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
   }
 
   /// 调度一次原生渲染：渲染中则合并（保留最新参数），空闲则立即执行。
+  /// 参数取节流后的 [_applied]，非 widget.effects。
   void _scheduleOhosRender() {
     if (!OhosImageProcessor.isSupported || _ohosCacheId == null) return;
-    final params = widget.effects;
+    final params = _applied;
     if (!params.hasAnyEffect) return;
     if (_sigOf(params) == _previewSig && !_rendering) return;
     if (_rendering) {
@@ -553,7 +622,7 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
     // FragmentShader 静默失效时，这是拖动滑块照片跟着变化的保障）。
     // 原生渲染不含拉腿几何（成片仍会应用），拉腿增量≠0 时回落 shader 展示路径。
     final preview = _previewImage;
-    if (preview != null && widget.effects.legStretch == 0) {
+    if (preview != null && _applied.legStretch == 0) {
       return Center(
         child: AspectRatio(
           aspectRatio: preview.width / preview.height,
@@ -570,9 +639,9 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
       // 未解码 / 解码失败 → 原图片路径。
       return widget.fallback();
     }
-    final coreOnly = widget.effects.vignette == 0 &&
-        widget.effects.grain == 0 &&
-        widget.effects.legStretch == 0;
+    final coreOnly = _applied.vignette == 0 &&
+        _applied.grain == 0 &&
+        _applied.legStretch == 0;
     // core 短路 shader 仅在真正加载成功时使用。绝不能把 CoreDetailEffectsPainter
     // 配到完整程序（edit_detail_effects.frag）上：两者 uniform 布局不同
     //（core：uSharpenA=4 / uSmooth=5；完整：uVignette=5 / uSmooth=6），错配会把
@@ -580,15 +649,17 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
     if (coreOnly && _coreProgram != null) {
       return Center(
         child: AspectRatio(
-          aspectRatio: widget.effects.outputAspect(
+          aspectRatio: _applied.outputAspect(
             img.width.toDouble(),
             img.height.toDouble(),
           ),
-          child: CustomPaint(
-            painter: CoreDetailEffectsPainter(
-              image: img,
-              effects: widget.effects,
-              program: _coreProgram!,
+          child: _reducedCanvas(
+            CustomPaint(
+              painter: CoreDetailEffectsPainter(
+                image: img,
+                effects: _applied,
+                program: _coreProgram!,
+              ),
             ),
           ),
         ),
@@ -602,7 +673,7 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
     return Center(
       child: AspectRatio(
         // 拉腿改变高度 → 画布比例随之变化，观感等价 BoxFit.contain。
-        aspectRatio: widget.effects.outputAspect(
+        aspectRatio: _applied.outputAspect(
           img.width.toDouble(),
           img.height.toDouble(),
         ),
@@ -623,15 +694,38 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
             // 原图会完全遮盖 shader 输出（细节参数调整不可见）；拉腿比例变化
             // 时 child 上下留边，shader 以重影形式露出（2026-09-10 修复）。
             // 尺寸由 AspectRatio 的 tight 约束给定，无需 child 提供布局。
-            return CustomPaint(
-              painter: DetailEffectsPainter(
-                image: img,
-                noise: noise,
-                effects: widget.effects,
-                program: prog,
+            return _reducedCanvas(
+              CustomPaint(
+                painter: DetailEffectsPainter(
+                  image: img,
+                  noise: noise,
+                  effects: _applied,
+                  program: prog,
+                ),
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+
+  /// shader 求值降采样：拖动中（[_effectBusy]）用 0.5 分辨率画布 +
+  /// FittedBox 放大铺满；静止回全分辨率。
+  ///
+  /// 磨皮为 22 tap 十字高斯、锐化为 4 tap 逐片元操作，片元数降到 1/4 后
+  /// GPU 开销大幅下降（拖动顺滑），效果本身为低通/局部对比，放大后与
+  /// 全分辨率观感一致。AspectRatio 已保证画布宽高比，缩放同比例无变形。
+  Widget _reducedCanvas(Widget child) {
+    if (!_effectBusy) return child;
+    const scale = 0.5;
+    return LayoutBuilder(
+      builder: (context, constraints) => FittedBox(
+        fit: BoxFit.fill,
+        child: SizedBox(
+          width: math.max(constraints.maxWidth * scale, 1),
+          height: math.max(constraints.maxHeight * scale, 1),
+          child: child,
         ),
       ),
     );

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -202,8 +203,17 @@ Future<void> _writeStorageReport(Database db, String dbPath) async {
     buf.writeln('photos dir listing failed: $e');
   }
 
-  final diagDir = await getApplicationDocumentsDirectory();
-  final dir = Directory(p.join(diagDir.path, 'color_diag'));
+  // OHOS 上 pub.dev 版 path_provider 无原生实现，getApplicationDocumentsDirectory()
+  // 会抛 MissingPluginException；且本函数由启动流程 unawaited 调用，未捕获的异步
+  // 异常会直达框架层弹「启动失败」。回退到 sqflite getDatabasesPath()（鸿蒙持久数据
+  // 目录，与 photos/templates 等其余模块在 OHOS 上的统一降级策略一致）。
+  Directory diagBase;
+  try {
+    diagBase = await getApplicationDocumentsDirectory();
+  } on MissingPluginException {
+    diagBase = Directory(await getDatabasesPath());
+  }
+  final dir = Directory(p.join(diagBase.path, 'color_diag'));
   if (!await dir.exists()) await dir.create(recursive: true);
   await File(p.join(dir.path, 'storage_report.txt')).writeAsString(buf.toString());
   debugPrint('[storage] 存储诊断报告已写入 ${p.join(dir.path, 'storage_report.txt')}');
