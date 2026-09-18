@@ -23,7 +23,8 @@ List<PosterStyle> checkinPosterStyles() => [
       _style('ckM4', '错落画廊', _buildAsymmetric),
     ];
 
-PosterStyle _style(String id, String name, Widget Function(PosterStyleData) b) =>
+PosterStyle _style(
+        String id, String name, Widget Function(PosterStyleData) b) =>
     PosterStyle(
       id: id,
       name: name,
@@ -62,7 +63,9 @@ Widget _thumbRow({required List<Widget> cells, required double gap}) {
 /// 圆角裁切的照片块。
 Widget _photo(Widget Function(double, double) b, double w, double h, double r) {
   final child = b(w, h);
-  return r <= 0 ? child : ClipRRect(borderRadius: BorderRadius.circular(r), child: child);
+  return r <= 0
+      ? child
+      : ClipRRect(borderRadius: BorderRadius.circular(r), child: child);
 }
 
 /// 顶部/底部的一对「L」直角括号（topLeft / bottomRight）。
@@ -130,13 +133,17 @@ class _SoftJournalDotsPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(size.width - dot1Dx, dot1Cy),
       dot1Radius,
-      Paint()..color = color1..maskFilter = blur,
+      Paint()
+        ..color = color1
+        ..maskFilter = blur,
     );
     // 左下出血圆点：圆心 (dot2Cx, h - dot2CyBtm)
     canvas.drawCircle(
       Offset(dot2Cx, size.height - dot2CyBtm),
       dot2Radius,
-      Paint()..color = color2..maskFilter = blur,
+      Paint()
+        ..color = color2
+        ..maskFilter = blur,
     );
   }
 
@@ -223,7 +230,9 @@ Widget _buildSoftJournal(PosterStyleData d) {
   final mainH = px(330);
   final thumbs = d.thumbBuilders ?? const <Widget Function(double, double)>[];
   final gap = px(10);
-  final tw = thumbs.isEmpty ? 0.0 : (inner - gap * (thumbs.length - 1)) / thumbs.length;
+  final tw = thumbs.isEmpty
+      ? 0.0
+      : (inner - gap * (thumbs.length - 1)) / thumbs.length;
 
   return SizedBox(
     width: _kCkW,
@@ -278,7 +287,8 @@ Widget _buildSoftJournal(PosterStyleData d) {
                   ),
                   SizedBox(width: px(10)),
                   Container(
-                    padding: EdgeInsets.symmetric(horizontal: px(14), vertical: px(6)),
+                    padding: EdgeInsets.symmetric(
+                        horizontal: px(14), vertical: px(6)),
                     decoration: BoxDecoration(
                       color: glass,
                       borderRadius: BorderRadius.circular(1000),
@@ -297,7 +307,8 @@ Widget _buildSoftJournal(PosterStyleData d) {
                       left: px(16),
                       bottom: px(16),
                       child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: px(14), vertical: px(6)),
+                        padding: EdgeInsets.symmetric(
+                            horizontal: px(14), vertical: px(6)),
                         decoration: BoxDecoration(
                           color: const Color(0xD9FFFFFF),
                           borderRadius: BorderRadius.circular(1000),
@@ -356,11 +367,20 @@ Widget _buildSoftJournal(PosterStyleData d) {
                 runSpacing: px(6),
                 children: [
                   if (d.dateText.isNotEmpty)
-                    _glassPill(px: px, size: fs(12), text: d.dateText, color: ink),
+                    _glassPill(
+                        px: px, size: fs(12), text: d.dateText, color: ink),
                   if (d.category.isNotEmpty)
-                    _glassPill(px: px, size: fs(12), text: d.category, color: roseDeep),
+                    _glassPill(
+                        px: px,
+                        size: fs(12),
+                        text: d.category,
+                        color: roseDeep),
                   if (d.rating > 0)
-                    _glassPill(px: px, size: fs(12), text: _starsText(d.rating), color: star),
+                    _glassPill(
+                        px: px,
+                        size: fs(12),
+                        text: _starsText(d.rating),
+                        color: star),
                 ],
               ),
               if (d.note.isNotEmpty) ...[
@@ -368,11 +388,13 @@ Widget _buildSoftJournal(PosterStyleData d) {
                 // 心得玻璃卡
                 Container(
                   width: double.infinity,
-                  padding: EdgeInsets.symmetric(horizontal: px(18), vertical: px(14)),
+                  padding: EdgeInsets.symmetric(
+                      horizontal: px(18), vertical: px(14)),
                   decoration: BoxDecoration(
                     color: glass,
                     borderRadius: BorderRadius.circular(px(20)),
-                    border: Border.all(color: const Color(0xE6FFFFFF), width: px(1)),
+                    border: Border.all(
+                        color: const Color(0xE6FFFFFF), width: px(1)),
                   ),
                   child: Text(
                     d.note,
@@ -399,7 +421,8 @@ Widget _buildSoftJournal(PosterStyleData d) {
                       '如画 LUMIRA · 探店足迹',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: posterPlain(fs(11), color: ink2, letterSpacing: px(1)),
+                      style: posterPlain(fs(11),
+                          color: ink2, letterSpacing: px(1)),
                     ),
                   ),
                   Text(
@@ -430,7 +453,8 @@ Widget _glassPill({
 }) {
   return Container(
     padding: EdgeInsets.symmetric(horizontal: px(12), vertical: px(5)),
-    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(1000)),
+    decoration:
+        BoxDecoration(color: bg, borderRadius: BorderRadius.circular(1000)),
     child: Text(text, style: posterPlain(size, color: color)),
   );
 }
@@ -461,9 +485,8 @@ Widget _buildMorandi(PosterStyleData d) {
   final thumbs = d.thumbBuilders ?? const <Widget Function(double, double)>[];
   final gap = px(12);
   // 设计稿为「3 张小图 + 一个 + 号格」，共 4 格。
-  final imgCount = thumbs.isEmpty
-      ? 0
-      : (thumbs.length >= 3 ? 3 : thumbs.length);
+  final imgCount =
+      thumbs.isEmpty ? 0 : (thumbs.length >= 3 ? 3 : thumbs.length);
   final cellCount = thumbs.isEmpty ? 0 : imgCount + 1;
   final cw = cellCount == 0 ? 0.0 : (inner - gap * (cellCount - 1)) / cellCount;
 
@@ -477,12 +500,14 @@ Widget _buildMorandi(PosterStyleData d) {
         children: [
           // 细线卡纸框 + 陶土色 L 角标
           Container(
-            decoration: BoxDecoration(border: Border.all(color: line, width: px(1))),
+            decoration:
+                BoxDecoration(border: Border.all(color: line, width: px(1))),
             child: Stack(
               clipBehavior: Clip.none,
               children: [
                 Padding(
-                  padding: EdgeInsets.fromLTRB(framePad, px(26), framePad, px(20)),
+                  padding:
+                      EdgeInsets.fromLTRB(framePad, px(26), framePad, px(20)),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -526,7 +551,11 @@ Widget _buildMorandi(PosterStyleData d) {
                       ),
                       SizedBox(height: px(14)),
                       // meta：地点 · 日期 · 分类
-                      _separatedMeta(d, size: fs(12), gapPx: px(2), color: ink2, sepColor: clay),
+                      _separatedMeta(d,
+                          size: fs(12),
+                          gapPx: px(2),
+                          color: ink2,
+                          sepColor: clay),
                       SizedBox(height: px(26)),
                       // 主图
                       _photo(d.photoBuilder, inner, mainH, px(2)),
@@ -538,7 +567,8 @@ Widget _buildMorandi(PosterStyleData d) {
                           children: [
                             Text(
                               _starsText(d.rating),
-                              style: posterSerif(fs(15), color: clay, letterSpacing: px(2)),
+                              style: posterSerif(fs(15),
+                                  color: clay, letterSpacing: px(2)),
                             ),
                             SizedBox(width: px(8)),
                             Text(
@@ -552,7 +582,8 @@ Widget _buildMorandi(PosterStyleData d) {
                             ),
                             Text(
                               '/ 5',
-                              style: posterSerif(fs(12), color: clay, letterSpacing: px(2)),
+                              style: posterSerif(fs(12),
+                                  color: clay, letterSpacing: px(2)),
                             ),
                           ],
                         ),
@@ -560,7 +591,8 @@ Widget _buildMorandi(PosterStyleData d) {
                         SizedBox(height: px(18)),
                         Container(
                           width: double.infinity,
-                          padding: EdgeInsets.symmetric(horizontal: px(10), vertical: px(14)),
+                          padding: EdgeInsets.symmetric(
+                              horizontal: px(10), vertical: px(14)),
                           child: Text(
                             d.note,
                             textAlign: TextAlign.center,
@@ -600,7 +632,8 @@ Widget _buildMorandi(PosterStyleData d) {
                                     child: Center(
                                       child: Text(
                                         '+',
-                                        style: posterSerif(fs(26), color: taupe),
+                                        style:
+                                            posterSerif(fs(26), color: taupe),
                                       ),
                                     ),
                                   ),
@@ -656,7 +689,8 @@ Widget _buildMorandi(PosterStyleData d) {
                       ),
                       TextSpan(
                         text: ' LUMIRA',
-                        style: posterPlain(fs(11), color: taupe, letterSpacing: px(2)),
+                        style: posterPlain(fs(11),
+                            color: taupe, letterSpacing: px(2)),
                       ),
                     ],
                   ),
@@ -733,7 +767,9 @@ Widget _buildGoldFrame(PosterStyleData d) {
   final mainH = px(300);
   final thumbs = d.thumbBuilders ?? const <Widget Function(double, double)>[];
   final bandGap = px(9);
-  final bandW = thumbs.isEmpty ? 0.0 : (contentW - bandGap * (thumbs.length - 1)) / thumbs.length;
+  final bandW = thumbs.isEmpty
+      ? 0.0
+      : (contentW - bandGap * (thumbs.length - 1)) / thumbs.length;
 
   return SizedBox(
     width: _kCkW,
@@ -750,14 +786,16 @@ Widget _buildGoldFrame(PosterStyleData d) {
                 SizedBox(height: px(22)),
                 // 印章
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: px(16), vertical: px(3)),
+                  padding:
+                      EdgeInsets.symmetric(horizontal: px(16), vertical: px(3)),
                   decoration: BoxDecoration(
                     border: Border.all(color: gold, width: px(1)),
                     borderRadius: BorderRadius.circular(1000),
                   ),
                   child: Text(
                     '探 店 足 迹',
-                    style: posterSerif(fs(12), color: goldDark, letterSpacing: px(4)),
+                    style: posterSerif(fs(12),
+                        color: goldDark, letterSpacing: px(4)),
                   ),
                 ),
                 SizedBox(height: px(14)),
@@ -792,7 +830,8 @@ Widget _buildGoldFrame(PosterStyleData d) {
                   SizedBox(height: px(6)),
                   Text(
                     d.dateText,
-                    style: posterSerif(fs(11), color: ink3, letterSpacing: px(3)),
+                    style:
+                        posterSerif(fs(11), color: ink3, letterSpacing: px(3)),
                   ),
                 ],
                 SizedBox(height: px(22)),
@@ -851,7 +890,8 @@ Widget _buildGoldFrame(PosterStyleData d) {
                           if (d.rating > 0) ...[
                             Text(
                               _starsText(d.rating),
-                              style: posterPlain(fs(17), color: gold, letterSpacing: px(2)),
+                              style: posterPlain(fs(17),
+                                  color: gold, letterSpacing: px(2)),
                             ),
                             SizedBox(width: px(8)),
                             Text(
@@ -918,7 +958,8 @@ Widget _buildGoldFrame(PosterStyleData d) {
                           '如 画 · LUMIRA',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: posterSerif(fs(12), color: goldDark, letterSpacing: px(3)),
+                          style: posterSerif(fs(12),
+                              color: goldDark, letterSpacing: px(3)),
                         ),
                       ),
                       Flexible(
@@ -958,7 +999,8 @@ Widget _buildGoldFrame(PosterStyleData d) {
             child: Padding(
               padding: EdgeInsets.all(px(14)),
               child: Container(
-                decoration: BoxDecoration(border: Border.all(color: line, width: px(1))),
+                decoration: BoxDecoration(
+                    border: Border.all(color: line, width: px(1))),
                 child: Padding(
                   padding: EdgeInsets.all(px(3)),
                   child: Container(
@@ -974,12 +1016,14 @@ Widget _buildGoldFrame(PosterStyleData d) {
           Positioned(
             top: px(6),
             left: px(6),
-            child: _bracket(size: px(30), stroke: px(3), color: goldDark, lower: false),
+            child: _bracket(
+                size: px(30), stroke: px(3), color: goldDark, lower: false),
           ),
           Positioned(
             bottom: px(6),
             right: px(6),
-            child: _bracket(size: px(30), stroke: px(3), color: goldDark, lower: true),
+            child: _bracket(
+                size: px(30), stroke: px(3), color: goldDark, lower: true),
           ),
         ],
       ),
@@ -1022,286 +1066,331 @@ Widget _buildAsymmetric(PosterStyleData d) {
     width: _kCkW,
     child: Container(
       color: surface,
-      padding: EdgeInsets.fromLTRB(padH, px(32), padH, px(28)),
       child: Stack(
         children: [
-          // 细金内框（对应 m4.html outline-offset:-12px）。先于内容绘制，
-          // 让内容压在金色细线之上，避免「金色细线与内容重叠」。
+          // 细金内框（对应 m4.html outline-offset:-12px）：距画布外缘 12px，
+          // 位于内容留白之内、正文（从 34px 起排）之外，不与正文重叠。
           Positioned.fill(
             child: Padding(
               padding: EdgeInsets.all(px(12)),
               child: Container(
-                decoration: BoxDecoration(border: Border.all(color: hair, width: px(1))),
+                decoration: BoxDecoration(
+                    border: Border.all(color: hair, width: px(1))),
               ),
             ),
           ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 上排：左大图 + 右信息列
-              SizedBox(
-                height: bigH,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(
-                      width: leftW,
-                      child: Stack(
-                        children: [
-                          d.photoBuilder(leftW, bigH),
-                          Positioned(
-                            top: 0,
-                            left: 0,
-                            child: _bracket(
-                              size: px(16),
-                              stroke: px(1),
-                              color: brandDeep,
-                              lower: false,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(width: heroGap),
-                    SizedBox(
-                      width: rightW,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'STORE DIARY',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: posterSerif(fs(9), color: ink3, letterSpacing: px(4)),
-                          ),
-                          // 金色短线 + 菱形
-                          SizedBox(
-                            height: px(8),
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                Positioned(
-                                  left: px(3.5),
-                                  top: px(3.5),
-                                  child: Container(width: px(34), height: px(1), color: brand),
-                                ),
-                                Positioned(
-                                  left: 0,
-                                  top: 0,
-                                  child: Transform.rotate(
-                                    angle: math.pi / 4,
-                                    child: Container(
-                                      width: px(7),
-                                      height: px(7),
-                                      decoration: BoxDecoration(
-                                        color: surface,
-                                        border: Border.all(color: brand, width: px(1)),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
+          Padding(
+            padding: EdgeInsets.fromLTRB(padH, px(32), padH, px(28)),
+            child: ConstrainedBox(
+              // m4.html 画布 min-height:820（随 520 宽等比缩放），保证底部留白
+              constraints: BoxConstraints(minHeight: px(820)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 上排：左大图 + 右信息列
+                  SizedBox(
+                    height: bigH,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(
+                          width: leftW,
+                          child: Stack(
                             children: [
-                              SizedBox(height: px(16)),
-                              Text(
-                                d.title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: posterSerif(
-                                  fs(40),
-                                  color: ink,
-                                  letterSpacing: px(7),
-                                  height: 1.15,
-                                  weight: FontWeight.w600,
+                              d.photoBuilder(leftW, bigH),
+                              Positioned(
+                                top: 0,
+                                left: 0,
+                                child: _bracket(
+                                  size: px(16),
+                                  stroke: px(1),
+                                  color: brandDeep,
+                                  lower: false,
                                 ),
                               ),
-                              if (d.rating > 0) ...[
-                                SizedBox(height: px(14)),
-                                Text(
-                                  _starsText(d.rating),
-                                  style: posterSerif(
-                                    fs(13),
-                                    color: brand,
-                                    letterSpacing: px(2),
-                                  ),
-                                ),
-                                SizedBox(height: px(2)),
-                                Text(
-                                  d.rating.toStringAsFixed(1),
-                                  style: posterSerif(
-                                    fs(24),
-                                    color: brandDeep,
-                                    weight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                              if (d.place.isNotEmpty || d.dateText.isNotEmpty) ...[
-                                SizedBox(height: px(14)),
-                                Text(
-                                  [
-                                    if (d.place.isNotEmpty) d.place,
-                                    if (d.dateText.isNotEmpty) d.dateText,
-                                  ].join('\n'),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: posterSerif(
-                                    fs(11),
-                                    color: ink2,
-                                    letterSpacing: px(1),
-                                    height: 1.9,
-                                  ),
-                                ),
-                              ],
-                              if (d.category.isNotEmpty) ...[
-                                SizedBox(height: px(6)),
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: px(12),
-                                    vertical: px(2),
-                                  ),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: brand, width: px(1)),
-                                  ),
-                                  child: Text(
-                                    d.category,
-                                    style: posterSerif(
-                                      fs(10),
-                                      color: brandDeep,
-                                      letterSpacing: px(3),
-                                    ),
-                                  ),
-                                ),
-                              ],
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (thumbs.isNotEmpty) ...[
-                SizedBox(height: px(22)),
-                // 下排：错落四格
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (var i = 0; i < gCount; i++) ...[
-                      if (i > 0) SizedBox(width: gGap),
-                      Padding(
-                        padding: EdgeInsets.only(top: gOff[i % 4]),
-                        child: i < gImg
-                            ? Stack(
+                        ),
+                        SizedBox(width: heroGap),
+                        SizedBox(
+                          width: rightW,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // 顶部信息组：眉题 + 短线菱形 + 店名（对齐 m4.html 靠上排版）
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  SizedBox(
-                                    width: gW,
-                                    height: px(120),
-                                    child: thumbs[i](gW, px(120)),
+                                  Text(
+                                    'STORE DIARY · NO.001',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: posterSerif(fs(9),
+                                        color: ink3,
+                                        letterSpacing: px(4),
+                                        weight: FontWeight.w400),
                                   ),
-                                  Positioned(
-                                    top: 0,
-                                    left: 0,
-                                    child: _bracket(
-                                      size: px(12),
-                                      stroke: px(1),
-                                      color: brandDeep,
-                                      lower: false,
+                                  // 金色短线 + 菱形
+                                  SizedBox(
+                                    height: px(8),
+                                    child: Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        Positioned(
+                                          left: px(3.5),
+                                          top: px(3.5),
+                                          child: Container(
+                                              width: px(34),
+                                              height: px(1),
+                                              color: brand),
+                                        ),
+                                        Positioned(
+                                          left: 0,
+                                          top: 0,
+                                          child: Transform.rotate(
+                                            angle: math.pi / 4,
+                                            child: Container(
+                                              width: px(7),
+                                              height: px(7),
+                                              decoration: BoxDecoration(
+                                                color: surface,
+                                                border: Border.all(
+                                                    color: brand, width: px(1)),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  SizedBox(height: px(16)),
+                                  Text(
+                                    d.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: posterSerif(
+                                      fs(40),
+                                      color: ink,
+                                      letterSpacing: px(7),
+                                      height: 1.15,
+                                      weight: FontWeight.w600,
                                     ),
                                   ),
                                 ],
-                              )
-                            : Container(
-                                width: gW,
-                                height: px(120),
-                                decoration: BoxDecoration(
-                                  color: surface,
-                                  border: Border.all(color: brand, width: px(1)),
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
+                              ),
+                              // 底部信息组：评分 + 地址/日期 + 分类标签（spaceBetween 沉到底部）
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (d.rating > 0) ...[
                                     Text(
-                                      '＋',
+                                      _starsText(d.rating),
                                       style: posterSerif(
-                                        fs(24),
-                                        color: brandDeep,
+                                        fs(13),
+                                        color: brand,
+                                        letterSpacing: px(2),
                                         weight: FontWeight.w400,
                                       ),
                                     ),
                                     SizedBox(height: px(2)),
                                     Text(
-                                      '更多',
+                                      d.rating.toStringAsFixed(1),
                                       style: posterSerif(
-                                        fs(11),
+                                        fs(24),
                                         color: brandDeep,
-                                        letterSpacing: px(2),
+                                        weight: FontWeight.w600,
                                       ),
                                     ),
                                   ],
-                                ),
+                                  if (d.place.isNotEmpty ||
+                                      d.dateText.isNotEmpty) ...[
+                                    SizedBox(height: px(14)),
+                                    Text(
+                                      [
+                                        if (d.place.isNotEmpty) d.place,
+                                        if (d.dateText.isNotEmpty) d.dateText,
+                                      ].join('\n'),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: posterSerif(
+                                        fs(11),
+                                        color: ink2,
+                                        letterSpacing: px(1),
+                                        height: 1.9,
+                                        weight: FontWeight.w400,
+                                      ),
+                                    ),
+                                  ],
+                                  if (d.category.isNotEmpty) ...[
+                                    SizedBox(height: px(6)),
+                                    Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: px(12),
+                                        vertical: px(2),
+                                      ),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                            color: brand, width: px(1)),
+                                      ),
+                                      child: Text(
+                                        d.category,
+                                        style: posterSerif(
+                                          fs(10),
+                                          color: brandDeep,
+                                          letterSpacing: px(3),
+                                          weight: FontWeight.w400,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-              if (d.note.isNotEmpty) ...[
-                SizedBox(height: px(24)),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: px(2), vertical: px(14)),
-                  child: Text(
-                    d.note,
-                    textAlign: TextAlign.justify,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: posterSerif(fs(13), color: ink2, height: 2.1)
-                        .copyWith(fontStyle: FontStyle.italic),
-                  ),
-                ),
-              ],
-              SizedBox(height: px(22)),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(
-                            text: '如画 · 探店足迹 ',
-                            style: posterSerif(
-                              fs(11),
-                              color: brandDeep,
-                              letterSpacing: px(4),
-                            ),
+                            ],
                           ),
-                          TextSpan(
-                            text: 'LUMIRA',
-                            style: posterSerif(
-                              fs(9),
-                              color: ink3,
-                              letterSpacing: px(2),
-                            ),
-                          ),
-                        ],
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
                   ),
-                  Text(
-                    'LUMIRA · 如画',
-                    style: posterSerif(fs(10), color: ink3, letterSpacing: px(3)),
+                  if (thumbs.isNotEmpty) ...[
+                    SizedBox(height: px(22)),
+                    // 下排：错落四格
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (var i = 0; i < gCount; i++) ...[
+                          if (i > 0) SizedBox(width: gGap),
+                          Padding(
+                            padding: EdgeInsets.only(top: gOff[i % 4]),
+                            child: i < gImg
+                                ? Stack(
+                                    children: [
+                                      SizedBox(
+                                        width: gW,
+                                        height: px(120),
+                                        child: thumbs[i](gW, px(120)),
+                                      ),
+                                      Positioned(
+                                        top: 0,
+                                        left: 0,
+                                        child: _bracket(
+                                          size: px(12),
+                                          stroke: px(1),
+                                          color: brandDeep,
+                                          lower: false,
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : Container(
+                                    width: gW,
+                                    height: px(120),
+                                    decoration: BoxDecoration(
+                                      color: surface,
+                                      border: Border.all(
+                                          color: brand, width: px(1)),
+                                    ),
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          '＋',
+                                          style: posterSerif(
+                                            fs(24),
+                                            color: brandDeep,
+                                            weight: FontWeight.w400,
+                                          ),
+                                        ),
+                                        SizedBox(height: px(2)),
+                                        Text(
+                                          '更多',
+                                          style: posterSerif(
+                                            fs(11),
+                                            color: brandDeep,
+                                            letterSpacing: px(2),
+                                            weight: FontWeight.w400,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                  if (d.note.isNotEmpty) ...[
+                    SizedBox(height: px(24)),
+                    // 心得块：上下金色发丝线包裹斜体文案（对齐 m4.html .note）
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: px(2), vertical: px(14)),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(color: hair, width: px(1)),
+                          bottom: BorderSide(color: hair, width: px(1)),
+                        ),
+                      ),
+                      child: Text(
+                        d.note,
+                        textAlign: TextAlign.justify,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: posterSerif(fs(13),
+                                color: ink2,
+                                height: 2.1,
+                                weight: FontWeight.w400)
+                            .copyWith(fontStyle: FontStyle.italic),
+                      ),
+                    ),
+                  ],
+                  SizedBox(height: px(22)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: '如画 · 探店足迹 ',
+                                style: posterSerif(
+                                  fs(11),
+                                  color: brandDeep,
+                                  letterSpacing: px(4),
+                                  weight: FontWeight.w400,
+                                ),
+                              ),
+                              TextSpan(
+                                text: 'LUMIRA',
+                                style: posterSerif(
+                                  fs(9),
+                                  color: ink3,
+                                  letterSpacing: px(2),
+                                  weight: FontWeight.w400,
+                                ),
+                              ),
+                            ],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        'LUMIRA · 如画',
+                        style: posterSerif(fs(10),
+                            color: ink3,
+                            letterSpacing: px(3),
+                            weight: FontWeight.w400),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ],
       ),

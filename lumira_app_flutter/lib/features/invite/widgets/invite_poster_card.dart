@@ -7,8 +7,16 @@ import '../../../shared/widgets/poster/poster_common.dart';
 
 // ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables
 
-/// 顶部装饰图带内置资源（固定横图，Export 稳定，不依赖网络）。
-const String invitePosterArtwork = 'assets/images/templates/golden_landscape.jpg';
+/// 顶部装饰图带候选封面组（内置资源，Export 稳定，不依赖网络）。
+/// 每次打开随机取一张，保证同一张海报预览与导出用同一张图。
+const List<String> invitePosterArtworks = [
+  'assets/images/templates/golden_landscape.jpg',
+  'assets/images/templates/epic_valley.jpg',
+  'assets/images/templates/epic_sea.jpg',
+  'assets/images/templates/mountain_dawn.jpg',
+  'assets/images/templates/fresh_lake.jpg',
+  'assets/images/templates/sunset_silhouette.jpg',
+];
 
 /// 情绪文案一对（主句 / 副句）。
 class EmoOption {
@@ -43,6 +51,8 @@ class InvitePosterCard extends StatefulWidget {
 
 class _InvitePosterCardState extends State<InvitePosterCard> {
   late final EmoOption _emo = inviteEmoOptions[Random().nextInt(inviteEmoOptions.length)];
+  late final String _artwork =
+      invitePosterArtworks[Random().nextInt(invitePosterArtworks.length)];
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +63,7 @@ class _InvitePosterCardState extends State<InvitePosterCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _ArtworkBand(),
+          _ArtworkBand(image: _artwork),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 14),
@@ -79,9 +89,10 @@ class _InvitePosterCardState extends State<InvitePosterCard> {
   }
 }
 
-/// 顶部图片装饰带：满宽金色风景 + 底部渐变换 + 左上纯文字品牌标。
+/// 顶部图片装饰带：满宽风景封面 + 底部渐变换 + 左上纯文字品牌标。
 class _ArtworkBand extends StatelessWidget {
-  const _ArtworkBand();
+  const _ArtworkBand({required this.image});
+  final String image;
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +101,7 @@ class _ArtworkBand extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset(invitePosterArtwork, fit: BoxFit.cover),
+          Image.asset(image, fit: BoxFit.cover),
           // 底部渐变换（surface 羽毛融进下方文字区）——叠加在图片上的过渡遮罩，
           // 属跨风格通用的「叠加视觉」例外，使用品牌 surface 色。
           const DecoratedBox(

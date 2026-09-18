@@ -69,6 +69,14 @@ class _SplashPageState extends ConsumerState<SplashPage> {
         _syncPendingQuestionnaire();
       }
     });
+    // 启动性能：合规版本由 main 后台异步读取后置 bootstrapDoneProvider=true。
+    // 至此 complianceAwaitingProvider 已就绪，才具备弹合规窗的前提；
+    // 直接依赖首帧后的 addPostFrameCallback 会在后台未就绪时漏判首启门控。
+    ref.listenManual<bool>(bootstrapDoneProvider, (previous, next) {
+      if (previous != true && next == true) {
+        _maybePresentCompliance();
+      }
+    });
   }
 
   @override

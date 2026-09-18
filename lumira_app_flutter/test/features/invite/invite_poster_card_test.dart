@@ -43,10 +43,10 @@ void main() {
       expect(find.text(t), findsOneWidget);
     }
 
-    // 顶部装饰图带（固定内置资源）
+    // 顶部装饰图带（随机取自内置封面候选组）
     final img = tester.widget<Image>(find.byType(Image));
     expect(img.image, isA<AssetImage>());
-    expect((img.image as AssetImage).assetName, invitePosterArtwork);
+    expect(invitePosterArtworks, contains((img.image as AssetImage).assetName));
 
     // 邀请码与二维码（PosterQr 真编码）
     expect(find.text('LUMIRA-7K2A'), findsOneWidget);

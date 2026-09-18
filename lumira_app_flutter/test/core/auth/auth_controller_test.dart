@@ -100,6 +100,8 @@ void main() {
       );
       await ctrl.bootstrap();
       ctrl.invalidateRegistration();
+      // _dao 现为惰性 Future，清 token 在后台微任务中执行，先让其跑完再断言库内状态
+      await Future<void>.delayed(Duration.zero);
       expect(ctrl.state.status, AuthStatus.fresh);
       expect(ctrl.state.token, isNull);
       // 只清 token，不清 deviceId：重注册沿用原 deviceId，避免后端误判新设备丢数据
