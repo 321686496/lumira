@@ -44,6 +44,8 @@ interface SilhouettePreviewProps {
   rotation: number;
   aspectRatio: string;
   cropRatio?: string;
+  /** 背景效果图（姿势图）：传入后在剪影下层显示该姿势对应的照片 */
+  backgroundUrl?: string | null;
   onPositionChange: (x: number, y: number) => void;
   onScaleChange: (scale: number) => void;
   onRotationChange: (rotation: number) => void;
@@ -58,6 +60,7 @@ export default function SilhouettePreview({
   rotation,
   aspectRatio,
   cropRatio,
+  backgroundUrl,
   onPositionChange,
   onScaleChange,
   onRotationChange,
@@ -128,17 +131,29 @@ export default function SilhouettePreview({
               className="relative overflow-hidden bg-[#14151a]"
               style={{ width: '100%', aspectRatio: String(ratio) }}
             >
+              {/* 背景姿势图（透明底剪影下方显示该姿势对应照片） */}
+              {backgroundUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={backgroundUrl}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-cover"
+                  draggable={false}
+                />
+              )}
               {/* 占位网格背景 */}
               <div className="absolute inset-0 opacity-20">
                 <div className="absolute left-1/2 top-0 bottom-0 border-l border-white/30" />
                 <div className="absolute top-1/2 left-0 right-0 border-t border-white/30" />
               </div>
 
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center text-muted-foreground/30 pointer-events-none">
-                  <p className="text-[10px]">取景区域 {effectiveRatio}</p>
+              {!backgroundUrl && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-center text-muted-foreground/30 pointer-events-none">
+                    <p className="text-[10px]">取景区域 {effectiveRatio}</p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {silhouetteUrl && (
                 <div

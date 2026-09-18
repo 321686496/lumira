@@ -15,6 +15,52 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
+/**
+ * 全局生图并发闸门：批量姿势图（锚点 + 最多 5 个依赖图）会被同时发起，
+ * 而多数生图厂商对并发生图存在并发/速率限制（过量会 429/排队 → 表现为“生成两张后卡住”）。
+ * 这里把对上游的实际生图请求收敛到并发 ≤ 2，避免打爆上游而卡死。
+ */
+const AI_IMAGE_CONCURRENCY = 2;
+
+class Semaphore {
+  private active = 0;
+  private readonly waiters: Array<() => void> = [];
+  constructor(private readonly limit: number) {}
+
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    await this.acquire();
+    try {
+      return await fn();
+    } finally {
+      this.release();
+    }
+  }
+
+  private acquire(): Promise<void> {
+    if (this.active < this.limit) {
+      this.active += 1;
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      this.waiters.push(() => {
+        this.active += 1;
+        resolve();
+      });
+    });
+  }
+
+  private release(): void {
+    const next = this.waiters.shift();
+    if (next) {
+      next();
+    } else {
+      this.active -= 1;
+    }
+  }
+}
+
+const imageSemaphore = new Semaphore(AI_IMAGE_CONCURRENCY);
+
 /** 草稿顶层 composition.aspectRatio 提取（缺失/非字符串 → undefined，mapSize 内兜底 1:1） */
 function extractAspectRatio(draft: Record<string, unknown>): string | undefined {
   const composition = draft.composition;
@@ -56,11 +102,12 @@ export class AiGenerateImageService {
     //    + 按厂商映射尺寸 → 生图（有参考图时 doubao/openai 走图生图）
     const rawPrompt = buildImagePrompt(draft, extraPrompt);
     const { prompt } = await polishPrompt(cfg.text, rawPrompt);
-    return generateImage(cfg.image, {
+    // 网络生图（含 qwen 异步轮询/结果下载）纳入全局并发闸门，避免并发打爆上游厂商
+    return imageSemaphore.run(() => generateImage(cfg.image, {
       prompt,
       size: mapSize(cfg.image.provider, extractAspectRatio(draft)),
       referenceBase64: reference?.buffer.toString('base64'),
       referenceMime: reference?.mimetype,
-    });
+    }));
   }
 }
