@@ -909,6 +909,9 @@ static napi_value UpdatePreviewFxParams(napi_env env, napi_callback_info info) {
     return nullptr;
   }
   if (!g.running.load(std::memory_order_relaxed)) {
+    // DIAG(2026-09-18)：管线未运行时此处静默忽略——打印一次，便于区分
+    // 「Dart 未推送」与「管线未创建」（后者无 pipeline ready 日志 + 本日志）。
+    FX_LOG("updatePreviewFxParams ignored: pipeline not running");
     return nullptr; // 管线不存在：安静忽略（如录像模式/初始化竞态）
   }
 
@@ -958,6 +961,21 @@ static napi_value UpdatePreviewFxParams(napi_env env, napi_callback_info info) {
   if (p.sharpen > 6.0f) p.sharpen = 6.0f;
   if (p.sharpen < 0.0f) p.sharpen = 0.0f;
   p.grain = (float)(grain / 100.0);
+
+  // DIAG(2026-09-18 前置WB排查)：记录每次参数下发，确认 Dart→原生推送是否到达。
+  // 矩阵值（mR0[0] 应含 frontWbCompensation 的 R 增益，如 0.5）可据此验证注入链。
+  if (hasMatrix) {
+    FX_LOG("updatePreviewFxParams hasMatrix=1 mR0=[%{public}.3f %{public}.3f %{public}.3f "
+           "%{public}.3f] bias=[%{public}.3f %{public}.3f %{public}.3f] "
+           "vig=%{public}.2f smooth=%{public}.2f sharpen=%{public}.2f grain=%{public}.2f",
+           p.mR0[0], p.mR0[1], p.mR0[2], p.mR0[3],
+           p.bias[0], p.bias[1], p.bias[2],
+           p.vignette, p.smooth, p.sharpen, p.grain);
+  } else {
+    FX_LOG("updatePreviewFxParams hasMatrix=0 vig=%{public}.2f smooth=%{public}.2f "
+           "sharpen=%{public}.2f grain=%{public}.2f",
+           p.vignette, p.smooth, p.sharpen, p.grain);
+  }
 
   {
     std::lock_guard<std::mutex> pl(g.paramMtx);

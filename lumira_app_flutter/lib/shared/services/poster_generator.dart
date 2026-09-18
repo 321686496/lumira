@@ -140,7 +140,13 @@ Future<ui.Image?> _capturePosterImage(OverlayState? overlay, Widget poster) asyn
     builder: (ctx) => Positioned(
       left: 30000, // 移到屏幕外，避免渲染瞬间闪现
       top: 0,
-      child: RepaintBoundary(key: renderKey, child: poster),
+      child: RepaintBoundary(
+        key: renderKey,
+        // 离屏 Overlay 无 Material/Scaffold 祖先，海报样式内嵌的 Text 拿不到
+        // DefaultTextStyle 上下文（部分引擎表现为文字下方出现黄色双下划线）。
+        // 包透明 Material 提供默认文本样式，不影响透明背景与捕获结果。
+        child: Material(type: MaterialType.transparency, child: poster),
+      ),
     ),
   );
   overlay.insert(entry);

@@ -11,6 +11,7 @@ import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/capture/data/capture_state.dart';
 import 'package:lumira_app_flutter/features/capture/pages/capture_preview_template_page.dart';
+import 'package:lumira_app_flutter/features/capture/services/white_balance.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/camera_preview.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/capture_bottom_controls.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/capture_nav.dart';
@@ -114,6 +115,59 @@ void main() {
 
   const tplQuery =
       '/capture/preview-template?${RouteNames.paramTemplateId}=tpl-cafe-portrait';
+
+  /// 从 /home push 进入预览页，返回页面所在 ProviderContainer（用于直接写 provider
+  /// 模拟用户调整 + 读取回写结果）。
+  Future<ProviderContainer> openPreviewAndGetContainer(
+    WidgetTester tester,
+  ) async {
+    setLargeViewport(tester);
+    final goRouter = GoRouter(
+      initialLocation: '/home',
+      routes: [
+        GoRoute(
+          path: '/home',
+          name: 'home',
+          builder: (_, __) => const _StubPage(text: 'HOME_PAGE'),
+        ),
+        GoRoute(
+          path: RouteNames.capturePreviewTemplate,
+          name: 'capturePreviewTemplate',
+          builder: (context, state) {
+            final templateId = state.queryParams[RouteNames.paramTemplateId];
+            final draftId = state.queryParams['draftId'];
+            return CapturePreviewTemplatePage(
+              templateId: templateId,
+              draftId: draftId,
+            );
+          },
+        ),
+      ],
+    );
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
+        uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
+        cameraPreviewOverrideProvider.overrideWithValue(
+          const ColoredBox(
+            color: Color(0xFF181614),
+            child: SizedBox.expand(),
+          ),
+        ),
+      ],
+      child: MaterialApp.router(routerConfig: goRouter),
+    ));
+    await settleOrPump(tester, UIStyle.neumorphic);
+
+    goRouter.push(tplQuery);
+    await settleOrPump(tester, UIStyle.neumorphic);
+    expect(find.byType(CapturePreviewTemplatePage), findsOneWidget);
+
+    return ProviderScope.containerOf(
+      tester.element(find.byType(CapturePreviewTemplatePage)),
+      listen: false,
+    );
+  }
 
   // ============================================================
   // 分类 1: 路由参数加载
@@ -362,7 +416,120 @@ void main() {
   });
 
   // ============================================================
-  // 分类 5: Cross-theme/cross-style smoke
+  // 分类 5: 松散会话参数（比例/前后置/闪光灯/白平衡/补光）同步写回
+  // ============================================================
+  group('CapturePreviewTemplatePage — session params sync write-back', () {
+    testWidgets('aspect ratio change syncs to composition.aspectRatio and cropRatio',
+        (tester) async {
+      final container = await openPreviewAndGetContainer(tester);
+
+      // 模拟用户在预览页切换比例（写 aspectRatioProvider，与 CaptureTopPillBar 一致）
+      container.read(CaptureState.aspectRatioProvider.notifier).state = '1:1';
+
+      await tester.tap(find.text('同步到编辑器'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      expect(find.byType(CapturePreviewTemplatePage), findsNothing);
+
+      final merged = container.read(previewEditorFormProvider);
+      expect(merged, isNotNull);
+      expect(merged!.composition.aspectRatio, '1:1');
+      expect(merged.postProcess.cropRatio, '1:1');
+    });
+
+    testWidgets('flash mode change syncs to camera.flashMode', (tester) async {
+      final container = await openPreviewAndGetContainer(tester);
+
+      // 模拟用户开启常亮闪光（写 flashModeProvider，与顶部导航切换一致）
+      container
+          .read(CaptureState.flashModeProvider.notifier)
+          .state = CaptureFlashMode.torch;
+
+      await tester.tap(find.text('同步到编辑器'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      final merged = container.read(previewEditorFormProvider);
+      expect(merged!.camera.flashMode, 'torch');
+    });
+
+    testWidgets('white balance change syncs mode and temperatureK',
+        (tester) async {
+      final container = await openPreviewAndGetContainer(tester);
+
+      // 模拟用户把白平衡从 daylight 切到 cloudy（写 whiteBalanceSessionProvider）
+      container.read(whiteBalanceSessionProvider.notifier).state =
+          const WhiteBalanceSettings(
+        mode: WhiteBalanceMode.cloudy,
+        temperatureK: 6500,
+      );
+
+      await tester.tap(find.text('同步到编辑器'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      final merged = container.read(previewEditorFormProvider);
+      expect(merged!.camera.whiteBalance, 'cloudy');
+      expect(merged.camera.whiteBalanceK, 6500);
+    });
+
+    testWidgets('fill light enable syncs color and intensity', (tester) async {
+      final container = await openPreviewAndGetContainer(tester);
+
+      // 模拟用户在预览页开启补光并调色/调强度
+      container.read(CaptureState.fillLightEnabledProvider.notifier).state = true;
+      container.read(CaptureState.fillLightColorProvider.notifier).state =
+          const Color(0xFFFFB3C1);
+      container
+          .read(CaptureState.fillLightIntensityProvider.notifier)
+          .state = 1.0;
+
+      await tester.tap(find.text('同步到编辑器'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      final merged = container.read(previewEditorFormProvider);
+      expect(merged!.fillLight, isNotNull);
+      expect(merged.fillLight!.enabled, isTrue);
+      expect(merged.fillLight!.color, 0xFFFFB3C1);
+      expect(merged.fillLight!.intensity, 1.0);
+    });
+
+    testWidgets('manual camera switch syncs current pose cameraDirection',
+        (tester) async {
+      final container = await openPreviewAndGetContainer(tester);
+
+      // 点击底部工具栏的摄像头切换按钮（走页面 _switchCamera，记录手动切换）
+      await tester.tap(find.byIcon(Icons.cameraswitch_outlined));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      expect(container.read(CaptureState.cameraFacingProvider), 'front');
+
+      await tester.tap(find.text('同步到编辑器'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      final merged = container.read(previewEditorFormProvider);
+      expect(merged!.poses, isNotEmpty);
+      expect(merged.poses.first.cameraDirection, 'front');
+    });
+
+    testWidgets('sync without touching keeps template baseline values',
+        (tester) async {
+      final container = await openPreviewAndGetContainer(tester);
+
+      // 不做任何调整直接同步：比例/闪光/白平衡应保持表单原值
+      await tester.tap(find.text('同步到编辑器'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      final merged = container.read(previewEditorFormProvider);
+      expect(merged, isNotNull);
+      expect(merged!.camera.whiteBalance, 'daylight');
+      expect(merged.camera.whiteBalanceK, 5500);
+      expect(merged.camera.flashMode, 'off');
+      expect(merged.composition.aspectRatio, '3:4');
+      expect(merged.postProcess.cropRatio, '3:4');
+      // 姿势方向未被手动切换 → 保持表单原值（null）
+      expect(merged.poses.first.cameraDirection, isNull);
+    });
+  });
+
+  // ============================================================
+  // 分类 6: Cross-theme/cross-style smoke
   // ============================================================
   group('CapturePreviewTemplatePage — smoke tests', () {
     testWidgets('renders without FlutterError under 8 themes + 4 styles',

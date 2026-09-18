@@ -89,3 +89,29 @@ Future<void> refreshWbResidual(WidgetRef ref) async {
     debugPrint('[wb] getWbResidual failed: $e');
   }
 }
+
+/// OHOS 前置摄像头预设白平衡的「软件色彩补偿」（R/G/B 对角增益，返回 null 表示不补偿）。
+///
+/// 根因：OHOS 前置摄像头对各预设档位的 ISP 预设增益渲染与后置不同——
+/// `setWhiteBalanceMode` 实际生效但画面仍偏色（前置尤其偏红）；前置 MANUAL
+/// 色温不可用（`getWhiteBalanceRange` 返回 undefined，全部回退预设模式），
+/// 唯一可行方案是软件矩阵修正。补偿与 [wbResidualSessionProvider] 同机制：
+/// 由 `CaptureState.effectivePostProcessProvider` 按「OHOS + 前置 + 非 auto」
+/// 注入 `PostProcess.frontWbCompensation`，作用于取景器 FX 矩阵与成片矩阵
+/// 同层（最内层对角增益，两处同源一致）。
+///
+/// 当前各档位统一按「抵消前置偏红」起步（R×0.90 / B×1.10，约抵消 10% 偏红）；
+/// 真机逐档位实测后若各档偏色程度不同，再在下方 switch 分档位微调。
+WbResidual? ohosFrontWhiteBalanceCompensation(WhiteBalanceMode mode) {
+  switch (mode) {
+    case WhiteBalanceMode.auto:
+      // auto 不修正（用户未反馈 auto 偏色）
+      return null;
+    case WhiteBalanceMode.daylight:
+    case WhiteBalanceMode.cloudy:
+    case WhiteBalanceMode.fluorescent:
+    case WhiteBalanceMode.incandescent:
+      // TEMP-DIAG: 强补偿用于真机验证管线是否真正应用矩阵（R×0.5/B×2.0）。
+      return const WbResidual(r: 0.5, g: 1.0, b: 2.0);
+  }
+}

@@ -744,6 +744,16 @@ class PostProcess {
   /// 处理」与首次成片一致。
   final WbResidual? wbResidual;
 
+  /// OHOS 前置摄像头预设白平衡「软件色彩补偿」（R/G/B 对角增益，见 [WbResidual]）。
+  ///
+  /// 根因：OHOS 前置摄像头对各预设档位的 ISP 预设增益渲染与后置不同，
+  /// `setWhiteBalanceMode` 实际生效但画面仍偏色（前置 MANUAL 色温不可用，
+  /// 全部回退预设模式），唯一可行方案是软件矩阵补偿。由
+  /// `effectivePostProcessProvider` 按「OHOS + 前置 + 非 auto 档位」注入，
+  /// 与 wbResidual 同层（最内层对角增益，取景器 FX 矩阵与成片矩阵同源一致），
+  /// 拍照时刻随 JSON 持久化，保证编辑页「从原图重新处理」与首次成片一致。
+  final WbResidual? frontWbCompensation;
+
   /// 拍摄镜头朝向（'front' / 'back'，null 视为 'back'，旧记录兼容）。
   ///
   /// 原图备份（originalPath）是 sensor 原始 JPEG：横屏、前置未镜像。编辑页
@@ -765,6 +775,7 @@ class PostProcess {
     this.customCropRect,
     this.fillLight,
     this.wbResidual,
+    this.frontWbCompensation,
     this.facing,
   });
 
@@ -784,6 +795,7 @@ class PostProcess {
     Object? customCropRect = _unset,
     Object? fillLight = _unset,
     Object? wbResidual = _unset,
+    Object? frontWbCompensation = _unset,
     String? facing,
   }) =>
       PostProcess(
@@ -807,6 +819,9 @@ class PostProcess {
         wbResidual: identical(wbResidual, _unset)
             ? this.wbResidual
             : wbResidual as WbResidual?,
+        frontWbCompensation: identical(frontWbCompensation, _unset)
+            ? this.frontWbCompensation
+            : frontWbCompensation as WbResidual?,
         facing: facing ?? this.facing,
       );
 
@@ -826,12 +841,13 @@ class PostProcess {
           customCropRect == other.customCropRect &&
           fillLight == other.fillLight &&
           wbResidual == other.wbResidual &&
+          frontWbCompensation == other.frontWbCompensation &&
           facing == other.facing;
 
   @override
   int get hashCode => Object.hash(cropRatio, color, smoothStrength, sharpen,
       vignette, grain, legStretch, lut, systemFilter, customCropRect, fillLight,
-      wbResidual, facing);
+      wbResidual, frontWbCompensation, facing);
 
   Map<String, dynamic> toJson() => {
         'cropRatio': cropRatio,
@@ -850,6 +866,15 @@ class PostProcess {
         // 首次成片一致；旧记录无此字段 → null（无软件补足，向后兼容）。
         if (wbResidual != null)
           'wbResidual': {'r': wbResidual!.r, 'g': wbResidual!.g, 'b': wbResidual!.b},
+        // OHOS 前置白平衡软件补偿随 JSON 持久化（同 wbResidual 语义：拍照时刻
+        // 补偿记录的固有属性），保证编辑页「从原图重新处理」与首次成片一致；
+        // 旧记录无此字段 → null（无补偿，向后兼容）。
+        if (frontWbCompensation != null)
+          'frontWbCompensation': {
+            'r': frontWbCompensation!.r,
+            'g': frontWbCompensation!.g,
+            'b': frontWbCompensation!.b,
+          },
         // 前置/后置随 JSON 持久化：编辑页「从原图重新处理」据此补做前置镜像
         if (facing != null) 'facing': facing,
       };
@@ -876,6 +901,8 @@ class PostProcess {
         // 残差为会话态：增量带新残差用增量（重新拉取过），否则保留烘焙值，
         // 保证「编辑页保存→从原图重新处理」时硬件封顶削减的部分仍被补足。
         wbResidual: delta.wbResidual ?? wbResidual,
+        // 前置白平衡补偿同理为拍照时刻记录：增量带新补偿用增量，否则保留烘焙值。
+        frontWbCompensation: delta.frontWbCompensation ?? frontWbCompensation,
         // facing 为拍照时刻元数据（非增量可调项）：保留烘焙值。
         facing: delta.facing ?? facing,
       );
@@ -899,6 +926,11 @@ class PostProcess {
         wbResidual: (json['wbResidual'] as Map<String, dynamic>?) != null
             ? WbResidual.fromJson(json['wbResidual'] as Map<String, dynamic>)
             : null,
+        frontWbCompensation:
+            (json['frontWbCompensation'] as Map<String, dynamic>?) != null
+                ? WbResidual.fromJson(
+                    json['frontWbCompensation'] as Map<String, dynamic>)
+                : null,
         facing: json['facing'] as String?,
       );
 }
