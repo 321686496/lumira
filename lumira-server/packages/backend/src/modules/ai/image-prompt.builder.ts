@@ -157,7 +157,23 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
     segments.push('不要合并多个姿势，不要生成连拍、多宫格或姿势对比图');
   }
 
-  // ⑧ 额外要求：用户显式补充的附加提示词（Step3 输入），置于末尾权重最高
+  // ⑧ 真实感约束：抑制 AI 生成痕迹，向真实相机实拍靠拢（人像额外强调人物真实）。
+  // 仅在已有真实草稿内容时追加；空草稿仍走兜底文案。
+  if (segments.length > 0) {
+    segments.push('真实相机直出的摄影质感，画面像实拍照片而非插画、3D 建模渲染或 AI 合成');
+    if (subject === 'portrait') {
+      segments.push(
+        '人物皮肤、五官、发丝与衣服纹理都要真实自然，身材比例和肢体动作贴合真实人体结构，表情松弛自然不做作',
+      );
+      segments.push(
+        '避免典型 AI 感：不过度磨皮或塑料感光滑皮肤，不夸张卡通化或锥子脸，不打光浮夸，不高饱和炫彩或镜面质感，不出现手部手指或肢体畸变，画面整体收敛、生活化',
+      );
+    } else if (subject) {
+      segments.push('避免典型 AI 感：不夸张色彩饱和度，不生硬打光，无塑料或镜面质感');
+    }
+  }
+
+  // ⑨ 额外要求：用户显式补充的附加提示词（Step3 输入），置于末尾权重最高
   const extra = typeof extraPrompt === 'string' ? extraPrompt.trim() : '';
   const allowInconsistentPose =
     consistency.mode === 'loose' || (extra.length > 0 && INCONSISTENT_POSE_PROMPT_PATTERN.test(extra));

@@ -1654,6 +1654,7 @@ export default function TemplateForm({
                         {poseSilhouettePreview(currentPose) && (
                           <SilhouettePreview
                             silhouetteUrl={poseSilhouettePreview(currentPose)!}
+                            backgroundUrl={imagePreviews[poseIndex] ?? null}
                             positionX={currentPose.positionX}
                             positionY={currentPose.positionY}
                             scale={currentPose.scale}
@@ -2205,7 +2206,7 @@ export default function TemplateForm({
       {(() => {
         const previewContent = (
           <PhonePreview
-            coverUrl={coverPreviewSrc}
+            coverUrl={imagePreviews[poseIndex] ?? coverPreviewSrc}
             silhouetteUrl={currentPose ? poseSilhouettePreview(currentPose) : null}
             silhouetteType={currentPose?.silhouetteType ?? 'builtin'}
             silhouetteBuiltinKey={currentPose?.silhouetteBuiltinKey ?? ''}

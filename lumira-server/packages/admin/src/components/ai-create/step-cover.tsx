@@ -10,6 +10,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { generateAiPoseImages } from '@/lib/ai-task';
 import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
@@ -17,6 +23,7 @@ import { ImageSquare } from '@phosphor-icons/react/dist/csr/ImageSquare';
 import { ArrowLeft } from '@phosphor-icons/react/dist/csr/ArrowLeft';
 import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
 import { X } from '@phosphor-icons/react/dist/csr/X';
+import { DownloadSimple } from '@phosphor-icons/react/dist/csr/DownloadSimple';
 import { cn } from '@/lib/utils';
 import { compressImage } from '@/lib/image-compress';
 
@@ -50,11 +57,26 @@ export function StepCover({
 }) {
   const { toast } = useToast();
   const [generating, setGenerating] = useState(false);
+  /** 预览放大：当前查看的候选索引（null = 关闭） */
+  const [viewIndex, setViewIndex] = useState<number | null>(null);
   /** 附加提示词：拼接到后端合成 prompt 末尾（用户对封面图的额外要求，权重最高） */
   const [extraPrompt, setExtraPrompt] = useState('');
   const referenceInputRef = useRef<HTMLInputElement>(null);
 
   const disabled = busy || generating;
+
+  /** 保存候选图到本地：优先用原始 File 生成 blob（objectURL 同源可下载） */
+  const downloadCandidate = (c: CoverCandidate) => {
+    const url = URL.createObjectURL(c.file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = c.file.name || `pose-${Date.now()}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: '已开始下载', description: c.file.name || '姿势图' });
+  };
+
+  const viewing = viewIndex != null ? candidates[viewIndex] : null;
 
   /** 将示例图置顶为封面候选 */
   const rollExampleToTop = () => {
@@ -268,8 +290,16 @@ export function StepCover({
                       封面
                     </span>
                   )}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={c.url} alt="封面候选" className="aspect-[3/4] w-full object-cover" />
+                  {/* 点击放大查看 */}
+                  <button
+                    type="button"
+                    className="block w-full cursor-zoom-in"
+                    onClick={() => setViewIndex(i)}
+                    aria-label={`放大查看第 ${i + 1} 张候选图`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={c.url} alt="封面候选" className="aspect-[3/4] w-full object-cover" />
+                  </button>
                 </div>
                 <div className="flex items-center justify-between border-t border-border bg-card px-1 py-1">
                   <div className="flex">
@@ -329,6 +359,39 @@ export function StepCover({
         <Button disabled={disabled || candidates.length === 0} onClick={() => onApply(candidates.map((c) => c.file))}>
           应用为封面 <ArrowRight size={14} className="ml-1" />
         </Button>
+
+        {/* 放大查看 + 保存到本地 */}
+        <Dialog open={viewing != null} onOpenChange={(open) => { if (!open) setViewIndex(null); }}>
+          <DialogContent className="max-w-3xl p-2">
+            <div className="flex items-center justify-between px-1 pt-1">
+              <DialogTitle className="sr-only">候选图放大预览</DialogTitle>
+              <DialogDescription className="sr-only">姿势图/封面候选图放大预览</DialogDescription>
+              <span className="text-sm text-muted-foreground">
+                {viewing && viewIndex != null ? `候选图 ${viewIndex + 1} / ${candidates.length}` : ''}
+              </span>
+              {viewing && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => downloadCandidate(viewing)}
+                >
+                  <DownloadSimple size={14} className="mr-1" /> 保存到本地
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center justify-center max-h-[80vh] overflow-hidden">
+              {viewing && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={viewing.url}
+                  alt="候选图"
+                  className="max-h-[80vh] w-auto object-contain rounded-md"
+                />
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );
