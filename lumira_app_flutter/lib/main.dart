@@ -8,10 +8,8 @@ import 'package:go_router/go_router.dart';
 
 import 'app/router.dart';
 import 'core/auth/auth_controller.dart';
-import 'core/auth/auth_dao.dart';
 import 'core/compliance/compliance_gate.dart';
 import 'core/config/app_config.dart';
-import 'core/db/dao/settings_dao.dart';
 import 'core/db/database_provider.dart';
 import 'core/startup/post_compliance_init.dart';
 import 'core/router/route_names.dart';
@@ -21,9 +19,10 @@ import 'core/theme/system_brightness_watcher.dart';
 import 'core/utils/safe_share.dart';
 import 'core/utils/share_reporter.dart';
 import 'features/capture/data/capture_state.dart';
+import 'features/gallery/data/diary_mock_seeder.dart';
+import 'features/gallery/providers/gallery_diary_providers.dart';
 import 'features/points/data/points_repository.dart';
 import 'features/profile/data/growth_models.dart';
-import 'features/profile/data/profile_dao.dart';
 import 'features/profile/data/profile_models.dart';
 import 'features/profile/services/growth_xp_provider.dart';
 import 'features/templates/services/template_import_service.dart';
@@ -93,6 +92,15 @@ void _reportFatal(Object error, StackTrace? stack) {
   );
 }
 
+/// 造数/清理后，让依赖相册表的页面（拍日记时间轴、打卡、统计）重新拉取。
+void _invalidateDiaryData(ProviderContainer container) {
+  container.invalidate(diaryEntriesProvider);
+  container.invalidate(diaryStreakProvider);
+  container.invalidate(diaryMonthlyStatsProvider);
+  container.invalidate(diaryTotalCountProvider);
+  container.invalidate(shootingCheckinProvider);
+}
+
 /// Bootstrap 失败时的兜底 UI。
 ///
 /// 原先 main() 在 runApp 之前会 await sqflite 初始化（_createBootstrapDaos），
@@ -158,43 +166,23 @@ Future<void> _bootstrapAndRun() async {
   // 横屏拍摄的适配不依赖整屏旋转，而是走加速度传感器（见 capture_page/level_sensor_service）：
   //   - 成片方向：横持手机时拍出的照片按原相机逻辑转 90° 成为横图；
   //   - 悬浮模板信息卡：横持时单独旋转该卡到可读角度，其余 UI 不变。
-  await SystemChrome.setPreferredOrientations([
+  // 启动性能：不 await 此项，避免阻塞首帧。
+  // ignore: unawaited_futures
+  SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
   ]);
 
-  // 1. 等待 sqflite 就绪并取出 AuthDao + UserProfileDao
-  final daos = await _createBootstrapDaos();
-
-  // 2. 创建 AuthController 并 bootstrap（从 sqflite 加载已存的 token/deviceId）
-  final authController = AuthController(
-    dao: daos.authDao,
-    resolveDeviceId: () => defaultResolveDeviceId(daos.authDao),
-    resolveOs: defaultResolveOs,
-    doRegister: _doRegister,
-    onRegistered: (result) async {
-      final profile = result.profile;
-      if (profile == null) return;
-      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      await daos.profileDao.upsert(profile, now);
-    },
-  );
-
-  await authController.bootstrap();
-
-  // 3. 判断是否待合规同意：本地已同意版本与当前合规版本不一致即需先征得同意、
-  //    在此之前不得联网/采集（注册、上报设备信息等全部延后到同意后由
-  //    runPostComplianceInit 执行）。
-  final awaitingCompliance =
-      await daos.settingsDao.getComplianceVersion() != complianceCurrentVersion;
-
-  // 4. 注入 authController 到全局 Provider，启动 app
+  // == 延迟首帧：不 await sqflite 打开/种子化，立刻构造容器并 runApp。
+  //    数据库打开、内置模板种子化、求快版本读取、auth bootstrap 全部挪到
+  //    [_initStartupAsync] 后台异步执行，Splash 首帧即刻渲染。
+  //    （AppGallery Connect 审核「启动加载完成时延 ≤1100ms」被此项阻塞导致超基准。）
   final container = ProviderContainer(
     overrides: [
-      authControllerProvider.overrideWith((ref) => authController),
+      authControllerProvider.overrideWith((ref) => _createAuthController(ref)),
     ],
   );
 
-  // 4.5 分享积分上报：调起系统分享即计分（每日首享 +2，幂等由后端保证）
+  // 分享积分上报：调起系统分享即计分（每日首享 +2，幂等由后端保证）
   ShareReporter.onShare = () async {
     try {
       final repo = await container.read(pointsRepositoryProvider.future);
@@ -217,7 +205,7 @@ Future<void> _bootstrapAndRun() async {
     }
   };
 
-  // 4.55 分享降级反馈：share_plus 不可用（鸿蒙）降级到剪贴板时，Toast 告知用户结果
+  // 分享降级反馈：share_plus 不可用（鸿蒙）降级到剪贴板时，Toast 告知用户结果
   SafeShare.onFallback = (message) {
     // 注意：不能用 Overlay.of(rootNavigatorKey.currentContext!)——Navigator 自身的
     // context 位于它创建的 Overlay 之上，向上查找会抛 "No Overlay widget found"。
@@ -227,23 +215,15 @@ Future<void> _bootstrapAndRun() async {
     LumiraToast.showWithOverlay(overlay, message);
   };
 
-  // 4.6 深链监听：冷启动链接 + 运行中链接
+  // 深链监听：冷启动链接 + 运行中链接
   // ignore: unawaited_futures
   DeepLinkService.instance.start(
     onTemplateLink: (link) => _handleTemplateLink(container, link),
   );
 
-  // 4.7 恢复持久化的主题与 UI 风格（写回 StateProvider，供首帧生效）
+  // 恢复持久化的主题与 UI 风格（内部异步读 DB，后台执行，不阻塞首帧）
   // ignore: unawaited_futures
   restoreThemePreferences(container);
-
-  // 5. 合规门控：若待同意，则注入 complianceAwaitingProvider=true，Splash 据其弹出
-  //    合规窗；同意前不做任何注册/采集/联网。已同意（非首启）则直接跑初始化链。
-  container.read(complianceAwaitingProvider.notifier).state = awaitingCompliance;
-  if (!awaitingCompliance) {
-    // ignore: unawaited_futures
-    runPostComplianceInit(container);
-  }
 
   runApp(
     UncontrolledProviderScope(
@@ -251,28 +231,73 @@ Future<void> _bootstrapAndRun() async {
       child: const MyApp(),
     ),
   );
+
+  // 后台初始化链：DB 打开(含首装种子化) → 合规版本 → auth bootstrap → 就绪标记。
+  // 交由 runZonedGuarded 捕获，任何异常都走 [_initStartupAsync] 内的兜底而非白屏。
+  // ignore: unawaited_futures
+  _initStartupAsync(container);
 }
 
-/// Bootstrap 阶段所需的 DAO 集合（Dart 2.19 无 records，用私有类承载）
-class _BootstrapDaos {
-  final AuthDao authDao;
-  final UserProfileDao profileDao;
-  final SettingsDao settingsDao;
-  const _BootstrapDaos({
-    required this.authDao,
-    required this.profileDao,
-    required this.settingsDao,
-  });
+/// 后台创建 AuthController：所有 DAO 依赖以惰性 Future 注入，
+/// 首个操作时才解析 sqflite（authDaoProvider.future 会触发 DB 打开/种子化）。
+AuthController _createAuthController(Ref ref) {
+  return AuthController(
+    dao: ref.read(authDaoProvider.future),
+    resolveDeviceId: () async =>
+        defaultResolveDeviceId(await ref.read(authDaoProvider.future)),
+    resolveOs: defaultResolveOs,
+    doRegister: _doRegister,
+    onRegistered: (result) async {
+      final profile = result.profile;
+      if (profile == null) return;
+      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final profileDao = await ref.read(userProfileDaoProvider.future);
+      await profileDao.upsert(profile, now);
+    },
+  );
 }
 
-/// 创建临时 ProviderContainer 用于 bootstrap 阶段读取 authDaoProvider / userProfileDaoProvider / settingsDaoProvider
-Future<_BootstrapDaos> _createBootstrapDaos() async {
-  final container = ProviderContainer();
-  await container.read(databaseProvider.future);
-  final authDao = await container.read(authDaoProvider.future);
-  final profileDao = await container.read(userProfileDaoProvider.future);
-  final settingsDao = await container.read(settingsDaoProvider.future);
-  return _BootstrapDaos(authDao: authDao, profileDao: profileDao, settingsDao: settingsDao);
+/// 启动后台初始化（fire-and-forget，不阻塞首帧）。
+///
+/// 顺序：确保 DB 打开（首装时在此完成内置模板种子化）→ 读合规版本 →
+/// auth bootstrap（loading→registered/fresh）→ 置 [bootstrapDoneProvider] 就绪 →
+/// 非待同意则跑 post-compliance 初始化链。
+Future<void> _initStartupAsync(ProviderContainer container) async {
+  try {
+    // 首装最耗时：openDatabase onCreate 全量种子化内置模板/分类/场景。
+    await container.read(databaseProvider.future);
+
+    // 展示图 mock：直接注入示例相片（拍日记时间轴 + 相册海报生成素材）。
+    // 幂等（已有 mock 则跳过），普通 flutter run 启动或热重启都能直接看到数据。
+    // 不再上架时由开发直接删除 mock 数据即可恢复（见 diary_mock_seeder.dart 的注解）。
+    // ignore: unawaited_futures
+    DiaryMockSeeder.seed(container).then((_) => _invalidateDiaryData(container));
+
+    // 合规门控：本地已同意版本与当前合规版本不一致即需先征得同意、
+    // 在此之前不得联网/采集（注册、上报设备信息等全部延后到同意后由
+    // runPostComplianceInit 执行）。
+    final settingsDao = await container.read(settingsDaoProvider.future);
+    final awaitingCompliance =
+        await settingsDao.getComplianceVersion() != complianceCurrentVersion;
+    container.read(complianceAwaitingProvider.notifier).state = awaitingCompliance;
+
+    // auth bootstrap：从 sqflite 加载已存的 token/deviceId
+    await container.read(authControllerProvider.notifier).bootstrap();
+
+    container.read(bootstrapDoneProvider.notifier).state = true;
+
+    // 已同意（非首启）直接跑初始化链
+    if (!awaitingCompliance) {
+      // ignore: unawaited_futures
+      runPostComplianceInit(container);
+    }
+  } catch (e, st) {
+    // 后台初始化失败：绝不白屏。记录日志，并把 auth 置为 failed 让 Splash 显示
+    // 「网络连接失败 + 重试」。同时标记就绪，避免 Splash 无限转圈。
+    _reportFatal(e, st);
+    container.read(authControllerProvider.notifier).markStartupFailed(e);
+    container.read(bootstrapDoneProvider.notifier).state = true;
+  }
 }
 
 /// 设备注册回调

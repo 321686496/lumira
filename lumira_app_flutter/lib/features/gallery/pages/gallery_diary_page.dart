@@ -414,6 +414,9 @@ class _MoodFilterRow extends StatelessWidget {
       height: 38,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
+        // Clip.none：让新拟态未选中 chip 的凸起外阴影能向下溢出到
+        // 38px 视口之外完整呈现，避免底部阴影被视口/下方内容卡截断。
+        clipBehavior: Clip.none,
         padding: const EdgeInsets.symmetric(horizontal: 24),
         itemCount: moods.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),

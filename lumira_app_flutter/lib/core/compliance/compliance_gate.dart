@@ -12,3 +12,9 @@ const String complianceCurrentVersion = '2026-08-24';
 /// 默认 false：由 main() 在启动时依据本地已同意版本与 [complianceCurrentVersion]
 /// 是否一致来设置；Splash 依据它决定是否弹出合规窗。
 final complianceAwaitingProvider = StateProvider<bool>((ref) => false);
+
+/// 启动后台初始化是否已完成。
+///
+/// 启动性能优化后，sqflite 打开/种子化与合规版本读取都在 runApp 之后异步执行；
+/// Splash 依赖此标志在正确时机弹合规窗，避免后台未就绪时漏掉首启合规门控。
+final bootstrapDoneProvider = StateProvider<bool>((ref) => false);

@@ -42,7 +42,10 @@ class RegisterResult {
 /// 2. 未注册时调用 /device/register 拿新 token
 /// 3. 401 失效时清除本地 token，下次启动重新注册
 class AuthController extends StateNotifier<AuthState> {
-  final AuthDaoLike _dao;
+  /// 惰性 DAO：构造时不 await 数据库，首个操作时再解析。
+  /// 让 AuthController 可在 sqflite 打开/种子化完成前同步构造，
+  /// 从而 runApp 能立刻渲染 Splash 首帧（启动性能：不在首帧前阻塞 DB 初始化）。
+  final Future<AuthDaoLike> _dao;
   final Future<String> Function() _resolveDeviceId;
   final String Function() _resolveOs;
   final Future<RegisterResult> Function({
@@ -55,7 +58,7 @@ class AuthController extends StateNotifier<AuthState> {
   bool _registering = false;
 
   AuthController({
-    required AuthDaoLike dao,
+    required FutureOr<AuthDaoLike> dao,
     required Future<String> Function() resolveDeviceId,
     required String Function() resolveOs,
     required Future<RegisterResult> Function({
@@ -63,7 +66,7 @@ class AuthController extends StateNotifier<AuthState> {
       required String os,
     }) doRegister,
     Future<void> Function(RegisterResult result)? onRegistered,
-  })  : _dao = dao,
+  })  : _dao = Future.value(dao),
         _resolveDeviceId = resolveDeviceId,
         _resolveOs = resolveOs,
         _doRegister = doRegister,
@@ -75,7 +78,7 @@ class AuthController extends StateNotifier<AuthState> {
 
   /// 启动加载本地 auth 状态
   Future<void> bootstrap() async {
-    final saved = await _dao.load();
+    final saved = await (await _dao).load();
     // token 为空视为未注册（fresh）：401 失效时 clearToken 只清 token、
     // 保留 deviceId，此时启动不应带着空 token 发请求，而应重新注册（沿用原 deviceId）。
     if (saved == null || saved.token.isEmpty) {
@@ -114,7 +117,7 @@ class AuthController extends StateNotifier<AuthState> {
         isNewDevice: resp.isNewDevice,
         registeredAt: now,
       );
-      await _dao.save(record);
+      await (await _dao).save(record);
       try {
         await _onRegistered?.call(resp);
       } catch (_) {
@@ -182,6 +185,18 @@ class AuthController extends StateNotifier<AuthState> {
     return result;
   }
 
+  /// 启动后台初始化（DB 打开/种子化）失败时的兜底：置为 failed。
+  ///
+  /// 让 Splash 显示「网络连接失败 + 重试」，替代无限转圈；不抛异常、不白屏。
+  /// 仅当尚未收敛到 registered（或仍 fresh）时覆盖，避免污染已成功注册的状态。
+  void markStartupFailed(Object error) {
+    if (state.status != AuthStatus.loading && !state.needsRegistration) return;
+    state = state.copyWith(
+      status: AuthStatus.failed,
+      lastError: error.toString(),
+    );
+  }
+
   /// 401 失效：清除本地 token，保留 deviceId（下次启动/自动重注册沿用同一设备标识）
   ///
   /// 并发安全：若已有注册在进行则直接返回，避免 401 风暴中多个 onError
@@ -189,7 +204,11 @@ class AuthController extends StateNotifier<AuthState> {
   /// 「无 spinner 也无重试按钮」的空白态，用户点击原重试位置没有任何反应。
   void invalidateRegistration() {
     if (_registering) return;
-    _dao.clearToken(); // 只清 token，不清 deviceId，避免重注册被判为新设备导致数据隔离
+    // 只清 token，不清 deviceId，避免重注册被判为新设备导致数据隔离。
+    // _dao 为惰性 Future：fire-and-forget 解析后清除。
+    final dao = _dao;
+    // ignore: unawaited_futures
+    dao.then((d) => d.clearToken());
     state = const AuthState(status: AuthStatus.fresh);
   }
 
@@ -210,7 +229,7 @@ class AuthController extends StateNotifier<AuthState> {
       isNewDevice: resp.isNewDevice,
       registeredAt: now,
     );
-    await _dao.save(record);
+    await (await _dao).save(record);
     try {
       await _onRegistered?.call(resp);
     } catch (_) {
