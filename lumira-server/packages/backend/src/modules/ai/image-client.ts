@@ -171,6 +171,9 @@ async function openaiGenerate(cfg: ImageClientConfig, input: GenerateImageInput,
   fd.append('prompt', input.prompt);
   fd.append('model', cfg.model);
   fd.append('size', input.size);
+  // 显式要求 b64_json：edits 默认返回 url（dall-e-2 默认 response_format=url），
+  // 不设置会导致 data[0] 只有 url 而解析不到 b64_json → 误报「内容为空」
+  fd.append('response_format', 'b64_json');
 
   const res = await fetch(`${normBaseUrl(cfg.baseUrl)}/images/edits`, {
     method: 'POST',
@@ -180,10 +183,15 @@ async function openaiGenerate(cfg: ImageClientConfig, input: GenerateImageInput,
   }).catch(mapNetworkError);
   await assertOk(res);
 
-  const data = (await res.json()) as { data?: Array<{ b64_json?: unknown }> } | null;
-  const b64 = data?.data?.[0]?.b64_json;
-  if (typeof b64 !== 'string' || b64 === '') throw new Error('生图服务返回内容为空');
-  return { base64: b64, mimeType: 'image/png' };
+  const data = (await res.json()) as { data?: Array<{ b64_json?: unknown; url?: unknown }> } | null;
+  const item = data?.data?.[0];
+  if (item && typeof item.b64_json === 'string' && item.b64_json !== '') {
+    return { base64: item.b64_json, mimeType: 'image/png' };
+  }
+  if (item && typeof item.url === 'string' && item.url !== '') {
+    return downloadImage(item.url, opts);
+  }
+  throw new Error('生图服务返回内容为空');
 }
 
 /** qwen（wanx）：DashScope 异步任务——提交 → 轮询 task_status → SUCCEEDED 后下载 results[0].url */

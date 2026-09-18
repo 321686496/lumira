@@ -181,12 +181,34 @@ describe('generateImage', () => {
       expect(fd.get('prompt')).toBe('一张 3:4 竖构图的人像摄影作品');
       expect(fd.get('model')).toBe('image-model');
       expect(fd.get('size')).toBe('1024x1536');
+      // 显式要求 b64_json：edits 默认返回 url，不设置会导致误报「内容为空」
+      expect(fd.get('response_format')).toBe('b64_json');
       const imagePart = fd.get('image');
       expect(imagePart).toBeInstanceOf(Blob);
       expect((imagePart as Blob).type).toBe('image/jpeg');
       expect(Buffer.from(await (imagePart as Blob).arrayBuffer()).toString('base64')).toBe('cmVmLWJ5dGVz');
 
       expect(res).toEqual({ base64: 'ZWRpdHM=', mimeType: 'image/png' });
+    });
+
+    it('有参考图但上游忽略 response_format 返回 url → 下载 url 转 base64（不再误报内容为空）', async () => {
+      const fetchMock = jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValueOnce(okResponse({ data: [{ url: 'https://cdn.example.com/edit.png' }] }))
+        .mockResolvedValueOnce(imageDownloadResponse());
+
+      const res = await generateImage(
+        cfg('openai', 'https://api.openai.example.com/v1'),
+        input({
+          size: '1024x1536',
+          referenceBase64: 'cmVmLWJ5dGVz',
+          referenceMime: 'image/jpeg',
+        }),
+      );
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(String(fetchMock.mock.calls[1][0])).toBe('https://cdn.example.com/edit.png');
+      expect(res).toEqual({ base64: PNG_B64, mimeType: 'image/png' });
     });
   });
 
