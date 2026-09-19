@@ -1,20 +1,17 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:qr_code_scanner/qr_code_scanner.dart';
 
 import '../../../core/auth/auth_controller.dart';
-import '../../../core/services/file_picker_service.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_error.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../shared/services/qr_decoder.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../../shared/widgets/scan/scan_view.dart';
 import '../data/account_api.dart';
 import '../widgets/account_common.dart';
 
@@ -416,10 +413,9 @@ class _MethodCard extends StatelessWidget {
 
 /// 全屏扫描恢复二维码子页，解析成功后把原始结果回传给父页。
 ///
-/// 原生相机扫码在 android / iOS / ohos（HarmonyOS）可用：本地化的
-/// `qr_code_scanner` 已合并 CPF-Flutter 鸿蒙适配（OhosView 原生扫码）。
-/// 其余平台（含 web）展示与 App 主题一致的引导卡片，引导用户回到
-/// 父页手动输入恢复码（设计文档已约定该兜底，见 2026-08-19-account-recovery-design.md）。
+/// 扫码能力由共享 [ScanView] 提供（按平台分发，同首页扫一扫）。
+/// 其余平台（含 web）展示主题化引导卡片，引导用户回到父页手动输入恢复码
+/// （设计文档已约定该兜底，见 2026-08-19-account-recovery-design.md）。
 class _ScannerPage extends ConsumerStatefulWidget {
   const _ScannerPage();
 
@@ -428,56 +424,6 @@ class _ScannerPage extends ConsumerStatefulWidget {
 }
 
 class _ScannerPageState extends ConsumerState<_ScannerPage> {
-  final _key = GlobalKey();
-  QRViewController? _controller;
-  bool _picking = false;
-
-  /// 支持原生相机扫码的平台：android / iOS / ohos；其余（含 web）走主题化回退。
-  bool get _canScanNative {
-    if (kIsWeb) return false;
-    final p = defaultTargetPlatform;
-    return p == TargetPlatform.android ||
-        p == TargetPlatform.iOS ||
-        // 标准 Flutter SDK 没有 TargetPlatform.ohos，用名称判断保持双 SDK 兼容
-        p.name == 'ohos';
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  /// 从相册选择图片并尝试识别二维码，成功则 pop 回传识别文本。
-  ///
-  /// 选图走 `FilePickerService`（跨平台，含 OHOS）；二维码解码用纯 Dart 的
-  /// `zxing2`，因此相册识别在 android / iOS / ohos 乃至 web 上均可用
-  /// （web 端连相机扫码都不可用，正好用相册识别补齐）。
-  Future<void> _pickFromGallery() async {
-    if (_picking) return;
-    setState(() => _picking = true);
-    try {
-      final file = await FilePickerService.pickSingleImage();
-      if (file == null) return; // 用户取消选择
-      final full = await FilePickerService.ensureFullBytes(file);
-      final bytes = full.bytes;
-      if (bytes == null || bytes.isEmpty) {
-        if (mounted) LumiraToast.show(context, '读取图片失败，请重试');
-        return;
-      }
-      // 解码移入后台 isolate，避免在 UI 线程执行耗时解码导致界面卡顿。
-      final secret = await compute(decodeQrFromBytes, bytes);
-      if (!mounted) return;
-      if (secret != null && secret.isNotEmpty) {
-        Navigator.of(context).pop(secret);
-      } else {
-        LumiraToast.show(context, '未识别到二维码，请选择清晰的二维码图片');
-      }
-    } finally {
-      if (mounted) setState(() => _picking = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
@@ -501,103 +447,18 @@ class _ScannerPageState extends ConsumerState<_ScannerPage> {
           ),
         ),
         child: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: _canScanNative
-                    ? QRView(
-                        key: _key,
-                        overlay: QrScannerOverlayShape(
-                          overlayColor: Colors.black26,
-                          borderColor: tokens.brand,
-                          borderLength: 30,
-                          borderWidth: 5,
-                        ),
-                        onQRViewCreated: (c) {
-                          _controller = c;
-                          c.scannedDataStream.listen((barcode) {
-                            final code = barcode.code;
-                            if (code != null && code.isNotEmpty) {
-                              Navigator.of(context).pop(code);
-                            }
-                          });
-                        },
-                      )
-                    : _UnsupportedScanGuide(tokens: tokens),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-                child: LumiraButton(
-                  variant: ButtonVariant.secondary,
-                  onPressed: _picking ? null : _pickFromGallery,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(_picking ? Icons.hourglass_top : Icons.photo_library_outlined),
-                      const SizedBox(width: 8),
-                      Text(_picking ? '识别中…' : '从相册选择二维码'),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 读取不到原生相机扫码能力的引导卡片（主题一致，不崩溃）。
-class _UnsupportedScanGuide extends StatelessWidget {
-  const _UnsupportedScanGuide({required this.tokens});
-
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: NeuCard(
-          onTap: () => Navigator.of(context).pop(),
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: tokens.brandSubtle,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Icon(Icons.qr_code_scanner, size: 32, color: tokens.brand),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                '当前设备暂不支持摄像头扫码',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
+          child: ScanView(
+            showGalleryButton: true,
+            // 「返回手动输入恢复码」pop null（等同取消），父页据此回到手动输入
+            onManualInput: () => Navigator.of(context).pop(),
+            manualInputLabel: '返回手动输入恢复码',
+            unsupportedDesc:
                 '请返回「找回账号」页，手动输入旧设备上保存的恢复码即可找回账号。',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, height: 1.5, color: tokens.textSecondary),
-              ),
-              const SizedBox(height: 20),
-              LumiraButton(
-                variant: ButtonVariant.primary,
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('返回手动输入恢复码'),
-              ),
-            ],
+            onResult: (text) {
+              if (text != null && text.isNotEmpty) {
+                Navigator.of(context).pop(text);
+              }
+            },
           ),
         ),
       ),
