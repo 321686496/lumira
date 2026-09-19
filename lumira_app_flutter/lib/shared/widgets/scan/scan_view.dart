@@ -291,7 +291,14 @@ class _ScanViewState extends ConsumerState<ScanView> {
           MobileScanner(
             controller: _controller,
             onDetect: _onDetect,
-            errorBuilder: (context, error, child) => _buildCameraFallback(tokens),
+            errorBuilder: (context, error, child) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted && !_cameraFailed) {
+                  setState(() => _cameraFailed = true);
+                }
+              });
+              return _buildCameraFallback(tokens);
+            },
           ),
         if (_cameraActive)
           Center(
