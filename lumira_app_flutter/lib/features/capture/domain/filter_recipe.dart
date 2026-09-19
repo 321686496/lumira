@@ -482,8 +482,9 @@ List<double> composePostProcessMatrix(PostProcess process) {
       0, 0, 0, 1, 0,
     ], matrix);
   }
-  // OHOS 前置白平衡软件补偿：与 wbResidual 同层（最内层对角增益）。前置 ISP
-  // 预设增益渲染与后置不同的偏色由该对角矩阵抵消（两矩阵均为纯对角，可交换）。
+  // OHOS 前置白平衡软件色温模拟：与 wbResidual 同层（最内层对角增益）。前置
+  // 原生预设增益表偏红不可信，传感器固定 AUTO，档位视觉由该对角矩阵模拟
+  //（两矩阵均为纯对角，可交换）。
   final frontWb = process.frontWbCompensation;
   if (frontWb != null && !frontWb.isIdentity) {
     matrix = _multiplyMatrices(<double>[

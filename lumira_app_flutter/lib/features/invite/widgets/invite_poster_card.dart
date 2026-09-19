@@ -133,15 +133,22 @@ class _BandBrandmark extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        // 品牌暖白 → 透明 的从左向右渐变，如墨笔扫过；配金色细边 + 小圆角
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            PosterPalette.surface.withOpacity(.92),
-            PosterPalette.surface.withOpacity(0.0),
-          ],
+        // AI 生成的毛笔从左往右扫过的暖白渐变背景（品牌 surface 色），替代手写 LinearGradient。
+        // 源图为暖白笔触画在纯黑底上：用「红通道→透明」的 luma-key 矩阵把黑色抠成透明，
+        // 让右侧笔锋渐隐、露出下方照片；配金色细边 + 小圆角。
+        image: const DecorationImage(
+          image: AssetImage('assets/images/invite_brand_stroke.jpg'),
+          fit: BoxFit.cover,
+          colorFilter: ColorFilter.matrix(<double>[
+            // 输出 RGB 保留原样（笔触即品牌暖白）
+            1, 0, 0, 0, 0,
+            0, 1, 0, 0, 0,
+            0, 0, 1, 0, 0,
+            // 输出 Alpha 取自红通道缩放（黑底→透明，暖白笔触→不透），实现 luma-key 抠图
+            1, 0, 0, 0, 0,
+          ]),
         ),
         borderRadius: BorderRadius.circular(3),
         border: Border.all(color: PosterPalette.line),

@@ -73,6 +73,7 @@ class RecentTemplateStrip extends ConsumerWidget {
             SizedBox(
               height: 248,
               child: ListView.separated(
+                clipBehavior: Clip.none, // 放行卡片四周浮雕阴影，避免下侧阴影被「场景推荐」区裁切遮挡
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 itemCount: templates.length,

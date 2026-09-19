@@ -317,7 +317,12 @@ class CamerawesomeCameraService implements CameraService {
         '[camera] setWhiteBalance DISPATCH mode=$mode k=${settings.temperatureK} platform=${_delegate.platformTag}');
     try {
       if (_delegate.platformTag == 'ohos') {
-        ohos.CamerawesomePlugin.setWhiteBalance(mode, settings.temperatureK);
+        // OHOS：仅「手动拖动色温滑块」（manualK=true）下发连续色温 k（原生走
+        // MANUAL 路径，仅后置支持）；预设 pill 点击（manualK=false）只下发 mode
+        // 走 setWhiteBalanceMode 预设模式（前后置均支持）——前置 HDI 未实现
+        // 手动色温接口，若把预设联动值 k 也下发会走 MANUAL 导致前置档位失效。
+        ohos.CamerawesomePlugin.setWhiteBalance(
+            mode, settings.manualK ? settings.temperatureK : null);
       } else {
         ca.CamerawesomePlugin.setWhiteBalance(mode, settings.temperatureK);
       }

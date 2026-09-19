@@ -19,8 +19,6 @@ import 'core/theme/system_brightness_watcher.dart';
 import 'core/utils/safe_share.dart';
 import 'core/utils/share_reporter.dart';
 import 'features/capture/data/capture_state.dart';
-import 'features/gallery/data/diary_mock_seeder.dart';
-import 'features/gallery/providers/gallery_diary_providers.dart';
 import 'features/points/data/points_repository.dart';
 import 'features/profile/data/growth_models.dart';
 import 'features/profile/data/profile_models.dart';
@@ -90,15 +88,6 @@ void _reportFatal(Object error, StackTrace? stack) {
       library: 'Lumira bootstrap',
     ),
   );
-}
-
-/// 造数/清理后，让依赖相册表的页面（拍日记时间轴、打卡、统计）重新拉取。
-void _invalidateDiaryData(ProviderContainer container) {
-  container.invalidate(diaryEntriesProvider);
-  container.invalidate(diaryStreakProvider);
-  container.invalidate(diaryMonthlyStatsProvider);
-  container.invalidate(diaryTotalCountProvider);
-  container.invalidate(shootingCheckinProvider);
 }
 
 /// Bootstrap 失败时的兜底 UI。
@@ -266,12 +255,6 @@ Future<void> _initStartupAsync(ProviderContainer container) async {
   try {
     // 首装最耗时：openDatabase onCreate 全量种子化内置模板/分类/场景。
     await container.read(databaseProvider.future);
-
-    // 展示图 mock：直接注入示例相片（拍日记时间轴 + 相册海报生成素材）。
-    // 幂等（已有 mock 则跳过），普通 flutter run 启动或热重启都能直接看到数据。
-    // 不再上架时由开发直接删除 mock 数据即可恢复（见 diary_mock_seeder.dart 的注解）。
-    // ignore: unawaited_futures
-    DiaryMockSeeder.seed(container).then((_) => _invalidateDiaryData(container));
 
     // 合规门控：本地已同意版本与当前合规版本不一致即需先征得同意、
     // 在此之前不得联网/采集（注册、上报设备信息等全部延后到同意后由

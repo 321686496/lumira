@@ -23,6 +23,7 @@ class WhiteBalanceSettings {
   const WhiteBalanceSettings({
     this.mode = WhiteBalanceMode.auto,
     this.temperatureK,
+    this.manualK = false,
   });
 
   final WhiteBalanceMode mode;
@@ -30,15 +31,24 @@ class WhiteBalanceSettings {
   /// 色温（开尔文），取值 3000..8000，仅非 auto 模式生效，auto 时为 null。
   final int? temperatureK;
 
+  /// 是否为「手动拖动色温滑块」产生的连续色温。
+  ///
+  /// OHOS 原生据此决定路径：true=MANUAL 连续色温（setWhiteBalance，仅后置支持，
+  /// 前置 HDI 未实现手动色温接口）；false=预设模式（setWhiteBalanceMode，前后置均支持）。
+  /// 预设 pill 点击联动滑块时为 false（temperatureK 仅用于 UI 滑块跟随）。
+  final bool manualK;
+
   bool get isAuto => mode == WhiteBalanceMode.auto;
 
   WhiteBalanceSettings copyWith({
     WhiteBalanceMode? mode,
     int? temperatureK,
+    bool? manualK,
   }) {
     return WhiteBalanceSettings(
       mode: mode ?? this.mode,
       temperatureK: temperatureK ?? this.temperatureK,
+      manualK: manualK ?? this.manualK,
     );
   }
 
@@ -47,15 +57,16 @@ class WhiteBalanceSettings {
     if (identical(this, other)) return true;
     return other is WhiteBalanceSettings &&
         other.mode == mode &&
-        other.temperatureK == temperatureK;
+        other.temperatureK == temperatureK &&
+        other.manualK == manualK;
   }
 
   @override
-  int get hashCode => Object.hash(mode, temperatureK);
+  int get hashCode => Object.hash(mode, temperatureK, manualK);
 
   @override
   String toString() =>
-      'WhiteBalanceSettings(mode: $mode, temperatureK: $temperatureK)';
+      'WhiteBalanceSettings(mode: $mode, temperatureK: $temperatureK, manualK: $manualK)';
 }
 
 /// 白平衡会话状态（实时调节取景器，**不写入模板 CameraParams**）。
@@ -90,28 +101,37 @@ Future<void> refreshWbResidual(WidgetRef ref) async {
   }
 }
 
-/// OHOS 前置摄像头预设白平衡的「软件色彩补偿」（R/G/B 对角增益，返回 null 表示不补偿）。
+/// OHOS 前置摄像头白平衡档位的「软件色温模拟」（R/G/B 对角增益，返回 null 表示不注入）。
 ///
-/// 根因：OHOS 前置摄像头对各预设档位的 ISP 预设增益渲染与后置不同——
-/// `setWhiteBalanceMode` 实际生效但画面仍偏色（前置尤其偏红）；前置 MANUAL
-/// 色温不可用（`getWhiteBalanceRange` 返回 undefined，全部回退预设模式），
-/// 唯一可行方案是软件矩阵修正。补偿与 [wbResidualSessionProvider] 同机制：
-/// 由 `CaptureState.effectivePostProcessProvider` 按「OHOS + 前置 + 非 auto」
-/// 注入 `PostProcess.frontWbCompensation`，作用于取景器 FX 矩阵与成片矩阵
-/// 同层（最内层对角增益，两处同源一致）。
+/// 【学醒图路线（2026-09-19）】前置 ISP 预设增益表偏红（真机实测非 auto 档
+/// R 通道高 30~40%），原生档位不可信，故原生侧前置固定 AUTO（传感器级 AWB，
+/// 实测中性 R/G≈0.988）；档位视觉改由本矩阵在最内层模拟——基于后置（正常）
+/// 各档位相对 AUTO 的实测偏移（室内灯光场景截图中心区 RGB 均值）标定，
+/// 方向与系统相机一致（阴天偏暖、荧光偏冷青、白炽最冷蓝）：
 ///
-/// 当前各档位统一按「抵消前置偏红」起步（R×0.90 / B×1.10，约抵消 10% 偏红）；
-/// 真机逐档位实测后若各档偏色程度不同，再在下方 switch 分档位微调。
+/// | 档位         | 后置相对 AUTO 偏移 (R,B) | 模拟系数 (R,B)  |
+/// | ------------ | ----------------------- | -------------- |
+/// | daylight     | ×0.899 / ×1.019         | ×0.90 / ×1.02  |
+/// | cloudy       | ×0.960 / ×0.851         | ×0.96 / ×0.85  |
+/// | fluorescent  | ×0.910 / ×1.406         | ×0.91 / ×1.35  |
+/// | incandescent | ×0.264 / ×1.512(过冲)   | ×0.75 / ×1.25(收敛) |
+///
+/// auto 档不注入（原生 AUTO 已中性）。仅 OHOS 前置 + 非 auto 生效（调用方
+/// [CaptureState.effectivePostProcessProvider] 判断；后置走原生档位，不注入）。
+/// 单场景单采样局限，需真机逐档验证微调。
 WbResidual? ohosFrontWhiteBalanceCompensation(WhiteBalanceMode mode) {
   switch (mode) {
-    case WhiteBalanceMode.auto:
-      // auto 不修正（用户未反馈 auto 偏色）
-      return null;
     case WhiteBalanceMode.daylight:
+      return const WbResidual(r: 0.90, g: 1.0, b: 1.02);
     case WhiteBalanceMode.cloudy:
+      return const WbResidual(r: 0.96, g: 1.0, b: 0.85);
     case WhiteBalanceMode.fluorescent:
+      return const WbResidual(r: 0.91, g: 1.0, b: 1.35);
     case WhiteBalanceMode.incandescent:
-      // TEMP-DIAG: 强补偿用于真机验证管线是否真正应用矩阵（R×0.5/B×2.0）。
-      return const WbResidual(r: 0.5, g: 1.0, b: 2.0);
+      // 后置实测相对偏移 R×0.264/B×1.512 是冷光下切白炽档的过冲表现，直接照搬
+      // 会让肤色发蓝；收敛后仍保持全档位最冷蓝的方向。
+      return const WbResidual(r: 0.75, g: 1.0, b: 1.25);
+    case WhiteBalanceMode.auto:
+      return null;
   }
 }

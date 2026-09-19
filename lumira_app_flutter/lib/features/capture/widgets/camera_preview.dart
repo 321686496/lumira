@@ -835,6 +835,10 @@ class _PostEffectSyncState extends State<_PostEffectSync> {
       }
       final p = widget.post;
       final matrix = composePostProcessMatrix(p);
+      // 诊断（2026-09-19 前置白平衡软件模拟）：确认矩阵是否到达本层。
+      debugPrint('[fx] _applyLatest enabled=${widget.enabled} '
+          'frontWb=${p.frontWbCompensation?.r}/${p.frontWbCompensation?.b} '
+          'm0=${matrix[0]} m6=${matrix[6]} m12=${matrix[12]}');
       await CamerawesomePlugin.updatePreviewEffects(
         // 全中性时传 null → 原生处理器保持不激活、走免 GPU 直通快路径。
         matrix: _isIdentityMatrix(matrix) ? null : matrix,

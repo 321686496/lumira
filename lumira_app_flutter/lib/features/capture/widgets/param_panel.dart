@@ -489,9 +489,18 @@ class _WbControl extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final wb = ref.watch(whiteBalanceSessionProvider);
-    // OHOS 连续色温（setWhiteBalance/getWhiteBalanceRange）真机不可用，
-    // 传感器级手动值无法落地，仅保留预设 pill，隐藏色温滑块。
-    final showWbSlider = Platform.isAndroid || Platform.isIOS;
+    // 色温滑块（连续白平衡）：
+    // - iOS/Android：预设与滑块底层同为「锁定色温」，全部显示；
+    // - OHOS 后置：MANUAL 连续色温可用（真机实测 range=[2800,10000]，setWhiteBalance
+    //   生效），显示滑块；OHOS 前置：HDI 未实现手动色温接口
+    //   （GetManualWhiteBalanceRange / GetManualWhiteBalance 均 return code 3，
+    //   SetManualWhiteBalance 报 Bias range is empty），滑块对前置无法生效
+    //   （2026-09-19 真机日志实锤，硬件限制），故前置隐藏滑块，仅保留预设档位。
+    final isOhos = !Platform.isAndroid && !Platform.isIOS;
+    final isFront =
+        ref.watch(CaptureState.cameraFacingProvider) == 'front';
+    final showWbSlider =
+        Platform.isAndroid || Platform.isIOS || (isOhos && !isFront);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
@@ -505,15 +514,16 @@ class _WbControl extends ConsumerWidget {
               // 切回 Auto：temperatureK 置 null，插件端 auto 复位
               _apply(ref, const WhiteBalanceSettings());
             } else {
-              // 非 Auto 预设。iOS/Android：预设与色温滑块底层同为“锁定色温”，
-              // 预设点击时把 temperatureK 联动到对应档位，使滑块跟随；
-              // OHOS：预设走原生 mode 分支，temperatureK 保持 null。
+              // 非 Auto 预设：temperatureK 联动到对应档位（滑块跟随显示），
+              // manualK=false 表示「预设联动」——OHOS 原生据此走预设模式
+              // setWhiteBalanceMode；手动连续色温仅由滑块拖动触发（manualK=true）。
               _apply(
                 ref,
-                showWbSlider
-                    ? WhiteBalanceSettings(
-                        mode: mode, temperatureK: _wbPresetK[mode])
-                    : WhiteBalanceSettings(mode: mode),
+                WhiteBalanceSettings(
+                  mode: mode,
+                  temperatureK: _wbPresetK[mode],
+                  manualK: false,
+                ),
               );
             }
           },
@@ -534,6 +544,7 @@ class _WbControl extends ConsumerWidget {
                 WhiteBalanceSettings(
                   mode: wb.mode,
                   temperatureK: (v / 100).round() * 100,
+                  manualK: true,
                 ),
               ),
             ),

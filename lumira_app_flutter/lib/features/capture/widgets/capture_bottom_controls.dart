@@ -88,6 +88,7 @@ class CaptureBottomBar extends ConsumerWidget {
     this.thumbnailKey,
     this.onHeightChanged,
     this.paramPanelOverlay = false,
+    this.hideTemplatesTool = false,
   });
 
   final bool isFullscreen;
@@ -102,6 +103,9 @@ class CaptureBottomBar extends ConsumerWidget {
 
   /// true 时参数面板由页面渲染为贴底浮层，抽屉不再重复占位。
   final bool paramPanelOverlay;
+
+  /// true 时隐藏「模板」工具栏（供模板预览页使用：预览只调参数，不选模板）。
+  final bool hideTemplatesTool;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -145,7 +149,9 @@ class CaptureBottomBar extends ConsumerWidget {
 
               // 工具栏 + 抽屉（全屏 / 试用模式隐藏）
               if (!isFullscreen && !isTrialMode) ...[
-                const CaptureToolbar(),
+                CaptureToolbar(
+                  hideTemplatesTool: hideTemplatesTool,
+                ),
                 AnimatedToolDrawer(
                   rawCaptureKey: rawCaptureKey,
                   showParamPanel: !paramPanelOverlay,
@@ -173,7 +179,10 @@ class CaptureBottomBar extends ConsumerWidget {
 /// 点击已激活的工具 → 收起抽屉
 /// 点击"参数" → 直接打开 ParamPanel
 class CaptureToolbar extends ConsumerWidget {
-  const CaptureToolbar();
+  const CaptureToolbar({this.hideTemplatesTool = false});
+
+  /// true 时隐藏「模板」工具（预览页用于调整模板参数，不选模板）。
+  final bool hideTemplatesTool;
 
   static const _tools = [
     ToolDef('templates', Icons.dashboard_outlined, Icons.dashboard, '模板'),
@@ -200,9 +209,10 @@ class CaptureToolbar extends ConsumerWidget {
     );
 
     // 补光工具仅在前置摄像头时显示（屏幕补光仅对前摄自拍摄影有效）
-    final tools = facing == 'front'
-        ? _tools
-        : _tools.where((t) => t.id != 'fillLight').toList();
+    final tools = _tools
+        .where((t) => !(hideTemplatesTool && t.id == 'templates'))
+        .where((t) => facing == 'front' || t.id != 'fillLight')
+        .toList();
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),

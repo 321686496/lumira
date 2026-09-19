@@ -119,6 +119,15 @@ class CaptureState {
     return null;
   }
 
+  /// 'fullscreen' 的目标宽高比（比例随设备方向旋转）。
+  ///
+  /// 全屏不成固定 W:H，而是贴住屏幕实际宽高比：竖屏用「短/长」、横屏用「长/短」。
+  /// 因 UI 恒锁竖屏，调用方传入的 [screenRatio] 恒为竖屏比（短/长，约 9:19.5），
+  /// 故横持时取倒数得到横向全屏比，使成片 9:16 → 16:9。仅用于成片输出侧；
+  /// 取景器不随方向旋转，仍按竖屏 media query 原样绘制。
+  static double fullscreenRatio(bool isPortrait, double screenRatio) =>
+      isPortrait ? screenRatio : 1.0 / screenRatio;
+
   /// 计算指定比例相对于 4:3 传感器基准的裁切系数。
   ///
   /// 原生相机行为模型（参考 harmonyos 相机缩放比调研）：

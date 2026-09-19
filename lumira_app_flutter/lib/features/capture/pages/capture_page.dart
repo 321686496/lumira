@@ -1016,15 +1016,18 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // 物理方向优先用加速度传感器（见 _devicePortrait）：OHOS 窗口/MediaQuery 未必跟随旋转，
     // 仅看 MediaQuery 会恒判竖屏 → 横屏持机成片仍是竖图、3:4 也不翻成 4:3。
     // 传感器判定成功（非 null）时用之；否则回退到 MediaQuery。
-    final isPortrait =
+    var isPortrait =
         _devicePortrait ?? (screenSize.height >= screenSize.width);
     var screenRatio = screenSize.width / screenSize.height;
     if (!screenRatio.isFinite || screenRatio <= 0) {
       // Fallback：典型手机屏幕比例（竖屏 9:19.5，横屏 19.5:9）
       screenRatio = isPortrait ? 9.0 / 19.5 : 19.5 / 9.0;
     }
-    final targetRatio =
-        CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
+    // 仅 'fullscreen' 走全屏方向自适应（横持翻成横向全屏比）；其余比例保持原样。
+    // 最终方向以下方捕获帧实测为准（见 capture 后的全屏修正）。
+    var targetRatio = ratioId == 'fullscreen'
+        ? CaptureState.fullscreenRatio(isPortrait, screenRatio)
+        : CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
 
     try {
       // === P0：动画不等成片 ===
@@ -1073,6 +1076,26 @@ class _CapturePageState extends ConsumerState<CapturePage>
       final result = await captureFuture;
       debugPrint('[perf] cameraService.capture: ${sw.elapsedMilliseconds}ms');
       _recordFillLightUse();
+
+      // 成片方向修正：以实际捕获帧的横竖构图为准（加速度计在快门瞬间可能尚未
+      // 翻转，导致横持/竖持被误判，固定比例 3:4/4:3 也会随方向翻错）。
+      // 帧的宽高比是可靠的地面真值，据此重算 isPortrait 与 targetRatio（各比例通用）。
+      final frameSize = await _readCapturedFrameSize(result.filePath);
+      if (frameSize != null) {
+        final trueIsPortrait = frameSize.height >= frameSize.width;
+        if (trueIsPortrait != isPortrait) {
+          isPortrait = trueIsPortrait;
+          targetRatio = ratioId == 'fullscreen'
+              ? CaptureState.fullscreenRatio(isPortrait, screenRatio)
+              : CaptureState.computeTargetRatio(ratioId, isPortrait) ??
+                  screenRatio;
+          debugPrint('[capture] 拍摄方向按捕获帧修正: '
+              'frame=${frameSize.width.toStringAsFixed(0)}x'
+              '${frameSize.height.toStringAsFixed(0)} '
+              'isPortrait=$isPortrait '
+              'targetRatio=${targetRatio.toStringAsFixed(4)}');
+        }
+      }
 
       // 回退：无动画源帧（闪光模式/取景器帧捕捉失败）且动画尚未启动 →
       // 用成片启动（成片是原始照片，需要方向对齐，sourceAligned=false）。
@@ -1171,6 +1194,34 @@ class _CapturePageState extends ConsumerState<CapturePage>
   }
 
   static const int _kBurstThumbDim = 240;
+
+  /// 读取一张图片的真实像素尺寸（仅解析文件头，不实际解码像素）。
+  ///
+  /// 用于全屏拍摄时以"捕获帧的实际横竖构图"校准成片方向：加速度计在快门瞬间
+  /// 可能尚未翻转（横持误判为竖持），而原始帧的宽高比是可靠的地面真值。
+  /// 失败（解码不了）返回 null，调用方沿用原方向。
+  Future<Size?> _readCapturedFrameSize(String path) async {
+    try {
+      final bytes = await File(path).readAsBytes();
+      final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+      try {
+        final descriptor = await ui.ImageDescriptor.encoded(buffer);
+        try {
+          return Size(
+            descriptor.width.toDouble(),
+            descriptor.height.toDouble(),
+          );
+        } finally {
+          descriptor.dispose();
+        }
+      } finally {
+        buffer.dispose();
+      }
+    } catch (e) {
+      debugPrint('[capture] 读取捕获帧尺寸失败，沿用原方向: $e');
+      return null;
+    }
+  }
 
   /// 用 dart:ui（OS 加速解码）把连拍帧降到 [_kBurstThumbDim]px 的 rawRgba。
   /// 返回 null 表示全部解码失败（调用方会回退到 worker 内自行读文件解码）。

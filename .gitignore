@@ -67,3 +67,25 @@ scripts/results/
 
 # Agent 工作目录（本地记忆/配置，不入库）
 .workbuddy-ai/
+
+# ===== 拍摄/修图联调临时产物（不入库）=====
+# 根目录联调截图与诊断残留
+/current*.jpeg
+/screen*.jpeg
+/unlock.jpeg
+/_diag/
+/output/
+/packagefile/
+/harmony-mcp.json
+/layout.json
+/gpt-image-9527-skill/
+
+# OHOS 构建缓存/隔离目录
+/lumira_app_flutter/ohos/_mvaside/
+/lumira_app_flutter/ohos/_ohpm_quarantine/
+/lumira_app_flutter/ohos/entry/libs/
+/lumira_app_flutter/packages/camerawesome_ohos/_wrapper/oh_modules/
+
+# 海报/滤镜诊断截图与失败产物
+/lumira_app_flutter/test/diag_*.png
+/lumira_app_flutter/test/failures/

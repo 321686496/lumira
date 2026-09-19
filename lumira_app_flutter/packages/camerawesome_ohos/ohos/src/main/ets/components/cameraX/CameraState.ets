@@ -902,6 +902,9 @@ export class CameraState implements StreamHandler {
   updatePreviewEffects(hasMatrix: boolean, matrix: number[] | null, vignette: number,
     smooth: number, sharpen: number, grain: number): void {
     try {
+      // 诊断（2026-09-19 前置白平衡软件模拟）：确认矩阵是否到达原生层。
+      const dbgM = matrix && matrix.length >= 20 ? `${matrix[0]}/${matrix[6]}/${matrix[12]}` : 'null'
+      Logger.info(TAG, `updatePreviewEffects hasMatrix=${hasMatrix} m=${dbgM} v=${vignette} s=${smooth}`);
       if (hasMatrix && matrix !== null && matrix !== undefined && matrix.length >= 20) {
         const m = new Float64Array(20)
         for (let i = 0; i < 20; i++) {
@@ -1350,24 +1353,26 @@ export class CameraState implements StreamHandler {
         Logger.error(TAG, `setWhiteBalanceFn: session not ready, skipped`);
         return
       }
+      // 前置固定 AUTO（学醒图路线，2026-09-19）：前置 ISP 预设增益表偏红不可信
+      //（非 auto 档 R 通道高 30~40%），原生档位不应用；档位视觉由 Dart 软件色温
+      // 矩阵（frontWbCompensation → previewFx 最内层对角增益）模拟。auto 档放行。
+      if (this.cameraPosition === camera.CameraPosition.CAMERA_POSITION_FRONT &&
+        (k !== undefined && k !== null || mode !== 'auto')) {
+        Logger.info(TAG, `setWhiteBalanceFn: front keeps AUTO, req mode=${mode} k=${k}`);
+        return
+      }
       // 手动色温：OHOS WhiteBalance 支持连续开尔文（API 20+）。
       // 手动 K 需先切换 MANUAL 模式再下发连续值；无回读变化时回退到预设模式。
       if (k !== undefined && k !== null) {
         this.setManualWhiteBalance(k)
         return
       }
-      // 前置 ISP 的预设白平衡增益与后置存在明显差异（实测前置 DAYLIGHT 明显偏红）。
-      // 前置切预设档位时改用「MANUAL + 映射色温」（与 iOS 增益锁定思路一致），
-      // 绕开前置 ISP 预设增益的异常渲染；MANUAL 不可用时自动回退预设模式，不退化。
-      if (this.cameraPosition === camera.CameraPosition.CAMERA_POSITION_FRONT) {
-        const kelvin: number | undefined = this.presetToKelvin(mode)
-        if (kelvin !== undefined && this.setManualWhiteBalance(kelvin)) {
-          return
-        }
-        if (kelvin !== undefined) {
-          Logger.info(TAG, `setWhiteBalanceFn: front manual failed, fallback to preset mode, mode=${mode}`)
-        }
-      }
+      // 前置与后置统一走原生预设模式 setWhiteBalanceMode。
+      // 2026-09-19 用户真机实测：前置「MANUAL + 映射色温」在本设备画面无任何变化
+      //（HDI 接受 setWhiteBalance 但 ISP 不应用，前置 MANUAL 连续色温不可用），
+      // 此前为绕开前置偏红而做的 MANUAL 特判反而让前置白平衡完全失效。
+      // 后置预设模式实测正常，故前置不再特判，与后置共用同一路径。
+      // 若后续发现前置预设档位偏色，应在不改变模式路径的前提下另行校准。
       // 预设模式映射
       let wbMode: camera.WhiteBalanceMode = camera.WhiteBalanceMode.AUTO
       switch (mode) {
@@ -1399,22 +1404,6 @@ export class CameraState implements StreamHandler {
       }
     } catch (e) {
       Logger.error(TAG, `setWhiteBalanceFn error: ${(e as BusinessError).code}`);
-    }
-  }
-
-  /** 预设白平衡档位 → 色温(K)。与 iOS 映射保持一致；auto 返回 undefined（走 AUTO 模式）。 */
-  private presetToKelvin(mode: string): number | undefined {
-    switch (mode) {
-      case 'daylight':
-        return 5500
-      case 'cloudy':
-        return 6500
-      case 'fluorescent':
-        return 4200
-      case 'incandescent':
-        return 3000
-      default:
-        return undefined
     }
   }
 
@@ -1485,28 +1474,50 @@ export class CameraState implements StreamHandler {
       Logger.error(TAG, `setManualWhiteBalance: set MANUAL mode failed, err=${JSON.stringify(e)}`)
       return false
     }
-    let range: Array<number> = []
+    // 真机实测（2026-09-19）：前置 getWhiteBalanceRange 返回空（HDI return code 3，
+    // Napi "whiteBalanceRange is empty"），但 MANUAL 模式本身设置成功。
+    // 范围查询失败 ≠ 色温下发失败——不再直接放弃，改用保守假设范围 [2800,8000]
+    // clamp 后继续尝试 setWhiteBalance，以「回读一致」判定是否真正生效；
+    // 下发抛错或回读不一致时才回退预设模式（保持原有不退化语义）。
+    let range: Array<number> | undefined = undefined
     try {
       range = this.session.getWhiteBalanceRange()
     } catch (e) {
       Logger.error(TAG, `setManualWhiteBalance: getWhiteBalanceRange failed, err=${JSON.stringify(e)}`)
     }
-    if (!range || range.length < 2) {
-      Logger.error(TAG, `setManualWhiteBalance: invalid range=${JSON.stringify(range)}`)
-      return false
+    let lo = 2800
+    let hi = 8000
+    let rangeStr = 'assumed[2800,8000]'
+    if (range !== undefined && range !== null && range.length >= 2) {
+      lo = range[0]
+      hi = range[1]
+      rangeStr = JSON.stringify(range)
+    } else {
+      Logger.info(TAG, 'setManualWhiteBalance: empty range, try assumed range [2800,8000] anyway')
     }
-    let value: number = k
-    if (range.length >= 2) {
-      value = Math.min(Math.max(k, range[0]), range[1])
-    }
+    const value: number = Math.min(Math.max(k, lo), hi)
     try {
       this.session.setWhiteBalance(value)
     } catch (e) {
       Logger.error(TAG, `setManualWhiteBalance: set value failed, err=${JSON.stringify(e)}`)
       return false
     }
-    const curVal: number = this.session.getWhiteBalance()
-    Logger.info(TAG, `setManualWhiteBalance K: ${value}; range=${JSON.stringify(range)}; after=${curVal}`);
+    // 回读验证。前置预设档位是「已知偏色」路径，回退没有任何收益，因此：
+    // - 回读抛错（部分 HDI 未实现 getWhiteBalance）→ 信下发成功，返回 true；
+    // - 回读为 0（预设模式下的旧值，多为「未实现回读」）→ 同上信成功；
+    // - 回读到具体值 → 与目标比对，一致才算生效。
+    let curVal: number = -1
+    try {
+      curVal = this.session.getWhiteBalance()
+    } catch (e) {
+      Logger.info(TAG, `setManualWhiteBalance: readback threw, trust set success, err=${JSON.stringify(e)}`)
+      return true
+    }
+    if (curVal === 0 && value !== 0) {
+      Logger.info(TAG, `setManualWhiteBalance: readback 0 (unimplemented?), trust set success, K=${value}`)
+      return true
+    }
+    Logger.info(TAG, `setManualWhiteBalance K: ${value}; range=${rangeStr}; after=${curVal}`);
     return Math.abs(curVal - value) <= 1
   }
 

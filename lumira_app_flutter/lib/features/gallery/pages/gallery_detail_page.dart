@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -1136,9 +1137,14 @@ class _ReadOnlyCanvasState extends State<_ReadOnlyCanvas> {
     return widget.photo.dataUrl ?? widget.photo.filePath;
   }
 
-  /// 生成本地/网络图片的 ImageProvider。
+  /// 生成本地/网络/base64 图片的 ImageProvider。
   ImageProvider<Object> _imageProviderFor(String url) {
     if (url.startsWith('http')) return NetworkImage(url);
+    if (url.startsWith('data:')) {
+      final comma = url.indexOf(',');
+      final b64 = comma >= 0 ? url.substring(comma + 1) : url;
+      return MemoryImage(base64Decode(b64));
+    }
     return FileImage(File(url));
   }
 
