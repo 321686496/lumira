@@ -8,6 +8,7 @@ import FileReaderPlugin from '../plugins/FileReaderPlugin';
 import DeepLinkPlugin from '../plugins/DeepLinkPlugin';
 import ImageProcessorPlugin from '../plugins/ImageProcessorPlugin';
 import LumiraSensorPlugin from '../plugins/LumiraSensorPlugin';
+import ScanPlugin from '../plugins/ScanPlugin';
 
 export default class EntryAbility extends FlutterAbility {
   configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -24,6 +25,8 @@ export default class EntryAbility extends FlutterAbility {
     flutterEngine.getPlugins()?.add(new ImageProcessorPlugin());
     // 注册原生加速度传感器插件（水平仪，sensors_plus 无 ohos 实现）
     flutterEngine.getPlugins()?.add(new LumiraSensorPlugin());
+    // 注册原生扫码插件（OHOS 无 mobile_scanner 实现，改调 HarmonyOS Scan Kit 系统扫码界面）
+    flutterEngine.getPlugins()?.add(new ScanPlugin());
   }
 
   // ⚠️ best-effort：flutter_ohos 的 onCreate 返回 Promise，须以 async 方式重写；
