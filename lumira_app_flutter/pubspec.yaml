@@ -120,11 +120,6 @@ dependencies:
   # 与参考项目 health_training 同版本（3.5.5，Dart 2.19.6 兼容已验证）；
   # 精确锁定避免 caret 解析到 3.5.7（patch 差异，未验证）
   mobile_scanner: 3.5.5
-  # 扫码（本地化 fork：CPF-Flutter 鸿蒙适配，源库 qr_code_scanner 0.7.0）
-  # 已合并 android/ios/ohos 三端实现到 packages/qr_code_scanner
-  # TODO(Task 8): 迁移完成后移除本依赖并删除 packages/qr_code_scanner 目录
-  qr_code_scanner:
-    path: packages/qr_code_scanner
   # 二维码解码（纯 Dart，无原生插件；用于「从相册选择二维码」识别）
   # 纯 Dart 实现，兼容 OHOS / Dart 2.19.6，web 端亦可用
   zxing2: 0.2.0

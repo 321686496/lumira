@@ -780,13 +780,6 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "3.0.1"
-  qr_code_scanner:
-    dependency: "direct main"
-    description:
-      path: "packages/qr_code_scanner"
-      relative: true
-    source: path
-    version: "0.7.0"
   qr_flutter:
     dependency: "direct main"
     description:
