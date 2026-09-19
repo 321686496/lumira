@@ -1,9 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
-import '../../../core/theme/theme_controller.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../templates/data/preview_form_provider.dart';
 import '../../templates/data/templates_editor_mock_data.dart';
@@ -13,12 +14,14 @@ import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
 import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
+import '../services/level_sensor_service.dart';
 import '../services/white_balance.dart';
 import '../widgets/capture_top_pill_bar.dart';
 import '../widgets/camera_preview.dart';
 import '../widgets/capture_bottom_controls.dart';
 import '../widgets/capture_nav.dart';
 import '../widgets/level_indicator.dart';
+import '../widgets/param_panel.dart';
 import '../widgets/shutter_feedback.dart';
 
 /// 模板预览页（对齐拍摄页 capture_page.dart）
@@ -30,7 +33,8 @@ import '../widgets/shutter_feedback.dart';
 /// - 顶部浮层（延时 / 比例切换 / 参数 pill）
 /// - 右侧多姿势切换（CapturePoseSwitchButton）
 /// - 底部控制区（CaptureBottomBar：缩放轮盘 + 5 页签工具栏 + 抽屉 + 拍照）
-/// - 参数面板（ParamPanel）、水平仪（LevelIndicator）、快门白闪（ShutterFeedback）
+/// - 参数面板（ParamPanel，贴底浮层弹出不挤压取景器）、水平仪（LevelIndicator）、
+///   快门白闪（ShutterFeedback）
 ///
 /// 与拍摄页的不同（预览场景限定）：
 /// - 导航返回 / 右下「完成」均触发 [CaptureState.previewTemplateSourceProvider] 清理并回写。
@@ -64,8 +68,15 @@ class _CapturePreviewTemplatePageState
   /// 快门白闪触发版本号
   int _shutterTrigger = 0;
 
-  /// 参数面板展开时底部控制区的实时高度，用于取景器让位。
-  double _bottomControlsHeight = 0;
+  /// 横屏时悬浮内容（模板信息卡）需顺时针旋转的 90° 圈数（0/1/3）。
+  /// 由传感器按左右持机方向给出，保证全屏横持时取景器横向铺满且内容正向可读。
+  int _landscapeQuarterTurns = 0;
+
+  /// 来自加速度传感器的竖/横持判定（true=竖持，false=横持，null=尚未判定/平放）。
+  /// 对齐拍摄页：fullscreen 档仅在全屏横持时旋转取景器成横满屏（所见即所得），
+  /// 由传感器判定，不依赖 OHOS 是否更新 MediaQuery（横持时 MediaQuery 常恒报竖屏）。
+  bool? _devicePortrait;
+  StreamSubscription<HoldOrientation>? _devicePortraitSub;
 
   /// 取景器 RepaintBoundary key（facing 变化时重建以切换传感器）
   GlobalKey? _viewfinderCaptureKey;
@@ -82,11 +93,26 @@ class _CapturePreviewTemplatePageState
   @override
   void initState() {
     super.initState();
+    // 订阅加速度传感器判定竖/横持（对齐拍摄页）：全屏横持时旋转取景器成横满屏。
+    // 仅当判定翻转时 setState，避免传感器高频回调触发不必要的重建。
+    _devicePortraitSub = LevelSensorService.holdOrientationStream().listen((o) {
+      if (!mounted) return;
+      if (o.quarterTurns != _landscapeQuarterTurns ||
+          o.portrait != _devicePortrait) {
+        setState(() {
+          _landscapeQuarterTurns = o.quarterTurns;
+          _devicePortrait = o.portrait;
+        });
+      } else {
+        _devicePortrait = o.portrait;
+      }
+    });
     _loadTemplate();
   }
 
   @override
   void dispose() {
+    _devicePortraitSub?.cancel();
     // dispose 兜底清理预览桥接源，避免残留到真实拍摄页
     _clearPreviewSource();
     super.dispose();
@@ -426,16 +452,16 @@ class _CapturePreviewTemplatePageState
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. 取景器（含补光悬浮模式）
+          // 1. 取景器（含补光悬浮模式），参数面板为贴底浮层，不挤压取景框
           AnimatedPadding(
             duration: const Duration(milliseconds: 260),
             curve: Curves.easeOutCubic,
-            padding: EdgeInsets.only(
-              bottom: paramPanelExpanded ? _bottomControlsHeight : 0,
-            ),
+            padding: EdgeInsets.zero,
             child: _PreviewViewfinderArea(
               onZoomChanged: _onZoomChanged,
               rawCaptureKey: _viewfinderCaptureKey,
+              devicePortrait: _devicePortrait,
+              landscapeQuarterTurns: _landscapeQuarterTurns,
             ),
           ),
 
@@ -475,6 +501,7 @@ class _CapturePreviewTemplatePageState
           ),
 
           // 5. 底部控制区（缩放轮盘 + 5 页签工具栏 + 抽屉 + 拍摄按钮行）
+          //    参数面板由下方浮层弹出（paramPanelOverlay），不占用抽屉、不挤压取景器。
           Positioned(
             bottom: 0,
             left: 0,
@@ -488,12 +515,34 @@ class _CapturePreviewTemplatePageState
               // 预览页不产生成片缩略图（角标缩略图为空，点击无操作）
               onThumbnailTap: () {},
               rawCaptureKey: _viewfinderCaptureKey,
-              onHeightChanged: (size) {
-                if (_bottomControlsHeight == size.height) return;
-                setState(() => _bottomControlsHeight = size.height);
-              },
+              paramPanelOverlay: true,
+              // 预览页只调模板参数、不选模板，隐藏「模板」工具栏
+              hideTemplatesTool: true,
             ),
           ),
+
+          // 5.5 参数面板作为贴底浮层弹出，不改变取景器与底部控制区布局（对齐拍摄页）。
+          if (paramPanelExpanded) ...[
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  ref.read(CaptureState.panelExpandedProvider.notifier).state =
+                      false;
+                  ref.read(CaptureState.activeToolProvider.notifier).state =
+                      null;
+                },
+              ),
+            ),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: ParamPanel(
+                bottomInset: MediaQuery.of(context).padding.bottom,
+              ),
+            ),
+          ],
 
           // 6. 水平仪
           const LevelIndicator(),
@@ -502,53 +551,7 @@ class _CapturePreviewTemplatePageState
           Positioned.fill(
             child: ShutterFeedback(trigger: _shutterTrigger),
           ),
-
-          // 8. 右下「完成」浮层胶囊（tokens.surface + 细边，叠照片浮层规范）
-          Positioned(
-            right: 14,
-            bottom: MediaQuery.of(context).size.height * 0.34,
-            child: _DoneFloatingButton(onTap: _onSyncBack),
-          ),
         ],
-      ),
-    );
-  }
-}
-
-/// 右下「完成」浮层胶囊：跟随主题（surface + 细边），不沿用旧硬编码金色渐变。
-class _DoneFloatingButton extends ConsumerWidget {
-  const _DoneFloatingButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(themeTokensProvider);
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-        decoration: BoxDecoration(
-          color: tokens.surface.withOpacity(0.9),
-          borderRadius: BorderRadius.circular(9999),
-          border: Border.all(color: tokens.surfaceAlt, width: 0.8),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.check, size: 16, color: tokens.textPrimary),
-            const SizedBox(width: 4),
-            Text(
-              '同步到编辑器',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -560,10 +563,19 @@ class _PreviewViewfinderArea extends ConsumerWidget {
   const _PreviewViewfinderArea({
     required this.onZoomChanged,
     this.rawCaptureKey,
+    this.devicePortrait,
+    this.landscapeQuarterTurns = 0,
   });
 
   final ValueChanged<double> onZoomChanged;
   final GlobalKey? rawCaptureKey;
+
+  /// 物理方向（加速度传感器判定）：true=竖持，false=横持，null=未知。
+  /// 仅 fullscreen 档在横持时需要旋转取景器，由本字段驱动；非 fullscreen 忽略。
+  final bool? devicePortrait;
+
+  /// 横屏时内容旋转到正向的 90° 圈数（1 或 3），模板信息卡同款（见 HoldOrientation）。
+  final int landscapeQuarterTurns;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -576,10 +588,15 @@ class _PreviewViewfinderArea extends ConsumerWidget {
           constraints.maxWidth,
           constraints.maxHeight,
         );
-        final isPortrait = screenSize.height >= screenSize.width;
+        // fullscreen 档才用传感器方向（横持需旋转取景器成横满屏）；4:3/1:1 保持
+        // constraints 判定（恒竖屏），避免改动其现有取景框行为。
+        final isPortrait = ratioId == 'fullscreen' && devicePortrait != null
+            ? devicePortrait!
+            : screenSize.height >= screenSize.width;
         final screenRatio = screenSize.width / screenSize.height;
-        final targetRatio =
-            CaptureState.computeTargetRatio(ratioId, isPortrait) ??
+        final targetRatio = ratioId == 'fullscreen'
+            ? CaptureState.fullscreenRatio(isPortrait, screenRatio)
+            : CaptureState.computeTargetRatio(ratioId, isPortrait) ??
                 screenRatio;
         final isFullscreen = ratioId == 'fullscreen';
 
@@ -627,6 +644,17 @@ class _PreviewViewfinderArea extends ConsumerWidget {
             );
           }
 
+          // 全屏横持：整体旋转取景器成横满屏，实现"所见即所得"。
+          // RotatedBox 会交换子项布局宽高：子项按横满屏（宽>高）布局，旋转 90° 后
+          // 恰好铺满恒竖屏画布，且相对持机方向呈横屏可读（对齐拍摄页同款）。
+          // 仅 fullscreen 且横持时启；4:3/1:1 的 viewfinder 原样返回。
+          if (isFullscreen && !isPortrait && landscapeQuarterTurns != 0) {
+            viewfinder = RotatedBox(
+              quarterTurns: landscapeQuarterTurns,
+              child: viewfinder,
+            );
+          }
+
           return Container(
             color: Colors.black,
             child: Center(
@@ -646,6 +674,8 @@ class _PreviewViewfinderArea extends ConsumerWidget {
           onZoomChanged: onZoomChanged,
           rawCaptureKey: rawCaptureKey,
           screenSize: screenSize,
+          devicePortrait: devicePortrait,
+          landscapeQuarterTurns: landscapeQuarterTurns,
         );
       },
     );
@@ -658,11 +688,20 @@ class _PreviewFloatingViewfinder extends ConsumerStatefulWidget {
     required this.onZoomChanged,
     required this.rawCaptureKey,
     required this.screenSize,
+    this.devicePortrait,
+    this.landscapeQuarterTurns = 0,
   });
 
   final ValueChanged<double> onZoomChanged;
   final GlobalKey? rawCaptureKey;
   final Size screenSize;
+
+  /// 物理方向（加速度传感器判定）：true=竖持，false=横持，null=未知。
+  /// 仅 fullscreen 档在横持时按传感器方向取横满屏比例；非 fullscreen 忽略。
+  final bool? devicePortrait;
+
+  /// 横屏时内容旋转到正向的 90° 圈数（1 或 3）。
+  final int landscapeQuarterTurns;
 
   @override
   ConsumerState<_PreviewFloatingViewfinder> createState() =>
@@ -685,10 +724,15 @@ class _PreviewFloatingViewfinderState
 
     final sw = widget.screenSize.width;
     final sh = widget.screenSize.height;
-    final isPortrait = sh >= sw;
+    // fullscreen 档用传感器方向判断横/竖持（横持取横满屏比例）；非 fullscreen 保持
+    // constraints 判定（恒竖屏），避免改动 4:3/1:1 的悬浮窗行为。
+    final isPortrait = ratioId == 'fullscreen' && widget.devicePortrait != null
+        ? widget.devicePortrait!
+        : sh >= sw;
     final screenRatio = sw / sh;
-    final windowRatio =
-        CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
+    final windowRatio = ratioId == 'fullscreen'
+        ? CaptureState.fullscreenRatio(isPortrait, screenRatio)
+        : CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
     final windowW = sw * scale;
     final windowH = windowW / windowRatio;
 

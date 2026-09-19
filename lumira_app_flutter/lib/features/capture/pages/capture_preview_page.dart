@@ -83,8 +83,7 @@ class CapturePreviewPage extends ConsumerStatefulWidget {
   final String? challengeId;
 
   @override
-  ConsumerState<CapturePreviewPage> createState() =>
-      _CapturePreviewPageState();
+  ConsumerState<CapturePreviewPage> createState() => _CapturePreviewPageState();
 }
 
 class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
@@ -204,8 +203,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   @override
   void initState() {
     super.initState();
-    _photoUrl =
-        widget.photoUrl ?? CapturePreviewMockData.lastCapturedPhotoUrl;
+    _photoUrl = widget.photoUrl ?? CapturePreviewMockData.lastCapturedPhotoUrl;
     // 拍摄后默认不选择任何心情（全部非激活），用户可在编辑页选择或点击「跳过」
     _moods = CapturePreviewMockData.moods
         .map((m) => m.copyWith(active: false))
@@ -363,9 +361,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       _selectedSceneId = record.sceneId;
       _isEdited = false;
       // 恢复该照片的心情选中状态
-      _moods = _moods
-          .map((m) => m.copyWith(active: m.name == record.mood))
-          .toList();
+      _moods =
+          _moods.map((m) => m.copyWith(active: m.name == record.mood)).toList();
     });
     // 按该照片实际宽高比初始化裁剪比例（默认选框 = 满幅，无操作 = 无裁剪）
     _initLocalCropRatio();
@@ -546,9 +543,10 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       grain: 0,
       // systemFilter / LUT：未更改时用 'none'/null（无附加滤镜）；
       // 已更改时无法通过 ColorFiltered 精确"撤销"烘焙的滤镜，但保存时会从原图重新处理
-      systemFilter: (_localPostProcess.systemFilter != _bakedPostProcess.systemFilter)
-          ? _localPostProcess.systemFilter
-          : null,
+      systemFilter:
+          (_localPostProcess.systemFilter != _bakedPostProcess.systemFilter)
+              ? _localPostProcess.systemFilter
+              : null,
       lut: (_localPostProcess.lut != _bakedPostProcess.lut)
           ? _localPostProcess.lut
           : 'none',
@@ -632,8 +630,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                     Icon(Icons.broken_image, color: Colors.white38, size: 64),
               ),
             )
-        : Image.file(
-            File(photoUrl),
+          : Image.file(
+              File(photoUrl),
               fit: BoxFit.contain,
               errorBuilder: (_, __, ___) => const Center(
                 child:
@@ -651,8 +649,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     // 对比模式：显示原图色彩（透明滤镜 = 无后期），不应用变换
     if (isComparing) {
       return ColorFiltered(
-        colorFilter: const ColorFilter.mode(
-            Colors.transparent, BlendMode.dst),
+        colorFilter: const ColorFilter.mode(Colors.transparent, BlendMode.dst),
         child: buildImage(),
       );
     }
@@ -1019,9 +1016,9 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       // - 替换原图：outputPath=photoPath，覆盖当前显示的照片文件
       // - 另存为：写入不冲突的新文件路径，不影响原图
       final fullParams = _bakedPostProcess.merge(_localPostProcess).copyWith(
-        cropRatio: plan.baseRatio,
-        customCropRect: plan.composedCropRect,
-      );
+            cropRatio: plan.baseRatio,
+            customCropRect: plan.composedCropRect,
+          );
       final outputPath =
           isDuplicate ? _makeDuplicatePath(photoPath) : photoPath;
       final processedPath = await PhotoPostProcessor.processFile(
@@ -1040,8 +1037,10 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
 
       // Evict FileImage 缓存（避免显示旧版本）
       try {
-        PaintingBinding.instance.imageCache.evict(FileImage(File(processedPath)));
-        PaintingBinding.instance.imageCache.evict(FileImage(File(originalPath)));
+        PaintingBinding.instance.imageCache
+            .evict(FileImage(File(processedPath)));
+        PaintingBinding.instance.imageCache
+            .evict(FileImage(File(originalPath)));
       } catch (_) {}
 
       // 操作数据库记录（使用 _currentPhotoId 以支持滑动切换后的当前照片）
@@ -1049,10 +1048,10 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       if (isDuplicate) {
         // 另存为：创建新记录，原图记录保持不变
         final newPhotoId = 'photo_${DateTime.now().millisecondsSinceEpoch}';
-        final old = (_currentIndex >= 0 &&
-                _currentIndex < _historyPhotos.length)
-            ? _historyPhotos[_currentIndex]
-            : null;
+        final old =
+            (_currentIndex >= 0 && _currentIndex < _historyPhotos.length)
+                ? _historyPhotos[_currentIndex]
+                : null;
         final dao = await ref.read(galleryDaoProvider.future);
         final newRecord = GalleryItemRecord(
           id: newPhotoId,
@@ -1202,9 +1201,9 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       );
       // 从原图重新处理（应用当前编辑参数），写出到临时文件
       final fullParams = _bakedPostProcess.merge(_localPostProcess).copyWith(
-        cropRatio: plan.baseRatio,
-        customCropRect: plan.composedCropRect,
-      );
+            cropRatio: plan.baseRatio,
+            customCropRect: plan.composedCropRect,
+          );
       tmpPath = _makeDuplicatePath(photoPath);
       final processedPath = await PhotoPostProcessor.processFile(
         inputPath: _originalPath!,
@@ -1263,7 +1262,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         ),
         content: Text(
           '确定删除这张照片吗？此操作不可撤销。',
-          style: TextStyle(fontSize: 14, color: tokens.textSecondary, height: 1.5),
+          style:
+              TextStyle(fontSize: 14, color: tokens.textSecondary, height: 1.5),
         ),
         actions: [
           TextButton(
@@ -1274,7 +1274,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
               '删除',
-              style: TextStyle(color: tokens.danger, fontWeight: FontWeight.w600),
+              style:
+                  TextStyle(color: tokens.danger, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -1295,8 +1296,9 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         final remaining = List<GalleryItemRecord>.from(_historyPhotos)
           ..removeWhere((record) => record.id == pid);
         if (remaining.isNotEmpty) {
-          final nextIndex =
-              removedIndex < 0 ? 0 : removedIndex.clamp(0, remaining.length - 1);
+          final nextIndex = removedIndex < 0
+              ? 0
+              : removedIndex.clamp(0, remaining.length - 1);
           final nextPhoto = remaining[nextIndex];
           final nextLastPhotoPath = nextPhoto.filePath;
           if (nextLastPhotoPath != null && nextLastPhotoPath.isNotEmpty) {
@@ -1362,7 +1364,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     } catch (e) {
       debugPrint('[delete] 删除照片失败: $e');
       if (!mounted) return;
-      LumiraToast.show(context, '删除失败：$e', duration: const Duration(seconds: 2));
+      LumiraToast.show(context, '删除失败：$e',
+          duration: const Duration(seconds: 2));
     }
   }
 
@@ -1395,6 +1398,91 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       backgroundColor: isThemed ? tokens.canvas : Colors.black,
       body: Column(
         children: [
+          // 0. 顶部导航 + 只读横幅 + 右上角对比按钮/徽标（仅 _uiVisible 时显示）。
+          //    顶部导航占用布局空间、照片只显示在其下方，避免超高照片的内容
+          //    延伸到标题栏后方（与后期修图页一致）。
+          if (_uiVisible)
+            SafeArea(
+              bottom: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _PreviewNav(
+                    tokens: tokens,
+                    isThemed: isThemed,
+                    onBack: _back,
+                    onShare: _onShare,
+                    // 删除 / 保存到系统相册已移入「更多」底部 Sheet
+                    onSave: _onSave,
+                    showSave: _isEdited,
+                  ),
+                  // 只读模式横幅：原图未保留时显示（位于导航栏下方）
+                  if (_isReadOnly)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      color: tokens.dangerSubtle,
+                      child: Row(
+                        children: [
+                          Icon(Icons.lock_outline,
+                              size: 16, color: tokens.danger),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '此照片未保留原图，仅可查看，无法编辑',
+                              style:
+                                  TextStyle(fontSize: 12, color: tokens.danger),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  // 右上角对比按钮（顶栏下方，叠照片浮层取向：半透明+细边无阴影）
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16, right: 12),
+                        child: ComparePhotoButton(
+                          comparing: _isComparing,
+                          tokens: tokens,
+                          onTap: _onCompareToggle,
+                          overlayOnImage: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                  // 对比状态徽标（开启后 1s 内显示，说明当前看到的版本）
+                  if (_showCompareBadge)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8, right: 12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.6),
+                              borderRadius: BorderRadius.circular(1000),
+                              border: Border.all(
+                                  color: Colors.white.withOpacity(0.25)),
+                            ),
+                            child: Text(
+                              _isComparing ? '查看修改前' : '已回到修改后',
+                              style: const TextStyle(
+                                  fontSize: 11, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
           // 1. 照片区：占满剩余空间（面板展开时由 Column 自动收缩）
           Expanded(
             child: Stack(
@@ -1402,98 +1490,6 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
               children: [
                 // 照片本体（裁剪模式 → PhotoCropLayer；否则 PhotoView/历史滑动）
                 _buildPhotoStage(tokens, isThemed),
-                // 顶部导航 + 只读横幅 + 右上角对比按钮/徽标（仅 _uiVisible 时显示）。
-                // 对比按钮与顶栏共用同一 SafeArea 布局流、位于顶栏下方：
-                // 真机状态栏 inset 下不与顶栏右侧动作图标重叠（不再引入
-                // 独立于顶栏高度的 top 魔法值）。
-                if (_uiVisible)
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: SafeArea(
-                      bottom: false,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _PreviewNav(
-                            tokens: tokens,
-                            isThemed: isThemed,
-                            onBack: _back,
-                            onShare: _onShare,
-                            // 删除 / 保存到系统相册已移入「更多」底部 Sheet
-                            onSave: _onSave,
-                            showSave: _isEdited,
-                          ),
-                          // 只读模式横幅：原图未保留时显示（位于导航栏下方）
-                          if (_isReadOnly)
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              color: tokens.dangerSubtle,
-                              child: Row(
-                                children: [
-                                  Icon(Icons.lock_outline,
-                                      size: 16, color: tokens.danger),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      '此照片未保留原图，仅可查看，无法编辑',
-                                      style: TextStyle(
-                                          fontSize: 12, color: tokens.danger),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          // 右上角对比按钮（顶栏下方，叠照片浮层取向：半透明+细边无阴影）
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(top: 16, right: 12),
-                                child: ComparePhotoButton(
-                                  comparing: _isComparing,
-                                  tokens: tokens,
-                                  onTap: _onCompareToggle,
-                                  overlayOnImage: true,
-                                ),
-                              ),
-                            ],
-                          ),
-                          // 对比状态徽标（开启后 1s 内显示，说明当前看到的版本）
-                          if (_showCompareBadge)
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.only(top: 8, right: 12),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 5),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.6),
-                                      borderRadius: BorderRadius.circular(1000),
-                                      border: Border.all(
-                                          color: Colors.white.withOpacity(0.25)),
-                                    ),
-                                    child: Text(
-                                      _isComparing ? '查看修改前' : '已回到修改后',
-                                      style: const TextStyle(
-                                          fontSize: 11, color: Colors.white),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -1519,8 +1515,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                     _localPostProcess.customCropRect!.h,
                   )
                 : null,
-            aspectRatio: _parseCropAspectRatio(
-                _localPostProcess.cropRatio,
+            aspectRatio: _parseCropAspectRatio(_localPostProcess.cropRatio,
                 MediaQuery.of(context).size.aspectRatio),
             transform: _localTransform,
             onChanged: (rect) => setState(() {
@@ -1549,8 +1544,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                   maxScale: 6.0,
                   scaleStateCycle: _previewScaleCycle,
                   onTapUp: _onPhotoTap,
-                  backgroundDecoration:
-                      BoxDecoration(color: isThemed ? tokens.canvas : Colors.black),
+                  backgroundDecoration: BoxDecoration(
+                      color: isThemed ? tokens.canvas : Colors.black),
                   child: _buildPhotoContent(
                     _photoUrl,
                     _isComparing,
@@ -1566,8 +1561,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                 pageController: _pageController,
                 onPageChanged: _onPageChanged,
                 scrollPhysics: const BouncingScrollPhysics(),
-                backgroundDecoration:
-                    BoxDecoration(color: isThemed ? tokens.canvas : Colors.black),
+                backgroundDecoration: BoxDecoration(
+                    color: isThemed ? tokens.canvas : Colors.black),
                 builder: (context, index) {
                   final record = _historyPhotos[index];
                   final url = record.filePath ?? record.dataUrl ?? '';
@@ -1625,8 +1620,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
               onSelectScene: _selectScene,
               tokens: tokens,
             ),
-            Container(
-                width: double.infinity, height: 1, color: tokens.divider),
+            Container(width: double.infinity, height: 1, color: tokens.divider),
             PreviewEditToolbar(
               activeTool: _activeTool,
               postProcess: _localPostProcess,

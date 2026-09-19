@@ -206,7 +206,6 @@ flutter:
     - assets/images/scenes/
     - assets/images/academy/
     - assets/images/tutorials/
-    - assets/images/diary/
     - assets/logos/
 
   fonts:

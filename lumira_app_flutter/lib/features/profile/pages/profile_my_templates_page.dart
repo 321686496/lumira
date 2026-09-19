@@ -575,7 +575,7 @@ class _FilterBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4), // 40rpx/32rpx/8rpx → 20/16/4dp
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16), // 40rpx/32rpx → 20/16dp；底部给足空间，避免新拟态 chip 的下侧浮雕阴影被下方内容裁切
       child: Row(
         children: [
           for (var i = 0; i < _filters.length; i++) ...[
