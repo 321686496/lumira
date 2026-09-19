@@ -62,7 +62,6 @@ export interface AiBatchProgress {
 /** 已完成/错误任务的保留时长（超过即清理，防 base64 结果占用内存） */
 const RESULT_TTL_MS = 15 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 60 * 1000;
-const DEPENDENT_CONCURRENCY = 5;
 const GENERATE_RETRY_LIMIT = 4;
 
 @Injectable()
@@ -284,26 +283,20 @@ export class AiImageTaskService implements OnModuleDestroy {
       return;
     }
 
-    const queue = [...dependents];
-    const workers = Array.from(
-      { length: Math.min(DEPENDENT_CONCURRENCY, queue.length) },
-      async () => {
-        for (;;) {
-          const dependentId = queue.shift();
-          if (!dependentId) return;
-          const dependent = this.tasks.get(dependentId);
-          const batch = dependent?.batch;
-          if (!dependent || !batch) continue;
-          const reference: UploadFile = {
-            buffer: Buffer.from(anchor.result!.image, 'base64'),
-            filename: 'anchor.png',
-            mimetype: anchor.result!.mimeType,
-          };
-          await this.run(dependentId, reference, batch.metaJson, batch.extraPrompt);
-        }
-      },
-    );
-    void Promise.all(workers).catch(() => undefined);
+    // 锚点完成后，剩余依赖图一次性全量并发（不设并发上限）——
+    // 所有 run 同步内即置 running 并触发 generate，真正的多路上游并行调用，互不阻塞。
+    const reference: UploadFile = {
+      buffer: Buffer.from(anchor.result.image, 'base64'),
+      filename: 'anchor.png',
+      mimetype: anchor.result.mimeType,
+    };
+    const started = dependents.map((dependentId) => {
+      const dependent = this.tasks.get(dependentId);
+      const batch = dependent?.batch;
+      if (!dependent || !batch) return null;
+      return this.run(dependentId, reference, batch.metaJson, batch.extraPrompt);
+    });
+    void Promise.all(started.filter((p): p is Promise<void> => p !== null)).catch(() => undefined);
   }
 
   private failDependents(taskId: string, error: string): void {
