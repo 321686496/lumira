@@ -43,12 +43,21 @@ export class AiTemplatesController {
   }
 
   /**
-   * 批量姿势图：一次提交全部任务；首张完成后由后端使用锚点结果启动剩余任务。
+   * 批量姿势图：一次提交返回单一 batchId。后端内部控制锚点先后、并发上限与逐张进度，
+   * 前端只需轮询 GET batch/:batchId 一个接口即可拿到全量进度与结果。
    */
   @Post('ai-generate-image/batch')
   async generateImageBatch(@Req() req: FastifyRequest) {
     const { meta, reference, extraPrompt } = await parseAiMultipart(req);
     return this.aiImageTaskService.submitBatch(reference, meta, extraPrompt);
+  }
+
+  /** 查询批量姿势图进度（total/completed/current/status/results）；批次不存在则 404 */
+  @Get('ai-generate-image/batch/:batchId')
+  async getImageBatch(@Param('batchId') batchId: string) {
+    const batch = this.aiImageTaskService.getBatch(batchId);
+    if (!batch) throw new NotFoundException('Image batch not found');
+    return batch;
   }
 
   /** 查询生图任务状态（done 带 image/mimeType，error 带 error；任务不存在则 404） */

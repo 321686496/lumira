@@ -35,6 +35,14 @@ describe('AiImageTaskService', () => {
     throw new Error(`timed out waiting for status ${status}`);
   }
 
+  async function waitBatchStatus(batchId: string, status: string): Promise<void> {
+    for (let i = 0; i < 12000; i++) {
+      if (service.getBatch(batchId)?.status === status) return;
+      await new Promise((r) => setTimeout(r, 2));
+    }
+    throw new Error(`timed out waiting for batch status ${status}`);
+  }
+
   it('submit 快速失败：未配置/未启用抛 503，且不触发生图', async () => {
     getActiveConfigMock.mockRejectedValue(
       new ServiceUnavailableException('AI 未配置或未启用'),
@@ -71,7 +79,7 @@ describe('AiImageTaskService', () => {
     expect(service.get('img_nope')).toBeNull();
   });
 
-  it('批量姿势任务：首张完成后用锚点结果启动剩余任务', async () => {
+  it('批量姿势任务：返回单个 batchId，进度 indices 完整，首张用锚点结果启动剩余任务', async () => {
     getActiveConfigMock.mockResolvedValue({} as never);
     generateMock.mockImplementation(async (_reference, metaJson: string) => {
       const meta = JSON.parse(metaJson);
@@ -82,10 +90,18 @@ describe('AiImageTaskService', () => {
     });
     const draft = { pose: [{ index: 0 }, { index: 1 }, { index: 2 }] };
 
-    const { tasks } = await service.submitBatch(undefined, JSON.stringify(draft));
+    const { batchId } = await service.submitBatch(undefined, JSON.stringify(draft));
+    expect(batchId).toMatch(/^bimg_/);
 
-    expect(tasks).toHaveLength(3);
-    await Promise.all(tasks.map(({ taskId }) => waitStatus(taskId, 'done')));
+    const initial = service.getBatch(batchId);
+    expect(initial?.total).toBe(3);
+    expect(initial?.results.map((r) => r.index)).toEqual([0, 1, 2]);
+
+    await waitBatchStatus(batchId, 'done');
+    const done = service.getBatch(batchId);
+    expect(done?.completed).toBe(3);
+    expect(done?.status).toBe('done');
+    expect(done?.results.every((r) => r.status === 'done' && r.error === undefined)).toBe(true);
     expect(generateMock).toHaveBeenCalledTimes(3);
 
     const calls = generateMock.mock.calls as Array<[UploadFile | undefined, string]>;
@@ -95,18 +111,19 @@ describe('AiImageTaskService', () => {
     expect(calls[2][0]?.buffer.equals(anchorBuffer!)).toBe(true);
   });
 
-  it('批量姿势任务：首张锚点失败时停止剩余任务', async () => {
+  it('批量姿势任务：首张锚点失败时停止后续（批次 done 且带汉字错误）', async () => {
     getActiveConfigMock.mockResolvedValue({} as never);
     generateMock.mockRejectedValue(new Error('生图失败'));
     const draft = { pose: [{ index: 0 }, { index: 1 }, { index: 2 }] };
 
-    const { tasks } = await service.submitBatch(undefined, JSON.stringify(draft));
+    const { batchId } = await service.submitBatch(undefined, JSON.stringify(draft));
 
-    await Promise.all(tasks.map(({ taskId }) => waitStatus(taskId, 'error')));
+    await waitBatchStatus(batchId, 'done');
+    const results = service.getBatch(batchId)?.results ?? [];
     expect(generateMock).toHaveBeenCalledTimes(1);
-    expect(service.get(tasks[0].taskId)?.error).toBe('生图失败');
-    expect(service.get(tasks[1].taskId)?.error).toContain('锚点');
-    expect(service.get(tasks[2].taskId)?.error).toContain('锚点');
+    expect(results[0].error).toBe('生图失败');
+    expect(results[1].error).toContain('锚点');
+    expect(results[2].error).toContain('锚点');
   });
 
   it('批量姿势任务：限流等瞬时失败自动重试', async () => {
@@ -117,9 +134,25 @@ describe('AiImageTaskService', () => {
       .mockResolvedValue({ base64: 'cG9zZQ==', mimeType: 'image/png' });
     const draft = { pose: [{ index: 0 }, { index: 1 }] };
 
-    const { tasks } = await service.submitBatch(undefined, JSON.stringify(draft));
+    const { batchId } = await service.submitBatch(undefined, JSON.stringify(draft));
 
-    await Promise.all(tasks.map(({ taskId }) => waitStatus(taskId, 'done')));
+    await waitBatchStatus(batchId, 'done');
+    expect(generateMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('批量姿势任务：「生图服务返回内容为空」纳入可重试并最终成功', async () => {
+    getActiveConfigMock.mockResolvedValue({} as never);
+    generateMock
+      .mockResolvedValueOnce({ base64: 'YW5jaG9y', mimeType: 'image/png' })
+      .mockRejectedValueOnce(new Error('生图服务返回内容为空'))
+      .mockResolvedValue({ base64: 'cG9zZQ==', mimeType: 'image/png' });
+    const draft = { pose: [{ index: 0 }, { index: 1 }] };
+
+    const { batchId } = await service.submitBatch(undefined, JSON.stringify(draft));
+
+    await waitBatchStatus(batchId, 'done');
+    const results = service.getBatch(batchId)?.results ?? [];
+    expect(results.every((r) => r.status === 'done' && r.error === undefined)).toBe(true);
     expect(generateMock).toHaveBeenCalledTimes(3);
   });
 });
