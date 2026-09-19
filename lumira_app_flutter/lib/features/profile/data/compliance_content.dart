@@ -402,8 +402,8 @@ class ComplianceDocs {
         ComplianceListItem(
           title: '扫码识别',
           rows: [
-            ComplianceKVRow(label: 'SDK 名称', value: 'qr_code_scanner'),
-            ComplianceKVRow(label: '提供方', value: '开源组件'),
+            ComplianceKVRow(label: 'SDK 名称', value: 'mobile_scanner / HarmonyOS Scan Kit'),
+            ComplianceKVRow(label: '提供方', value: '开源组件与系统能力'),
             ComplianceKVRow(label: '使用目的', value: '扫描二维码完成模板导入或账号恢复'),
             ComplianceKVRow(label: '收集的信息', value: '相机画面仅在本地解析'),
           ],
