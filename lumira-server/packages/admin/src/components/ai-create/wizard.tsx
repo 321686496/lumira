@@ -26,7 +26,7 @@ import {
   aiAnalyzeAction,
   getAiConfigAction,
 } from '@/actions/ai';
-import { generateAiPoseImages, generateAiSilhouettes } from '@/lib/ai-task';
+import { generateAiPoseImages, generateAiSilhouettes, type AiPoseProgress } from '@/lib/ai-task';
 import type { TemplateCategory } from '@/types/admin';
 import { StepCover, type CoverCandidate } from './step-cover';
 import { StepSilhouette } from './step-silhouette';
@@ -84,6 +84,8 @@ export function AiCreateWizard({
   const [analyzing, setAnalyzing] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [autoState, setAutoState] = useState<{ running: boolean; stage: AutoStage; error?: string } | null>(null);
+  /** 全自动「生成封面」阶段实时进度（第 X/Y 张） */
+  const [poseProgress, setPoseProgress] = useState<AiPoseProgress | null>(null);
   /** Step1 附加输入：创作要求 / 姿势个数（'auto' = AI 自动判断）；主文字描述复用 inputText（同时作为 textDesc 附加输入） */
   const [creationReq, setCreationReq] = useState('');
   const [poseCount, setPoseCount] = useState('auto');
@@ -303,6 +305,7 @@ export function AiCreateWizard({
       const poseResults = await generateAiPoseImages({
         draft: draftLocal,
         referenceFile: poseReferenceFile ?? exampleFile,
+        onProgress: setPoseProgress,
         onResult: appendGeneratedPose,
       });
       const poseFiles = poseResults
@@ -444,11 +447,20 @@ export function AiCreateWizard({
           <div className="rounded-md border border-primary/40 bg-primary/5 p-4">
             <div className="flex items-center gap-2 text-sm font-medium text-primary">
               <MagicWand size={16} /> 全自动进行中：{AUTO_STAGE_TEXT[autoState.stage]}
+              {autoState.stage === 'generating-image' && poseProgress
+                ? `（第 ${poseProgress.current}/${poseProgress.total} 张）`
+                : ''}
             </div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-primary/20">
               <div
                 className="h-full bg-primary transition-all"
-                style={{ width: `${((stageIndex + 1) / AUTO_STAGES.length) * 100}%` }}
+                style={{
+                  width: `${
+                    autoState.stage === 'generating-image' && poseProgress
+                      ? (poseProgress.current / Math.max(poseProgress.total, 1)) * 100
+                      : ((stageIndex + 1) / AUTO_STAGES.length) * 100
+                  }%`,
+                }}
               />
             </div>
           </div>

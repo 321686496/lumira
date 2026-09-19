@@ -15,6 +15,7 @@ import type {
   AiAnalyzeResult,
   AiImageResult,
   AiImageBatchTaskId,
+  AiBatchStatusResult,
   AiImageTaskId,
   AiImageStatusResult,
   AiSilhouetteTaskId,
@@ -83,12 +84,24 @@ export async function aiGenerateImageStartAction(
   }
 }
 
-/** 批量提交姿势生图任务：后端先生成首张锚点，再启动其余任务 */
+/** 批量提交姿势生图：后端返回单个 batchId；撤销每姿势独立 task 轮询，改由前端只轮询一个批次接口 */
 export async function aiGenerateImageBatchStartAction(
   formData: FormData,
 ): Promise<AiImageBatchTaskId | { error: string }> {
   try {
     return await api.aiGenerateImageBatchStart(formData);
+  } catch (e) {
+    if (e instanceof UnauthenticatedError) redirect('/login');
+    return { error: (e as Error).message };
+  }
+}
+
+/** 轮询批量姿势图进度（total/completed/current/status/results） */
+export async function aiGenerateImageBatchStatusAction(
+  batchId: string,
+): Promise<AiBatchStatusResult | { error: string }> {
+  try {
+    return await api.aiGenerateImageBatchStatus(batchId);
   } catch (e) {
     if (e instanceof UnauthenticatedError) redirect('/login');
     return { error: (e as Error).message };

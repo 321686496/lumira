@@ -5,15 +5,21 @@ vi.mock('@/actions/ai', () => ({
   aiGenerateImageStatusAction: vi.fn(),
   aiGenerateImageStartAction: vi.fn(),
   aiGenerateImageBatchStartAction: vi.fn(),
+  aiGenerateImageBatchStatusAction: vi.fn(),
   aiGenerateSilhouetteStartAction: vi.fn(),
   aiGenerateSilhouetteStatusAction: vi.fn(),
 }));
 
-import { aiGenerateImageBatchStartAction, aiGenerateImageStatusAction } from '@/actions/ai';
+import {
+  aiGenerateImageBatchStartAction,
+  aiGenerateImageStatusAction,
+  aiGenerateImageBatchStatusAction,
+} from '@/actions/ai';
 import { generateAiPoseImages, pollAiImageTask, AiTaskPollError } from '../ai-task';
 
 const statusMock = vi.mocked(aiGenerateImageStatusAction);
 const batchStartMock = vi.mocked(aiGenerateImageBatchStartAction);
+const batchStatusMock = vi.mocked(aiGenerateImageBatchStatusAction);
 
 describe('pollAiImageTask', () => {
   beforeEach(() => {
@@ -68,33 +74,44 @@ describe('pollAiImageTask', () => {
 
 describe('generateAiPoseImages', () => {
   beforeEach(() => {
-    statusMock.mockReset();
     batchStartMock.mockReset();
+    batchStatusMock.mockReset();
   });
 
-  it('一次提交批量任务，并保持源图顺序轮询结果', async () => {
+  it('一次提交拿到 batchId，只轮询一个批次接口并保持源图顺序返回', async () => {
     const draft = {
       pose: [{ index: 0 }, { index: 1 }, { index: 2 }],
     };
-    batchStartMock.mockResolvedValue({
-      tasks: [
-        { index: 0, taskId: 'task-0' },
-        { index: 1, taskId: 'task-1' },
-        { index: 2, taskId: 'task-2' },
-      ],
-    });
-    statusMock.mockImplementation(async (taskId: string) => ({
-      taskId,
-      status: 'done' as const,
-      image: 'aGVsbG8=',
-      mimeType: 'image/png',
-    }));
+    batchStartMock.mockResolvedValue({ batchId: 'batch-1' });
+    batchStatusMock
+      .mockResolvedValueOnce({
+        batchId: 'batch-1', total: 3, completed: 1, current: 1, status: 'running',
+        results: [
+          { index: 0, status: 'running' },
+          { index: 1, status: 'pending' },
+          { index: 2, status: 'pending' },
+        ],
+      })
+      .mockResolvedValue({
+        batchId: 'batch-1', total: 3, completed: 3, current: 3, status: 'done',
+        results: [0, 1, 2].map((index) => ({
+          index,
+          status: 'done' as const,
+          image: 'aGVsbG8=',
+          mimeType: 'image/png',
+        })),
+      });
 
-    const results = await generateAiPoseImages({ draft });
+    const seen: number[] = [];
+    const results = await generateAiPoseImages({
+      draft,
+      onProgress: (p) => seen.push(p.current),
+    });
 
     expect(results).toHaveLength(3);
     expect(results.every((result) => result.file)).toBe(true);
     expect(batchStartMock).toHaveBeenCalledTimes(1);
+    expect(batchStatusMock).toHaveBeenCalled();
 
     const formData = batchStartMock.mock.calls[0]?.[0];
     const meta = JSON.parse(formData?.get('meta') as string);
@@ -106,12 +123,10 @@ describe('generateAiPoseImages', () => {
 
   it('提交指定姿势参考图时传给后端', async () => {
     const draft = { pose: [{ index: 0 }] };
-    batchStartMock.mockResolvedValue({ tasks: [{ index: 0, taskId: 'task-0' }] });
-    statusMock.mockResolvedValue({
-      taskId: 'task-0',
-      status: 'done' as const,
-      image: 'aGVsbG8=',
-      mimeType: 'image/png',
+    batchStartMock.mockResolvedValue({ batchId: 'batch-1' });
+    batchStatusMock.mockResolvedValue({
+      batchId: 'batch-1', total: 1, completed: 1, current: 1, status: 'done',
+      results: [{ index: 0, status: 'done' as const, image: 'aGVsbG8=', mimeType: 'image/png' }],
     });
     const reference = new File(['reference'], 'pose.png', { type: 'image/png' });
 
@@ -124,6 +139,6 @@ describe('generateAiPoseImages', () => {
   it('批量提交失败时抛出错误并停止轮询', async () => {
     batchStartMock.mockResolvedValue({ error: '生图服务不可用' });
     await expect(generateAiPoseImages({ draft: {} })).rejects.toThrow('生图服务不可用');
-    expect(statusMock).not.toHaveBeenCalled();
+    expect(batchStatusMock).not.toHaveBeenCalled();
   });
 });

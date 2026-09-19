@@ -35,6 +35,7 @@ import type {
   AiAnalyzeResult,
   AiImageResult,
   AiImageBatchTaskId,
+  AiBatchStatusResult,
   AiImageTaskId,
   AiImageStatusResult,
   AiSilhouetteTaskId,
@@ -571,12 +572,16 @@ export const api = {
       body: formData,
     }, AI_ENDPOINT_TIMEOUT_MS),
 
-  /** 批量姿势：一次提交，后端先生成首张锚点再启动其余任务 */
+  /** 批量姿势：一次提交，后端返回单个 batchId */ 
   aiGenerateImageBatchStart: (formData: FormData) =>
     adminFetch<AiImageBatchTaskId>('/templates/ai-generate-image/batch', {
       method: 'POST',
       body: formData,
     }, AI_ENDPOINT_TIMEOUT_MS),
+
+  /** 轮询单个批次进度（total/completed/current/status/results） */
+  aiGenerateImageBatchStatus: (batchId: string) =>
+    adminFetch<AiBatchStatusResult>(`/templates/ai-generate-image/batch/${batchId}`),
 
   /** 查询生图任务状态（done 带 image/mimeType；error 带 error） */
   aiGenerateImageStatus: (taskId: string) =>

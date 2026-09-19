@@ -15,6 +15,8 @@ export interface ImageTask {
   id: string;
   status: ImageTaskStatus;
   createdAt: number;
+  /** 所属批次（批量姿势任务）；单任务为空 */
+  batchId?: string;
   /** 批量姿势任务依赖信息；单任务为空 */
   batch?: {
     metaJson: string;
@@ -28,6 +30,35 @@ export interface ImageTask {
   error?: string;
 }
 
+/** 批次中单张姿势图的结果项 */
+export interface AiBatchResultItem {
+  index: number;
+  /** 内部任务 id（查询用；前端无需关心） */
+  taskId?: string;
+  status: ImageTaskStatus;
+  image?: string;
+  mimeType?: string;
+  error?: string;
+}
+
+/**
+ * 单批次进度（前端只轮询这一个接口即可拿到全量进度）：
+ * - total：本批张数
+ * - completed：已结束（done 或 error）的张数
+ * - current：正在处理的第几张（1-based；全部完成后等于 total）
+ * - status：'pending' 启动前 / 'running' 处理中 / 'done' 全部处理完毕（含 error）
+ * - results：按 index 排序的逐张明细（done 带 image/mimeType，error 带 error）
+ */
+export interface AiBatchProgress {
+  batchId: string;
+  total: number;
+  completed: number;
+  current: number;
+  status: ImageTaskStatus;
+  results: AiBatchResultItem[];
+  createdAt: number;
+}
+
 /** 已完成/错误任务的保留时长（超过即清理，防 base64 结果占用内存） */
 const RESULT_TTL_MS = 15 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 60 * 1000;
@@ -37,6 +68,10 @@ const GENERATE_RETRY_LIMIT = 4;
 @Injectable()
 export class AiImageTaskService implements OnModuleDestroy {
   private readonly tasks = new Map<string, ImageTask>();
+  /** 批次进度：batchId → 进度快照 */
+  private readonly batches = new Map<string, AiBatchProgress>();
+  /** 批次内部索引注册表：batchId → [{ index, taskId }]（按 index 顺序） */
+  private readonly batchEntries = new Map<string, Array<{ index: number; taskId: string }>>();
   private readonly sweeper: NodeJS.Timeout;
 
   constructor(
@@ -48,11 +83,17 @@ export class AiImageTaskService implements OnModuleDestroy {
     this.sweeper.unref?.();
   }
 
-  /** 惰性清理过期任务（含 done/error 结果） */
+  /** 惰性清理过期任务（含 done/error 结果）及对应批次 */
   private sweep(): void {
     const now = Date.now();
     for (const [id, task] of this.tasks) {
       if (now - task.createdAt > RESULT_TTL_MS) this.tasks.delete(id);
+    }
+    for (const [batchId, batch] of this.batches) {
+      if (now - batch.createdAt > RESULT_TTL_MS) {
+        this.batches.delete(batchId);
+        this.batchEntries.delete(batchId);
+      }
     }
   }
 
@@ -73,14 +114,15 @@ export class AiImageTaskService implements OnModuleDestroy {
   }
 
   /**
-   * 批量姿势任务：先提交首张锚点，锚点完成后由后端用内存中的锚点图启动剩余任务，
-   * 避免浏览器把已生成图片经 Server Action 回传造成的中断。
+   * 批量姿势任务：一次提交返回单个 batchId（前端只需轮询 GET batch/:batchId 一个接口）。
+   * 后端先生成首张锚点，锚点完成后用内存中的锚点图启动剩余任务（并发受 DEPENDENT_CONCURRENCY 限制），
+   * 逐张完成时实时刷新批次进度；前端据 completed/total 展示「第 X/Y 张」。
    */
   async submitBatch(
     reference: UploadFile | undefined,
     metaJson: string | null,
     extraPrompt?: string | null,
-  ): Promise<{ tasks: Array<{ index: number; taskId: string }> }> {
+  ): Promise<{ batchId: string }> {
     await this.aiConfigService.getActiveConfig();
 
     let draft: Record<string, unknown> = {};
@@ -105,23 +147,16 @@ export class AiImageTaskService implements OnModuleDestroy {
         : [];
     const targets = poses.length > 0 ? poses : [undefined];
 
-    if (targets.length <= 1) {
-      const taskMeta = targets[0] === undefined
-        ? metaJson
-        : JSON.stringify({ ...draft, pose: targets[0], singlePose: true, consistency: { mode: 'strict' } });
-      const { taskId } = await this.submit(reference, taskMeta, extraPrompt);
-      return { tasks: [{ index: 0, taskId }] };
-    }
-
-    const taskIds: string[] = [];
-    targets.forEach((_, index) => {
+    const batchId = `bimg_${nanoid(16)}`;
+    const entries = targets.map((_, index) => {
       const id = `img_${nanoid(16)}`;
-      this.tasks.set(id, { id, status: 'pending', createdAt: Date.now() });
-      taskIds.push(id);
+      const task: ImageTask = { id, status: 'pending', createdAt: Date.now(), batchId };
+      this.tasks.set(id, task);
+      return { index, taskId: id };
     });
 
     targets.forEach((pose, index) => {
-      const task = this.tasks.get(taskIds[index]!);
+      const task = this.tasks.get(entries[index]!.taskId);
       if (!task) return;
       task.batch = {
         metaJson: JSON.stringify({
@@ -133,18 +168,29 @@ export class AiImageTaskService implements OnModuleDestroy {
             : { mode: 'strict', anchor: 'first' },
         }),
         extraPrompt,
-        dependencyTaskId: index === 0 ? undefined : taskIds[0],
-        dependents: index === 0 ? taskIds.slice(1) : undefined,
+        dependencyTaskId: index === 0 ? undefined : entries[0].taskId,
+        dependents: index === 0 ? entries.slice(1).map((e) => e.taskId) : undefined,
       };
     });
 
-    const anchor = this.tasks.get(taskIds[0]!);
-    if (!anchor?.batch) throw new Error('批量姿势任务初始化失败');
-    void this.run(taskIds[0]!, reference, anchor.batch.metaJson, anchor.batch.extraPrompt);
+    const firstTaskId = entries[0]!.taskId;
+    const anchor = this.tasks.get(firstTaskId);
+    this.batchEntries.set(batchId, entries);
+    this.batches.set(batchId, {
+      batchId,
+      total: entries.length,
+      completed: 0,
+      current: 1,
+      status: 'pending',
+      results: entries.map(({ index }) => ({ index, status: 'pending' })),
+      createdAt: Date.now(),
+    });
 
-    return {
-      tasks: taskIds.map((taskId, index) => ({ index, taskId })),
-    };
+    if (!anchor?.batch) throw new BadRequestException('批量姿势任务初始化失败');
+    void this.run(firstTaskId, reference, anchor.batch.metaJson, anchor.batch.extraPrompt);
+    this.refreshBatch(batchId);
+
+    return { batchId };
   }
 
   /** 后台执行（复用 AiGenerateImageService.generate，内部已有各类超时兜底，不会无限挂起） */
@@ -157,6 +203,7 @@ export class AiImageTaskService implements OnModuleDestroy {
     const task = this.tasks.get(id);
     if (!task) return;
     task.status = 'running';
+    this.refreshBatch(task.batchId);
     try {
       const r = await this.generateWithRetry(reference, metaJson, extraPrompt);
       task.status = 'done';
@@ -167,6 +214,7 @@ export class AiImageTaskService implements OnModuleDestroy {
       task.error = (err as Error)?.message || '生图失败，请重试';
       this.failDependents(id, task.error);
     }
+    this.refreshBatch(task.batchId);
   }
 
   private async generateWithRetry(
@@ -181,12 +229,46 @@ export class AiImageTaskService implements OnModuleDestroy {
       } catch (err) {
         lastError = err;
         const message = (err as Error)?.message || '';
-        const retryable = /HTTP 429|HTTP 5\d\d|超时|无法连接/.test(message);
+        // 「生图服务返回内容为空」多为上游瞬时空响应，重试大概率成功，纳入可重试集合
+        const retryable = /HTTP 429|HTTP 5\d\d|超时|无法连接|返回内容为空/.test(message);
         if (!retryable || attempt >= GENERATE_RETRY_LIMIT) break;
         await new Promise((resolve) => setTimeout(resolve, attempt * attempt * 1000));
       }
     }
     throw lastError instanceof Error ? lastError : new Error('生图失败，请重试');
+  }
+
+  /** 依据该批次各 task 最新状态重新计算进度快照（任一张结束即调用） */
+  private refreshBatch(batchId?: string): void {
+    if (!batchId) return;
+    const entries = this.batchEntries.get(batchId);
+    const progress = this.batches.get(batchId);
+    if (!entries || !progress) return;
+    const results: AiBatchResultItem[] = [];
+    let completed = 0;
+    let running = false;
+    let pending = false;
+    for (const { index, taskId } of entries) {
+      const t = this.tasks.get(taskId);
+      const status = t?.status ?? 'pending';
+      results.push({
+        index,
+        taskId: t?.id,
+        status,
+        image: t?.result?.image,
+        mimeType: t?.result?.mimeType,
+        error: t?.error,
+      });
+      if (status === 'done' || status === 'error') completed += 1;
+      else if (status === 'running') running = true;
+      else pending = true;
+    }
+    const status: ImageTaskStatus =
+      completed === entries.length ? 'done' : running || completed > 0 ? 'running' : 'pending';
+    progress.results = results;
+    progress.completed = completed;
+    progress.status = status;
+    progress.current = completed < entries.length ? completed + 1 : entries.length;
   }
 
   private startDependents(taskId: string): void {
@@ -238,6 +320,11 @@ export class AiImageTaskService implements OnModuleDestroy {
   /** 查询任务；不存在返回 null（前端据此提示可重试） */
   get(taskId: string): ImageTask | null {
     return this.tasks.get(taskId) ?? null;
+  }
+
+  /** 查询批次进度；不存在返回 null */
+  getBatch(batchId: string): AiBatchProgress | null {
+    return this.batches.get(batchId) ?? null;
   }
 
   onModuleDestroy(): void {

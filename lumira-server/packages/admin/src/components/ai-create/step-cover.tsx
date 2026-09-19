@@ -17,7 +17,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { generateAiPoseImages } from '@/lib/ai-task';
+import { generateAiPoseImages, type AiPoseProgress } from '@/lib/ai-task';
 import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
 import { ImageSquare } from '@phosphor-icons/react/dist/csr/ImageSquare';
 import { ArrowLeft } from '@phosphor-icons/react/dist/csr/ArrowLeft';
@@ -57,6 +57,8 @@ export function StepCover({
 }) {
   const { toast } = useToast();
   const [generating, setGenerating] = useState(false);
+  /** 实时生成进度（第 current/total 张） */
+  const [poseProgress, setPoseProgress] = useState<AiPoseProgress | null>(null);
   /** 预览放大：当前查看的候选索引（null = 关闭） */
   const [viewIndex, setViewIndex] = useState<number | null>(null);
   /** 附加提示词：拼接到后端合成 prompt 末尾（用户对封面图的额外要求，权重最高） */
@@ -97,11 +99,13 @@ export function StepCover({
   const generate = async () => {
     if (!draft) return;
     setGenerating(true);
+    setPoseProgress(null);
     try {
       const results = await generateAiPoseImages({
         draft,
         referenceFile: referenceFile ?? exampleFile,
         extraPrompt,
+        onProgress: setPoseProgress,
         onResult: (result) => {
           if (!result.file) return;
           const generated: CoverCandidate = {
@@ -147,6 +151,7 @@ export function StepCover({
       });
     } finally {
       setGenerating(false);
+      setPoseProgress(null);
     }
   };
 
@@ -254,9 +259,32 @@ export function StepCover({
           </Button>
           <Button size="sm" disabled={!draft || disabled} onClick={generate}>
             <MagicWand size={14} className="mr-1" />
-            {generating ? '并行生成中…' : Array.isArray(draft?.pose) && draft.pose.length > 0 ? `并行生成 ${draft.pose.length} 张姿势图` : '生成姿势图'}
+            {generating
+              ? `生成姿势图 ${poseProgress?.current ?? 0}/${poseProgress?.total ?? 0}…`
+              : Array.isArray(draft?.pose) && draft.pose.length > 0
+                ? `并行生成 ${draft.pose.length} 张姿势图`
+                : '生成姿势图'}
           </Button>
         </div>
+
+        {/* 实时生成进度条 */}
+        {generating && poseProgress && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                正在生成第 {poseProgress.current}/{poseProgress.total} 张
+                {poseProgress.status === 'done' ? '（完成）' : ''}
+              </span>
+              <span>{Math.round((poseProgress.current / poseProgress.total) * 100)}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-primary/20">
+              <div
+                className="h-full bg-primary transition-all"
+                style={{ width: `${(poseProgress.current / Math.max(poseProgress.total, 1)) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* 附加提示词：拼接到后端合成 prompt 末尾，可多次生成时调整迭代 */}
         <div className="space-y-2">

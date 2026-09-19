@@ -499,9 +499,28 @@ export interface AiImageTaskId {
   taskId: string;
 }
 
-/** 提交批量姿势任务 → 立即返回全部 taskId，后端控制首图锚点依赖 */
+/** 提交批量姿势任务 → 立即返回批次 id（前端只轮询 GET batch/:batchId 一个接口） */
 export interface AiImageBatchTaskId {
-  tasks: Array<{ index: number; taskId: string }>;
+  batchId: string;
+}
+
+/** 批次内单张姿势图结果项（按 index 排序） */
+export interface AiBatchResultItem {
+  index: number;
+  status: 'pending' | 'running' | 'done' | 'error';
+  image?: string;
+  mimeType?: string;
+  error?: string;
+}
+
+/** 批量姿势图进度（total/completed/current/status/results；status=done 即全部处理完毕） */
+export interface AiBatchStatusResult {
+  batchId: string;
+  total: number;
+  completed: number;
+  current: number;
+  status: 'pending' | 'running' | 'done' | 'error';
+  results: AiBatchResultItem[];
 }
 
 /** 查询生图任务状态（done 带 image/mimeType，error 带 error） */
