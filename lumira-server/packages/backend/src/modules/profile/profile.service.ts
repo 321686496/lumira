@@ -1,10 +1,12 @@
 // lumira-server/packages/backend/src/modules/profile/profile.service.ts
-import * as fs from 'fs';
-import * as path from 'path';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { userProfiles } from '../../database/schema';
+import { STORAGE_ADAPTER } from '../../common/storage/storage.provider';
+import type { StorageAdapter } from '../../common/storage/storage-adapter.interface';
+import { toStorageKey } from '../../common/storage/storage-key';
+import { buildAssetUrl } from '../../common/storage/asset-url';
 import { BUILTIN_AVATAR_SEEDS, BUILTIN_USERNAMES, randomPick } from './profile-constants';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
@@ -43,14 +45,17 @@ function toProfileView(row: typeof userProfiles.$inferSelect): ProfileView {
     expectations: parseArr(row.expectationsJson),
     commonScenes: parseArr(row.commonScenesJson),
     shootFrequency: row.shootFrequency,
-    avatarUrl: row.avatarUrl,
+    avatarUrl: buildAssetUrl(row.avatarUrl),
     updatedAt: row.updatedAt,
   };
 }
 
 @Injectable()
 export class ProfileService {
-  constructor(private readonly dbService: DatabaseService) {}
+  constructor(
+    private readonly dbService: DatabaseService,
+    @Inject(STORAGE_ADAPTER) private readonly storage: StorageAdapter,
+  ) {}
 
   async getOrCreateProfile(deviceId: string): Promise<ProfileView> {
     const db = this.dbService.getDb();
@@ -77,7 +82,11 @@ export class ProfileService {
     if (dto.gender !== undefined) fields.gender = dto.gender;
     if (dto.skillLevel !== undefined) fields.skillLevel = dto.skillLevel;
     if (dto.shootFrequency !== undefined) fields.shootFrequency = dto.shootFrequency;
-    if (dto.avatarUrl !== undefined) fields.avatarUrl = dto.avatarUrl;
+    if (dto.avatarUrl !== undefined) {
+      // 头像统一存相对 storageKey：`/uploads/...` 形式（或 http://…/uploads/...）归整为相对 key；外部绝对 URL（如第三方）原样保留
+      const key = toStorageKey(dto.avatarUrl);
+      fields.avatarUrl = key !== null ? key : dto.avatarUrl;
+    }
     if (dto.favoriteCategories !== undefined) fields.favoriteCategoriesJson = JSON.stringify(dto.favoriteCategories);
     if (dto.painPoints !== undefined) fields.painPointsJson = JSON.stringify(dto.painPoints);
     if (dto.expectations !== undefined) fields.expectationsJson = JSON.stringify(dto.expectations);
@@ -112,34 +121,18 @@ export class ProfileService {
     }
   }
 
-  /** 保存自定义头像到 {UPLOAD_DIR}/users/{deviceId}/avatar.{ext}，删除旧文件，写 avatar_url。 */
+  /** 保存自定义头像（写透当前存储），DB 存相对 storageKey，返回经 buildAssetUrl 的公网 URL。 */
   async saveAvatar(deviceId: string, buffer: Buffer, ext: string): Promise<{ avatarUrl: string }> {
     await this.getOrCreateProfile(deviceId);
-    const uploadDir = process.env.UPLOAD_DIR || path.resolve('./data/uploads');
     // 白名单清洗 deviceId，防止路径逃逸（deviceId 源自 JWT，注册时用户自报）
     const safeId = deviceId.replace(/[^0-9a-zA-Z_-]/g, '');
-    const dir = path.join(uploadDir, 'users', safeId);
-    fs.mkdirSync(dir, { recursive: true });
-
-    // 删除旧头像
-    const db = this.dbService.getDb();
-    const oldRow = await db
-      .select({ url: userProfiles.avatarUrl })
-      .from(userProfiles)
-      .where(eq(userProfiles.deviceId, deviceId))
-      .limit(1);
-    const oldUrl = oldRow[0]?.url;
-    if (oldUrl) {
-      const oldName = oldUrl.split('/').pop();
-      if (oldName) fs.rmSync(path.join(dir, oldName), { force: true });
-    }
-
     const filename = `avatar.${ext}`;
-    fs.writeFileSync(path.join(dir, filename), buffer);
 
-    const base = process.env.BACKEND_PUBLIC_URL || 'http://localhost:3000';
-    const avatarUrl = `${base}/uploads/users/${safeId}/${filename}`;
-    await this.updateProfile(deviceId, { avatarUrl });
-    return { avatarUrl };
+    // 清旧头像 + 写新头像（同一个 id 目录即可覆盖）
+    await this.storage.deleteByDir('users', safeId);
+    const storageKey = await this.storage.write('users', safeId, filename, buffer);
+
+    await this.updateProfile(deviceId, { avatarUrl: storageKey });
+    return { avatarUrl: buildAssetUrl(storageKey) };
   }
 }

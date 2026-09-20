@@ -44,7 +44,7 @@ const PhotoTemplate freshGreenPortraitTemplate = PhotoTemplate(
       name: '封面·蹲姿仰望',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/fresh_green_portrait_pose1.png'),
       position: Position(x: 0.5, y: 0.5),
-      scale: 2.5,
+      scale: 2.7,
       rotation: 0,
       description: '人物蹲在画面中央偏下，身体侧向屏幕左约45°，面部完全转向屏幕左上方仰视（headPitch +25°）。双手抬起至下巴处，指尖轻轻捏住蕾丝头巾的系带，手肘自然下垂。视线看向屏幕左上方的光源，嘴唇微张，表情宁静憧憬。头顶留白约1/5，前景有虚化草叶遮挡。',
       cameraDirection: 'back',
