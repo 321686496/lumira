@@ -166,7 +166,6 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
 
   /// 对比按钮开启后的短暂状态徽标
   bool _showCompareBadge = false;
-  Timer? _compareBadgeTimer;
 
   /// 将裁剪比例字符串解析为数值宽高比（width/height），null 表示自由裁剪。
   /// [screenRatio] 用于 'fullscreen'（= 取景器/屏幕比例，与拍摄语义一致）。
@@ -284,7 +283,6 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   void dispose() {
     _upgradeSub?.close();
     _upgradeSub = null;
-    _compareBadgeTimer?.cancel();
     _pageController.dispose();
     super.dispose();
   }
@@ -563,17 +561,21 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     }
   }
 
-  /// 右上角对比按钮：在「修改后」与「修改前（烘焙基线）」之间切换；
-  /// 开启时短暂显示状态徽标（1s 后淡出），帮助用户理解当前看到的版本。
-  void _onCompareToggle() {
+  /// 右上角对比按钮：**按住**期间显示原图，**松开**恢复修改后；
+  /// 按住期间显示状态徽标，松开即隐藏，帮助用户理解当前看到的版本。
+  void _onCompareStart() {
     if (!mounted) return;
     setState(() {
-      _isComparing = !_isComparing;
+      _isComparing = true;
       _showCompareBadge = true;
     });
-    _compareBadgeTimer?.cancel();
-    _compareBadgeTimer = Timer(const Duration(seconds: 1), () {
-      if (mounted) setState(() => _showCompareBadge = false);
+  }
+
+  void _onCompareEnd() {
+    if (!mounted) return;
+    setState(() {
+      _isComparing = false;
+      _showCompareBadge = false;
     });
   }
 
@@ -1449,7 +1451,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                         child: ComparePhotoButton(
                           comparing: _isComparing,
                           tokens: tokens,
-                          onTap: _onCompareToggle,
+                          onHoldStart: _onCompareStart,
+                          onHoldEnd: _onCompareEnd,
                           overlayOnImage: true,
                         ),
                       ),
@@ -1472,7 +1475,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                                   color: Colors.white.withOpacity(0.25)),
                             ),
                             child: Text(
-                              _isComparing ? '查看修改前' : '已回到修改后',
+                              '查看原图',
                               style: const TextStyle(
                                   fontSize: 11, color: Colors.white),
                             ),
