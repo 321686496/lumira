@@ -550,6 +550,15 @@ export interface AiSilhouetteStatusResult {
 
 export type StorageCategory = 'templates' | 'categories' | 'banners' | 'feedback' | 'users';
 
+export type StorageId = 'local' | 'r2' | 'aliyun' | 'tencent';
+
+export const STORAGE_OPTIONS: { value: StorageId; label: string }[] = [
+  { value: 'local', label: '本地磁盘' },
+  { value: 'r2', label: 'Cloudflare R2' },
+  { value: 'aliyun', label: '阿里云 OSS' },
+  { value: 'tencent', label: '腾讯云 COS' },
+];
+
 export interface CategoryReport {
   category: StorageCategory;
   dbTotal: number;
@@ -591,6 +600,8 @@ export interface MigrationRecordView {
   id: string;
   status: 'running' | 'success' | 'failed' | 'stopped';
   triggerBy: string;
+  sourceId: StorageId;
+  targetId: StorageId;
   startedAt: number;
   finishedAt: number | null;
   error: string | null;

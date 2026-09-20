@@ -608,10 +608,10 @@ export const api = {
     }, AI_ENDPOINT_TIMEOUT_MS),
 
   // ===== 图片存储迁移（R2 迁移）=====
-  startMigration: (triggerBy: string) =>
-    adminFetch<{ id: string }>('/storage/migrate', {
+  startMigration: (triggerBy: string, target?: string) =>
+    adminFetch<{ id: string; sourceId: string; targetId: string }>('/storage/migrate', {
       method: 'POST',
-      body: JSON.stringify({ triggerBy }),
+      body: JSON.stringify({ triggerBy, target }),
     }),
 
   getMigrationStatus: () =>

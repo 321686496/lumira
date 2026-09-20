@@ -13,7 +13,6 @@ import {
 } from '../../database/schema';
 import { toStorageKey } from '../../common/storage/storage-key';
 import type { StorageAdapter, StorageCategory } from '../../common/storage/storage-adapter.interface';
-import type { LocalStorageAdapter } from '../../common/storage/local-storage.adapter';
 
 /** 单个存储 key 引用 */
 export interface KeyRef {
@@ -92,8 +91,8 @@ export class StorageMigrationAgent {
 
   constructor(
     private readonly db: DatabaseService,
-    private readonly source: LocalStorageAdapter, // 迁移源：本地磁盘
-    private readonly dest: StorageAdapter,        // 迁移目标：R2
+    private readonly source: StorageAdapter, // 迁移源：当前激活存储（任意厂商）
+    private readonly dest: StorageAdapter,   // 迁移目标：本次选择的存储
   ) {}
 
   cancel(): void {

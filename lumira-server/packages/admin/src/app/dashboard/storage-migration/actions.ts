@@ -21,8 +21,8 @@ async function wrap<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
   }
 }
 
-export async function startMigrationAction(triggerBy: string): Promise<ActionResult<{ id: string }>> {
-  const started = await wrap(() => api.startMigration(triggerBy));
+export async function startMigrationAction(triggerBy: string, target?: string): Promise<ActionResult<{ id: string; sourceId: string; targetId: string }>> {
+  const started = await wrap(() => api.startMigration(triggerBy, target));
   revalidatePath('/dashboard/storage-migration');
   return started;
 }

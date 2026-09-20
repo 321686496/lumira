@@ -375,6 +375,8 @@ export const storageMigrations = mysqlTable('storage_migrations', {
   id: varchar('id', { length: 64 }).primaryKey(),
   status: varchar('status', { length: 16 }).notNull(), // running | success | failed | stopped
   triggerBy: text('trigger_by').notNull(),
+  sourceId: varchar('source_id', { length: 32 }).notNull().default('local'), // 迁移源存储 id
+  targetId: varchar('target_id', { length: 32 }).notNull().default('r2'), // 迁移目标存储 id
   startedAt: int('started_at').notNull(),
   finishedAt: int('finished_at'),
   error: text('error'),
