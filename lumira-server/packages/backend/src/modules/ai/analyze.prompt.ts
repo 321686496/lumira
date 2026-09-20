@@ -96,7 +96,7 @@ const DRAFT_JSON_EXAMPLE = `{
     "smoothStrength": 15, "sharpen": 10, "vignette": 12, "grain": 18,
     "lut": "japanese_fresh",
     "fillLight": { "enabled": true, "color": "warm", "intensity": 0.6 },  // App 补光：暗部/夜景/室内开启（Task9）
-    "legStretch": 0.4  // 拉腿比例 0~1；仅全身/半身姿势使用（Task9）
+    "legStretch": 40  // 拉腿比例 0~100（App 整数值，满档 100）；仅全身/半身姿势使用（Task9）
   },
   "poseRefSheet": { "shared": { "outfit": "米色针织", "scene": "飘窗" },
     "perPose": [{ "name": "侧身回眸", "differentiationNote": "身体右转45度。" }] }  // 姿势参考面片（Task9）

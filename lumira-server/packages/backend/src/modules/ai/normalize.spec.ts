@@ -363,15 +363,24 @@ describe('normalizeDraft', () => {
     expect(warnings.some((w) => w.includes('intensity'))).toBe(true);
   });
 
-  it('22. Task9 越界/非法：legStretch 1.2→1；cameraDirection 非法丢弃 + warning', () => {
+  it('22. Task9 越界/非法：legStretch 超 100→100；0~100 范围内小数保留；cameraDirection 非法丢弃 + warning', () => {
     const raw = baseDraft();
-    raw.postProcess.legStretch = 1.2;
+    raw.postProcess.legStretch = 150;
     raw.pose[0].cameraDirection = 'top';
     const { draft, warnings } = normalizeDraft(raw, CATEGORIES);
 
-    expect((draft.postProcess as any).legStretch).toBe(1);
+    expect((draft.postProcess as any).legStretch).toBe(100);
     expect((draft.pose as any[])[0].cameraDirection).toBeUndefined();
     expect(warnings.some((w) => w.includes('legStretch'))).toBe(true);
     expect(warnings.some((w) => w.includes('cameraDirection'))).toBe(true);
+  });
+
+  it('22b. Task9 legStretch：0~100 内小数（0.5）原样保留，不触发夹取 warning', () => {
+    const raw = baseDraft();
+    raw.postProcess.legStretch = 0.5;
+    const { draft, warnings } = normalizeDraft(raw, CATEGORIES);
+
+    expect((draft.postProcess as any).legStretch).toBe(0.5);
+    expect(warnings.some((w) => w.includes('legStretch'))).toBe(false);
   });
 });

@@ -450,8 +450,9 @@ export function normalizeDraft(raw: unknown, categories: CategoryNode[]): Normal
     }
     if (Object.keys(fillLight).length > 0) postProcess.fillLight = fillLight;
   }
-  // 拉腿 legStretch（0~1，App 长腿比例）：越界夹取 + warning
-  setClampField(postProcess, 'legStretch', rawPost.legStretch, 0, 1, 'postProcess.legStretch', warnings);
+  // 拉腿 legStretch（App 整数值 0~100，满档 100 整图高度最大增幅20%）：
+  // 0~1 小数（如 0.6）会被保留为数值，App 端 toInt() 即可截取；越界夹取 + warning
+  setClampField(postProcess, 'legStretch', rawPost.legStretch, 0, 100, 'postProcess.legStretch', warnings);
   draft.postProcess = postProcess;
 
   // ===== poseRefSheet（姿势参考面片，透传 object；Task 9 新增，仅接收合法对象）=====

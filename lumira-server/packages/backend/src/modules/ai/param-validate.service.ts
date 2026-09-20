@@ -45,18 +45,6 @@ export class ParamValidateService {
     const corrected: Record<string, unknown> = JSON.parse(JSON.stringify(draft));
     const adjustments: string[] = [];
 
-    const postLocations = ['postProcess', 'composition.postProcess'] as const;
-    const getPost = () => {
-      for (const loc of postLocations) {
-        const target = loc === 'postProcess' ? corrected : (corrected.composition as Record<string, unknown> | undefined);
-        if (loc === 'postProcess' && corrected[loc] && typeof corrected[loc] === 'object') return corrected[loc] as Record<string, unknown>;
-        if (loc === 'composition.postProcess' && target && target[loc.split('.')[1]] && typeof target[loc.split('.')[1]] === 'object') {
-          return target[loc.split('.')[1]] as Record<string, unknown>;
-        }
-      }
-      return null;
-    };
-
     // 确保存在 postProcess 位置（优先 composition.postProcess）
     const comp = (corrected.composition && typeof corrected.composition === 'object' ? corrected.composition : {}) as Record<string, unknown>;
     if (!comp.postProcess || typeof comp.postProcess !== 'object') comp.postProcess = {};

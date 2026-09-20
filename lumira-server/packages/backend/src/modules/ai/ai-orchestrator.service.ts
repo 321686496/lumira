@@ -145,6 +145,9 @@ export class AiOrchestratorService {
       warnings.push(`评分 ${result.score} 低于闸门，进行第 ${i + 2} 次再校验`);
     }
 
+    // (6.5) 姿势参考面片写入草稿定稿（此前仅用于评分；供 normalize 透传下发）
+    workingDraft = { ...workingDraft, poseRefSheet: poseSheet };
+
     // (7) 定稿归一化（fail-safe：categories 必传，输入为 object）
     const normalized = normalizeDraft(workingDraft, categories);
     return { draft: normalized.draft, warnings: [...normalized.warnings, ...warnings], trace };
