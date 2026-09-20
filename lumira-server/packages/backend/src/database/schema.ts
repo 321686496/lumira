@@ -382,6 +382,38 @@ export const aiProviderConfig = mysqlTable('ai_provider_config', {
   updatedAt: int('updated_at').notNull(),
 });
 
+// ===== AI Golden Set 回归门禁 + Trend Index 新鲜度衰减 + 失败案例库（spec 2026-09-21 Task 11）=====
+// trend_index：趋势研究条目索引，按 topic×source×trend_date 幂等 upsert，供新鲜度衰减查询（默认 7 天 TTL）
+export const trendIndex = mysqlTable('trend_index', {
+  id: int('id').primaryKey().autoincrement(),
+  topic: varchar('topic', { length: 255 }).notNull(),
+  source: varchar('source', { length: 64 }).notNull().default(''),
+  /** 观察日期 YYYY-MM-DD（新鲜度衰减依据） */
+  trendDate: varchar('trend_date', { length: 32 }).notNull().default(''),
+  title: text('title').notNull(),
+  snippet: text('snippet'),
+  keywordsJson: text('keywords_json'),
+  imgUrl: text('img_url'),
+  url: text('url'),
+  popularity: double('popularity'),
+  payloadJson: longtext('payload_json'),
+  createdAt: int('created_at').notNull(),
+  updatedAt: int('updated_at').notNull(),
+}, (table) => ({
+  topicSourceDateIdx: uniqueIndex('uq_trend_topic_source_date').on(table.topic, table.source, table.trendDate),
+}));
+
+// template_fail_cases：生成失败的案例库（AI 向导/回归跑批报错时登记，供后续改进看板）
+export const templateFailCases = mysqlTable('template_fail_cases', {
+  id: int('id').primaryKey().autoincrement(),
+  templateId: text('template_id'),
+  traceJson: longtext('trace_json'),
+  reasonsJson: text('reasons_json'),
+  failCount: int('fail_count').notNull().default(1),
+  createdAt: int('created_at').notNull(),
+  updatedAt: int('updated_at').notNull(),
+});
+
 // ===== 图片存储迁移（R2 迁移，2026-09）=====
 // 每次迁移运行一行记录；详细失败项落本地服务器文件，DB 仅存路径与汇总。
 export const storageMigrations = mysqlTable('storage_migrations', {
