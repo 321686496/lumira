@@ -44,3 +44,9 @@ export async function listMigrationsAction(): Promise<ActionResult<MigrationReco
 export async function getMigrationDetailAction(id: string): Promise<ActionResult<MigrationRecordView>> {
   return wrap(() => api.getMigrationDetail(id));
 }
+
+export async function retryMigrationAction(id: string): Promise<ActionResult<{ id: string; sourceId: string; targetId: string }>> {
+  const res = await wrap(() => api.retryMigration(id));
+  revalidatePath('/dashboard/storage-migration');
+  return res;
+}

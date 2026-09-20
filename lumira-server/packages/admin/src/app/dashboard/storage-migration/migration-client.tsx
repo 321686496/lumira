@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select';
 import {
   startMigrationAction, stopMigrationAction, getMigrationStatusAction,
-  listMigrationsAction, getMigrationDetailAction,
+  listMigrationsAction, getMigrationDetailAction, retryMigrationAction,
 } from './actions';
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -122,6 +122,16 @@ export function MigrationClient({
     setDetailLoading(false);
     if (res.ok && res.data) setDetail(res.data);
     else setErr(res.error ?? '读取详情失败');
+  };
+
+  const onRetry = async () => {
+    if (!detail) return;
+    setBusy(true); setErr(null);
+    const res = await retryMigrationAction(detail.id);
+    setBusy(false);
+    if (!res.ok) { setErr(res.error ?? '重试失败'); return; }
+    setDetail(null); // 关闭详情，列表刷新展示新的重试记录
+    await refresh();
   };
 
   const progressPct = useMemo(() => {
@@ -262,14 +272,26 @@ export function MigrationClient({
               迁移报告 · {detail?.id}
             </DialogTitle>
             <DialogDescription>
-              开始 {fmtTime(detail?.startedAt)} · 结束 {fmtTime(detail?.finishedAt)}
+              迁移路径：{detail ? (STORAGE_LABEL[detail.sourceId] ?? detail.sourceId) : '-'}
+              <span className="mx-1">→</span>
+              {detail ? (STORAGE_LABEL[detail.targetId] ?? detail.targetId) : '-'}
+              {' · 开始 '}{fmtTime(detail?.startedAt)}{' · 结束 '}{fmtTime(detail?.finishedAt)}
               {detail?.error ? ` · 错误：${detail.error}` : ''}
             </DialogDescription>
           </DialogHeader>
           {detailLoading ? (
             <p className="text-sm text-muted-foreground">加载中…</p>
           ) : detail ? (
-            <MigrationReport summary={detail.summary} failures={detail.failureDetail ?? []} />
+            <>
+              <MigrationReport summary={detail.summary} failures={detail.failureDetail ?? []} />
+              {detail.status === 'failed' && (detail.failureDetail?.length ?? 0) > 0 && (
+                <div className="flex justify-end">
+                  <Button onClick={onRetry} disabled={busy}>
+                    重试失败项（{detail.failureDetail?.length}）
+                  </Button>
+                </div>
+              )}
+            </>
           ) : (
             <p className="text-sm text-muted-foreground">无数据</p>
           )}

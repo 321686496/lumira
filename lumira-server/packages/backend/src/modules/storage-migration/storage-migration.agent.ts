@@ -179,6 +179,92 @@ export class StorageMigrationAgent {
     return { category, id, filename };
   }
 
+  private emptyCategoryCounts(): Record<string, CategoryReport> {
+    const byCategory: Record<string, CategoryReport> = {};
+    for (const cat of ['templates', 'categories', 'banners', 'feedback', 'users'] as StorageCategory[]) {
+      byCategory[cat] = {
+        category: cat, dbTotal: 0, diskTotal: 0, migrated: 0, copied: 0,
+        missingTarget: 0, danglingDb: 0, orphans: 0, failed: 0,
+      };
+    }
+    return byCategory;
+  }
+
+  /** 仅对指定失败 storageKey 重试：源→目标复制 + 逐条核对（源/目标复用记录里的厂商）。 */
+  async retryOnly(scopedKeys: string[]): Promise<{
+    summary: MigrationSummary;
+    failures: FailureRecord[];
+    copiedKeys: string[];
+  }> {
+    const keys = [...new Set(scopedKeys)];
+    this.progress.phase = 'copy';
+    this.progress.total = keys.length;
+    this.progress.done = 0;
+    this.progress.copied = 0;
+
+    const failures: FailureRecord[] = [];
+    const copiedKeys: string[] = [];
+    const targetKeys = new Set(await this.dest.listKeys());
+
+    // 复制缺失的文件
+    for (const storageKey of keys) {
+      this.throwIfCancelled();
+      this.progress.done++;
+      if (targetKeys.has(storageKey)) continue; // 目标已有（上次可能已部分成功）
+      const { category, id, filename } = this.parseParts(storageKey);
+      try {
+        const buffer = await this.source.readBuffer(storageKey);
+        await this.dest.write(category, id, filename, buffer);
+        copiedKeys.push(storageKey);
+        this.progress.copied++;
+      } catch (e) {
+        failures.push({ phase: 'copy', storageKey, reason: `重试复制失败：${(e as Error).message}`, at: Date.now() });
+      }
+    }
+
+    this.progress.phase = 'verify';
+    const finalTarget = new Set<string>([...targetKeys, ...copiedKeys]);
+    const byCategory = this.emptyCategoryCounts();
+    const totals = { db: 0, disk: 0, migrated: 0, copied: 0, missingTarget: 0, danglingDb: 0, orphans: 0, failed: 0 };
+
+    for (const storageKey of keys) {
+      const cat = (storageKey.replace(/^\/uploads\//, '').split('/')[0] || '') as StorageCategory;
+      const r = byCategory[cat];
+      if (!r) continue;
+      r.dbTotal++;
+      totals.db++;
+      let onDisk = true;
+      try { await this.source.readBuffer(storageKey); } catch { onDisk = false; }
+      const covered = finalTarget.has(storageKey);
+      if (!onDisk) {
+        r.danglingDb++;
+        failures.push({ phase: 'verify', storageKey, reason: '源存储中无该文件，无法重试', at: Date.now() });
+      } else if (covered) {
+        r.migrated++;
+        if (copiedKeys.includes(storageKey)) r.copied++;
+      } else {
+        r.missingTarget++;
+        failures.push({ phase: 'verify', storageKey, reason: '目标存储仍缺失该文件', at: Date.now() });
+      }
+    }
+
+    for (const cat of Object.values(byCategory)) {
+      totals.migrated += cat.migrated;
+      totals.copied += cat.copied;
+      totals.missingTarget += cat.missingTarget;
+      totals.danglingDb += cat.danglingDb;
+      totals.orphans += cat.orphans;
+    }
+    totals.failed = failures.length;
+
+    this.progress.phase = 'done';
+    return {
+      summary: { success: totals.missingTarget === 0 && totals.failed === 0, byCategory, totals },
+      failures,
+      copiedKeys,
+    };
+  }
+
   /**
    * 执行一次完整迁移：枚举 → 复制 → 三向核对。
    * 返回 { refs, diskKeys, targetKeys, summary, failures, copiedKeys }

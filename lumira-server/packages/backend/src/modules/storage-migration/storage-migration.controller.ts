@@ -14,6 +14,11 @@ export class StorageMigrationController {
     return this.service.start(body?.triggerBy ?? 'admin', (body?.target as never) ?? 'r2');
   }
 
+  @Post('migrate/retry/:id')
+  retry(@Param('id') id: string, @Body() body: { triggerBy?: string }) {
+    return this.service.retry(id, body?.triggerBy ?? 'admin');
+  }
+
   @Get('migrate/status')
   status() {
     return this.service.runningView();

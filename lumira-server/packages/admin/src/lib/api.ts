@@ -625,4 +625,10 @@ export const api = {
 
   getMigrationDetail: (id: string) =>
     adminFetch<MigrationRecordView>(`/storage/migrate/${id}`),
+
+  retryMigration: (id: string) =>
+    adminFetch<{ id: string; sourceId: string; targetId: string }>(`/storage/migrate/retry/${id}`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
 };
