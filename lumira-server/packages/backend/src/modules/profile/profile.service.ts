@@ -5,6 +5,7 @@ import { DatabaseService } from '../../database/database.service';
 import { userProfiles } from '../../database/schema';
 import { STORAGE_ADAPTER } from '../../common/storage/storage.provider';
 import type { StorageAdapter } from '../../common/storage/storage-adapter.interface';
+import { toStorageKey } from '../../common/storage/storage-key';
 import { buildAssetUrl } from '../../common/storage/asset-url';
 import { BUILTIN_AVATAR_SEEDS, BUILTIN_USERNAMES, randomPick } from './profile-constants';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -81,7 +82,11 @@ export class ProfileService {
     if (dto.gender !== undefined) fields.gender = dto.gender;
     if (dto.skillLevel !== undefined) fields.skillLevel = dto.skillLevel;
     if (dto.shootFrequency !== undefined) fields.shootFrequency = dto.shootFrequency;
-    if (dto.avatarUrl !== undefined) fields.avatarUrl = dto.avatarUrl;
+    if (dto.avatarUrl !== undefined) {
+      // 头像统一存相对 storageKey：`/uploads/...` 形式（或 http://…/uploads/...）归整为相对 key；外部绝对 URL（如第三方）原样保留
+      const key = toStorageKey(dto.avatarUrl);
+      fields.avatarUrl = key !== null ? key : dto.avatarUrl;
+    }
     if (dto.favoriteCategories !== undefined) fields.favoriteCategoriesJson = JSON.stringify(dto.favoriteCategories);
     if (dto.painPoints !== undefined) fields.painPointsJson = JSON.stringify(dto.painPoints);
     if (dto.expectations !== undefined) fields.expectationsJson = JSON.stringify(dto.expectations);
