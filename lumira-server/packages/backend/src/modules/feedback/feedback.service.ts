@@ -1,11 +1,12 @@
 // lumira-server/packages/backend/src/modules/feedback/feedback.service.ts
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Inject } from '@nestjs/common';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
-import * as fs from 'fs';
-import * as path from 'path';
 import { DatabaseService } from '../../database/database.service';
 import { feedbacks } from '../../database/schema';
+import { STORAGE_ADAPTER } from '../../common/storage/storage.provider';
+import type { StorageAdapter } from '../../common/storage/storage-adapter.interface';
+import { buildAssetUrl } from '../../common/storage/asset-url';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
 import type { FeedbackUploadFile } from './feedback.controller';
 
@@ -22,11 +23,6 @@ export interface AdminFeedbackItem {
 }
 
 const MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024; // 10MB / 张
-
-function buildPublicUrl(id: string, filename: string): string {
-  const base = process.env.BACKEND_PUBLIC_URL || 'http://localhost:3000';
-  return `${base}/uploads/feedback/${id}/${filename}`;
-}
 
 function extractExt(file: FeedbackUploadFile): string {
   if (file.filename) {
@@ -45,11 +41,10 @@ function extractExt(file: FeedbackUploadFile): string {
 
 @Injectable()
 export class FeedbackService {
-  private readonly uploadDir: string;
-
-  constructor(private readonly dbService: DatabaseService) {
-    this.uploadDir = path.resolve(process.env.UPLOAD_DIR || './data/uploads');
-  }
+  constructor(
+    private readonly dbService: DatabaseService,
+    @Inject(STORAGE_ADAPTER) private readonly storage: StorageAdapter,
+  ) {}
 
   async submit(
     deviceId: string,
@@ -67,16 +62,15 @@ export class FeedbackService {
       }
     }
 
-    // 保存截图（原子性：任一失败则整体失败，不留孤儿）
+    // 保存截图（原子性：任一失败则整体失败，不留孤儿），写透当前存储，DB 存相对 key
     const screenshots: string[] = [];
-    files.forEach((file, i) => {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       const ext = extractExt(file);
       const filename = `shot-${i}.${ext}`;
-      const dir = path.join(this.uploadDir, 'feedback', id);
-      fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, filename), file.buffer);
-      screenshots.push(buildPublicUrl(id, filename));
-    });
+      const storageKey = await this.storage.write('feedback', id, filename, file.buffer);
+      screenshots.push(storageKey);
+    }
 
     await db.insert(feedbacks).values({
       id,
@@ -127,7 +121,7 @@ export class FeedbackService {
         content: r.content,
         contact: r.contact,
         status: r.status,
-        screenshots: this.parseScreenshots(r.screenshotsJson),
+        screenshots: this.parseScreenshots(r.screenshotsJson).map((s) => buildAssetUrl(s)),
         createdAt: r.createdAt,
         clientIp: r.clientIp,
       })) as AdminFeedbackItem[],

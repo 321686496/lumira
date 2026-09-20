@@ -372,6 +372,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
       // 加载持久化的前后置摄像头与照片比例（先于相机初始化，保证首次进入即恢复）
       await CaptureState.loadCameraPrefs(
           ProviderScope.containerOf(context, listen: false));
+      // 修复：loadCameraPrefs 会用「持久化的照片比例」覆盖模板比例，导致带 cropRatio 的
+      // 模板（如 9:16）进入拍摄页后被用户上次保存的 1:1 等比例覆盖，模板比例不生效。
+      // 这里在持久化比例加载完成后，若当前模板自带 cropRatio，重新夺回模板比例。
+      final entryTplRatio = ref.read(CaptureState.originalTemplateProvider);
+      final entryCropRatio = entryTplRatio?.postProcess.cropRatio;
+      if (entryCropRatio != null && entryCropRatio.isNotEmpty) {
+        ref.read(CaptureState.aspectRatioProvider.notifier).state =
+            entryCropRatio;
+      }
       // 加载模板信息卡隐藏偏好（用户上次点了隐藏则本次保持隐藏）
       await CaptureState.loadTemplateInfoCardPreference(
           ProviderScope.containerOf(context, listen: false));

@@ -1,7 +1,7 @@
 // lumira-server/packages/backend/src/common/storage/storage-adapter.interface.ts
-// 存储抽象接口：后续可切换 S3/OSS 等实现，业务只依赖此接口
+// 存储抽象接口：该接口是「每一个应用到图片存储的实体」迁移与校验的根基。
 
-export type StorageCategory = 'templates' | 'categories' | 'banners';
+export type StorageCategory = 'templates' | 'categories' | 'banners' | 'feedback' | 'users';
 
 export const STORAGE_KEY_PREFIX = '/uploads';
 
@@ -10,4 +10,10 @@ export interface StorageAdapter {
   write(category: StorageCategory, id: string, filename: string, buffer: Buffer): Promise<string>;
   /** 删除某实体整个目录 */
   deleteByDir(category: StorageCategory, id: string): Promise<void>;
+  /** 读取单个 storageKey 的原始字节（迁移/校验源读取用） */
+  readBuffer(storageKey: string): Promise<Buffer>;
+  /** 判断单个 storageKey 是否存在（迁移校验用） */
+  exists(storageKey: string): Promise<boolean>;
+  /** 列出路径前缀下的所有 storageKey（盘/桶扫描，缀 `{STORAGE_KEY_PREFIX}/...`） */
+  listKeys(prefix?: string): Promise<string[]>;
 }

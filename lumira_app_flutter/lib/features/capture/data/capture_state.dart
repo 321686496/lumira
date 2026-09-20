@@ -83,6 +83,7 @@ class CaptureState {
   /// 'fullscreen' = 与取景器全屏一致（9:16 或 16:9）
   /// '4:3' = 标准 4:3 比例
   /// '1:1' = 正方形
+  /// '9:16' = 竖版 9:16
   /// '3:4' = 竖版 3:4
   static final aspectRatioProvider = StateProvider<String>((ref) => 'fullscreen');
 
