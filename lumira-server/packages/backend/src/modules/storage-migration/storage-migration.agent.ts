@@ -310,7 +310,37 @@ export class StorageMigrationAgent {
       byCategory,
       totals,
     };
+    // 历史存量头像/截图若存的是绝对 URL，统一重写为相对 storageKey：切 R2 后它们才能真正走 R2 访问
+    await this.normalizeStoredKeys();
+
     void start;
     return { refs: dbRefs, diskKeys, targetKeys, summary, failures, copiedKeys };
+  }
+
+  /** 把手写库里的绝对 `/uploads` URL 重写为相对 storageKey（头像 + 反馈截图） */
+  private async normalizeStoredKeys(): Promise<void> {
+    const db = this.db.getDb();
+
+    // 用户头像
+    const ups = await db.select({ deviceId: userProfiles.deviceId, avatarUrl: userProfiles.avatarUrl }).from(userProfiles);
+    for (const u of ups) {
+      const key = toStorageKey(u.avatarUrl);
+      if (key !== null && key !== u.avatarUrl) {
+        await db.update(userProfiles).set({ avatarUrl: key }).where(eq(userProfiles.deviceId, u.deviceId));
+      }
+    }
+
+    // 反馈截图（数组，逐条归整）
+    const fbs = await db.select({ id: feedbacks.id, screenshotsJson: feedbacks.screenshotsJson }).from(feedbacks);
+    for (const f of fbs) {
+      let arr: string[] = [];
+      try { arr = JSON.parse(f.screenshotsJson); } catch { /* ignore */ }
+      if (!Array.isArray(arr)) continue;
+      const normalized = arr.map((s) => toStorageKey(s) ?? s);
+      const changed = normalized.some((n, i) => n !== arr[i]);
+      if (changed) {
+        await db.update(feedbacks).set({ screenshotsJson: JSON.stringify(normalized) }).where(eq(feedbacks.id, f.id));
+      }
+    }
   }
 }
