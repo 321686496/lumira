@@ -6,6 +6,7 @@
 // （key=name|query|limit）+ 8s 超时；失败抛可读错误（上层 Promise.allSettled 降级跳过）。
 
 import { createBingSearchProvider } from './web-search-bing';
+import { createVendorSearchProvider } from './web-search-vendor';
 import type { ResearchItem } from './research-item';
 import type { LlmEndpoint } from '../llm-client';
 
@@ -46,8 +47,7 @@ export function createWebSearchProvider(
     case 'vendor':
     case 'llm':
       if (!cfg.vendorEndpoint) throw new Error('vendor 联网检索需配置联网模型端点');
-      // 接入见 Task 3（web-search-vendor.ts）
-      throw new Error('vendor 联网检索适配器尚未接入');
+      return createVendorSearchProvider(cfg.vendorEndpoint);
     default:
       throw new Error(`未知的搜索服务商：${providerName}`);
   }

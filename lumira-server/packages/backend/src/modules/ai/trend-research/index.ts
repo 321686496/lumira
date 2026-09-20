@@ -5,3 +5,4 @@ export { createWebSearchProvider, cacheableSearch } from './web-search.provider'
 export type { WebSearchProvider, WebSearchQuery } from './web-search.provider';
 export type { ResearchItem } from './research-item';
 export { createBingSearchProvider } from './web-search-bing';
+export { createVendorSearchProvider } from './web-search-vendor';
