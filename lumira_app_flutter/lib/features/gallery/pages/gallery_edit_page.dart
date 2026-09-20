@@ -391,7 +391,8 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
                 child: ComparePhotoButton(
                   comparing: _isComparing,
                   tokens: tokens,
-                  onTap: () => setState(() => _isComparing = !_isComparing),
+                  onHoldStart: () => setState(() => _isComparing = true),
+                  onHoldEnd: () => setState(() => _isComparing = false),
                 ),
               ),
             ],
