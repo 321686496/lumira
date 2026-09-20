@@ -9,6 +9,7 @@ import { aiProviderConfig } from '../../database/schema';
 import { visionChat, textChat } from './llm-client';
 import { generateImage, mapSize } from './image-client';
 import { UpdateAiConfigDto } from './dto/update-ai-config.dto';
+import type { SearchConfig, SearchSourceConfig } from './trend-research';
 
 /** 脱敏后的配置视图（GET/PUT 返回；apiKey 永不回传明文） */
 export interface AiConfigView {
@@ -367,6 +368,44 @@ export class AiConfigService {
       result[target] = itemResult;
     }
     return result;
+  }
+
+  /**
+   * 获取研究管线运行时配置（供 orchestrator / trend-research 使用）。
+   * 未配置 / 未启用 → undefined（调用方视作研究关闭，自动降级为原单次路径）。
+   * 注意与 `getActiveConfig().search` 一致；此处独立方法避免 orchestrator 仅需研究配置时强依赖全量端点在设。
+   */
+  async getSearchConfig(): Promise<SearchConfig | undefined> {
+    const db = this.dbService.getDb();
+    const row = await db.query.aiProviderConfig.findFirst();
+    if (!row || row.enabled !== 1) return undefined;
+
+    const names = parseSearchSources(row.searchSources);
+    const sources: SearchSourceConfig[] = [];
+    for (const name of names) {
+      if (name === 'vendor') {
+        // 厂商联网检索：复用有效文本模型端点作为联网检索端点
+        const hasTextPlatform = Boolean(row.textProvider?.trim() && row.textBaseUrl?.trim() && row.textApiKey?.trim());
+        const hasCustomTextModel = (row.textModel ?? '').trim() !== '';
+        sources.push({
+          name,
+          provider: 'vendor',
+          vendorEndpoint: hasTextPlatform
+            ? { provider: row.textProvider as string, baseUrl: row.textBaseUrl as string, apiKey: row.textApiKey as string, model: row.textModel as string }
+            : { provider: row.provider, baseUrl: row.baseUrl, apiKey: row.apiKey, model: hasCustomTextModel ? (row.textModel as string) : row.visionModel },
+        });
+      } else if (name === 'bing') {
+        sources.push({
+          name,
+          provider: 'bing',
+          baseUrl: row.searchBaseUrl ?? undefined,
+          apiKey: row.searchApiKey ?? undefined,
+        });
+      }
+      // baidu 适配器（web-search-baidu.ts）尚未实现，跳过避免 factory 抛错
+    }
+
+    return { enabled: row.searchEnabled === 1, sources };
   }
 
   /** 未配置/未启用 → 503；供 ai-analyze 等业务端点复用 */

@@ -17,15 +17,25 @@ import {
   buildTextOnlyUserPrompt,
 } from './analyze.prompt';
 import { extractJson, normalizeDraft, CategoryNode } from './normalize';
+import { AiOrchestratorService } from './ai-orchestrator.service';
+import type { OrchestratorInput } from './ai-orchestrator.service';
 
 /** 允许的示例图 mimetype */
 const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
+
+export interface AiAnalyzeResult {
+  draft: Record<string, unknown>;
+  warnings: string[];
+  /** 研究管线开启时由 orchestrator 返回；未开启/未接入时缺省（向后兼容） */
+  trace?: Array<{ step: string; tool?: string; resultBrief: string; score?: number }>;
+}
 
 @Injectable()
 export class AiAnalyzeService {
   constructor(
     private readonly dbService: DatabaseService,
     private readonly aiConfigService: AiConfigService,
+    private readonly orchestrator?: AiOrchestratorService,
   ) {}
 
   /**
@@ -114,6 +124,22 @@ export class AiAnalyzeService {
     }
 
     // 6. 归一化（枚举校验 / 分类链校验 / 数值夹取，非法值丢弃并收集 warnings）
-    return normalizeDraft(json, categories);
+    const normalized = normalizeDraft(json, categories);
+
+    // 7. 研究管线开启（orchestrator 已接入）→ 走 Agentic 再判：以单次识别草稿为基，
+    //    由 orchestrator 追加 趋势研究 / 姿势面片 / 参数校准 / 评分闸门，返回 {draft,warnings,trace}。
+    //    否则（研究关闭 / 未接入）保留原单次路径，向后兼容。
+    if (cfg.search?.enabled && this.orchestrator) {
+      const input: OrchestratorInput = {
+        imageBase64: image ? image.buffer.toString('base64') : undefined,
+        imageMime: image ? image.mimetype : undefined,
+        text: trimmedText,
+        creationReq: extra.creationReq ?? undefined,
+        poseCount: poseCount ?? undefined,
+      };
+      return this.orchestrator.run(input, { categories, draft: json });
+    }
+
+    return normalized;
   }
 }

@@ -644,3 +644,33 @@
 - **背景/动机**：ISO 当前仅占位展示（不可编辑），已从胶囊栏移除等待实现；数据模型与既有计划（`docs/superpowers/plans/2026-08-15-camera-manual-params.md`）已就绪，属 v2 相机手动参数能力的组成部分。
 - **目标状态**：手动设置 ISO 后拍摄建议/模板展示按所选 ISO 生效；胶囊栏与参数面板显示同步，并随 4 套 UI 风格 × 主题自适应。
 - **状态**：⏳ v2 待实现
+
+---
+
+## AI 模板 Agentic 编排管线（2026-09-21）
+
+> 背景：单次 LLM 调用升级为「文本大模型为中枢 + T1 趋势研究/T2 穷尽识别/T3 姿势面片/T4 生图择优/T5 参数校准/T6 评分闸门」的 Agentic 管线（`AiOrchestratorService`）。以下为本次已落地但「当前先这样、后续再优化」的项，按本文档格式登记。
+
+### P1 · sharp 近似渲染管线：LUT / 磨皮为近似实现，非真实 3D LUT
+
+- **模块**：后端 AI 渲染（`lumira-server/packages/backend/src/modules/ai/render-approx.service.ts`，App 模板录入全自动/后台校准）
+- **优化点**：`RenderApproxService.apply` 用 sharp（色阶曲线 `linear` / 复合矩阵 `recomb` / 色罩 `tint` / 模糊 `blur` / 噪点近似）复刻 App 端 `PostProcess` 的 LUT 与磨皮，属**近似**，非服务端真实 3D LUT 变换，也不逐像素等价 App 的 filterRecipe/bakeCanvas。真实 LUT 需把 .cube 3D LUT 与应用语义逐通道映射到 sharp，当前仅做预设近似（如 cinematic/vintage 等按名字映射到线性组合）。
+- **背景/动机**：sharp 能力边界内做「App 实拍 ≈ 期望」的粗略校准参考即可满足 P4 主目标；真实 3D LUT 工程量与对齐成本高，非本计划范围。
+- **目标状态**：如需更高一致度，加载真实 3D LUT 并在 sharp 内按三线性插值实现（或下沉到后端原生/WebAssembly LUT 内核），使渲染结果与 App 成片逐像素对齐。
+- **状态**：⏳ 待优化
+
+### P1 · 真机抽检流程为手工后续项
+
+- **模块**：后端 AI 渲染（RenderApproxService）+ 后台 AI 向导
+- **优化点**：P4 实拍闭环的「App 实拍 ≈ 期望」**真机抽检**当前无自动化流程，仅能由运营在后台生成后真机拍摄人工对比，未纳入 CI / Golden Set 门禁。
+- **背景/动机**：服务端 sharp 近似只做「粗校准参考」，最终一致性以 App 真机为准；完整自动抽检涉及真机设备接入与自动化拍照，超出本计划范围。
+- **目标状态**：建立可复用的真机抽检流程（后台生成 → 下发 App → 真机拍摄 → 回传与原图对比），或接入 GoldenSetService 作为可选回归门禁。
+- **状态**：⏳ 待优化
+
+### P2 · 抖音 / 小红书直连适配器后续接入
+
+- **模块**：后端 AI 趋势研究（`src/modules/ai/trend-research/`，`TrendResearchService` / `web-search.provider.ts`）
+- **优化点**：P3 计划设想的「抖音 / 小红书直连」内容源目前没有独立实现：`web-search.provider.ts` 仅支持 `bing`（通用搜索 API）与 `vendor`（厂商联网模型检索）两条路径，`baidu` 适配器文件 `web-search-baidu.ts` 尚未编写（`createWebSearchProvider` 对 `baidu` 直接抛「尚未接入」）；抖音 / 小红书作为**热门内容直连趋势源**留存为后续项。
+- **背景/动机**：直连内容平台需处理其公开接口 / 反爬 / 合规与限速，风险与合规成本高于通用搜索，本次先以 bing + 厂商检索覆盖热点来源（符合「可开关、可降级、单源失败不阻断」约束）。
+- **目标状态**：新增 `web-search-baidu.ts` 与抖音/小红书直连适配器，注册进 `createWebSearchProvider` 工厂与 `search_sources` 可选列表；后台可切换启用，单源失败仍降级不影响主流程。
+- **状态**：⏳ 待优化
