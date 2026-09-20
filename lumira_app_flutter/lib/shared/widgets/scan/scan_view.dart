@@ -59,7 +59,9 @@ class ScanView extends ConsumerStatefulWidget {
 }
 
 class _ScanViewState extends ConsumerState<ScanView> {
-  final MobileScannerController _controller = MobileScannerController();
+  /// iOS / Android 原生预览控制器；仅在 [_canNativePreview] 时创建（OHOS 跳过，
+  /// 避免对不存在的 mobile_scanner 通道执行 dispose 触发 MissingPluginException）。
+  MobileScannerController? _controller;
 
   /// 是否已识别到有效码并回调（防止原生端每帧回调导致重复 pop，损坏导航栈）。
   bool _resolved = false;
@@ -97,13 +99,14 @@ class _ScanViewState extends ConsumerState<ScanView> {
         });
       });
     } else if (_canNativePreview) {
+      _controller = MobileScannerController();
       _initCameraPermission();
     }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
@@ -234,7 +237,7 @@ class _ScanViewState extends ConsumerState<ScanView> {
     final raw = barcodes.first.rawValue;
     if (raw == null || raw.isEmpty) return;
     _resolved = true;
-    unawaited(_controller.stop());
+    unawaited(_controller?.stop());
     widget.onResult(raw);
   }
 
@@ -285,11 +288,9 @@ class _ScanViewState extends ConsumerState<ScanView> {
           _buildPermissionLoading(tokens)
         else if (!_cameraAllowed)
           _buildPermissionDenied(tokens)
-        else if (_cameraFailed)
-          _buildCameraFallback(tokens)
         else
           MobileScanner(
-            controller: _controller,
+            controller: _controller!,
             onDetect: _onDetect,
             errorBuilder: (context, error, child) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -297,7 +298,7 @@ class _ScanViewState extends ConsumerState<ScanView> {
                   setState(() => _cameraFailed = true);
                 }
               });
-              return _buildCameraFallback(tokens);
+              return ColoredBox(color: tokens.canvas);
             },
           ),
         if (_cameraActive)
@@ -326,6 +327,8 @@ class _ScanViewState extends ConsumerState<ScanView> {
               ),
             ),
           ),
+        if (_cameraFailed)
+          Positioned.fill(child: _buildCameraFallback(tokens)),
       ],
     );
   }
@@ -512,7 +515,7 @@ class _ScanViewState extends ConsumerState<ScanView> {
                 onPressed: () async {
                   setState(() => _cameraFailed = false);
                   try {
-                    await _controller.start();
+                    await _controller!.start();
                   } catch (_) {
                     if (mounted) setState(() => _cameraFailed = true);
                   }
