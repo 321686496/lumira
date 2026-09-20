@@ -14,6 +14,7 @@ import { Megaphone } from '@phosphor-icons/react/dist/csr/Megaphone';
 import { Images } from '@phosphor-icons/react/dist/csr/Images';
 import { Brain } from '@phosphor-icons/react/dist/csr/Brain';
 import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
+import { CloudArrowUp } from '@phosphor-icons/react/dist/csr/CloudArrowUp';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -31,6 +32,7 @@ const navItems = [
   { href: '/dashboard/ai-config', label: 'AI 设置', icon: Brain },
   { href: '/dashboard/categories', label: '分类管理', icon: GridFour },
   { href: '/dashboard/scenes', label: '场景管理', icon: Camera },
+  { href: '/dashboard/storage-migration', label: '图片迁移', icon: CloudArrowUp },
 ];
 
 export function Sidebar({ activePath }: { activePath: string }) {

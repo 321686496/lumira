@@ -12,7 +12,11 @@ import { STORAGE_KEY_PREFIX } from './storage-adapter.interface';
 export function buildAssetUrl(url: string | null | undefined): string {
   if (!url) return url || '';
   if (url.startsWith(STORAGE_KEY_PREFIX)) {
-    const base = process.env.BACKEND_PUBLIC_URL || 'http://localhost:3000';
+    // 迁移到 R2 后优先使用 R2 公网域名，缺省回退 Backend 公网地址
+    const base =
+      process.env.STORAGE_PUBLIC_URL ||
+      process.env.BACKEND_PUBLIC_URL ||
+      'http://localhost:3000';
     return `${base}${url}`;
   }
   if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(url)) {
