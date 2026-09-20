@@ -365,6 +365,13 @@ export function normalizeDraft(raw: unknown, categories: CategoryNode[]): Normal
     };
     pose.scale = clampOrDefault(item.scale, 0.1, 3, 1, `pose[${idx}].scale`, warnings);
     pose.rotation = clampOrDefault(item.rotation, -180, 180, 0, `pose[${idx}].rotation`, warnings);
+    // cameraDirection（前后摄）：front/back 二选一，非法丢弃 + warning（App 前置/后置自动切换）
+    const camDir = item.cameraDirection;
+    if (camDir === 'front' || camDir === 'back') {
+      pose.cameraDirection = camDir;
+    } else if (camDir !== undefined) {
+      warnings.push(`pose[${idx}].cameraDirection ${String(camDir)} 不是合法值(front/back)，已丢弃`);
+    }
     poses.push(pose);
   });
   if (poses.length > MAX_POSES) {
@@ -426,7 +433,29 @@ export function normalizeDraft(raw: unknown, categories: CategoryNode[]): Normal
   setClampField(postProcess, 'vignette', rawPost.vignette, 0, 100, 'postProcess.vignette', warnings);
   setClampField(postProcess, 'grain', rawPost.grain, 0, 100, 'postProcess.grain', warnings);
   setEnumField(postProcess, 'lut', rawPost.lut, LUTS, LUT_LABELS, 'postProcess.lut', warnings);
+  // 补光 fillLight：enabled(boolean) + color(string) + intensity(clamp [0,1])（App 补光，Task 5/9 新增）
+  if (isPlainObject(rawPost.fillLight)) {
+    const fillLight: Record<string, unknown> = {};
+    const rf = rawPost.fillLight;
+    if (typeof rf.enabled === 'boolean') fillLight.enabled = rf.enabled;
+    const color = toStr(rf.color);
+    if (color !== undefined) fillLight.color = color;
+    const intensity = clampNumber(rf.intensity, 0, 1);
+    if (intensity !== undefined) {
+      const orig = toFiniteNumber(rf.intensity)!;
+      if (orig !== intensity) {
+        warnings.push(`postProcess.fillLight.intensity 值 ${orig} 超出 [0, 1]，已夹取为 ${intensity}`);
+      }
+      fillLight.intensity = intensity;
+    }
+    if (Object.keys(fillLight).length > 0) postProcess.fillLight = fillLight;
+  }
+  // 拉腿 legStretch（0~1，App 长腿比例）：越界夹取 + warning
+  setClampField(postProcess, 'legStretch', rawPost.legStretch, 0, 1, 'postProcess.legStretch', warnings);
   draft.postProcess = postProcess;
+
+  // ===== poseRefSheet（姿势参考面片，透传 object；Task 9 新增，仅接收合法对象）=====
+  if (isPlainObject(src.poseRefSheet)) draft.poseRefSheet = src.poseRefSheet;
 
   return { draft, warnings };
 }

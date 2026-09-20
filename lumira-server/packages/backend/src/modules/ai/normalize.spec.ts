@@ -347,4 +347,31 @@ describe('normalizeDraft', () => {
     expect(draft.pose).toHaveLength(6);
     expect(joined).toContain('pose 数量 8 超过上限 6');
   });
+
+  it('21. Task9 白名单：fillLight/legStretch 进 postProcess、pose.cameraDirection、poseRefSheet 透传；越界夹取', () => {
+    const raw = baseDraft();
+    raw.postProcess.fillLight = { enabled: true, color: 'warm', intensity: 1.5 }; // intensity 越界
+    raw.postProcess.legStretch = 0.6;
+    raw.pose[0].cameraDirection = 'front';
+    raw.poseRefSheet = { shared: { outfit: '米色' }, perPose: [{ name: 'a', differentiationNote: 'b' }] };
+    const { draft, warnings } = normalizeDraft(raw, CATEGORIES);
+
+    expect((draft.postProcess as any).fillLight).toEqual({ enabled: true, color: 'warm', intensity: 1 });
+    expect((draft.postProcess as any).legStretch).toBe(0.6);
+    expect((draft.pose as any[])[0].cameraDirection).toBe('front');
+    expect((draft as any).poseRefSheet).toMatchObject({ shared: { outfit: '米色' }, perPose: [{ name: 'a' }] });
+    expect(warnings.some((w) => w.includes('intensity'))).toBe(true);
+  });
+
+  it('22. Task9 越界/非法：legStretch 1.2→1；cameraDirection 非法丢弃 + warning', () => {
+    const raw = baseDraft();
+    raw.postProcess.legStretch = 1.2;
+    raw.pose[0].cameraDirection = 'top';
+    const { draft, warnings } = normalizeDraft(raw, CATEGORIES);
+
+    expect((draft.postProcess as any).legStretch).toBe(1);
+    expect((draft.pose as any[])[0].cameraDirection).toBeUndefined();
+    expect(warnings.some((w) => w.includes('legStretch'))).toBe(true);
+    expect(warnings.some((w) => w.includes('cameraDirection'))).toBe(true);
+  });
 });
