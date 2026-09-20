@@ -173,7 +173,7 @@ class _DelaySegment extends ConsumerWidget {
   }
 }
 
-/// 取景比例：全屏 / 4:3 / 1:1 紧凑分段。
+/// 取景比例：全屏 / 4:3 / 1:1 / 9:16 紧凑分段。
 class _AspectSegment extends ConsumerWidget {
   final CaptureOverlayVisual visual;
   const _AspectSegment({required this.visual});
@@ -182,6 +182,7 @@ class _AspectSegment extends ConsumerWidget {
     _AspectOption(id: 'fullscreen', label: '全屏', icon: Icons.fullscreen),
     _AspectOption(id: '4:3', label: '4:3', icon: Icons.crop_3_2),
     _AspectOption(id: '1:1', label: '1:1', icon: Icons.crop_square),
+    _AspectOption(id: '9:16', label: '9:16', icon: Icons.crop_portrait),
   ];
 
   @override
