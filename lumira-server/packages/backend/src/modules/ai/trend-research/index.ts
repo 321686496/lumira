@@ -6,3 +6,5 @@ export type { WebSearchProvider, WebSearchQuery } from './web-search.provider';
 export type { ResearchItem } from './research-item';
 export { createBingSearchProvider } from './web-search-bing';
 export { createVendorSearchProvider } from './web-search-vendor';
+export { TrendResearchService } from './trend-research.service';
+export type { SearchConfig, SearchSourceConfig, SearchProviderFactory } from './trend-research.service';

@@ -75,9 +75,17 @@ class LruCache {
       if (oldest !== undefined) this.map.delete(oldest);
     }
   }
+  clear(): void {
+    this.map.clear();
+  }
 }
 
 const searchCache = new LruCache(200);
+
+/** 清空进程内搜索缓存（测试隔离 / 维护用） */
+export function clearWebSearchCache(): void {
+  searchCache.clear();
+}
 
 /**
  * 包一层 LRU 缓存（name|query|limit）按需搜索：命中直接返回缓存，
