@@ -545,3 +545,66 @@ export interface AiSilhouetteStatusResult {
   mimeType?: string;
   error?: string;
 }
+
+// ===== 图片存储迁移（R2 迁移）=====
+
+export type StorageCategory = 'templates' | 'categories' | 'banners' | 'feedback' | 'users';
+
+export interface CategoryReport {
+  category: StorageCategory;
+  dbTotal: number;
+  diskTotal: number;
+  migrated: number;
+  copied: number;
+  missingTarget: number;
+  danglingDb: number;
+  orphans: number;
+  failed: number;
+}
+
+export interface MigrationTotals {
+  db: number;
+  disk: number;
+  migrated: number;
+  copied: number;
+  missingTarget: number;
+  danglingDb: number;
+  orphans: number;
+  failed: number;
+}
+
+export interface MigrationSummary {
+  success: boolean;
+  byCategory: Record<string, CategoryReport>;
+  totals: MigrationTotals;
+}
+
+export interface FailureRecord {
+  phase: 'copy' | 'verify';
+  storageKey: string;
+  entityLabel?: string;
+  reason: string;
+  at: number;
+}
+
+export interface MigrationRecordView {
+  id: string;
+  status: 'running' | 'success' | 'failed' | 'stopped';
+  triggerBy: string;
+  startedAt: number;
+  finishedAt: number | null;
+  error: string | null;
+  summary: MigrationSummary | null;
+  failureFile: string | null;
+  createdAt: number;
+  failureDetail?: FailureRecord[];
+}
+
+export interface MigrationRunningView {
+  running: boolean;
+  id?: string;
+  phase?: string;
+  done?: number;
+  total?: number;
+  copied?: number;
+}

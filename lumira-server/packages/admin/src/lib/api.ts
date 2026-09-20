@@ -40,6 +40,8 @@ import type {
   AiImageStatusResult,
   AiSilhouetteTaskId,
   AiSilhouetteStatusResult,
+  MigrationRecordView,
+  MigrationRunningView,
 } from '@/types/admin';
 
 // 重新导出纯函数，供 server-only 调用方使用（客户端组件请直接从 @/lib/category-tree 导入）
@@ -604,4 +606,23 @@ export const api = {
       method: 'POST',
       body: formData,
     }, AI_ENDPOINT_TIMEOUT_MS),
+
+  // ===== 图片存储迁移（R2 迁移）=====
+  startMigration: (triggerBy: string) =>
+    adminFetch<{ id: string }>('/storage/migrate', {
+      method: 'POST',
+      body: JSON.stringify({ triggerBy }),
+    }),
+
+  getMigrationStatus: () =>
+    adminFetch<MigrationRunningView>('/storage/migrate/status'),
+
+  stopMigration: () =>
+    adminFetch<{ stopped: boolean }>('/storage/migrate/stop', { method: 'POST' }),
+
+  listMigrations: () =>
+    adminFetch<MigrationRecordView[]>('/storage/migrate'),
+
+  getMigrationDetail: (id: string) =>
+    adminFetch<MigrationRecordView>(`/storage/migrate/${id}`),
 };

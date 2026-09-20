@@ -368,3 +368,19 @@ export const aiProviderConfig = mysqlTable('ai_provider_config', {
   createdAt: int('created_at').notNull(),
   updatedAt: int('updated_at').notNull(),
 });
+
+// ===== 图片存储迁移（R2 迁移，2026-09）=====
+// 每次迁移运行一行记录；详细失败项落本地服务器文件，DB 仅存路径与汇总。
+export const storageMigrations = mysqlTable('storage_migrations', {
+  id: varchar('id', { length: 64 }).primaryKey(),
+  status: varchar('status', { length: 16 }).notNull(), // running | success | failed | stopped
+  triggerBy: text('trigger_by').notNull(),
+  startedAt: int('started_at').notNull(),
+  finishedAt: int('finished_at'),
+  error: text('error'),
+  // 结构化汇总 JSON：{ phases, byCategory:, totals:{...} }
+  summaryJson: longtext('summary_json'),
+  // 失败详情文件在服务器本地的相对路径（UPLOAD_DIR 下 migrations/…）
+  failureFile: varchar('failure_file', { length: 512 }),
+  createdAt: int('created_at').notNull(),
+});
