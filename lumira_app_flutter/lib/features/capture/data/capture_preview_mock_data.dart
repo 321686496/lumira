@@ -22,10 +22,18 @@ class MoodOption {
 
 /// 场景标签选项（对应 preview.vue line 130-134 的 sceneOptions）
 class ScenePillOption {
-  const ScenePillOption({required this.id, required this.name, required this.icon});
+  const ScenePillOption({
+    required this.id,
+    required this.name,
+    required this.icon,
+    this.image,
+  });
   final String id;
   final String name;
   final IconData icon;
+
+  /// 场景缩略图 asset 路径；缺省时回退到 [icon]（占位图标）。
+  final String? image;
 }
 
 /// 预览页 mock 数据
@@ -52,15 +60,16 @@ class CapturePreviewMockData {
   ];
 
   // 场景标签（8 个，对应 preview.vue sceneOptions — mock 数据，与 HomeMockData.scenes 一致）
+  // image 为场景缩略图 asset，映射现成 resources；缺失时预览页回退到 icon 占位。
   static const List<ScenePillOption> sceneOptions = [
-    ScenePillOption(id: 'cafe', name: '咖啡馆', icon: Icons.coffee_outlined),
-    ScenePillOption(id: 'street', name: '街头', icon: Icons.location_city_outlined),
-    ScenePillOption(id: 'park', name: '公园', icon: Icons.park_outlined),
-    ScenePillOption(id: 'home', name: '居家', icon: Icons.home_outlined),
-    ScenePillOption(id: 'studio', name: '工作室', icon: Icons.camera_alt_outlined),
-    ScenePillOption(id: 'restaurant', name: '餐厅', icon: Icons.restaurant_outlined),
-    ScenePillOption(id: 'travel', name: '旅行', icon: Icons.flight_outlined),
-    ScenePillOption(id: 'night', name: '夜景', icon: Icons.nights_stay_outlined),
+    ScenePillOption(id: 'cafe', name: '咖啡馆', icon: Icons.coffee_outlined, image: 'assets/images/scenes/scene_cafe.jpg'),
+    ScenePillOption(id: 'street', name: '街头', icon: Icons.location_city_outlined, image: 'assets/images/scenes/scene_street.jpg'),
+    ScenePillOption(id: 'park', name: '公园', icon: Icons.park_outlined, image: 'assets/images/scenes/scene_park-lawn.jpg'),
+    ScenePillOption(id: 'home', name: '居家', icon: Icons.home_outlined, image: 'assets/images/scenes/scene_home.jpg'),
+    ScenePillOption(id: 'studio', name: '工作室', icon: Icons.camera_alt_outlined, image: 'assets/images/scenes/scene_dance-studio.jpg'),
+    ScenePillOption(id: 'restaurant', name: '餐厅', icon: Icons.restaurant_outlined, image: 'assets/images/scenes/scene_noodle-shop.jpg'),
+    ScenePillOption(id: 'travel', name: '旅行', icon: Icons.flight_outlined, image: 'assets/images/scenes/scene_road-sunset.jpg'),
+    ScenePillOption(id: 'night', name: '夜景', icon: Icons.nights_stay_outlined, image: 'assets/images/scenes/scene_night-market.jpg'),
   ];
 
   /// 最近拍摄照片 URL（mock：picsum 占位图）
