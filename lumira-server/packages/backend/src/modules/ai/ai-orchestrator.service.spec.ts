@@ -94,6 +94,11 @@ describe('AiOrchestratorService.run', () => {
     // 经过 normalizeDraft 归一化：meta.name / category 落在输出
     expect(res.draft.meta).toBeDefined();
     expect(res.draft.meta.category).toBe('portrait');
+    // poseRefSheet 已写入草稿定稿：含 shared 锚点 + perPose 数组
+    expect(res.draft.poseRefSheet).toMatchObject({
+      shared: { outfit: '米色针织' },
+      perPose: [{ name: '坐姿侧靠', differentiationNote: '侧靠偏左' }],
+    });
     // trace 阶段覆盖
     const steps = res.trace.map((t) => t.step);
     expect(steps).toContain('research');

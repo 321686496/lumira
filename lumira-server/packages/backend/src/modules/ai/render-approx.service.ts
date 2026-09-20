@@ -245,7 +245,7 @@ export class RenderApproxService {
         // eslint-disable-next-line no-console
         console.error('[RenderApprox] apply error:', (err as Error).message);
       }
-      return Buffer.isBuffer(input) ? input : input;
+      return input;
     }
   }
 
