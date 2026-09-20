@@ -5,6 +5,7 @@
 
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../../database/database.module';
+import { DatabaseService } from '../../database/database.service';
 import { AiConfigController } from './ai-config.controller';
 import { AiConfigService } from './ai-config.service';
 import { AiTemplatesController } from './ai-templates.controller';
@@ -19,6 +20,8 @@ import { PoseRefSheetService } from './pose-ref-sheet.service';
 import { ParamValidateService } from './param-validate.service';
 import { ImageScoreService } from './image-score.service';
 import { AiOrchestratorService } from './ai-orchestrator.service';
+import { GoldenSetService } from './golden-set.service';
+import { RenderApproxService } from './render-approx.service';
 
 @Module({
   imports: [DatabaseModule],
@@ -28,6 +31,14 @@ import { AiOrchestratorService } from './ai-orchestrator.service';
     // Task 9 Agentic 管线工具 + 中枢（稳定性：getActiveConfig 缺 search 配置时 research 自动降级关闭）
     TrendResearchService, ImageDescribeService, PoseRefSheetService, ParamValidateService, ImageScoreService,
     AiOrchestratorService,
+    RenderApproxService,
+    // Task 11 Golden Set 回归门禁（db 经 DatabaseService.getDb() 提供，避免裸注入 MySql2Database token 解析失败）
+    {
+      provide: GoldenSetService,
+      inject: [DatabaseService, AiOrchestratorService, ImageScoreService],
+      useFactory: (dbSvc: DatabaseService, orch: AiOrchestratorService, score: ImageScoreService) =>
+        new GoldenSetService(dbSvc.getDb(), orch, score),
+    },
   ],
 })
 export class AiModule {}

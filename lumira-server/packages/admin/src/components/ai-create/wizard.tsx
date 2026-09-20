@@ -27,7 +27,7 @@ import {
   getAiConfigAction,
 } from '@/actions/ai';
 import { generateAiPoseImages, generateAiSilhouettes, type AiPoseProgress } from '@/lib/ai-task';
-import type { TemplateCategory } from '@/types/admin';
+import type { TemplateCategory, AiAnalyzeTraceEntry } from '@/types/admin';
 import { StepCover, type CoverCandidate } from './step-cover';
 import { StepSilhouette } from './step-silhouette';
 import { Upload } from '@phosphor-icons/react/dist/csr/Upload';
@@ -73,6 +73,8 @@ export function AiCreateWizard({
   const [poseReferenceUrl, setPoseReferenceUrl] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
+  /** 研究管线 trace：各阶段（研究/识别/姿势面片/评分）执行轨迹；未开启时缺省 */
+  const [trace, setTrace] = useState<AiAnalyzeTraceEntry[] | null>(null);
   /** 模板表单当前实际效果图列表；剪影必须以此为准，避免继续使用已废弃的 Step3 候选缓存 */
   const [formImages, setFormImages] = useState<File[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -140,6 +142,7 @@ export function AiCreateWizard({
   /** 换图 / 改文字 = 重置整个下游流程 */
   const resetFlow = () => {
     setDraft(null);
+    setTrace(null);
     setWarnings([]);
     setCandidates([]);
     setSilhouetteFile(null);
@@ -210,6 +213,7 @@ export function AiCreateWizard({
       }
       setDraft(result.draft);
       setWarnings(result.warnings);
+      setTrace(result.trace ?? null);
       if (exampleFile) {
         setCandidates([{
           id: 'example',
@@ -255,6 +259,7 @@ export function AiCreateWizard({
       const draftLocal = analyzeResult.draft;
       setDraft(draftLocal);
       setWarnings(analyzeResult.warnings);
+      setTrace(analyzeResult.trace ?? null);
       setFormActivated(true);
       const exampleCandidate: CoverCandidate | null = exampleFile
         ? {
@@ -616,6 +621,58 @@ export function AiCreateWizard({
                   </ul>
                 </div>
               )}
+
+              {/* 研究过程 / 质量分（orchestrator trace；缺省降级为提示） */}
+              <div className="rounded-md border border-border p-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-foreground">研究过程 / 质量分</h4>
+                  {trace && trace.some((t) => typeof t.score === 'number') && (
+                    <span className="text-xs text-muted-foreground">
+                      最终质量分：
+                      {trace
+                        .filter((t) => typeof t.score === 'number')
+                        .slice(-1)[0]?.score?.toFixed(2)}
+                    </span>
+                  )}
+                </div>
+                {!trace || trace.length === 0 ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    本次识别走标准单次路径（研究管线未启用）。如在「AI 设置」开启「趋势研究」开关并配置搜索来源，可获取研究来源与逐阶段质量分。
+                  </p>
+                ) : (
+                  <ol className="mt-2 space-y-1.5">
+                    {trace.map((t, i) => {
+                      const label =
+                        t.step === 'research' ? '趋势研究'
+                        : t.step === 'describe' ? '示例图识别'
+                        : t.step === 'poseRefSheet' ? '姿势参考面片'
+                        : t.step === 'paramValidate' ? '参数校准'
+                        : t.step === 'imageScore' ? '质量评分'
+                        : t.step;
+                      const isSkip = String(t.resultBrief).startsWith('skip');
+                      const isFail = String(t.resultBrief).startsWith('fail');
+                      return (
+                        <li key={i} className="flex items-start gap-2 text-xs">
+                          <span className="mt-0.5 text-muted-foreground">{i + 1}.</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-foreground">{label}</span>
+                              {typeof t.score === 'number' && (
+                                <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                                  {t.score.toFixed(2)}
+                                </span>
+                              )}
+                            </div>
+                            <div className={`truncate ${isFail ? 'text-destructive' : isSkip ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
+                              {t.resultBrief}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
+              </div>
               <Button disabled={busy} onClick={() => goto(3)}>
                 下一步：选择封面 <ArrowRight size={14} className="ml-1" />
               </Button>

@@ -508,6 +508,16 @@ export interface AiConfigTestResult {
 export interface AiAnalyzeResult {
   draft: Record<string, unknown>;
   warnings: string[];
+  /** 研究管线（orchestrator）启用时返回的 trace 轨迹；旧后端/关闭时缺省 */
+  trace?: AiAnalyzeTraceEntry[];
+}
+
+/** AI 画像编排单步 trace（研究 / 识别 / 姿势面片 / 评分等阶段） */
+export interface AiAnalyzeTraceEntry {
+  step: string;
+  tool?: string;
+  resultBrief: string;
+  score?: number;
 }
 
 /** POST /admin/templates/ai-generate-silhouette 结果（同步，image = base64） */
