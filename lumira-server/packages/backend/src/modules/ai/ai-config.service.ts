@@ -31,6 +31,18 @@ export interface AiConfigView {
   /** 剪影专用模型：null = 与生图模型一致 */
   silhouetteModel: string | null;
   enabled: boolean;
+  /** 研究管线开关：true=启用（orchestrator 走研究管线）；false=关闭（原单次路径） */
+  searchEnabled: boolean;
+  /** 搜索服务商：'general'（通用搜索 API）| 'vendor'（厂商联网检索）| null（未启用） */
+  searchProvider: 'general' | 'vendor' | null;
+  /** 通用搜索 API baseUrl（searchProvider=general 时使用） */
+  searchBaseUrl: string;
+  /** 通用搜索 API key（脱敏） */
+  searchApiKeyMasked: string;
+  /** 启用的搜索来源（bing/vendor/baidu） */
+  searchSources: string[];
+  /** 迭代上限（预算护栏） */
+  maxIterations: number;
 }
 
 /** 单模态运行时端点（含明文 apiKey） */
@@ -55,6 +67,15 @@ export interface ActiveAiConfig {
   silhouetteModel: string;
   /** 是否配置了独立文本模型（连通测试分支用） */
   hasCustomTextModel: boolean;
+  /** 研究管线配置（orchestrator / trend-research 使用） */
+  search: {
+    enabled: boolean;
+    provider: 'general' | 'vendor' | null;
+    baseUrl: string;
+    apiKey: string;
+    sources: string[];
+    maxIterations: number;
+  };
 }
 
 /** 连通性测试目标（text 永远测有效文本模型；silhouette 永远测有效剪影模型） */
@@ -84,6 +105,23 @@ const ALL_TEST_TARGETS: AiConfigTestTarget[] = ['vision', 'text', 'image', 'silh
 function maskKey(k: string): string {
   if (!k) return '';
   return k.length <= 8 ? '****' : `${k.slice(0, 3)}****${k.slice(-2)}`;
+}
+
+/** 解析 search_sources JSON 数组为 string[]；非法/空返回空数组 */
+function parseSearchSources(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? (arr.filter((s) => ['bing', 'vendor', 'baidu'].includes(s)) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** 序列化 search_sources 为 JSON 数组字符串；空数组返回 null（等价未配置） */
+function serializeSearchSources(sources?: string[]): string | null {
+  if (!sources || sources.length === 0) return null;
+  return JSON.stringify([...new Set(sources)]);
 }
 
 @Injectable()
@@ -118,6 +156,15 @@ export class AiConfigService {
           : null,
       silhouetteModel: row.silhouetteModel ?? null,
       enabled: row.enabled === 1,
+      searchEnabled: row.searchEnabled === 1,
+      searchProvider:
+        row.searchProvider === 'general' || row.searchProvider === 'vendor'
+          ? row.searchProvider
+          : null,
+      searchBaseUrl: row.searchBaseUrl ?? '',
+      searchApiKeyMasked: maskKey(row.searchApiKey ?? ''),
+      searchSources: parseSearchSources(row.searchSources),
+      maxIterations: row.maxIterations ?? 3,
     };
   }
 
@@ -182,6 +229,20 @@ export class AiConfigService {
       silhouetteApiKey = resolvedSilhouetteApiKey;
     }
 
+    // 研究管线（Agentic）：缺省沿用既有值；首次 = 关闭。searchProvider='general' 且启用时必须提供 baseUrl + 首次 apiKey
+    const searchEnabled = dto.searchEnabled != null ? (dto.searchEnabled ? 1 : 0) : existing?.searchEnabled ?? 0;
+    const searchProvider = dto.searchProvider && dto.searchProvider !== 'off'
+      ? dto.searchProvider
+      : (existing?.searchProvider ?? null);
+    const searchBaseUrl = dto.searchBaseUrl?.trim() || existing?.searchBaseUrl || null;
+    const resolvedSearchApiKey = dto.searchApiKey?.trim() || existing?.searchApiKey || null;
+    const searchSources = serializeSearchSources(dto.searchSources) ?? existing?.searchSources ?? null;
+    const maxIterations = dto.maxIterations ?? existing?.maxIterations ?? 3;
+    if (searchEnabled === 1 && searchProvider === 'general') {
+      if (!searchBaseUrl) throw new BadRequestException('通用搜索 API 必须填写 baseUrl');
+      if (!resolvedSearchApiKey) throw new BadRequestException('首次启用通用搜索 API 必须填写 API Key');
+    }
+
     if (!existing) {
       if (!dto.apiKey) {
         throw new BadRequestException('首次配置必须填写 API Key');
@@ -205,6 +266,12 @@ export class AiConfigService {
         silhouetteApiKey,
         silhouetteModel,
         enabled: dto.enabled ? 1 : 0,
+        searchEnabled,
+        searchProvider,
+        searchBaseUrl,
+        searchApiKey: resolvedSearchApiKey,
+        searchSources,
+        maxIterations,
         createdAt: now,
         updatedAt: now,
       });
@@ -228,6 +295,12 @@ export class AiConfigService {
           silhouetteApiKey,
           silhouetteModel,
           enabled: dto.enabled ? 1 : 0,
+          searchEnabled,
+          searchProvider,
+          searchBaseUrl,
+          searchApiKey: dto.searchApiKey?.trim() ? resolvedSearchApiKey : existing.searchApiKey, // 留空 = 不改
+          searchSources,
+          maxIterations,
           apiKey: dto.apiKey ? dto.apiKey : existing.apiKey, // 留空 = 不改
           updatedAt: now,
         })
@@ -324,6 +397,17 @@ export class AiConfigService {
         : { ...image, model: silhouetteModel },
       silhouetteModel,
       hasCustomTextModel,
+      search: {
+        enabled: row.searchEnabled === 1,
+        provider:
+          row.searchProvider === 'general' || row.searchProvider === 'vendor'
+            ? row.searchProvider
+            : null,
+        baseUrl: row.searchBaseUrl ?? '',
+        apiKey: row.searchApiKey ?? '',
+        sources: parseSearchSources(row.searchSources),
+        maxIterations: row.maxIterations ?? 3,
+      },
     };
   }
 }

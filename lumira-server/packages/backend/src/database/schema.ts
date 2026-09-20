@@ -365,6 +365,19 @@ export const aiProviderConfig = mysqlTable('ai_provider_config', {
   silhouetteBaseUrl: varchar('silhouette_base_url', { length: 255 }),
   silhouetteApiKey: varchar('silhouette_api_key', { length: 255 }),
   enabled: int('enabled').notNull().default(0),
+  // ===== Agentic 研究管线（spec 2026-09-21）=====
+  /** 研究开关：1=启用（orchestrator 走研究管线）；0=关闭（保留原单次路径） */
+  searchEnabled: int('search_enabled').notNull().default(0),
+  /** 搜索服务商选择：'general'（通用搜索 API）| 'vendor'（厂商联网检索） */
+  searchProvider: varchar('search_provider', { length: 32 }),
+  /** 通用搜索 API 的 baseUrl（search_provider=general 时使用） */
+  searchBaseUrl: varchar('search_base_url', { length: 255 }),
+  /** 通用搜索 API 的 apiKey（脱敏返回，永不回传明文） */
+  searchApiKey: varchar('search_api_key', { length: 255 }),
+  /** 启用的搜索来源 JSON 数组：['bing','vendor','baidu']（预留，通用 API 约定 'bing'） */
+  searchSources: varchar('search_sources', { length: 255 }),
+  /** 迭代上限（预算护栏，默认 3，绝不无限迭代） */
+  maxIterations: int('max_iterations').notNull().default(3),
   createdAt: int('created_at').notNull(),
   updatedAt: int('updated_at').notNull(),
 });
