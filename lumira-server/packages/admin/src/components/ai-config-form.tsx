@@ -64,6 +64,20 @@ const TEST_TARGET_OPTIONS: { value: AiConfigTestTarget; label: string }[] = [
 ];
 const ALL_TEST_TARGETS = TEST_TARGET_OPTIONS.map((option) => option.value);
 
+/** 搜索服务商（研究管线）：通用 API / 厂商联网 / 关闭 */
+const SEARCH_PROVIDER_OPTIONS: { value: 'general' | 'vendor' | 'off'; label: string }[] = [
+  { value: 'general', label: '通用 API' },
+  { value: 'vendor', label: '厂商联网' },
+  { value: 'off', label: '关闭' },
+];
+
+/** 启用的搜索来源多选 */
+const SEARCH_SOURCE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'bing', label: 'Bing 通用搜索' },
+  { value: 'vendor', label: '厂商联网' },
+  { value: 'baidu', label: '百度（预留）' },
+];
+
 interface FormState {
   provider: ProviderKey;
   baseUrl: string;
@@ -73,6 +87,12 @@ interface FormState {
   textModel: string; // 留空 = 使用视觉模型
   silhouetteModel: string; // 留空 = 与生图模型一致
   enabled: boolean;
+  // 研究管线（Agentic）
+  searchProvider: 'general' | 'vendor' | 'off';
+  searchBaseUrl: string;
+  searchApiKey: string; // 留空 = 不修改原值
+  searchSources: string[];
+  maxIterations: number; // 迭代上限（预算护栏 1~3）
 }
 
 /** 模态独立平台子表单状态 */
@@ -171,6 +191,13 @@ export function AiConfigForm({
           textModel: initial.textModel,
           silhouetteModel: initial.silhouetteModel ?? '',
           enabled: initial.enabled,
+          searchProvider: initial.searchEnabled
+            ? (initial.searchProvider ?? 'general')
+            : 'off',
+          searchBaseUrl: initial.searchBaseUrl,
+          searchApiKey: '',
+          searchSources: initial.searchSources.length ? initial.searchSources : ['bing'],
+          maxIterations: initial.maxIterations,
         }
       : {
           provider: 'qwen',
@@ -181,6 +208,11 @@ export function AiConfigForm({
           textModel: PROVIDER_PRESETS.qwen.textModel,
           silhouetteModel: '',
           enabled: false,
+          searchProvider: 'off',
+          searchBaseUrl: '',
+          searchApiKey: '',
+          searchSources: ['bing'],
+          maxIterations: 2,
         },
   );
   /** 手动改过预设字段的标记：切换厂商时不覆盖 */
@@ -214,6 +246,10 @@ export function AiConfigForm({
   );
   const [silhouettePlatformMasked, setSilhouettePlatformMasked] = useState(
     initialSilhouettePlatform?.apiKeyMasked ?? '',
+  );
+  /** 已保存通用搜索 API 的脱敏 Key（占位符展示）；为空 = 尚未保存过，保存时启用通用 API 需填 Key */
+  const [searchApiKeyMasked, setSearchApiKeyMasked] = useState(
+    configured ? initial.searchApiKeyMasked : '',
   );
   const [testResult, setTestResult] = useState<AiConfigTestResult | null>(null);
   const [testTargets, setTestTargets] = useState<AiConfigTestTarget[]>(ALL_TEST_TARGETS);
@@ -355,6 +391,22 @@ export function AiConfigForm({
       });
       return;
     }
+    if (form.searchProvider === 'general' && !form.searchBaseUrl.trim()) {
+      toast({
+        variant: 'destructive',
+        title: '请填写完整',
+        description: '通用搜索 API 必须填写 baseUrl',
+      });
+      return;
+    }
+    if (form.searchProvider === 'general' && !searchApiKeyMasked && !form.searchApiKey.trim()) {
+      toast({
+        variant: 'destructive',
+        title: '缺少 API Key',
+        description: '首次启用通用搜索 API 必须填写 API Key',
+      });
+      return;
+    }
     startSave(async () => {
       const payload: UpdateAiConfigPayload = {
         provider: form.provider,
@@ -381,6 +433,15 @@ export function AiConfigForm({
         payload.silhouetteBaseUrl = silhouetteOverride.baseUrl.trim();
         if (silhouetteOverride.apiKey.trim()) payload.silhouetteApiKey = silhouetteOverride.apiKey.trim();
       }
+      // 研究管线（Agentic）：开关 = 是否关闭；provider 随选项；通用 API 时才传 baseUrl/apiKey/sources
+      payload.searchEnabled = form.searchProvider !== 'off';
+      payload.searchProvider = form.searchProvider;
+      payload.maxIterations = form.maxIterations;
+      if (form.searchProvider !== 'off') {
+        if (form.searchBaseUrl.trim()) payload.searchBaseUrl = form.searchBaseUrl.trim();
+        if (form.searchApiKey.trim()) payload.searchApiKey = form.searchApiKey.trim();
+        payload.searchSources = form.searchSources;
+      }
       const result = await saveAiConfigAction(payload);
       if ('error' in result) {
         toast({ variant: 'destructive', title: '保存失败', description: result.error });
@@ -391,6 +452,7 @@ export function AiConfigForm({
       setTextPlatformMasked(config.textPlatform?.apiKeyMasked ?? '');
       setImagePlatformMasked(config.imagePlatform?.apiKeyMasked ?? '');
       setSilhouettePlatformMasked(config.silhouettePlatform?.apiKeyMasked ?? '');
+      setSearchApiKeyMasked(config.searchApiKeyMasked);
       // 后端为权威：独立开关与平台字段按保存结果回填（被清除时保留输入、仅置回跟随）
       setTextOverride((o) => {
         const saved = overrideFromPlatform(config.textPlatform);
@@ -735,6 +797,126 @@ export function AiConfigForm({
 
           {/* 模态四：剪影模型（AI 一键建模「生成剪影」用，默认跟随生图平台） */}
           {renderModalitySection('silhouette')}
+
+          {/* 研究管线（Agentic）：搜索服务商 / 来源 / 迭代上限 */}
+          <div className="space-y-4 rounded-lg border border-border p-4">
+            <div>
+              <div className="text-sm font-medium text-foreground">研究管线（Agentic 趋势研究）</div>
+              <div className="mt-0.5 text-xs text-muted-foreground">
+                生成模板时结合联网趋势研究提升热点 / 真实感。关闭时走原单次识别路径。
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>搜索服务商</Label>
+              <div className="inline-flex rounded-md border border-border p-0.5">
+                {SEARCH_PROVIDER_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() =>
+                      setForm((f) =>
+                        option.value === 'general' && !f.searchBaseUrl.trim()
+                          ? { ...f, searchProvider: 'general', searchBaseUrl: 'https://api.bing.microsoft.com/v7.0/search' }
+                          : { ...f, searchProvider: option.value },
+                      )
+                    }
+                    className={cn(
+                      'rounded px-3 py-1 text-sm transition-colors',
+                      form.searchProvider === option.value
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {form.searchProvider !== 'off' && (
+              <>
+                {form.searchProvider === 'general' && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-search-base-url">通用搜索 API Base URL</Label>
+                      <Input
+                        id="ai-search-base-url"
+                        value={form.searchBaseUrl}
+                        onChange={(e) => setForm((f) => ({ ...f, searchBaseUrl: e.target.value }))}
+                        placeholder="https://api.bing.microsoft.com/v7.0/search"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-search-api-key">通用搜索 API Key</Label>
+                      <Input
+                        id="ai-search-api-key"
+                        type="password"
+                        value={form.searchApiKey}
+                        onChange={(e) => setForm((f) => ({ ...f, searchApiKey: e.target.value }))}
+                        placeholder={searchApiKeyMasked ? `${searchApiKeyMasked}（留空 = 不修改）` : '…'}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label>搜索来源（可多选）</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {SEARCH_SOURCE_OPTIONS.map((option) => {
+                      const checked = form.searchSources.includes(option.value);
+                      return (
+                        <label
+                          key={option.value}
+                          className={cn(
+                            'flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm',
+                            checked
+                              ? 'border-primary bg-primary/5 text-foreground'
+                              : 'border-border bg-background text-muted-foreground',
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={checked}
+                            onChange={(event) =>
+                              setForm((f) => ({
+                                ...f,
+                                searchSources: event.target.checked
+                                  ? [...new Set([...f.searchSources, option.value])]
+                                  : f.searchSources.filter((s) => s !== option.value),
+                              }))
+                            }
+                          />
+                          {option.label}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-2 md:max-w-xs">
+                  <Label htmlFor="ai-max-iterations">迭代上限（预算护栏）</Label>
+                  <Input
+                    id="ai-max-iterations"
+                    type="number"
+                    min={1}
+                    max={3}
+                    value={form.maxIterations}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        maxIterations: Number(e.target.value) || 1,
+                      }))
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    质量不达标时依评审建议微调重试，最多迭代该次数；1~3，绝不无限迭代。费用与耗时递增。
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* 启用开关 */}
           <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">

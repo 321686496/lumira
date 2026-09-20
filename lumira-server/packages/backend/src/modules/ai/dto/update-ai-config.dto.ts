@@ -1,7 +1,7 @@
 // lumira-server/packages/backend/src/modules/ai/dto/update-ai-config.dto.ts
 // AI 服务商配置保存入参（PUT /api/v1/admin/ai-config）
 
-import { IsIn, IsOptional, IsString, IsBoolean, MaxLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsBoolean, MaxLength, IsArray, ArrayMaxSize, ArrayNotEmpty, IsInt, Min, Max } from 'class-validator';
 import { PROVIDERS } from '../enums';
 
 export class UpdateAiConfigDto {
@@ -86,4 +86,43 @@ export class UpdateAiConfigDto {
 
   @IsBoolean()
   enabled!: boolean;
+
+  // ===== Agentic 研究管线（spec 2026-09-21）=====
+
+  /** 研究开关：1=启用；0/缺省 = 关闭（保留原单次路径） */
+  @IsOptional()
+  @IsBoolean()
+  searchEnabled?: boolean;
+
+  /** 搜索服务商：'general'（通用搜索 API）| 'vendor'（厂商联网检索）| 'off'（关闭） */
+  @IsOptional()
+  @IsIn(['general', 'vendor', 'off'] as const)
+  searchProvider?: string;
+
+  /** 通用搜索 API 的 baseUrl（searchProvider=general 时使用） */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  searchBaseUrl?: string;
+
+  /** 通用搜索 API 的 apiKey：空串/缺省 = 保留原值；首次启用通用 API 时必填 */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  searchApiKey?: string;
+
+  /** 启用的搜索来源数组（bing/vendor/baidu）；缺省 = 沿用原值 */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(3)
+  @ArrayNotEmpty()
+  @IsIn(['bing', 'vendor', 'baidu'], { each: true })
+  searchSources?: string[];
+
+  /** 迭代上限（预算护栏，1~3）；缺省 = 沿用原值 */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(3)
+  maxIterations?: number;
 }

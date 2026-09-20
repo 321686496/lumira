@@ -250,6 +250,8 @@ const schema = z.object({
   sharpen: z.coerce.number().int().min(0).max(100).default(0),
   vignette: z.coerce.number().int().min(0).max(100).default(0),
   grain: z.coerce.number().int().min(0).max(100).default(0),
+  // 拉腿强度 0-100（0 = 不拉伸；App 对图像下半部做平滑纵向拉伸）
+  legStretch: z.coerce.number().int().min(0).max(100).default(0),
   lut: z.enum(LUTS).default('none'),
   // 系统滤镜（统一滤镜库的子集，可空；默认 none）
   systemFilter: z.enum(LUTS).optional().default('none'),
@@ -293,8 +295,7 @@ const FIELD_STEP: Partial<Record<keyof FormValues, number>> = {
   // step 5 后期处理
   cropRatio: 5, colorBrightness: 5, colorContrast: 5, colorSaturation: 5, colorTemperature: 5,
   colorTint: 5, colorHighlights: 5, colorShadows: 5, colorBlackPoint: 5, colorClarity: 5,
-  colorVibrance: 5, colorBrilliance: 5, smoothStrength: 5, sharpen: 5, vignette: 5,
-  grain: 5, lut: 5, systemFilter: 5, fillLightEnabled: 5, fillLightColor: 5,
+  colorVibrance: 5, colorBrilliance: 5, smoothStrength: 5, sharpen: 5, vignette: 5, grain: 5, legStretch: 5, lut: 5, systemFilter: 5, fillLightEnabled: 5, fillLightColor: 5,
   fillLightIntensity: 5,
 };
 
@@ -316,7 +317,7 @@ const FIELD_LABELS: Partial<Record<keyof FormValues, string>> = {
   colorTemperature: '色温', colorTint: '色调', colorHighlights: '高光', colorShadows: '阴影',
   colorBlackPoint: '黑点', colorClarity: '清晰度', colorVibrance: '自然饱和度',
   colorBrilliance: '鲜明度', smoothStrength: '磨皮强度', sharpen: '锐化', vignette: '暗角',
-  grain: '颗粒', lut: '滤镜 LUT', systemFilter: '系统滤镜',
+  grain: '颗粒', legStretch: '拉腿', lut: '滤镜 LUT', systemFilter: '系统滤镜',
   fillLightEnabled: '补光灯', fillLightColor: '补光灯颜色', fillLightIntensity: '补光灯强度',
 };
 
@@ -532,6 +533,7 @@ export default function TemplateForm({
         sharpen: 0,
         vignette: 0,
         grain: 0,
+        legStretch: 0,
         lut: 'none',
         systemFilter: 'none',
         fillLightEnabled: false,
@@ -613,6 +615,7 @@ export default function TemplateForm({
       sharpen: num(postProcess.sharpen, 0),
       vignette: num(postProcess.vignette, 0),
       grain: num(postProcess.grain, 0),
+      legStretch: num(postProcess.legStretch, 0),
       lut: (postProcess.lut as FormValues['lut']) ?? 'none',
       systemFilter: (postProcess.systemFilter as FormValues['systemFilter']) ?? 'none',
       fillLightEnabled: (() => { const fl = postProcess.fillLight as Record<string, unknown> | undefined; return fl ? Boolean(fl.enabled) : false; })(),
@@ -752,6 +755,7 @@ export default function TemplateForm({
     if (typeof postProcess.sharpen === 'number') setValue('sharpen', postProcess.sharpen);
     if (typeof postProcess.vignette === 'number') setValue('vignette', postProcess.vignette);
     if (typeof postProcess.grain === 'number') setValue('grain', postProcess.grain);
+    if (typeof postProcess.legStretch === 'number') setValue('legStretch', postProcess.legStretch);
     if (postProcess.lut && (LUTS as readonly string[]).includes(postProcess.lut as string)) setValue('lut', postProcess.lut as FormValues['lut']);
     if (postProcess.systemFilter && (LUTS as readonly string[]).includes(postProcess.systemFilter as string)) setValue('systemFilter', postProcess.systemFilter as FormValues['systemFilter']);
     const fl = (postProcess.fillLight ?? {}) as Record<string, unknown>;
@@ -1006,6 +1010,7 @@ export default function TemplateForm({
         sharpen: data.sharpen,
         vignette: data.vignette,
         grain: data.grain,
+        legStretch: data.legStretch,
         lut: data.lut,
         ...(data.systemFilter && data.systemFilter !== 'none' ? { systemFilter: data.systemFilter } : {}),
         fillLight: (data.fillLightEnabled && data.fillLightColor && data.fillLightIntensity != null)
@@ -2161,6 +2166,10 @@ export default function TemplateForm({
                   <div className="space-y-2">
                     <Label htmlFor="grain">颗粒</Label>
                     <Input id="grain" type="number" min={0} max={100} {...register('grain')} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="legStretch">拉腿</Label>
+                    <Input id="legStretch" type="number" min={0} max={100} {...register('legStretch')} />
                   </div>
                 </div>
               </fieldset>

@@ -442,6 +442,18 @@ export interface AiProviderConfigView {
   /** 剪影专用模型：null = 与生图模型一致 */
   silhouetteModel: string | null;
   enabled: boolean;
+  /** 研究管线开关：true=启用；false=关闭 */
+  searchEnabled: boolean;
+  /** 搜索服务商：'general'（通用搜索 API）| 'vendor'（厂商联网检索）| null（未启用） */
+  searchProvider: 'general' | 'vendor' | null;
+  /** 通用搜索 API baseUrl（searchProvider=general 时使用） */
+  searchBaseUrl: string;
+  /** 通用搜索 API key（脱敏） */
+  searchApiKeyMasked: string;
+  /** 启用的搜索来源（bing/vendor/baidu） */
+  searchSources: string[];
+  /** 迭代上限（预算护栏） */
+  maxIterations: number;
 }
 
 /** PUT /admin/ai-config 请求体（apiKey 空串/缺省 = 不修改原值，首次保存必填） */
@@ -468,6 +480,16 @@ export interface UpdateAiConfigPayload {
   silhouetteProvider?: string;
   silhouetteBaseUrl?: string;
   silhouetteApiKey?: string;
+  /** 研究管线开关：true=启用；false/缺省 = 关闭 */
+  searchEnabled?: boolean;
+  /** 搜索服务商：'general' | 'vendor' | 'off'（关闭） */
+  searchProvider?: string;
+  searchBaseUrl?: string;
+  searchApiKey?: string;
+  /** 启用的搜索来源（bing/vendor/baidu） */
+  searchSources?: string[];
+  /** 迭代上限（预算护栏 1~3） */
+  maxIterations?: number;
 }
 
 /** POST /admin/ai-config/test 可选目标（缺省 = 全部） */
