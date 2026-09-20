@@ -5,7 +5,7 @@
 // 用例 14~16 为 Task 2（textChat）追加：纯文本请求形状 / model 取值 / jsonMode 降级
 // （textModel → visionModel 回退已上移至 getActiveConfig，客户端只取 cfg.model）
 
-import { LlmEndpoint, VisionChatInput, textChat, visionChat } from './llm-client';
+import { LlmEndpoint, VisionChatInput, textChat, visionChat, toolChat, extractToolCalls, ToolDef } from './llm-client';
 
 /** baseUrl 故意带尾斜杠：验证拼接前先规范化去掉 */
 const CFG: LlmEndpoint = {
@@ -246,5 +246,88 @@ describe('textChat', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(parseBody(fetchMock.mock.calls[0][1]).response_format).toEqual({ type: 'json_object' });
     expect(parseBody(fetchMock.mock.calls[1][1]).response_format).toBeUndefined();
+  });
+});
+
+// ===== toolChat / extractToolCalls（Task 1：函数调用往返）=====
+describe('toolChat / extractToolCalls', () => {
+  const TOOL_CFG: LlmEndpoint = {
+    provider: 'qwen',
+    baseUrl: 'https://x.example/v1',
+    apiKey: 'sk-test',
+    model: 'qwen-plus',
+  };
+
+  /** 带 tool_calls 的 OpenAI 兼容响应 */
+  function toolCallResponse(content: string | null, toolCalls: unknown[]): Response {
+    const msg: Record<string, unknown> = {};
+    if (content !== null) msg.content = content;
+    if (toolCalls.length) msg.tool_calls = toolCalls;
+    return new Response(JSON.stringify({ choices: [{ message: msg }] }), { status: 200 });
+  }
+
+  const TOOL: ToolDef = {
+    name: 'trendSearch',
+    description: '搜索热点',
+    parameters: { type: 'object', properties: { query: { type: 'string' } } },
+  };
+
+  it('toolChat：请求体含 tools 数组 + tool_choice:"auto"，返回 assistant 消息（含 tool_calls 原样）', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
+      toolCallResponse(null, [
+        { id: 'call_1', type: 'function', function: { name: 'trendSearch', arguments: '{"query":"秋日人像"}' } },
+      ]),
+    );
+
+    const out = await toolChat(TOOL_CFG, {
+      systemPrompt: 'sys',
+      userText: '帮我研究秋日人像趋势',
+      tools: [TOOL],
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = parseBody(fetchMock.mock.calls[0][1]);
+    expect(body.tool_choice).toBe('auto');
+    expect(body.tools).toEqual([TOOL]);
+    expect(body.messages).toEqual([
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: '帮我研究秋日人像趋势' },
+    ]);
+    // 返回的 assistant 消息含 tool_calls
+    expect(out.toolCalls).toHaveLength(1);
+    // 每项是一条含 tool_calls 的 assistant 消息（符合 ToolCallMsg 契约）
+    expect(out.toolCalls[0].role).toBe('assistant');
+    expect(out.toolCalls[0].tool_calls[0].function.name).toBe('trendSearch');
+    expect(JSON.parse(out.toolCalls[0].tool_calls[0].function.arguments)).toEqual({ query: '秋日人像' });
+    expect(out.content).toBeNull();
+    // messages 是完整上下文（system + user + assistant tool_calls）
+    expect(out.messages[2].tool_calls).toHaveLength(1);
+  });
+
+  it('toolChat：模型仅返回纯文本（无 tool_calls）→ content 透传、toolCalls 为空数组', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(toolCallResponse('没有任何搜索结果', []));
+
+    const out = await toolChat(TOOL_CFG, { systemPrompt: 'sys', userText: 'hi', tools: [TOOL] });
+
+    expect(out.content).toBe('没有任何搜索结果');
+    expect(out.toolCalls).toEqual([]);
+  });
+
+  it('extractToolCalls：从含 tool_calls 的 assistant 消息解析出函数名 / 参数 JSON；无 tool_calls 返回 []', () => {
+    const toolCalls = [
+      { role: 'assistant' as const, content: null, tool_calls: [
+        { id: 'c1', type: 'function', function: { name: 'trendSearch', arguments: '{"query":"a"}' } },
+      ] },
+      { role: 'user' as const, content: 'ok' },
+    ];
+    const parsed = extractToolCalls(null, toolCalls);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].role).toBe('assistant');
+    expect(parsed[0].tool_calls[0].function.name).toBe('trendSearch');
+    expect(parsed[0].tool_calls[0].function.arguments).toContain('"a"');
+    expect(parsed[0].tool_calls[0].id).toBe('c1');
+
+    // 纯文本 assistant（无 tool_calls）
+    expect(extractToolCalls('hello', [{ role: 'assistant', content: 'hello' }])).toEqual([]);
   });
 });
