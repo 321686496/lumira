@@ -66,18 +66,65 @@ export class StorageMigrationService {
     );
     this.running = { id, agent };
 
-    void this.execute(id, agent, triggerBy, now);
+    void this.execute(id, triggerBy, now, () => agent.run());
     return { id, sourceId, targetId };
   }
 
-  private async execute(id: string, agent: StorageMigrationAgent, triggerBy: string, startedAt: number): Promise<void> {
+  /** 对某条失败记录重试：复用该记录的 source→target，仅重试其失败文件，生成一条「重试」新记录 */
+  async retry(recordId: string, triggerBy = 'admin'): Promise<{ id: string; sourceId: string; targetId: string }> {
+    if (this.running) {
+      throw new BadRequestException('已有迁移任务正在运行，请等待完成或先停止');
+    }
+    const rec = await this.get(recordId);
+    const keys = await this.readFailureKeys(rec.failureFile);
+    if (keys.length === 0) {
+      throw new BadRequestException('该记录没有可重试的失败文件');
+    }
+    const id = `sm_${nanoid(10)}`;
+    const now = Math.floor(Date.now() / 1000);
+    const sourceId = rec.sourceId as StorageId;
+    const targetId = rec.targetId as StorageId;
+    const db = this.dbService.getDb();
+    db.insert(storageMigrations).values({
+      id, status: 'running', triggerBy: `${triggerBy}(重试自 ${recordId})`,
+      sourceId, targetId, startedAt: now, createdAt: now,
+    }).then().catch((e) => console.error('[storage-migration] retry insert failed', e));
+
+    const agent = new StorageMigrationAgent(
+      this.dbService,
+      buildStorageAdapter(sourceId),
+      buildStorageAdapter(targetId),
+    );
+    this.running = { id, agent };
+    void this.execute(id, triggerBy, now, () => agent.retryOnly(keys));
+    return { id, sourceId, targetId };
+  }
+
+  private async readFailureKeys(failureFile: string | null): Promise<string[]> {
+    if (!failureFile) return [];
+    const file = path.join(MIGRATIONS_DIR, failureFile.replace(/^migrations\//, ''));
+    if (!fs.existsSync(file)) return [];
+    try {
+      const list = JSON.parse(fs.readFileSync(file, 'utf-8')) as FailureRecord[];
+      return [...new Set(list.map((f) => f.storageKey).filter(Boolean))];
+    } catch {
+      return [];
+    }
+  }
+
+  private async execute(
+    id: string,
+    triggerBy: string,
+    startedAt: number,
+    runner: () => Promise<{ summary: MigrationSummary; failures: FailureRecord[] }>,
+  ): Promise<void> {
     const db = this.dbService.getDb();
     let status: string = 'failed';
     let summaryJson: string | null = null;
     let failureFile: string | null = null;
     let error: string | null = null;
     try {
-      const { summary, failures } = await agent.run();
+      const { summary, failures } = await runner();
       summaryJson = JSON.stringify(summary);
       if (failures.length > 0) {
         failureFile = await this.writeFailures(id, failures);
