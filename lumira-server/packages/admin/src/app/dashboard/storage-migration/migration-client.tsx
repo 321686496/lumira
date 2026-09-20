@@ -12,8 +12,12 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import type {
-  MigrationRecordView, MigrationRunningView, MigrationSummary, FailureRecord,
+  MigrationRecordView, MigrationRunningView, MigrationSummary, FailureRecord, StorageId,
 } from '@/types/admin';
+import { STORAGE_OPTIONS } from '@/types/admin';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import {
   startMigrationAction, stopMigrationAction, getMigrationStatusAction,
   listMigrationsAction, getMigrationDetailAction,
@@ -56,6 +60,10 @@ function statusDot(status?: string) {
   return <span className={cn('inline-block h-2 w-2 rounded-full', color)} />;
 }
 
+const STORAGE_LABEL: Record<StorageId, string> = Object.fromEntries(
+  STORAGE_OPTIONS.map((o) => [o.value, o.label]),
+) as Record<StorageId, string>;
+
 export function MigrationClient({
   initialList, initialStatus,
 }: {
@@ -66,6 +74,7 @@ export function MigrationClient({
   const [records, setRecords] = useState<MigrationRecordView[]>(initialList);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [target, setTarget] = useState<StorageId>('r2');
   const [detail, setDetail] = useState<MigrationRecordView | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -93,7 +102,7 @@ export function MigrationClient({
 
   const onStart = async () => {
     setBusy(true); setErr(null);
-    const res = await startMigrationAction('admin');
+    const res = await startMigrationAction('admin', target);
     setBusy(false);
     if (!res.ok) { setErr(res.error ?? '发起失败'); return; }
     await refresh();
@@ -126,13 +135,27 @@ export function MigrationClient({
       <Card>
         <CardHeader className="flex flex-row items-start justify-between space-y-0">
           <div>
-            <CardTitle>图片存储迁移（Cloudflare R2）</CardTitle>
+            <CardTitle>图片存储迁移</CardTitle>
             <CardDescription>
-              迁移源＝本地磁盘；迁移目标＝R2。迁移后逐实体全校验，失败明细存服务器本地。
+              迁移源＝当前激活存储（由服务器 UPLOAD_STORAGE / UPLOAD_R2 决定，自动识别，非写死）；
+              迁移目标＝本次选择。迁移后逐实体全校验，失败明细存服务器本地。
               仅允许一个任务并发运行。
             </CardDescription>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-end gap-2">
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">迁移目标</div>
+              <Select value={target} onValueChange={(v) => setTarget(v as StorageId)} disabled={running}>
+                <SelectTrigger className="w-44">
+                  <SelectValue placeholder="选择目标存储" />
+                </SelectTrigger>
+                <SelectContent>
+                  {STORAGE_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <Button
               onClick={onStart}
               disabled={busy}
@@ -183,6 +206,7 @@ export function MigrationClient({
             <TableHeader>
               <TableRow>
                 <TableHead>记录 ID</TableHead>
+                <TableHead>迁移路径</TableHead>
                 <TableHead>状态</TableHead>
                 <TableHead>触发人</TableHead>
                 <TableHead>开始时间</TableHead>
@@ -193,7 +217,7 @@ export function MigrationClient({
             <TableBody>
               {records.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground">
                     暂无迁移记录
                   </TableCell>
                 </TableRow>
@@ -201,6 +225,11 @@ export function MigrationClient({
               {records.map((r) => (
                 <TableRow key={r.id} className="cursor-pointer" onClick={() => openDetail(r.id)}>
                   <TableCell className="font-mono text-xs">{r.id}</TableCell>
+                  <TableCell className="text-xs">
+                    {STORAGE_LABEL[r.sourceId] ?? r.sourceId}
+                    <span className="mx-1 text-muted-foreground">→</span>
+                    {STORAGE_LABEL[r.targetId] ?? r.targetId}
+                  </TableCell>
                   <TableCell>
                     <Badge variant="secondary" className={STATUS_VARIANT[r.status]}>
                       <span className="flex items-center gap-1.5">

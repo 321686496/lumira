@@ -8,14 +8,17 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { DatabaseService } from '../../database/database.service';
 import { storageMigrations } from '../../database/schema';
-import { LocalStorageAdapter } from '../../common/storage/local-storage.adapter';
-import { R2StorageAdapter } from '../../common/storage/r2-storage.adapter';
+import { buildStorageAdapter, resolveActiveStorageId, StorageId } from '../../common/storage/storage-registry';
 import { StorageMigrationAgent, MigrationSummary, FailureRecord } from './storage-migration.agent';
 
 export interface MigrationRecordView {
   id: string;
   status: string;
   triggerBy: string;
+  /** 迁移源 = 发起时「当前激活存储」 */
+  sourceId: string;
+  /** 迁移目标 = 本次选择的目标存储 */
+  targetId: string;
   startedAt: number;
   finishedAt: number | null;
   error: string | null;
@@ -43,23 +46,28 @@ export class StorageMigrationService {
 
   constructor(private readonly dbService: DatabaseService) {}
 
-  /** 仅单一任务并发执行 */
-  start(triggerBy: string): { id: string } {
+  /** 仅单一任务并发执行。source=当前激活存储；target=目标存储（默认 r2） */
+  start(triggerBy: string, targetId: StorageId = 'r2'): { id: string; sourceId: StorageId; targetId: StorageId } {
     if (this.running) {
       throw new BadRequestException('已有迁移任务正在运行，请等待完成或先停止');
     }
     const id = `sm_${nanoid(10)}`;
     const now = Math.floor(Date.now() / 1000);
+    const sourceId = resolveActiveStorageId(); // 迁移源 = 当前激活存储（不再写死本地）
     const db = this.dbService.getDb();
     db.insert(storageMigrations).values({
-      id, status: 'running', triggerBy, startedAt: now, createdAt: now,
+      id, status: 'running', triggerBy, sourceId, targetId, startedAt: now, createdAt: now,
     }).then().catch((e) => console.error('[storage-migration] insert failed', e));
 
-    const agent = new StorageMigrationAgent(this.dbService, new LocalStorageAdapter(), new R2StorageAdapter());
+    const agent = new StorageMigrationAgent(
+      this.dbService,
+      buildStorageAdapter(sourceId),
+      buildStorageAdapter(targetId),
+    );
     this.running = { id, agent };
 
     void this.execute(id, agent, triggerBy, now);
-    return { id };
+    return { id, sourceId, targetId };
   }
 
   private async execute(id: string, agent: StorageMigrationAgent, triggerBy: string, startedAt: number): Promise<void> {
@@ -141,8 +149,9 @@ export class StorageMigrationService {
       try { summary = JSON.parse(r.summaryJson) as MigrationSummary; } catch { /* ignore */ }
     }
     return {
-      id: r.id, status: r.status, triggerBy: r.triggerBy, startedAt: r.startedAt,
-      finishedAt: r.finishedAt, error: r.error, summary, failureFile: r.failureFile, createdAt: r.createdAt,
+      id: r.id, status: r.status, triggerBy: r.triggerBy, sourceId: r.sourceId, targetId: r.targetId,
+      startedAt: r.startedAt, finishedAt: r.finishedAt, error: r.error,
+      summary, failureFile: r.failureFile, createdAt: r.createdAt,
     };
   }
 

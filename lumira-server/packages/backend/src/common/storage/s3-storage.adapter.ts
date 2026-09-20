@@ -1,7 +1,7 @@
-// lumira-server/packages/backend/src/common/storage/r2-storage.adapter.ts
-// Cloudflare R2（S3 兼容）存储实现：直连 R2，零出口带宽。
-// 环境变量：R2_ENDPOINT(或 R2_ACCOUNT_ID)、R2_ACCESS_KEY_ID、R2_SECRET_ACCESS_KEY、R2_BUCKET、R2_REGION(默认 auto)。
-// R2 无目录语义，deleteByDir 通过 ListObjectsV2 + DeleteObjects 实现。
+// lumira-server/packages/backend/src/common/storage/s3-storage.adapter.ts
+// 通用 S3 兼容存储适配器（R2 / 阿里云 OSS / 腾讯云 COS / MinIO 等均走此实现）。
+// 通过构造参数注入 endpoint/凭证/bucket，因此**同一进程可同时持有多个厂商实例**
+// （迁移时 source 与 dest 各自独立配置）。
 
 import {
   S3Client,
@@ -14,31 +14,30 @@ import {
 import type { StorageAdapter, StorageCategory } from './storage-adapter.interface';
 import { storageKeyToR2Key, r2KeyToStorageKey } from './storage-key';
 
-function resolveEndpoint(env: NodeJS.ProcessEnv): string {
-  if (env.R2_ENDPOINT) return env.R2_ENDPOINT;
-  if (env.R2_ACCOUNT_ID) return `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-  throw new Error('R2 not configured: set R2_ENDPOINT or R2_ACCOUNT_ID');
+export interface S3Config {
+  /** S3 endpoint，如 `https://<account>.r2.cloudflarestorage.com` */
+  endpoint: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+  region?: string;
 }
 
-export class R2StorageAdapter implements StorageAdapter {
+export class S3StorageAdapter implements StorageAdapter {
   private readonly client: S3Client;
   private readonly bucket: string;
 
-  constructor() {
-    const endpoint = resolveEndpoint(process.env);
-    const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-    const bucket = process.env.R2_BUCKET;
-    if (!accessKeyId || !secretAccessKey || !bucket) {
-      throw new Error('R2 not configured: R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET required');
+  constructor(config: S3Config) {
+    if (!config.endpoint || !config.accessKeyId || !config.secretAccessKey || !config.bucket) {
+      throw new Error(`S3 存储配置不完整：需 endpoint/accessKeyId/secretAccessKey/bucket`);
     }
     this.client = new S3Client({
-      region: process.env.R2_REGION || 'auto',
-      endpoint,
-      credentials: { accessKeyId, secretAccessKey },
-      forcePathStyle: true, // R2 + 自定义域名需要
+      region: config.region || 'auto',
+      endpoint: config.endpoint,
+      credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
+      forcePathStyle: true, // R2 / 自定义域名需要
     });
-    this.bucket = bucket;
+    this.bucket = config.bucket;
   }
 
   async write(category: StorageCategory, id: string, filename: string, buffer: Buffer): Promise<string> {
@@ -88,9 +87,9 @@ export class R2StorageAdapter implements StorageAdapter {
       );
       return true;
     } catch (e) {
-      if ((e as { name?: string })?.name === 'NotFound' || (e as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode === 404) {
-        return false;
-      }
+      const name = (e as { name?: string })?.name;
+      const code = (e as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
+      if (name === 'NotFound' || name === 'NoSuchKey' || code === 404) return false;
       throw e;
     }
   }

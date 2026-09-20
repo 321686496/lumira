@@ -10,8 +10,8 @@ export class StorageMigrationController {
   constructor(private readonly service: StorageMigrationService) {}
 
   @Post('migrate')
-  start(@Body() body: { triggerBy?: string }) {
-    return this.service.start(body?.triggerBy ?? 'admin');
+  start(@Body() body: { triggerBy?: string; target?: string }) {
+    return this.service.start(body?.triggerBy ?? 'admin', (body?.target as never) ?? 'r2');
   }
 
   @Get('migrate/status')

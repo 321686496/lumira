@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS storage_migrations (
   id            VARCHAR(64) PRIMARY KEY,
   status        VARCHAR(16)  NOT NULL COMMENT 'running|success|failed|stopped',
   trigger_by    TEXT         NOT NULL,
+  source_id     VARCHAR(32)  NOT NULL DEFAULT 'local' COMMENT '迁移源存储 id（当前激活存储）',
+  target_id     VARCHAR(32)  NOT NULL DEFAULT 'r2' COMMENT '迁移目标存储 id',
   started_at    INT          NOT NULL,
   finished_at   INT,
   error         TEXT,
