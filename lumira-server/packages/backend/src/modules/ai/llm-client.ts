@@ -32,6 +32,43 @@ export interface TextChatInput {
   timeoutMs?: number;       // 默认 90_000
 }
 
+// ===== 函数调用往返（Task 1：工具调用基建）=====
+
+/** tool definition（OpenAI 兼容 tools 数组元素） */
+export interface ToolDef {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+/** 一条含 tool_calls 的 assistant 消息 */
+export interface ToolCallMsg {
+  role: 'assistant';
+  content: string | null;
+  tool_calls: Array<{
+    id: string;
+    type: 'function';
+    function: { name: string; arguments: string };
+  }>;
+}
+
+/** 工具执行结果回填消息（role:'tool'） */
+export interface ToolResultMsg {
+  role: 'tool';
+  tool_call_id: string;
+  content: string;
+}
+
+/** toolChat 输入（本版本做一次往返；maxIterations 预留供调用方控制迭代） */
+export interface ToolChatInput {
+  systemPrompt: string;
+  userText: string;
+  tools: ToolDef[];
+  temperature?: number;
+  timeoutMs?: number;
+  maxIterations?: number;
+}
+
 const DEFAULT_TEMPERATURE = 0.3;
 const DEFAULT_TIMEOUT_MS = 90_000;
 const MAX_TOKENS = 4096;
@@ -58,25 +95,43 @@ async function upstreamError(res: Response): Promise<string> {
   return detail ? `AI 上游错误（HTTP ${res.status}）：${detail}` : `AI 上游错误（HTTP ${res.status}）`;
 }
 
-/** 公共请求层：messages + model → fetch → 错误映射 → jsonMode 降级 → 取 content；失败抛 Error，message 面向运营可读 */
-async function chatRequest(
-  cfg: LlmEndpoint,
-  input: { model: string; messages: unknown[]; temperature: number; jsonMode: boolean; timeoutMs: number },
-): Promise<string> {
+/** 请求体构造参数（含可选 tools / tool_choice） */
+interface ChatRequestBase {
+  model: string;
+  messages: unknown[];
+  temperature: number;
+  jsonMode: boolean;
+  timeoutMs: number;
+}
+
+/**
+ * 构造 chat/completions 请求体（chatRequest / toolChat 共用）：
+ * jsonMode → response_format；tools 非空 → 带 tools + tool_choice:'auto'。
+ */
+export function buildChatBody(input: ChatRequestBase, opts: { tools?: ToolDef[]; toolChoice?: 'auto' | 'none' | 'required'; jsonMode?: boolean } = {}): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: input.model,
+    temperature: input.temperature,
+    max_tokens: MAX_TOKENS,
+    messages: input.messages,
+  };
+  if (opts.jsonMode ?? input.jsonMode) body.response_format = { type: 'json_object' };
+  if (opts.tools && opts.tools.length) {
+    body.tools = opts.tools;
+    body.tool_choice = opts.toolChoice ?? 'auto';
+  }
+  return body;
+}
+
+/** 底层单次请求：fetch + 错误映射 + jsonMode 降级，返回 choices[0].message（含 tool_calls 时 content 可 null） */
+async function rawChatMessage(cfg: LlmEndpoint, input: ChatRequestBase, opts: { tools?: ToolDef[]; toolChoice?: 'auto' | 'none' | 'required' } = {}): Promise<Record<string, unknown>> {
   const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
 
   const doFetch = async (jsonMode: boolean): Promise<Response> => {
-    const body: Record<string, unknown> = {
-      model: input.model,
-      temperature: input.temperature,
-      max_tokens: MAX_TOKENS,
-      messages: input.messages,
-    };
-    if (jsonMode) body.response_format = { type: 'json_object' };
     return fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
-      body: JSON.stringify(body),
+      body: JSON.stringify(buildChatBody(input, { ...opts, jsonMode })),
       signal: AbortSignal.timeout(input.timeoutMs),
     });
   };
@@ -91,8 +146,15 @@ async function chatRequest(
   }
   if (!res.ok) throw new Error(await upstreamError(res));
 
-  const data = (await res.json()) as { choices?: Array<{ message?: { content?: unknown } }> } | null;
-  const content = data?.choices?.[0]?.message?.content;
+  const data = (await res.json()) as { choices?: Array<{ message?: Record<string, unknown> }> } | null;
+  const message = data?.choices?.[0]?.message;
+  return message && typeof message === 'object' ? message : {};
+}
+
+/** 公共请求层：messages + model → fetch → 错误映射 → jsonMode 降级 → 取 content；失败抛 Error，message 面向运营可读 */
+async function chatRequest(cfg: LlmEndpoint, input: ChatRequestBase): Promise<string> {
+  const message = await rawChatMessage(cfg, input);
+  const content = message.content;
   if (typeof content !== 'string' || !content) throw new Error('AI 服务返回内容为空');
   return content;
 }
@@ -128,4 +190,61 @@ export async function textChat(cfg: LlmEndpoint, input: TextChatInput): Promise<
     jsonMode: input.jsonMode ?? false,
     timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
   });
+}
+
+/**
+ * 从消息序列中解析出 assistant 的 tool_calls（自末向前扫第一条含 tool_calls 的 assistant 消息）。
+ * 无 tool_calls → 空数组。每条返回值是完整 ToolCallMsg（含 tool_calls 的 assistant 消息）。
+ */
+export function extractToolCalls(content: string | null, messages: unknown[]): ToolCallMsg[] {
+  const msgs = Array.isArray(messages) ? messages : [];
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i] as { role?: unknown; tool_calls?: unknown; content?: unknown } | null | undefined;
+    if (m && m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length) {
+      const calls = (m.tool_calls as Array<Record<string, unknown>>)
+        .filter((tc) => tc && typeof tc === 'object')
+        .map((tc) => {
+          const fn = (tc.function ?? {}) as { name?: unknown; arguments?: unknown };
+          return {
+            id: typeof tc.id === 'string' ? tc.id : '',
+            type: 'function' as const,
+            function: {
+              name: typeof fn.name === 'string' ? fn.name : '',
+              arguments: typeof fn.arguments === 'string' ? fn.arguments : '{}',
+            },
+          };
+        });
+      return [{ role: 'assistant', content, tool_calls: calls }];
+    }
+  }
+  return [];
+}
+
+/**
+ * 函数调用一次往返：system + user + tools → fetch → 返回本轮 assistant 消息。
+ * 复用 chatRequest 同款网络 / 错误映射 / jsonMode 降级；content 可为 null（轮到 model 只发 tool_calls）。
+ * 返回 messages 为完整上下文（system + user + assistant），供调用方回填工具结果后继续迭代。
+ */
+export async function toolChat(cfg: LlmEndpoint, input: ToolChatInput): Promise<{ content: string | null; toolCalls: ToolCallMsg[]; messages: unknown[] }> {
+  const messages: unknown[] = [
+    { role: 'system', content: input.systemPrompt },
+    { role: 'user', content: input.userText },
+  ];
+  const message = await rawChatMessage(
+    cfg,
+    {
+      model: cfg.model,
+      messages,
+      temperature: input.temperature ?? DEFAULT_TEMPERATURE,
+      jsonMode: false,
+      timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    },
+    { tools: input.tools, toolChoice: 'auto' },
+  );
+  const assistantMsg: Record<string, unknown> = { role: 'assistant', content: message.content ?? null };
+  if (Array.isArray(message.tool_calls)) assistantMsg.tool_calls = message.tool_calls;
+  messages.push(assistantMsg);
+
+  const content = typeof message.content === 'string' ? message.content : null;
+  return { content, toolCalls: extractToolCalls(content, messages), messages };
 }
