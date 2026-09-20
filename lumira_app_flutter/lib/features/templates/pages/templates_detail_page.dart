@@ -171,15 +171,17 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
         ? null
         : _FavoriteToggle(templateId: id, tokens: tokens);
     final rest = <Widget>[
-      if (_isMyTemplate) ...[
-        if (_isCustomTemplate)
-          LumiraIconButton(
-            icon: Icons.ios_share,
-            onPressed: _goExport,
-            color: tokens.textPrimary,
-            size: 20,
-            variant: LumiraIconButtonVariant.filled,
-          ),
+      // 自定义模板（user_/custom_/imported_）：右上角直接提供「导出」+「编辑」。
+      // 原先按 _isMyTemplate（仅识别 custom_/imp_ 前缀）判断，而编辑器生成的是
+      // user_<时间戳>，导致导出按钮一直不显示，这里统一改为 _isCustomTemplate。
+      if (_isCustomTemplate) ...[
+        LumiraIconButton(
+          icon: Icons.ios_share,
+          onPressed: _goExport,
+          color: tokens.textPrimary,
+          size: 20,
+          variant: LumiraIconButtonVariant.filled,
+        ),
         LumiraIconButton(
           icon: Icons.edit_outlined,
           onPressed: _goEdit,
@@ -308,7 +310,7 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
   }
 
   void _goEdit() {
-    final id = _template?.id;
+    final id = _template?.id ?? widget.templateId;
     if (id == null) return;
     GoRouter.of(context).push(
       RouteNames.withTemplateId(RouteNames.templatesEditor, id),

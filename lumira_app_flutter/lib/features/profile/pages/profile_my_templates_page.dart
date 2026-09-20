@@ -380,6 +380,8 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
                           RouteNames.withTemplateId(RouteNames.templatesDetail, tpl.id),
                         ),
                         onLongPress: _openActionSheet,
+                        onEdit: _handleActionEdit,
+                        onExport: _exportTemplate,
                       )
                     else
                       _EmptyState(tokens: tokens),
@@ -699,12 +701,16 @@ class _TplList extends StatelessWidget {
     required this.templates,
     required this.onTap,
     required this.onLongPress,
+    required this.onEdit,
+    required this.onExport,
   });
 
   final ThemeTokens tokens;
   final List<CustomTemplate> templates;
   final void Function(CustomTemplate) onTap;
   final void Function(CustomTemplate) onLongPress;
+  final void Function(CustomTemplate) onEdit;
+  final void Function(CustomTemplate) onExport;
 
   /// 估算单张卡片总高度，用于双列瀑布流按高度配平（仅分配用，非精确值）。
   double _estimateCardHeight(CustomTemplate t, double cardWidth) {
@@ -732,6 +738,8 @@ class _TplList extends StatelessWidget {
           template: t,
           onTap: () => onTap(t),
           onLongPress: () => onLongPress(t),
+          onEdit: () => onEdit(t),
+          onExport: () => onExport(t),
         ),
       );
       final h = _estimateCardHeight(t, cardWidth);
@@ -787,12 +795,16 @@ class _TplCard extends StatelessWidget {
     required this.template,
     required this.onTap,
     required this.onLongPress,
+    required this.onEdit,
+    required this.onExport,
   });
 
   final ThemeTokens tokens;
   final CustomTemplate template;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
+  final VoidCallback onEdit;
+  final VoidCallback onExport;
 
   String get _evText {
     final ev = template.exposureCompensation;
@@ -874,6 +886,27 @@ class _TplCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                // 操作图标（编辑 / 导出）：叠在封面右下角，仿移动端快速操作。
+                // 叠图表面控件：用实心 surface + 细描边表达表面，不做玻璃/外阴影/模糊。
+                Positioned(
+                  right: 8,
+                  bottom: 8,
+                  child: Row(
+                    children: [
+                      _CardOverlayAction(
+                        icon: Icons.edit_outlined,
+                        onTap: onEdit,
+                        tokens: tokens,
+                      ),
+                      const SizedBox(width: 8),
+                      _CardOverlayAction(
+                        icon: Icons.ios_share_outlined,
+                        onTap: onExport,
+                        tokens: tokens,
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
             Padding(
@@ -938,6 +971,40 @@ class _TplCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 叠在模板封面上的小型圆形操作按钮（编辑 / 导出）。
+///
+/// 叠图表面控件：实心 surface 底 + 细描边，无玻璃/无外阴影/无模糊——
+/// 若用新拟态双向阴影会像光晕一样糊在照片上，故按「叠图表面」取向实现。
+class _CardOverlayAction extends StatelessWidget {
+  const _CardOverlayAction({
+    required this.icon,
+    required this.onTap,
+    required this.tokens,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: tokens.surface.withOpacity(0.92),
+          shape: BoxShape.circle,
+          border: Border.all(color: tokens.surfaceAlt),
+        ),
+        child: Icon(icon, size: 15, color: tokens.textPrimary),
       ),
     );
   }
