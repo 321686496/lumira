@@ -10,7 +10,7 @@ import type { ResearchItem } from './research-item';
 import type { WebSearchProvider, WebSearchQuery } from './web-search.provider';
 
 /** 宽松提取 JSON 数组：直接 JSON.parse；失败剥 markdown 后再试；仍失败返回 null */
-function extractJsonArray(text: string): unknown {
+function extractJsonArray(text: string): unknown[] | null {
   const candidates = [text];
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (fence) candidates.unshift(fence[1]);
