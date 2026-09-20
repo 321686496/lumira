@@ -646,7 +646,14 @@ class _ShareQrSheetState extends ConsumerState<_ShareQrSheet> {
           ),
         ),
         const SizedBox(height: 16),
-        body,
+        // 结果视图（海报预览）内容较高，必须用 Expanded 将其高度约束为弹窗剩余
+        // 可用高度，内部的 SingleChildScrollView 才能获得有界高度并滚动到底部按钮。
+        // 否则作为非 flex 子项会按内容撑高而超出弹窗边界，底部"复制链接/撤回分享"
+        // 按钮被截断且无法滚动（BOTTOM OVERFLOWED）。
+        if (_phase == _SharePhase.result)
+          Expanded(child: body)
+        else
+          body,
       ],
     );
   }
