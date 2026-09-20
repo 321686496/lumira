@@ -357,22 +357,24 @@ class AnimatedToolDrawer extends ConsumerWidget {
           ? Container(
               width: double.infinity,
               decoration: BoxDecoration(color: visual.background),
-              child: _buildContent(activeTool, ref),
+              child: _buildContent(context, activeTool, ref),
             )
           : const SizedBox(height: 0, width: double.infinity),
     );
   }
 
-  Widget _buildContent(String toolId, WidgetRef ref) {
+  Widget _buildContent(BuildContext context, String toolId, WidgetRef ref) {
     switch (toolId) {
       case 'templates':
-        // 「显示更多」展开为 60% 高度 + 搜索框的大面板，否则显示前 10 个模板条
-        final expanded = ref.watch(CaptureState.templateDrawerExpandedProvider);
-        if (expanded) return const TemplateDrawerPanel();
+        // 「显示更多」以模态底部面板从底部弹出（overlay 独立路由），
+        // 不参与此行内布局，因此不会挤压/顶起工具栏；
+        // 软键盘高度由面板内部 viewInsets 兜底，搜索输入框保持可见。
         return TemplateStrip(
-          onShowMore: () => ref
-              .read(CaptureState.templateDrawerExpandedProvider.notifier)
-              .state = true,
+          onShowMore: () {
+            ref.read(CaptureState.templateDrawerExpandedProvider.notifier)
+                .state = false;
+            showTemplateDrawerSheet(context);
+          },
         );
       case 'scenes':
         return const ScenePresetStrip();

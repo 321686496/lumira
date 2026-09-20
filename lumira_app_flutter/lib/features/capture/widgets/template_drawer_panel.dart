@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,16 +13,47 @@ import '../../../shared/widgets/lumira/_internal/lumira_theme_resolver.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../templates/data/owned_templates_repository.dart';
 
-/// 「显示更多」展开的完整模板面板（约 60% 页面高度）。
+/// 从底部弹出「显示更多」的完整模板面板（约 60% 页面高度）。
+///
+/// 以模态底部面板（overlay 独立路由）呈现，不参与底部工具栏的行内布局，
+/// 因此展开时不会挤压/顶起工具栏。内部使用 viewInsets 预留软键盘高度，
+/// 保证搜索输入框聚焦时不被键盘遮挡。
 ///
 /// 顶部为标题 + 收起按钮 + 搜索输入框，下方为按使用频率排序、可搜索过滤的模板网格。
 /// 点击某模板 → 应用该模板（写 currentTemplateIdProvider）并收起面板回到横向条。
 class TemplateDrawerPanel extends ConsumerStatefulWidget {
-  const TemplateDrawerPanel({super.key});
+  const TemplateDrawerPanel({super.key, required this.anchor});
+
+  /// 页面级 BuildContext（拍摄页）。用于在面板（sheet 内部 context）被关闭后，
+  /// 仍能安全地用 GoRouter 跳转到模板详情页。
+  final BuildContext anchor;
 
   @override
   ConsumerState<TemplateDrawerPanel> createState() =>
       _TemplateDrawerPanelState();
+}
+
+/// 打开「显示更多」模板面板：以模态底部面板从底部弹出。
+///
+/// 需要显式包一层 viewInsets Padding，软键盘弹出时内容上移，输入框保持可见。
+Future<void> showTemplateDrawerSheet(BuildContext context) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black54,
+    builder: (sheetCtx) {
+      final keyboard = MediaQuery.of(sheetCtx).viewInsets.bottom;
+      return Padding(
+        padding: EdgeInsets.only(bottom: keyboard),
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: TemplateDrawerPanel(anchor: context),
+        ),
+      );
+    },
+  );
 }
 
 class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
@@ -44,23 +77,27 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
   }
 
   void _collapse() {
-    ref.read(CaptureState.templateDrawerExpandedProvider.notifier).state = false;
+    // 面板是模态底部路由：收起 = 关闭该路由
+    Navigator.of(context).pop();
   }
 
   void _select(PhotoTemplate tpl) {
-  final ownedIds = ref.read(ownedTemplateIdsProvider);
-  // 付费模板未解锁：不直接应用，跳详情页并提示需多少积分解锁
-  if (tpl.meta.price > 0 && !ownedIds.contains(tpl.meta.id)) {
+    final ownedIds = ref.read(ownedTemplateIdsProvider);
+    // 付费模板未解锁：不直接应用，关闭面板并提示需多少积分解锁，然后跳详情页
+    if (tpl.meta.price > 0 && !ownedIds.contains(tpl.meta.id)) {
+      LumiraToast.show(context, '这是付费模板，需 ${tpl.meta.price} 积分解锁');
+      Navigator.of(context).pop();
+      // 用页面级 anchor context 跳详情页（sheet 内部 context 已随关闭失效）
+      if (widget.anchor.mounted) {
+        GoRouter.of(widget.anchor).push(
+          RouteNames.withTemplateId(RouteNames.templatesDetail, tpl.meta.id),
+        );
+      }
+      return;
+    }
+    ref.read(CaptureState.currentTemplateIdProvider.notifier).state = tpl.meta.id;
     _collapse();
-    LumiraToast.show(context, '这是付费模板，需 ${tpl.meta.price} 积分解锁');
-    GoRouter.of(context).push(
-      RouteNames.withTemplateId(RouteNames.templatesDetail, tpl.meta.id),
-    );
-    return;
   }
-  ref.read(CaptureState.currentTemplateIdProvider.notifier).state = tpl.meta.id;
-  _collapse();
-}
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +108,6 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
     ref.watch(ownedTemplatesLoaderProvider);
     final ownedIds = ref.watch(ownedTemplateIdsProvider);
 
-    final panelHeight = MediaQuery.of(context).size.height * 0.6;
     final keyword = _query.trim().toLowerCase();
     final filtered = keyword.isEmpty
         ? templates
@@ -82,28 +118,41 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
                     tag.toLowerCase().contains(keyword))))
             .toList();
 
-    return SizedBox(
+    // 面板高度：默认约 60% 屏高；软键盘弹出时收缩，避免溢出导致输入框被挤到不可见。
+    // （外层已通过 viewInsets Padding 将整个面板上移，此处再按可用空间封顶高度。）
+    final mq = MediaQuery.of(context);
+    final keyboard = mq.viewInsets.bottom;
+    final available = math.max(
+      mq.size.height - mq.padding.top - mq.padding.bottom - keyboard - 16,
+      160.0,
+    );
+    final panelHeight = math.min(available, mq.size.height * 0.6);
+
+    return Container(
       height: panelHeight,
-      child: Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
         color: _visual.background,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildHeader(),
-            _buildSearchField(),
-            Expanded(
-              child: filtered.isEmpty
-                  ? Center(
-                      child: Text(
-                        '未找到匹配模板',
-                        style: TextStyle(
-                            color: _visual.foregroundMuted, fontSize: 13),
-                      ),
-                    )
-                  : _buildGrid(filtered, currentId, ownedIds),
-            ),
-          ],
-        ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildHeader(),
+          _buildSearchField(),
+          Expanded(
+            child: filtered.isEmpty
+                ? Center(
+                    child: Text(
+                      '未找到匹配模板',
+                      style: TextStyle(
+                          color: _visual.foregroundMuted, fontSize: 13),
+                    ),
+                  )
+                : _buildGrid(filtered, currentId, ownedIds),
+          ),
+        ],
       ),
     );
   }
