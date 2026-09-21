@@ -6,6 +6,7 @@
 // 工程约束：单源失败跳过、进程内 LRU 缓存、可开关、可降级。图片副产物保留 imgUrl（不在此下载）。
 
 import { Injectable } from '@nestjs/common';
+import { AiConfigService } from '../ai-config.service';
 import { cacheableSearch, createWebSearchProvider } from './web-search.provider';
 import type { WebSearchProvider, WebSearchQuery } from './web-search.provider';
 import type { ResearchItem } from './research-item';
@@ -38,20 +39,12 @@ const defaultProviderFactory: SearchProviderFactory = (name, cfg) =>
     vendorEndpoint: cfg.vendorEndpoint as never,
   });
 
-/** aiConfig 依赖最小面（getSearchConfig 可选：未实现时视作研究关闭） */
-export interface SearchConfigServiceLike {
-  getSearchConfig?(): Promise<SearchConfig | undefined> | SearchConfig | undefined;
-}
-
 @Injectable()
 export class TrendResearchService {
-  private readonly factory: SearchProviderFactory;
-  constructor(
-    private readonly aiConfigService: SearchConfigServiceLike,
-    providerFactory?: SearchProviderFactory,
-  ) {
-    this.factory = providerFactory ?? defaultProviderFactory;
-  }
+  /** 搜索工厂（测试注入用；生产缺省走 defaultProviderFactory） */
+  factory: SearchProviderFactory = defaultProviderFactory;
+
+  constructor(private readonly aiConfigService: AiConfigService) {}
 
   /**
    * 并行跑启用的来源，allSettled 聚合：失败来源跳过；相同 source+title 去重（保留先出现者）。

@@ -3,6 +3,7 @@
 
 import { TrendResearchService } from './trend-research.service';
 import type { SearchProviderFactory } from './trend-research.service';
+import { AiConfigService } from '../ai-config.service';
 import { clearWebSearchCache } from './web-search.provider';
 import type { ResearchItem } from './research-item';
 
@@ -12,8 +13,10 @@ function item(source: string, title: string, extra: Partial<ResearchItem> = {}):
 
 /** 注入型 aiConfig + 工厂辅助 */
 function build(factory: SearchProviderFactory, searchConfig: unknown) {
-  const aiConfig = { getSearchConfig: async () => searchConfig };
-  return new TrendResearchService(aiConfig, factory);
+  const aiConfig = { getSearchConfig: async () => searchConfig } as unknown as AiConfigService;
+  const svc = new TrendResearchService(aiConfig);
+  svc.factory = factory;
+  return svc;
 }
 
 beforeEach(() => {
