@@ -11,6 +11,7 @@ import type { ImageDescribeService } from './image-describe.service';
 import type { PoseRefSheetService } from './pose-ref-sheet.service';
 import type { ImageScoreService } from './image-score.service';
 import { ParamValidateService } from './param-validate.service';
+import type { DraftRefineService } from './draft-refine.service';
 
 const CATEGORIES = [
   { key: 'portrait', name: '人像', parentKey: null as string | null, level: 1 },
@@ -59,6 +60,14 @@ function build(opts: { searchEnabled?: boolean; scoreSequence?: Array<'pass' | '
     }),
   } as unknown as AiConfigService;
 
+  // draft-refine 在 retry 后返回一份有改动的草稿（代际递增，确保循环继续并最终 pass）
+  const draftRefine = {
+    refine: jest.fn().mockImplementation(async (input: { draft: Record<string, unknown> }) => ({
+      ...input.draft,
+      meta: { name: `细化稿-${Date.now()}` },
+    })),
+  };
+
   const service = new AiOrchestratorService(
     aiConfigService,
     research as unknown as TrendResearchService,
@@ -66,6 +75,7 @@ function build(opts: { searchEnabled?: boolean; scoreSequence?: Array<'pass' | '
     poseRefSheet as unknown as PoseRefSheetService,
     paramValidate,
     score as unknown as ImageScoreService,
+    draftRefine as unknown as DraftRefineService,
   );
 
   const optsRun = {
@@ -73,7 +83,7 @@ function build(opts: { searchEnabled?: boolean; scoreSequence?: Array<'pass' | '
     draft: { meta: { name: '飘窗清冷少女人像模板' }, camera: { iso: 200 } },
   };
 
-  return { service, research, describe, poseRefSheet, paramValidate, score, optsRun };
+  return { service, research, describe, poseRefSheet, paramValidate, score, draftRefine, optsRun };
 }
 
 beforeEach(() => jest.clearAllMocks());
@@ -137,7 +147,7 @@ describe('AiOrchestratorService.run', () => {
   });
 
   it('imageScore 先 retry 后 pass → 进入再判，score 被调用 2 次，二次通过后返回', async () => {
-    const { service, score, optsRun } = build({ scoreSequence: ['retry', 'pass'] });
+    const { service, score, draftRefine, optsRun } = build({ scoreSequence: ['retry', 'pass'] });
 
     const res = await service.run({ imageBase64: 'aGk=', imageMime: 'image/jpeg', poseCount: 1 }, optsRun);
 
@@ -145,6 +155,37 @@ describe('AiOrchestratorService.run', () => {
     const scores = res.trace.filter((t) => t.step === 'imageScore');
     expect(scores.length).toBeGreaterThanOrEqual(2);
     expect(scores[scores.length - 1].score).toBe(0.9);
+    // 收敛闭环：retry 后 suggestions 喂回 refine，草稿真正被改进而非原样重评
+    expect(draftRefine.refine).toHaveBeenCalledTimes(1);
+    const refineTrace = res.trace.find((t) => t.step === 'draftRefine');
+    expect(refineTrace).toBeDefined();
+  });
+
+  it('retry 后无法生成有效改进（refine 返回同稿/空）→ 停止空转，score 仅评一次', async () => {
+    const service = (() => {
+      const research = { research: jest.fn().mockResolvedValue({ items: [RESEARCH_ITEM], sourceErrors: [] }) };
+      const describe = { describe: jest.fn().mockResolvedValue(DESC) };
+      const poseRefSheet = { generate: jest.fn().mockResolvedValue(POSE_SHEET) };
+      const paramValidate = new ParamValidateService();
+      const score = { score: jest.fn().mockResolvedValue({ score: 0.6, verdict: 'retry' as const, reasons: ['待改进'], suggests: ['调整关键词'] }) };
+      const aiConfigService = { getSearchConfig: async () => ({ enabled: false, sources: [] }) } as unknown as AiConfigService;
+      // refine 恒返回 null → 视为无法改进
+      const draftRefine = { refine: jest.fn().mockResolvedValue(null) } as unknown as DraftRefineService;
+      return {
+        service: new AiOrchestratorService(
+          aiConfigService, research as unknown as TrendResearchService, describe as unknown as ImageDescribeService,
+          poseRefSheet as unknown as PoseRefSheetService, paramValidate, score as unknown as ImageScoreService, draftRefine,
+        ),
+        score,
+        draftRefine,
+      };
+    })();
+
+    const res = await service.service.run({ text: '奶油风人像', poseCount: 1 }, { categories: CATEGORIES });
+
+    expect(service.score.score).toHaveBeenCalledTimes(1); // 不空转
+    expect(service.draftRefine.refine).toHaveBeenCalledTimes(1);
+    expect(res.warnings.join('\n')).toContain('无法生成有效改进');
   });
 
   it('仅文字（无图）→ 跳过 describe，poseRefSheet 仍执行（describe 参数为 undefined 时兜底）', async () => {
