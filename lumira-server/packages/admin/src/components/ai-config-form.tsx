@@ -64,18 +64,11 @@ const TEST_TARGET_OPTIONS: { value: AiConfigTestTarget; label: string }[] = [
 ];
 const ALL_TEST_TARGETS = TEST_TARGET_OPTIONS.map((option) => option.value);
 
-/** 搜索服务商（研究管线）：通用 API / 厂商联网 / 关闭 */
-const SEARCH_PROVIDER_OPTIONS: { value: 'general' | 'vendor' | 'off'; label: string }[] = [
-  { value: 'general', label: '通用 API' },
-  { value: 'vendor', label: '厂商联网' },
+/** 搜索方式（研究管线）：模型自带(Qwen) / 三方(Bing) / 关闭 */
+const SEARCH_MODE_OPTIONS: { value: 'qwen' | 'bing' | 'off'; label: string }[] = [
+  { value: 'qwen', label: '模型自带搜索（Qwen）' },
+  { value: 'bing', label: '三方搜索引擎（Bing）' },
   { value: 'off', label: '关闭' },
-];
-
-/** 启用的搜索来源多选 */
-const SEARCH_SOURCE_OPTIONS: { value: string; label: string }[] = [
-  { value: 'bing', label: 'Bing 通用搜索' },
-  { value: 'vendor', label: '厂商联网' },
-  { value: 'baidu', label: '百度（预留）' },
 ];
 
 interface FormState {
@@ -88,10 +81,12 @@ interface FormState {
   silhouetteModel: string; // 留空 = 与生图模型一致
   enabled: boolean;
   // 研究管线（Agentic）
-  searchProvider: 'general' | 'vendor' | 'off';
+  searchMode: 'qwen' | 'bing' | 'off';
   searchBaseUrl: string;
   searchApiKey: string; // 留空 = 不修改原值
-  searchSources: string[];
+  searchQwenBaseUrl: string;
+  searchQwenApiKey: string; // 留空 = 不修改原值
+  searchQwenModel: string;
   maxIterations: number; // 迭代上限（预算护栏 1~3）
 }
 
@@ -191,12 +186,14 @@ export function AiConfigForm({
           textModel: initial.textModel,
           silhouetteModel: initial.silhouetteModel ?? '',
           enabled: initial.enabled,
-          searchProvider: initial.searchEnabled
-            ? (initial.searchProvider ?? 'general')
+          searchMode: initial.searchEnabled
+            ? (initial.searchProvider === 'qwen' ? 'qwen' : 'bing')
             : 'off',
           searchBaseUrl: initial.searchBaseUrl,
           searchApiKey: '',
-          searchSources: initial.searchSources.length ? initial.searchSources : ['bing'],
+          searchQwenBaseUrl: initial.searchQwenBaseUrl,
+          searchQwenApiKey: '',
+          searchQwenModel: initial.searchQwenModel,
           maxIterations: initial.maxIterations,
         }
       : {
@@ -208,10 +205,12 @@ export function AiConfigForm({
           textModel: PROVIDER_PRESETS.qwen.textModel,
           silhouetteModel: '',
           enabled: false,
-          searchProvider: 'off',
+          searchMode: 'off',
           searchBaseUrl: '',
           searchApiKey: '',
-          searchSources: ['bing'],
+          searchQwenBaseUrl: '',
+          searchQwenApiKey: '',
+          searchQwenModel: '',
           maxIterations: 2,
         },
   );
@@ -250,6 +249,10 @@ export function AiConfigForm({
   /** 已保存通用搜索 API 的脱敏 Key（占位符展示）；为空 = 尚未保存过，保存时启用通用 API 需填 Key */
   const [searchApiKeyMasked, setSearchApiKeyMasked] = useState(
     configured ? initial.searchApiKeyMasked : '',
+  );
+  /** 已保存 Qwen 搜索 API 的脱敏 Key（占位符展示） */
+  const [searchQwenApiKeyMasked, setSearchQwenApiKeyMasked] = useState(
+    configured ? initial.searchQwenApiKeyMasked : '',
   );
   const [testResult, setTestResult] = useState<AiConfigTestResult | null>(null);
   const [testTargets, setTestTargets] = useState<AiConfigTestTarget[]>(ALL_TEST_TARGETS);
@@ -391,19 +394,28 @@ export function AiConfigForm({
       });
       return;
     }
-    if (form.searchProvider === 'general' && !form.searchBaseUrl.trim()) {
-      toast({
-        variant: 'destructive',
-        title: '请填写完整',
-        description: '通用搜索 API 必须填写 baseUrl',
-      });
-      return;
-    }
-    if (form.searchProvider === 'general' && !searchApiKeyMasked && !form.searchApiKey.trim()) {
+    if (form.searchMode === 'qwen') {
+      if (!form.searchQwenBaseUrl.trim()) {
+        toast({
+          variant: 'destructive',
+          title: '请填写完整',
+          description: 'Qwen 搜索必须填写 baseUrl',
+        });
+        return;
+      }
+      if (!searchQwenApiKeyMasked && !form.searchQwenApiKey.trim()) {
+        toast({
+          variant: 'destructive',
+          title: '缺少 API Key',
+          description: '首次启用 Qwen 搜索必须填写 API Key',
+        });
+        return;
+      }
+    } else if (form.searchMode === 'bing' && !searchApiKeyMasked && !form.searchApiKey.trim()) {
       toast({
         variant: 'destructive',
         title: '缺少 API Key',
-        description: '首次启用通用搜索 API 必须填写 API Key',
+        description: '首次启用 Bing 搜索必须填写 API Key',
       });
       return;
     }
@@ -433,14 +445,22 @@ export function AiConfigForm({
         payload.silhouetteBaseUrl = silhouetteOverride.baseUrl.trim();
         if (silhouetteOverride.apiKey.trim()) payload.silhouetteApiKey = silhouetteOverride.apiKey.trim();
       }
-      // 研究管线（Agentic）：开关 = 是否关闭；provider 随选项；通用 API 时才传 baseUrl/apiKey/sources
-      payload.searchEnabled = form.searchProvider !== 'off';
-      payload.searchProvider = form.searchProvider;
+      // 研究管线（Agentic）：搜索方式三选一 → provider/sources/字段映射
+      payload.searchEnabled = form.searchMode !== 'off';
       payload.maxIterations = form.maxIterations;
-      if (form.searchProvider !== 'off') {
+      if (form.searchMode === 'qwen') {
+        payload.searchProvider = 'qwen';
+        payload.searchSources = ['qwen'];
+        if (form.searchQwenBaseUrl.trim()) payload.searchQwenBaseUrl = form.searchQwenBaseUrl.trim();
+        if (form.searchQwenApiKey.trim()) payload.searchQwenApiKey = form.searchQwenApiKey.trim();
+        payload.searchQwenModel = form.searchQwenModel.trim() || 'qwen-plus';
+      } else if (form.searchMode === 'bing') {
+        payload.searchProvider = 'general';
+        payload.searchSources = ['bing'];
         if (form.searchBaseUrl.trim()) payload.searchBaseUrl = form.searchBaseUrl.trim();
         if (form.searchApiKey.trim()) payload.searchApiKey = form.searchApiKey.trim();
-        payload.searchSources = form.searchSources;
+      } else {
+        payload.searchProvider = 'off';
       }
       const result = await saveAiConfigAction(payload);
       if ('error' in result) {
@@ -453,6 +473,7 @@ export function AiConfigForm({
       setImagePlatformMasked(config.imagePlatform?.apiKeyMasked ?? '');
       setSilhouettePlatformMasked(config.silhouettePlatform?.apiKeyMasked ?? '');
       setSearchApiKeyMasked(config.searchApiKeyMasked);
+      setSearchQwenApiKeyMasked(config.searchQwenApiKeyMasked);
       // 后端为权威：独立开关与平台字段按保存结果回填（被清除时保留输入、仅置回跟随）
       setTextOverride((o) => {
         const saved = overrideFromPlatform(config.textPlatform);
@@ -798,7 +819,7 @@ export function AiConfigForm({
           {/* 模态四：剪影模型（AI 一键建模「生成剪影」用，默认跟随生图平台） */}
           {renderModalitySection('silhouette')}
 
-          {/* 研究管线（Agentic）：搜索服务商 / 来源 / 迭代上限 */}
+          {/* 研究管线（Agentic）：搜索方式三选一 */}
           <div className="space-y-4 rounded-lg border border-border p-4">
             <div>
               <div className="text-sm font-medium text-foreground">研究管线（Agentic 趋势研究）</div>
@@ -808,22 +829,16 @@ export function AiConfigForm({
             </div>
 
             <div className="space-y-2">
-              <Label>搜索服务商</Label>
+              <Label>搜索方式</Label>
               <div className="inline-flex rounded-md border border-border p-0.5">
-                {SEARCH_PROVIDER_OPTIONS.map((option) => (
+                {SEARCH_MODE_OPTIONS.map((option) => (
                   <button
                     key={option.value}
                     type="button"
-                    onClick={() =>
-                      setForm((f) =>
-                        option.value === 'general' && !f.searchBaseUrl.trim()
-                          ? { ...f, searchProvider: 'general', searchBaseUrl: 'https://api.bing.microsoft.com/v7.0/search' }
-                          : { ...f, searchProvider: option.value },
-                      )
-                    }
+                    onClick={() => setForm((f) => ({ ...f, searchMode: option.value }))}
                     className={cn(
                       'rounded px-3 py-1 text-sm transition-colors',
-                      form.searchProvider === option.value
+                      form.searchMode === option.value
                         ? 'bg-primary text-primary-foreground'
                         : 'text-muted-foreground hover:text-foreground',
                     )}
@@ -834,87 +849,83 @@ export function AiConfigForm({
               </div>
             </div>
 
-            {form.searchProvider !== 'off' && (
-              <>
-                {form.searchProvider === 'general' && (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="ai-search-base-url">通用搜索 API Base URL</Label>
-                      <Input
-                        id="ai-search-base-url"
-                        value={form.searchBaseUrl}
-                        onChange={(e) => setForm((f) => ({ ...f, searchBaseUrl: e.target.value }))}
-                        placeholder="https://api.bing.microsoft.com/v7.0/search"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="ai-search-api-key">通用搜索 API Key</Label>
-                      <Input
-                        id="ai-search-api-key"
-                        type="password"
-                        value={form.searchApiKey}
-                        onChange={(e) => setForm((f) => ({ ...f, searchApiKey: e.target.value }))}
-                        placeholder={searchApiKeyMasked ? `${searchApiKeyMasked}（留空 = 不修改）` : '…'}
-                      />
-                    </div>
-                  </div>
-                )}
-
+            {form.searchMode === 'qwen' && (
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>搜索来源（可多选）</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {SEARCH_SOURCE_OPTIONS.map((option) => {
-                      const checked = form.searchSources.includes(option.value);
-                      return (
-                        <label
-                          key={option.value}
-                          className={cn(
-                            'flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm',
-                            checked
-                              ? 'border-primary bg-primary/5 text-foreground'
-                              : 'border-border bg-background text-muted-foreground',
-                          )}
-                        >
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4"
-                            checked={checked}
-                            onChange={(event) =>
-                              setForm((f) => ({
-                                ...f,
-                                searchSources: event.target.checked
-                                  ? [...new Set([...f.searchSources, option.value])]
-                                  : f.searchSources.filter((s) => s !== option.value),
-                              }))
-                            }
-                          />
-                          {option.label}
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="space-y-2 md:max-w-xs">
-                  <Label htmlFor="ai-max-iterations">迭代上限（预算护栏）</Label>
+                  <Label htmlFor="ai-qwen-base-url">Qwen 搜索端点（Base URL）</Label>
                   <Input
-                    id="ai-max-iterations"
-                    type="number"
-                    min={1}
-                    max={3}
-                    value={form.maxIterations}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        maxIterations: Number(e.target.value) || 1,
-                      }))
-                    }
+                    id="ai-qwen-base-url"
+                    value={form.searchQwenBaseUrl}
+                    onChange={(e) => setForm((f) => ({ ...f, searchQwenBaseUrl: e.target.value }))}
+                    placeholder="https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    质量不达标时依评审建议微调重试，最多迭代该次数；1~3，绝不无限迭代。费用与耗时递增。
-                  </p>
                 </div>
-              </>
+                <div className="space-y-2">
+                  <Label htmlFor="ai-qwen-api-key">Qwen 搜索 API Key</Label>
+                  <Input
+                    id="ai-qwen-api-key"
+                    type="password"
+                    value={form.searchQwenApiKey}
+                    onChange={(e) => setForm((f) => ({ ...f, searchQwenApiKey: e.target.value }))}
+                    placeholder={searchQwenApiKeyMasked ? `${searchQwenApiKeyMasked}（留空 = 不修改）` : '…'}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ai-qwen-model">Qwen 搜索模型</Label>
+                  <Input
+                    id="ai-qwen-model"
+                    value={form.searchQwenModel}
+                    onChange={(e) => setForm((f) => ({ ...f, searchQwenModel: e.target.value }))}
+                    placeholder="qwen-plus"
+                  />
+                </div>
+              </div>
+            )}
+
+            {form.searchMode === 'bing' && (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="ai-bing-base-url">Bing 搜索 Base URL</Label>
+                  <Input
+                    id="ai-bing-base-url"
+                    value={form.searchBaseUrl}
+                    onChange={(e) => setForm((f) => ({ ...f, searchBaseUrl: e.target.value }))}
+                    placeholder="https://api.bing.microsoft.com/v7.0/search"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ai-bing-api-key">Bing 搜索 API Key</Label>
+                  <Input
+                    id="ai-bing-api-key"
+                    type="password"
+                    value={form.searchApiKey}
+                    onChange={(e) => setForm((f) => ({ ...f, searchApiKey: e.target.value }))}
+                    placeholder={searchApiKeyMasked ? `${searchApiKeyMasked}（留空 = 不修改）` : '…'}
+                  />
+                </div>
+              </div>
+            )}
+
+            {form.searchMode !== 'off' && (
+              <div className="space-y-2 md:max-w-xs">
+                <Label htmlFor="ai-max-iterations">迭代上限（预算护栏）</Label>
+                <Input
+                  id="ai-max-iterations"
+                  type="number"
+                  min={1}
+                  max={3}
+                  value={form.maxIterations}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      maxIterations: Number(e.target.value) || 1,
+                    }))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  质量不达标时依评审建议微调重试，最多迭代该次数；1~3，绝不无限迭代。费用与耗时递增。
+                </p>
+              </div>
             )}
           </div>
 

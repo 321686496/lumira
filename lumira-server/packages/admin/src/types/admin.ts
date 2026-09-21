@@ -444,14 +444,20 @@ export interface AiProviderConfigView {
   enabled: boolean;
   /** 研究管线开关：true=启用；false=关闭 */
   searchEnabled: boolean;
-  /** 搜索服务商：'general'（通用搜索 API）| 'vendor'（厂商联网检索）| null（未启用） */
-  searchProvider: 'general' | 'vendor' | null;
+  /** 搜索服务商：'general'（通用搜索 API）| 'vendor'（厂商联网检索）| 'qwen'（模型自带搜索）| null（未启用） */
+  searchProvider: 'general' | 'vendor' | 'qwen' | null;
   /** 通用搜索 API baseUrl（searchProvider=general 时使用） */
   searchBaseUrl: string;
   /** 通用搜索 API key（脱敏） */
   searchApiKeyMasked: string;
   /** 启用的搜索来源（bing/vendor/baidu） */
   searchSources: string[];
+  /** Qwen 模型自带搜索端点（searchProvider=qwen 时使用） */
+  searchQwenBaseUrl: string;
+  /** Qwen 搜索 API key（脱敏） */
+  searchQwenApiKeyMasked: string;
+  /** Qwen 搜索模型（缺省 = qwen-plus） */
+  searchQwenModel: string;
   /** 迭代上限（预算护栏） */
   maxIterations: number;
 }
@@ -488,6 +494,9 @@ export interface UpdateAiConfigPayload {
   searchApiKey?: string;
   /** 启用的搜索来源（bing/vendor/baidu） */
   searchSources?: string[];
+  searchQwenBaseUrl?: string;
+  searchQwenApiKey?: string;
+  searchQwenModel?: string;
   /** 迭代上限（预算护栏 1~3） */
   maxIterations?: number;
 }
