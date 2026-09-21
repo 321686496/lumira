@@ -19,6 +19,8 @@ export interface SearchSourceConfig {
   provider: string;
   baseUrl?: string;
   apiKey?: string;
+  /** SearXNG 站点限定（provider=searxng 时可选，拼接 site: 前缀） */
+  site?: string;
   /** Qwen 模型自带联网搜索模型（provider=qwen 时使用，缺省回退 qwen-plus） */
   model?: string;
   /** 厂商联网检索端点（provider=vendor 时必填） */
@@ -39,6 +41,7 @@ const defaultProviderFactory: SearchProviderFactory = (name, cfg) =>
     baseUrl: cfg.baseUrl,
     apiKey: cfg.apiKey,
     model: cfg.model,
+    site: cfg.site,
     vendorEndpoint: cfg.vendorEndpoint as never,
   });
 

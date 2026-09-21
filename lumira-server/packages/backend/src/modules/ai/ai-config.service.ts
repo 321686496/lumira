@@ -40,8 +40,10 @@ export interface AiConfigView {
   searchBaseUrl: string;
   /** 通用搜索 API key（脱敏） */
   searchApiKeyMasked: string;
-  /** 启用的搜索来源（bing/vendor/baidu/qwen） */
+  /** 启用的搜索来源（searxng/vendor/baidu/qwen） */
   searchSources: string[];
+  /** SearXNG 站点限定（可选，如 xiaohongshu.com / v.douyin.com）；空串 = 全站搜索 */
+  searchSite: string;
   /** 迭代上限（预算护栏） */
   maxIterations: number;
   /** Qwen 模型自带搜索端点（searchProvider=qwen 时使用） */
@@ -80,6 +82,8 @@ export interface ActiveAiConfig {
     provider: 'general' | 'vendor' | 'qwen' | null;
     baseUrl: string;
     apiKey: string;
+    /** SearXNG 站点限定（可选；空串 = 全站搜索） */
+    site: string;
     sources: string[];
     maxIterations: number;
   };
@@ -119,7 +123,12 @@ function parseSearchSources(raw: string | null | undefined): string[] {
   if (!raw) return [];
   try {
     const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? (arr.filter((s) => ['bing', 'vendor', 'baidu', 'qwen'].includes(s)) as string[]) : [];
+    return Array.isArray(arr)
+      ? (arr
+          .filter((s) => ['bing', 'vendor', 'baidu', 'qwen', 'searxng'].includes(s))
+          // 老数据归一化：bing 已退役，按 searxng 处理（免费自建，无需 Key）
+          .map((s) => (s === 'bing' ? 'searxng' : s)) as string[])
+      : [];
   } catch {
     return [];
   }
@@ -171,6 +180,7 @@ export class AiConfigService {
       searchBaseUrl: row.searchBaseUrl ?? '',
       searchApiKeyMasked: maskKey(row.searchApiKey ?? ''),
       searchSources: parseSearchSources(row.searchSources),
+      searchSite: row.searchSite ?? '',
       maxIterations: row.maxIterations ?? 3,
       searchQwenBaseUrl: row.searchQwenBaseUrl ?? '',
       searchQwenApiKeyMasked: maskKey(row.searchQwenApiKey ?? ''),
@@ -247,13 +257,14 @@ export class AiConfigService {
     const searchBaseUrl = dto.searchBaseUrl?.trim() || existing?.searchBaseUrl || null;
     const resolvedSearchApiKey = dto.searchApiKey?.trim() || existing?.searchApiKey || null;
     const searchSources = serializeSearchSources(dto.searchSources) ?? existing?.searchSources ?? null;
+    const searchSite = dto.searchSite?.trim() || existing?.searchSite || null;
     const maxIterations = dto.maxIterations ?? existing?.maxIterations ?? 3;
     const searchQwenBaseUrl = dto.searchQwenBaseUrl?.trim() || existing?.searchQwenBaseUrl || null;
     const resolvedSearchQwenApiKey = dto.searchQwenApiKey?.trim() || existing?.searchQwenApiKey || null;
     const searchQwenModel = dto.searchQwenModel?.trim() || existing?.searchQwenModel || null;
     if (searchEnabled === 1 && searchProvider === 'general') {
+      // SearXNG 自建搜索免费且无需 Key，仅要求 baseUrl
       if (!searchBaseUrl) throw new BadRequestException('通用搜索 API 必须填写 baseUrl');
-      if (!resolvedSearchApiKey) throw new BadRequestException('首次启用通用搜索 API 必须填写 API Key');
     }
     if (searchEnabled === 1 && searchProvider === 'qwen') {
       if (!searchQwenBaseUrl) throw new BadRequestException('Qwen 搜索必须填写 baseUrl');
@@ -288,6 +299,7 @@ export class AiConfigService {
         searchBaseUrl,
         searchApiKey: resolvedSearchApiKey,
         searchSources,
+        searchSite,
         maxIterations,
         searchQwenBaseUrl,
         searchQwenApiKey: resolvedSearchQwenApiKey,
@@ -320,6 +332,7 @@ export class AiConfigService {
           searchBaseUrl,
           searchApiKey: dto.searchApiKey?.trim() ? resolvedSearchApiKey : existing.searchApiKey, // 留空 = 不改
           searchSources,
+          searchSite, // 留空 = 不改（searchSite 常量已是解析后的最终值）
           maxIterations,
           searchQwenBaseUrl,
           searchQwenApiKey: dto.searchQwenApiKey?.trim() ? resolvedSearchQwenApiKey : existing?.searchQwenApiKey,
@@ -432,12 +445,13 @@ export class AiConfigService {
             ? { provider: row.textProvider as string, baseUrl: row.textBaseUrl as string, apiKey: row.textApiKey as string, model: row.textModel as string }
             : { provider: row.provider, baseUrl: row.baseUrl, apiKey: row.apiKey, model: hasCustomTextModel ? (row.textModel as string) : row.visionModel },
         });
-      } else if (name === 'bing') {
+      } else if (name === 'searxng') {
         sources.push({
           name,
-          provider: 'bing',
+          provider: 'searxng',
           baseUrl: row.searchBaseUrl ?? undefined,
           apiKey: row.searchApiKey ?? undefined,
+          site: row.searchSite?.trim() || undefined,
         });
       }
       // baidu 适配器（web-search-baidu.ts）尚未实现，跳过避免 factory 抛错
@@ -482,6 +496,7 @@ export class AiConfigService {
             : null,
         baseUrl: row.searchBaseUrl ?? '',
         apiKey: row.searchApiKey ?? '',
+        site: row.searchSite ?? '',
         sources: parseSearchSources(row.searchSources),
         maxIterations: row.maxIterations ?? 3,
       },
