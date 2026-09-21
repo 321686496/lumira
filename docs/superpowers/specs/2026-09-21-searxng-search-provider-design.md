@@ -23,7 +23,7 @@
 「研究管线」搜索方式单选收敛为：
 
 - **模型自带搜索（Qwen）**：不变（`sources=[qwen]`）
-- **SearXNG 自建搜索（免费）**：显示「SearXNG Base URL」（必填，预填 `http://lumira-searxng:8080`）+「SearXNG API Key」（可选，带 token 的自建实例用）；`sources=[searxng]`
+- **SearXNG 自建搜索（免费）**：显示「SearXNG Base URL」（必填，预填 `http://lumira-searxng:8080`）+「SearXNG API Key」（可选，带 token 的自建实例用）+「站点限定（可选）」输入框（如 `xiaohongshu.com` / `v.douyin.com`，用于把小红书/抖音被搜索引擎收录的公开页面作为趋势信号源）；`sources=[searxng]`
 - **关闭**：不变
 
 规则：
@@ -38,6 +38,7 @@
 复用 `WebSearchProvider` 接口（`{ name, search(query, limit): Promise<ResearchItem[]> }`）。
 
 - **请求**：`GET {base}/search?q={query}&format=json&language=zh-CN`（去尾斜杠），无鉴权头；若配置了 apiKey 则带 `Authorization: Bearer <apiKey>`（SearXNG 的 token 鉴权）。
+- **站点限定（可选）**：适配器配置带 `site` 时，在 query 前拼 `site:{site}`（如 `site:xiaohongshu.com 秋季写真`），让引擎只返回该站点被收录的公开页面，作为自媒体（小红书/抖音等）趋势信号源。
 - **超时**：`AbortSignal.timeout(8000)`；失败抛可读错误（超时/连接/HTTP 非 200），上层 `allSettled` 降级跳过。
 - **解析**：`data.results[]`（`{ title, url, content }`）→ `ResearchItem{ source:'searxng', title, snippet: content, url, keywords: 分词前 12 }`；`data.unresponsive_engines` 或空数组 → 返回 `[]`（不抛）。
 - **Provider 名**：`searxng`，并入 `createWebSearchProvider` 分发；`trend-research/index.ts` re-export 同步；删除 `web-search-bing.ts` 与 `createBingSearchProvider`。
@@ -45,12 +46,14 @@
 ### 3.2 配置接线 `ai-config.service.ts`
 
 - `parseSearchSources` 白名单 → `['vendor','baidu','qwen','searxng']`；对存量 `'bing'` 归一化为 `'searxng'`（向后兼容，老数据直接生效）。
-- `getSearchConfig()` bing 分支 → searxng 分支：`sources.push({ name:'searxng', provider:'searxng', baseUrl: searchBaseUrl || 'http://lumira-searxng:8080', apiKey: searchApiKey ?? undefined })`。
+- `getSearchConfig()` bing 分支 → searxng 分支：`sources.push({ name:'searxng', provider:'searxng', baseUrl: searchBaseUrl || 'http://lumira-searxng:8080', apiKey: searchApiKey ?? undefined, site: searchSite?.trim() || undefined })`。
+- `SearchSourceConfig` 增 `site?: string`（trend-research.service.ts），searxng 适配器用它拼 `site:` 前缀。
+- 新增 DB 列 `search_site VARCHAR(255) NULL`（迁移 `042_ai_config_search_site.sql`，位置 `AFTER search_sources`），schema.ts / 更新与读取接线同步。
 - `getActiveConfig()` `search.sources` 走同一 `parseSearchSources`，自动同步。
 
 ### 3.3 DTO 校验
 
-`dto/update-ai-config.dto.ts` L119 `@IsIn` → `['vendor','baidu','qwen','searxng']`。
+`dto/update-ai-config.dto.ts` L119 `@IsIn` → `['vendor','baidu','qwen','searxng']`；新增 `searchSite?: string`（`@IsOptional @IsString @MaxLength(255)`）。
 
 ### 3.4 触发路径
 
@@ -87,16 +90,17 @@ lumira-searxng:
 
 - **错误处理**：SearXNG 请求超时/连接失败/HTTP 非 200 → 抛可读错误（上层 allSettled 收集为 `sourceErrors`）；无结果 → 返回 `[]` 不抛。
 - **测试（TDD）**：
-  - `web-search.spec.ts`：bing 适配器用例 → searxng 用例（请求形状 `?q=&format=json`、解析 `results[]`、空结果、超时、HTTP 错误、可选 apiKey 请求头）。
-  - `ai-config.service.spec.ts`：老数据 `sources=['bing']` → 归一化 `searxng` 的兼容用例更新。
+  - `web-search.spec.ts`：bing 适配器用例 → searxng 用例（请求形状 `?q=&format=json`、解析 `results[]`、空结果、超时、HTTP 错误、可选 apiKey 请求头、`site:` 前缀拼接）。
+  - `ai-config.service.spec.ts`：老数据 `sources=['bing']` → 归一化 `searxng` 的兼容用例更新；`searchSite` 传递用例。
   - `trend-research.service.spec.ts` / `ai-orchestrator.service.spec.ts` 中 `'bing'` 仅作来源标签（fixture），无需改动。
 
 ## 六、边界与不做
 
 - **不做**：baidu 适配器（仍 throw 降级）；SearXNG 图片/新闻分类搜索（`categories=images/news`）本次不做，`ResearchItem.imgUrl` 字段保留给后续；SearXNG 独立服务器部署形态不做（本期同服务器容器）。
+- **不引入**：MediaCrawler 等自媒体爬虫（Non-Commercial Learning License 禁止商用 + 平台合规风险）；小红书/抖音等自媒体趋势信号以 SearXNG `site:` 站点限定搜索（公开收录页面）作为合规替代。
 - **不换**：`qwen` 模型自带搜索保持可用；研究管线编排、评分、细化闭环不动。
 - **依赖外部**：服务器需能拉取 `searxng/searxng` 镜像（国内网络由服务器侧处理，与后端镜像一致）。
 
 ## 七、落地顺序
 
-P1 后端 `web-search-searxng.ts` + 删除 bing + 工厂/白名单/DTO/索引接线 + 单测 → P2 `ai-config.service` searxng 分支与 bing 归一化 + 单测 → P3 后台表单与 types（bing→searxng）+ 构建 → P4 部署：`settings.yml` + `docker-compose.prod.yml` + AGENTS.md 部署章节 → P5 commit + push 双远程。
+P1 后端 `web-search-searxng.ts`（含 `site:` 拼接）+ 删除 bing + 工厂/白名单/DTO/索引接线 + 单测 → P2 `ai-config.service` searxng 分支与 bing 归一化 + `search_site` 迁移/读取接线 + 单测 → P3 后台表单与 types（bing→searxng + 站点限定字段）+ 构建 → P4 部署：`settings.yml` + `docker-compose.prod.yml` + AGENTS.md 部署章节 → P5 commit + push 双远程。
