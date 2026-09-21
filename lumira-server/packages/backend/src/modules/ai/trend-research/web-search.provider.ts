@@ -2,10 +2,10 @@
 // T1 WebSearchProvider 抽象 + 工厂 + 进程内 LRU 缓存降级（Task 2）
 // 设计文档：docs/superpowers/specs/2026-09-21-ai-template-trend-orchestrator-design.md T1
 //
-// 职责：统一多源搜索按名实例化（bing/baidu/vendor），并把单源请求包一层 LRU 缓存
+// 职责：统一多源搜索按名实例化（searxng/baidu/vendor），并把单源请求包一层 LRU 缓存
 // （key=name|query|limit）+ 8s 超时；失败抛可读错误（上层 Promise.allSettled 降级跳过）。
 
-import { createBingSearchProvider } from './web-search-bing';
+import { createSearxngSearchProvider } from './web-search-searxng';
 import { createQwenSearchProvider } from './web-search-qwen';
 import { createVendorSearchProvider } from './web-search-vendor';
 import type { ResearchItem } from './research-item';
@@ -32,17 +32,17 @@ export interface VendorWebSearchProvider extends WebSearchProvider {
 }
 
 /**
- * 按名称创建搜索适配器：bing / baidu / vendor；未知名称 → 抛错。
+ * 按名称创建搜索适配器：searxng / baidu / vendor；未知名称 → 抛错。
  * vendor 需要额外 LlmEndpoint（联网检索模型）；未提供时抛可读错误。
  */
 export function createWebSearchProvider(
   providerName: string,
-  cfg: { baseUrl?: string; apiKey?: string; model?: string; vendorEndpoint?: LlmEndpoint },
+  cfg: { baseUrl?: string; apiKey?: string; model?: string; site?: string; vendorEndpoint?: LlmEndpoint },
 ): WebSearchProvider {
   const name = (providerName || '').trim().toLowerCase();
   switch (name) {
-    case 'bing':
-      return createBingSearchProvider(cfg);
+    case 'searxng':
+      return createSearxngSearchProvider(cfg);
     case 'qwen':
       return createQwenSearchProvider(cfg);
     case 'baidu':
@@ -104,5 +104,5 @@ export async function cacheableSearch(provider: WebSearchProvider, q: WebSearchQ
 }
 
 // re-export，便于统一入口
-export { createBingSearchProvider };
+export { createSearxngSearchProvider };
 export { createQwenSearchProvider };
