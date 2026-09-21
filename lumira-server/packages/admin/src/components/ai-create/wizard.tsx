@@ -27,9 +27,10 @@ import {
   getAiConfigAction,
 } from '@/actions/ai';
 import { generateAiPoseImages, generateAiSilhouettes, pollAiAnalyzeTask, type AiPoseProgress } from '@/lib/ai-task';
-import type { TemplateCategory, AiAnalyzeTraceEntry } from '@/types/admin';
+import type { TemplateCategory, AiAnalyzeTraceEntry, AiAnalyzeStatusResult } from '@/types/admin';
 import { StepCover, type CoverCandidate } from './step-cover';
 import { StepSilhouette } from './step-silhouette';
+import { AnalyzeResultDialog } from './analyze-result-dialog';
 import { Upload } from '@phosphor-icons/react/dist/csr/Upload';
 import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
 import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
@@ -75,6 +76,9 @@ export function AiCreateWizard({
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
   /** 研究管线 trace：各阶段（研究/识别/姿势面片/评分）执行轨迹；未开启时缺省 */
   const [trace, setTrace] = useState<AiAnalyzeTraceEntry[] | null>(null);
+  /** 识别完成后的全量结果（含 trace/raw/research），供数据分析详情弹窗 */
+  const [analyzeDetail, setAnalyzeDetail] = useState<AiAnalyzeStatusResult | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   /** 模板表单当前实际效果图列表；剪影必须以此为准，避免继续使用已废弃的 Step3 候选缓存 */
   const [formImages, setFormImages] = useState<File[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -144,6 +148,8 @@ export function AiCreateWizard({
     setDraft(null);
     setTrace(null);
     setWarnings([]);
+    setAnalyzeDetail(null);
+    setDetailDialogOpen(false);
     setCandidates([]);
     setSilhouetteFile(null);
     setInjection(null);
@@ -219,6 +225,7 @@ export function AiCreateWizard({
       setDraft(result.draft);
       setWarnings(result.warnings ?? []);
       setTrace(result.trace ?? null);
+      setAnalyzeDetail(result);
       if (exampleFile) {
         setCandidates([{
           id: 'example',
@@ -271,6 +278,7 @@ export function AiCreateWizard({
       setDraft(draftLocal);
       setWarnings(analyzeResult.warnings ?? []);
       setTrace(analyzeResult.trace ?? null);
+      setAnalyzeDetail(analyzeResult);
       setFormActivated(true);
       const exampleCandidate: CoverCandidate | null = exampleFile
         ? {
@@ -684,9 +692,20 @@ export function AiCreateWizard({
                   </ol>
                 )}
               </div>
-              <Button disabled={busy} onClick={() => goto(3)}>
-                下一步：选择封面 <ArrowRight size={14} className="ml-1" />
-              </Button>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button disabled={busy} onClick={() => goto(3)}>
+                  下一步：选择封面 <ArrowRight size={14} className="ml-1" />
+                </Button>
+                {analyzeDetail && (
+                  <Button
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => setDetailDialogOpen(true)}
+                  >
+                    查看识别详情 / 过程
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
         )}
@@ -759,6 +778,13 @@ export function AiCreateWizard({
           <div className="sticky top-6">{previewPanel}</div>
         </div>
       )}
+
+      {/* 识别结果详情弹窗（数据分析：过程 trace / 原始结构数据 / 参考 URL） */}
+      <AnalyzeResultDialog
+        open={detailDialogOpen}
+        onOpenChange={setDetailDialogOpen}
+        result={analyzeDetail}
+      />
     </div>
   );
 }

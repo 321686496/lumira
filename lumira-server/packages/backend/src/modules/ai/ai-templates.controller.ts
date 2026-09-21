@@ -45,6 +45,9 @@ export class AiTemplatesController {
       status: task.status,
       draft: task.result?.draft ?? null,
       warnings: task.result?.warnings ?? [],
+      trace: task.result?.trace ?? [],
+      raw: task.result?.raw ?? null,
+      research: task.result?.research ?? [],
       error: task.error,
     };
   }

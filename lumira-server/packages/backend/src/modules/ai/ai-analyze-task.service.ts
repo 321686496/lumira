@@ -8,6 +8,7 @@ import { BadRequestException, Injectable, OnModuleDestroy } from '@nestjs/common
 import { nanoid } from 'nanoid';
 import { UploadFile } from '../templates/admin-templates.service';
 import { AiAnalyzeService } from './ai-analyze.service';
+import type { AiAnalyzeResult } from './ai-analyze.service';
 
 export type AiAnalyzeTaskStatus = 'pending' | 'running' | 'done' | 'error';
 
@@ -16,7 +17,7 @@ export interface AiAnalyzeTask {
   status: AiAnalyzeTaskStatus;
   createdAt: number;
   /** 仅 done 时存在 */
-  result?: { draft: Record<string, unknown>; warnings: string[] };
+  result?: AiAnalyzeResult;
   /** 仅 error 时存在 */
   error?: string;
 }
@@ -73,9 +74,9 @@ export class AiAnalyzeTaskService implements OnModuleDestroy {
     if (!task) return;
     task.status = 'running';
     try {
-      const { draft, warnings } = await this.aiAnalyzeService.analyze(image, text, extra);
+      const result = await this.aiAnalyzeService.analyze(image, text, extra);
       task.status = 'done';
-      task.result = { draft, warnings };
+      task.result = result;
     } catch (err) {
       task.status = 'error';
       task.error = (err as Error)?.message || '识别失败，请重试';
