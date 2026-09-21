@@ -40,10 +40,16 @@ export interface AiConfigView {
   searchBaseUrl: string;
   /** 通用搜索 API key（脱敏） */
   searchApiKeyMasked: string;
-  /** 启用的搜索来源（bing/vendor/baidu） */
+  /** 启用的搜索来源（bing/vendor/baidu/qwen） */
   searchSources: string[];
   /** 迭代上限（预算护栏） */
   maxIterations: number;
+  /** Qwen 模型自带搜索端点（searchProvider=qwen 时使用） */
+  searchQwenBaseUrl: string;
+  /** Qwen 搜索 API key（脱敏） */
+  searchQwenApiKeyMasked: string;
+  /** Qwen 搜索模型（缺省 = qwen-plus） */
+  searchQwenModel: string;
 }
 
 /** 单模态运行时端点（含明文 apiKey） */
@@ -113,7 +119,7 @@ function parseSearchSources(raw: string | null | undefined): string[] {
   if (!raw) return [];
   try {
     const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? (arr.filter((s) => ['bing', 'vendor', 'baidu'].includes(s)) as string[]) : [];
+    return Array.isArray(arr) ? (arr.filter((s) => ['bing', 'vendor', 'baidu', 'qwen'].includes(s)) as string[]) : [];
   } catch {
     return [];
   }
@@ -166,6 +172,9 @@ export class AiConfigService {
       searchApiKeyMasked: maskKey(row.searchApiKey ?? ''),
       searchSources: parseSearchSources(row.searchSources),
       maxIterations: row.maxIterations ?? 3,
+      searchQwenBaseUrl: row.searchQwenBaseUrl ?? '',
+      searchQwenApiKeyMasked: maskKey(row.searchQwenApiKey ?? ''),
+      searchQwenModel: row.searchQwenModel ?? 'qwen-plus',
     };
   }
 
@@ -239,9 +248,16 @@ export class AiConfigService {
     const resolvedSearchApiKey = dto.searchApiKey?.trim() || existing?.searchApiKey || null;
     const searchSources = serializeSearchSources(dto.searchSources) ?? existing?.searchSources ?? null;
     const maxIterations = dto.maxIterations ?? existing?.maxIterations ?? 3;
+    const searchQwenBaseUrl = dto.searchQwenBaseUrl?.trim() || existing?.searchQwenBaseUrl || null;
+    const resolvedSearchQwenApiKey = dto.searchQwenApiKey?.trim() || existing?.searchQwenApiKey || null;
+    const searchQwenModel = dto.searchQwenModel?.trim() || existing?.searchQwenModel || null;
     if (searchEnabled === 1 && searchProvider === 'general') {
       if (!searchBaseUrl) throw new BadRequestException('通用搜索 API 必须填写 baseUrl');
       if (!resolvedSearchApiKey) throw new BadRequestException('首次启用通用搜索 API 必须填写 API Key');
+    }
+    if (searchEnabled === 1 && searchProvider === 'qwen') {
+      if (!searchQwenBaseUrl) throw new BadRequestException('Qwen 搜索必须填写 baseUrl');
+      if (!resolvedSearchQwenApiKey) throw new BadRequestException('首次启用 Qwen 搜索必须填写 API Key');
     }
 
     if (!existing) {
@@ -273,6 +289,9 @@ export class AiConfigService {
         searchApiKey: resolvedSearchApiKey,
         searchSources,
         maxIterations,
+        searchQwenBaseUrl,
+        searchQwenApiKey: resolvedSearchQwenApiKey,
+        searchQwenModel,
         createdAt: now,
         updatedAt: now,
       });
@@ -302,6 +321,9 @@ export class AiConfigService {
           searchApiKey: dto.searchApiKey?.trim() ? resolvedSearchApiKey : existing.searchApiKey, // 留空 = 不改
           searchSources,
           maxIterations,
+          searchQwenBaseUrl,
+          searchQwenApiKey: dto.searchQwenApiKey?.trim() ? resolvedSearchQwenApiKey : existing?.searchQwenApiKey,
+          searchQwenModel,
           apiKey: dto.apiKey ? dto.apiKey : existing.apiKey, // 留空 = 不改
           updatedAt: now,
         })
@@ -382,6 +404,22 @@ export class AiConfigService {
 
     const names = parseSearchSources(row.searchSources);
     const sources: SearchSourceConfig[] = [];
+    // 搜索方式 = qwen（模型自带）：用独立 Qwen 端点 + Key；缺任一 → sources 空（研究跑 0 条，绝不误写 skip-research）
+    if (row.searchProvider === 'qwen') {
+      const hasQwen = Boolean((row.searchQwenBaseUrl ?? '').trim() && (row.searchQwenApiKey ?? '').trim());
+      return {
+        enabled: row.searchEnabled === 1,
+        sources: hasQwen
+          ? [{
+              name: 'qwen',
+              provider: 'qwen',
+              baseUrl: (row.searchQwenBaseUrl ?? '').trim(),
+              apiKey: (row.searchQwenApiKey ?? '').trim(),
+              model: (row.searchQwenModel ?? '').trim() || 'qwen-plus',
+            }]
+          : [],
+      };
+    }
     for (const name of names) {
       if (name === 'vendor') {
         // 厂商联网检索：复用有效文本模型端点作为联网检索端点

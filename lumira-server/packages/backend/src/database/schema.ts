@@ -378,6 +378,12 @@ export const aiProviderConfig = mysqlTable('ai_provider_config', {
   searchSources: varchar('search_sources', { length: 255 }),
   /** 迭代上限（预算护栏，默认 3，绝不无限迭代） */
   maxIterations: int('max_iterations').notNull().default(3),
+  /** Qwen 模型自带联网搜索端点（search_provider=qwen 时使用） */
+  searchQwenBaseUrl: varchar('search_qwen_base_url', { length: 255 }),
+  /** Qwen 搜索 API key（脱敏返回，永不回传明文） */
+  searchQwenApiKey: varchar('search_qwen_api_key', { length: 255 }),
+  /** Qwen 搜索模型（默认 qwen-plus） */
+  searchQwenModel: varchar('search_qwen_model', { length: 64 }),
   createdAt: int('created_at').notNull(),
   updatedAt: int('updated_at').notNull(),
 });

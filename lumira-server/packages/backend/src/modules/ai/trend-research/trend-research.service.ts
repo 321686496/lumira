@@ -19,6 +19,8 @@ export interface SearchSourceConfig {
   provider: string;
   baseUrl?: string;
   apiKey?: string;
+  /** Qwen 模型自带联网搜索模型（provider=qwen 时使用，缺省回退 qwen-plus） */
+  model?: string;
   /** 厂商联网检索端点（provider=vendor 时必填） */
   vendorEndpoint?: unknown;
 }
@@ -36,6 +38,7 @@ const defaultProviderFactory: SearchProviderFactory = (name, cfg) =>
   createWebSearchProvider(cfg.provider || name, {
     baseUrl: cfg.baseUrl,
     apiKey: cfg.apiKey,
+    model: cfg.model,
     vendorEndpoint: cfg.vendorEndpoint as never,
   });
 

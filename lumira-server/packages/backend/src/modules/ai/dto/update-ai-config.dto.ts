@@ -94,9 +94,9 @@ export class UpdateAiConfigDto {
   @IsBoolean()
   searchEnabled?: boolean;
 
-  /** 搜索服务商：'general'（通用搜索 API）| 'vendor'（厂商联网检索）| 'off'（关闭） */
+  /** 搜索服务商：'general'（通用搜索 API）| 'vendor'（厂商联网检索）| 'qwen'（Qwen 模型自带）| 'off'（关闭） */
   @IsOptional()
-  @IsIn(['general', 'vendor', 'off'] as const)
+  @IsIn(['general', 'vendor', 'off', 'qwen'] as const)
   searchProvider?: string;
 
   /** 通用搜索 API 的 baseUrl（searchProvider=general 时使用） */
@@ -111,12 +111,12 @@ export class UpdateAiConfigDto {
   @MaxLength(255)
   searchApiKey?: string;
 
-  /** 启用的搜索来源数组（bing/vendor/baidu）；缺省 = 沿用原值 */
+  /** 启用的搜索来源数组（bing/vendor/baidu/qwen）；缺省 = 沿用原值 */
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(3)
   @ArrayNotEmpty()
-  @IsIn(['bing', 'vendor', 'baidu'], { each: true })
+  @IsIn(['bing', 'vendor', 'baidu', 'qwen'], { each: true })
   searchSources?: string[];
 
   /** 迭代上限（预算护栏，1~3）；缺省 = 沿用原值 */
@@ -125,4 +125,22 @@ export class UpdateAiConfigDto {
   @Min(1)
   @Max(3)
   maxIterations?: number;
+
+  /** Qwen 模型自带搜索端点（searchProvider=qwen 时使用） */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  searchQwenBaseUrl?: string;
+
+  /** Qwen 搜索 API key：空串/缺省 = 保留原值；首次启用 Qwen 搜索必填 */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  searchQwenApiKey?: string;
+
+  /** Qwen 搜索模型（缺省 = qwen-plus） */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  searchQwenModel?: string;
 }
