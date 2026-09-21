@@ -543,6 +543,19 @@ describe('AiConfigService — 模态独立平台（text/image override）', () =
 });
 
 describe('AiConfigService — search qwen', () => {
+  it('get() search_provider=qwen → searchProvider 表面为 qwen（供后台识别 qwen 模式）', async () => {
+    const service = new AiConfigService(readonlyDb(row({
+      enabled: 1,
+      searchEnabled: 1,
+      searchProvider: 'qwen',
+      searchQwenBaseUrl: 'https://qw.cn/v1',
+      searchQwenApiKey: 'sk-qwen-long',
+      searchQwenModel: 'qwen-plus',
+    })));
+    const view = await service.get();
+    if (view.configured !== true) throw new Error('should be configured');
+    expect(view.searchProvider).toBe('qwen');
+  });
   it('search_provider=qwen 且端点+Key 齐全 → getSearchConfig 返回 sources=[qwen]（含 model）', async () => {
     const service = new AiConfigService(readonlyDb(row({
       enabled: 1,
