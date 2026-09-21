@@ -11,6 +11,7 @@ import { Injectable } from '@nestjs/common';
 import { AiConfigService } from './ai-config.service';
 import { TrendResearchService } from './trend-research/trend-research.service';
 import type { ResearchItem } from './trend-research/research-item';
+import type { ResearchResult } from './trend-research/trend-research.service';
 import { ImageDescribeService } from './image-describe.service';
 import type { ImageDescription } from './image-describe.service';
 import { PoseRefSheetService } from './pose-ref-sheet.service';
@@ -85,13 +86,20 @@ export class AiOrchestratorService {
     if (!researchEnabled) {
       trace.push({ step: 'research', tool: 'trend-research', resultBrief: 'skip-research' });
     } else {
-      research = (await this.wrapStep<ResearchItem[]>('research', 'trend-research', trace, () =>
+      const result = (await this.wrapStep<ResearchResult>('research', 'trend-research', trace, () =>
         this.trendResearch.research(topic, { limitPerSource: 5 }),
-      )) ?? [];
-      if (!research.length) {
+      ));
+      if (result) {
+        research = result.items;
+        const errText = (result.sourceErrors?.length
+          ? result.sourceErrors.map((e) => `${e.name}: ${e.error}`).join('; ')
+          : '');
         const last = trace[trace.length - 1];
-        if (last && last.step === 'research' && !last.resultBrief.includes('fail')) {
-          last.resultBrief = 'skip-research'; // 命中为空视为跳过
+        if (last && last.step === 'research') {
+          // 有命中：条数 + 失败来源详情；全部无命中：research-0（绝不误写 skip-research）
+          last.resultBrief = result.items.length > 0
+            ? `${result.items.length} 条` + (errText ? `；来源失败: ${errText}` : '')
+            : `research-0: 来源无命中 (${errText || '全部来源为空'})`;
         }
       }
     }
