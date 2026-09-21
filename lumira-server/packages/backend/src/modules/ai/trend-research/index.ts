@@ -4,7 +4,7 @@
 export { createWebSearchProvider, cacheableSearch } from './web-search.provider';
 export type { WebSearchProvider, WebSearchQuery } from './web-search.provider';
 export type { ResearchItem } from './research-item';
-export { createBingSearchProvider } from './web-search-bing';
+export { createSearxngSearchProvider } from './web-search-searxng';
 export { createQwenSearchProvider } from './web-search-qwen';
 export { createVendorSearchProvider } from './web-search-vendor';
 export { TrendResearchService } from './trend-research.service';
