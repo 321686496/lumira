@@ -64,10 +64,10 @@ const TEST_TARGET_OPTIONS: { value: AiConfigTestTarget; label: string }[] = [
 ];
 const ALL_TEST_TARGETS = TEST_TARGET_OPTIONS.map((option) => option.value);
 
-/** 搜索方式（研究管线）：模型自带(Qwen) / 三方(Bing) / 关闭 */
-const SEARCH_MODE_OPTIONS: { value: 'qwen' | 'bing' | 'off'; label: string }[] = [
+/** 搜索方式（研究管线）：模型自带(Qwen) / SearXNG 自建(免费) / 关闭 */
+const SEARCH_MODE_OPTIONS: { value: 'qwen' | 'searxng' | 'off'; label: string }[] = [
   { value: 'qwen', label: '模型自带搜索（Qwen）' },
-  { value: 'bing', label: '三方搜索引擎（Bing）' },
+  { value: 'searxng', label: 'SearXNG 自建搜索（免费）' },
   { value: 'off', label: '关闭' },
 ];
 
@@ -81,7 +81,8 @@ interface FormState {
   silhouetteModel: string; // 留空 = 与生图模型一致
   enabled: boolean;
   // 研究管线（Agentic）
-  searchMode: 'qwen' | 'bing' | 'off';
+  searchMode: 'qwen' | 'searxng' | 'off';
+  searchSite: string;
   searchBaseUrl: string;
   searchApiKey: string; // 留空 = 不修改原值
   searchQwenBaseUrl: string;
@@ -187,9 +188,10 @@ export function AiConfigForm({
           silhouetteModel: initial.silhouetteModel ?? '',
           enabled: initial.enabled,
           searchMode: initial.searchEnabled
-            ? (initial.searchProvider === 'qwen' ? 'qwen' : 'bing')
+            ? (initial.searchProvider === 'qwen' ? 'qwen' : 'searxng')
             : 'off',
           searchBaseUrl: initial.searchBaseUrl,
+          searchSite: initial.searchSite ?? '',
           searchApiKey: '',
           searchQwenBaseUrl: initial.searchQwenBaseUrl,
           searchQwenApiKey: '',
@@ -207,6 +209,7 @@ export function AiConfigForm({
           enabled: false,
           searchMode: 'off',
           searchBaseUrl: '',
+          searchSite: '',
           searchApiKey: '',
           searchQwenBaseUrl: '',
           searchQwenApiKey: '',
@@ -411,11 +414,11 @@ export function AiConfigForm({
         });
         return;
       }
-    } else if (form.searchMode === 'bing' && !searchApiKeyMasked && !form.searchApiKey.trim()) {
+    } else if (form.searchMode === 'searxng' && !form.searchBaseUrl.trim()) {
       toast({
         variant: 'destructive',
-        title: '缺少 API Key',
-        description: '首次启用 Bing 搜索必须填写 API Key',
+        title: '缺少 SearXNG Base URL',
+        description: 'SearXNG 自建搜索必须填写 Base URL（如 http://lumira-searxng:8080）',
       });
       return;
     }
@@ -454,11 +457,12 @@ export function AiConfigForm({
         if (form.searchQwenBaseUrl.trim()) payload.searchQwenBaseUrl = form.searchQwenBaseUrl.trim();
         if (form.searchQwenApiKey.trim()) payload.searchQwenApiKey = form.searchQwenApiKey.trim();
         payload.searchQwenModel = form.searchQwenModel.trim() || 'qwen-plus';
-      } else if (form.searchMode === 'bing') {
+      } else if (form.searchMode === 'searxng') {
         payload.searchProvider = 'general';
-        payload.searchSources = ['bing'];
+        payload.searchSources = ['searxng'];
         if (form.searchBaseUrl.trim()) payload.searchBaseUrl = form.searchBaseUrl.trim();
         if (form.searchApiKey.trim()) payload.searchApiKey = form.searchApiKey.trim();
+        if (form.searchSite.trim()) payload.searchSite = form.searchSite.trim();
       } else {
         payload.searchProvider = 'off';
       }
@@ -882,26 +886,38 @@ export function AiConfigForm({
               </div>
             )}
 
-            {form.searchMode === 'bing' && (
+            {form.searchMode === 'searxng' && (
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="ai-bing-base-url">Bing 搜索 Base URL</Label>
+                  <Label htmlFor="ai-searxng-base-url">SearXNG Base URL</Label>
                   <Input
-                    id="ai-bing-base-url"
+                    id="ai-searxng-base-url"
                     value={form.searchBaseUrl}
                     onChange={(e) => setForm((f) => ({ ...f, searchBaseUrl: e.target.value }))}
-                    placeholder="https://api.bing.microsoft.com/v7.0/search"
+                    placeholder="http://lumira-searxng:8080"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="ai-bing-api-key">Bing 搜索 API Key</Label>
+                  <Label htmlFor="ai-searxng-api-key">SearXNG API Key（可选）</Label>
                   <Input
-                    id="ai-bing-api-key"
+                    id="ai-searxng-api-key"
                     type="password"
                     value={form.searchApiKey}
                     onChange={(e) => setForm((f) => ({ ...f, searchApiKey: e.target.value }))}
                     placeholder={searchApiKeyMasked ? `${searchApiKeyMasked}（留空 = 不修改）` : '…'}
                   />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="ai-searxng-site">站点限定（可选）</Label>
+                  <Input
+                    id="ai-searxng-site"
+                    value={form.searchSite}
+                    onChange={(e) => setForm((f) => ({ ...f, searchSite: e.target.value }))}
+                    placeholder="xiaohongshu.com / v.douyin.com，留空 = 全站搜索"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    用于把小红书/抖音等被搜索引擎收录的公开页面作为自媒体趋势信号源。
+                  </p>
                 </div>
               </div>
             )}
