@@ -164,9 +164,6 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 当前激活编辑工具；null = 面板收起（裁剪模式 = activeTool == crop）
   PreviewEditTool? _activeTool;
 
-  /// 对比按钮开启后的短暂状态徽标
-  bool _showCompareBadge = false;
-
   /// 将裁剪比例字符串解析为数值宽高比（width/height），null 表示自由裁剪。
   /// [screenRatio] 用于 'fullscreen'（= 取景器/屏幕比例，与拍摄语义一致）。
   static double? _parseCropAspectRatio(String ratio, double screenRatio) {
@@ -561,13 +558,11 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     }
   }
 
-  /// 右上角对比按钮：**按住**期间显示原图，**松开**恢复修改后；
-  /// 按住期间显示状态徽标，松开即隐藏，帮助用户理解当前看到的版本。
+  /// 右上角对比按钮：**按下**即刻显示原图，**松开**恢复修改后。
   void _onCompareStart() {
     if (!mounted) return;
     setState(() {
       _isComparing = true;
-      _showCompareBadge = true;
     });
   }
 
@@ -575,7 +570,6 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     if (!mounted) return;
     setState(() {
       _isComparing = false;
-      _showCompareBadge = false;
     });
   }
 
@@ -1458,31 +1452,6 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                       ),
                     ],
                   ),
-                  // 对比状态徽标（开启后 1s 内显示，说明当前看到的版本）
-                  if (_showCompareBadge)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8, right: 12),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.6),
-                              borderRadius: BorderRadius.circular(1000),
-                              border: Border.all(
-                                  color: Colors.white.withOpacity(0.25)),
-                            ),
-                            child: Text(
-                              '查看原图',
-                              style: const TextStyle(
-                                  fontSize: 11, color: Colors.white),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
                 ],
               ),
             ),
