@@ -24,7 +24,7 @@ beforeEach(() => {
 });
 
 describe('TrendResearchService', () => {
-  it('一个来源失败一个成功 → 返回成功来源结果，不含失败项（allSettled 降级）', async () => {
+  it('一个来源失败一个成功 → 返回成功来源结果，不含失败项，且在 sourceErrors 记录失败原因', async () => {
     const searchConfig = {
       enabled: true,
       sources: [
@@ -37,14 +37,16 @@ describe('TrendResearchService', () => {
     const providerFactory: SearchProviderFactory = (name: string) =>
       name === 'bing'
         ? { name: 'bing', search: async () => [item('bing', '秋日少女')] }
-        : { name: 'vendor', search: async () => { throw new Error(' vendor 不可用'); } };
+        : { name: 'vendor', search: async () => { throw new Error('vendor 不可用'); } };
 
     const svc = build(providerFactory, searchConfig);
-    const items = await svc.research('秋日人像');
+    const res = await svc.research('秋日人像');
+    const items = res.items;
 
     expect(items.map((i) => i.source)).toContain('bing');
     expect(items.map((i) => i.source)).not.toContain('vendor');
     expect(items).toHaveLength(1);
+    expect(res.sourceErrors).toEqual([{ name: 'vendor', error: 'vendor 不可用' }]);
   });
 
   it('重复标题去重（保留先出现者，key=source+title）', async () => {
@@ -65,7 +67,7 @@ describe('TrendResearchService', () => {
     });
 
     const svc = build(providerFactory, searchConfig);
-    const items = await svc.research('x');
+    const items = (await svc.research('x')).items;
 
     expect(items.filter((i) => i.source === 'bing' && i.title === '热门')).toHaveLength(1);
     // 不同来源的「热门」因 source 不同不属于同一 key，故总数为 2
@@ -76,7 +78,7 @@ describe('TrendResearchService', () => {
     const providerFactory: SearchProviderFactory = () => ({ name: 'bing', search: async () => [item('bing', '不应出现')] });
     const svc = build(providerFactory, { enabled: false, sources: [{ name: 'bing', provider: 'bing' }] });
 
-    await expect(svc.research('x')).resolves.toEqual([]);
+    await expect(svc.research('x')).resolves.toEqual({ items: [] });
   });
 
   it('保留带 imgUrl 的条目原图地址（不做下载）', async () => {
@@ -86,7 +88,7 @@ describe('TrendResearchService', () => {
     });
     const svc = build(providerFactory, { enabled: true, sources: [{ name: 'bing', provider: 'bing' }] });
 
-    const items = await svc.research('x');
+    const items = (await svc.research('x')).items;
     expect(items[0].imgUrl).toBe('https://img.example.com/1.jpg');
   });
 });

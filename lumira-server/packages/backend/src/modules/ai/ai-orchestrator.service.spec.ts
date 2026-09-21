@@ -35,7 +35,7 @@ const RESEARCH_ITEM = { source: 'bing', title: '秋日清冷感', snippet: '低�
 function build(opts: { searchEnabled?: boolean; scoreSequence?: Array<'pass' | 'retry'> } = {}) {
   const { searchEnabled = true, scoreSequence = ['pass'] } = opts;
 
-  const research = { research: jest.fn().mockResolvedValue([RESEARCH_ITEM]) };
+  const research = { research: jest.fn().mockResolvedValue({ items: [RESEARCH_ITEM], sourceErrors: [] }) };
   const describe = { describe: jest.fn().mockResolvedValue(DESC) };
   const poseRefSheet = { generate: jest.fn().mockResolvedValue(POSE_SHEET) };
   const paramValidate = new ParamValidateService();
@@ -117,6 +117,23 @@ describe('AiOrchestratorService.run', () => {
     const steps = res.trace.map((t) => t.resultBrief).concat(res.trace.map((t) => t.step));
     expect(JSON.stringify(res.trace)).toContain('skip-research');
     expect(research.research).not.toHaveBeenCalled();
+  });
+
+  it('研究开启但来源全部失败 → trace 为 research-0 而非 skip-research，并透传来源失败原因', async () => {
+    const base = build();
+    // 覆盖 research 返回：items 空 + sourceErrors 记录 vendor 失败
+    (base.research.research as jest.Mock).mockResolvedValue({
+      items: [],
+      sourceErrors: [{ name: 'vendor', error: 'vendor 不可用' }],
+    });
+
+    const res = await base.service.run({ text: '随便秋景'} as never, base.optsRun);
+
+    const researchTrace = res.trace.find((t) => t.step === 'research');
+    expect(researchTrace).toBeDefined();
+    expect(String(researchTrace?.resultBrief)).toContain('research-0');
+    expect(String(researchTrace?.resultBrief)).toContain('vendor: vendor 不可用');
+    expect(String(researchTrace?.resultBrief)).not.toContain('skip-research');
   });
 
   it('imageScore 先 retry 后 pass → 进入再判，score 被调用 2 次，二次通过后返回', async () => {

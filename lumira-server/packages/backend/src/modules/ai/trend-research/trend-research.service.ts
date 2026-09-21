@@ -39,6 +39,13 @@ const defaultProviderFactory: SearchProviderFactory = (name, cfg) =>
     vendorEndpoint: cfg.vendorEndpoint as never,
   });
 
+/** research 执行结果：命中条目 + 单个来源失败原因（供编排层透传到 trace / 弹窗） */
+export interface ResearchResult {
+  items: ResearchItem[];
+  /** 失败来源及其错误信息；全部成功则缺省为空数组 */
+  sourceErrors?: { name: string; error: string }[];
+}
+
 @Injectable()
 export class TrendResearchService {
   /** 搜索工厂（测试注入用；生产缺省走 defaultProviderFactory） */
@@ -47,25 +54,32 @@ export class TrendResearchService {
   constructor(private readonly aiConfigService: AiConfigService) {}
 
   /**
-   * 并行跑启用的来源，allSettled 聚合：失败来源跳过；相同 source+title 去重（保留先出现者）。
-   * 研究关闭或配置缺失 → []。每条限数 limitPerSource（默认 10）。
+   * 并行跑启用的来源，allSettled 聚合：失败来源跳过并收集原因；相同 source+title 去重（保留先出现者）。
+   * 研究关闭或配置缺失 → { items: [] }。每条限数 limitPerSource（默认 10）。
    */
-  async research(topic: string, opts: { limitPerSource?: number } = {}): Promise<ResearchItem[]> {
+  async research(topic: string, opts: { limitPerSource?: number } = {}): Promise<ResearchResult> {
     const cfg = await this.aiConfigService.getSearchConfig?.();
-    if (!cfg || !cfg.enabled || !cfg.sources.length) return [];
+    if (!cfg || !cfg.enabled || !cfg.sources.length) return { items: [] };
 
     const limit = opts.limitPerSource ?? 10;
-    const jobs = cfg.sources.map(async (src): Promise<ResearchItem[]> => {
-      const provider = this.factory(src.name, src);
-      return cacheableSearch(provider, { query: topic, limit } as WebSearchQuery);
-    });
+    const sourceErrors: { name: string; error: string }[] = [];
+    const settled = await Promise.allSettled(
+      cfg.sources.map(async (src): Promise<ResearchItem[]> => {
+        const provider = this.factory(src.name, src);
+        return cacheableSearch(provider, { query: topic, limit } as WebSearchQuery);
+      }),
+    );
 
-    const settled = await Promise.allSettled(jobs);
     const merged: ResearchItem[] = [];
-    for (const r of settled) {
-      if (r.status === 'fulfilled') merged.push(...r.value);
-      // rejected 来源跳过（日志由上层/编排追踪）
-    }
+    settled.forEach((r, i) => {
+      const src = cfg.sources[i];
+      if (r.status === 'fulfilled') {
+        merged.push(...r.value);
+      } else {
+        // rejected 来源跳过，但记录原因供上层透传（含 baidu 未接入 / bing 缺 key 等）
+        sourceErrors.push({ name: src.name, error: r.reason instanceof Error ? r.reason.message : String(r.reason) });
+      }
+    });
 
     const seen = new Set<string>();
     const out: ResearchItem[] = [];
@@ -76,6 +90,6 @@ export class TrendResearchService {
         out.push(it);
       }
     }
-    return out;
+    return { items: out, sourceErrors };
   }
 }
