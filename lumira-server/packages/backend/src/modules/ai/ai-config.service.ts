@@ -34,8 +34,8 @@ export interface AiConfigView {
   enabled: boolean;
   /** 研究管线开关：true=启用（orchestrator 走研究管线）；false=关闭（原单次路径） */
   searchEnabled: boolean;
-  /** 搜索服务商：'general'（通用搜索 API）| 'vendor'（厂商联网检索）| null（未启用） */
-  searchProvider: 'general' | 'vendor' | null;
+  /** 搜索服务商：'general'（通用搜索 API）| 'vendor'（厂商联网检索）| 'qwen'（Qwen 模型自带搜索）| null（未启用） */
+  searchProvider: 'general' | 'vendor' | 'qwen' | null;
   /** 通用搜索 API baseUrl（searchProvider=general 时使用） */
   searchBaseUrl: string;
   /** 通用搜索 API key（脱敏） */
@@ -77,7 +77,7 @@ export interface ActiveAiConfig {
   /** 研究管线配置（orchestrator / trend-research 使用） */
   search: {
     enabled: boolean;
-    provider: 'general' | 'vendor' | null;
+    provider: 'general' | 'vendor' | 'qwen' | null;
     baseUrl: string;
     apiKey: string;
     sources: string[];
@@ -165,7 +165,7 @@ export class AiConfigService {
       enabled: row.enabled === 1,
       searchEnabled: row.searchEnabled === 1,
       searchProvider:
-        row.searchProvider === 'general' || row.searchProvider === 'vendor'
+        row.searchProvider === 'general' || row.searchProvider === 'vendor' || row.searchProvider === 'qwen'
           ? row.searchProvider
           : null,
       searchBaseUrl: row.searchBaseUrl ?? '',
@@ -477,7 +477,7 @@ export class AiConfigService {
       search: {
         enabled: row.searchEnabled === 1,
         provider:
-          row.searchProvider === 'general' || row.searchProvider === 'vendor'
+          row.searchProvider === 'general' || row.searchProvider === 'vendor' || row.searchProvider === 'qwen'
             ? row.searchProvider
             : null,
         baseUrl: row.searchBaseUrl ?? '',
