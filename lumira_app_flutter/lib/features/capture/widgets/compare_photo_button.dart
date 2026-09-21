@@ -4,7 +4,7 @@ import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 
 /// 悬浮「对比」按钮（按住查看原图，松开返回修改后），拍摄预览页与后期修图页共用。
 ///
-/// 交互：**长按**期间显示原图（[onHoldStart]），**松开**恢复修改后（[onHoldEnd]）。
+/// 交互：**按下**即刻显示原图（[onHoldStart]，无长按延迟），**松开**恢复修改后（[onHoldEnd]）。
 ///
 /// 两种形态（遵循项目 UI 铁律「叠照片浮层取向」）：
 /// - [overlayOnImage] = false：纯色画布上（后期修图页）— surface 底 + 柔和凸阴影
@@ -23,10 +23,10 @@ class ComparePhotoButton extends StatelessWidget {
   final bool comparing;
   final ThemeTokens tokens;
 
-  /// 长按开始（按住查看原图）
+  /// 按下（立即查看原图）
   final VoidCallback onHoldStart;
 
-  /// 长按结束/取消（松开返回修改后）
+  /// 松开/取消（返回修改后）
   final VoidCallback onHoldEnd;
 
   /// 是否叠在照片上（决定浮层视觉取向）
@@ -48,10 +48,10 @@ class ComparePhotoButton extends StatelessWidget {
             shape: BoxShape.circle,
             boxShadow: tokens.shadowConvexSubtle,
           );
-    return GestureDetector(
-      onLongPressStart: (_) => onHoldStart(),
-      onLongPressEnd: (_) => onHoldEnd(),
-      onLongPressCancel: onHoldEnd,
+    return Listener(
+      onPointerDown: (_) => onHoldStart(),
+      onPointerUp: (_) => onHoldEnd(),
+      onPointerCancel: (_) => onHoldEnd(),
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
