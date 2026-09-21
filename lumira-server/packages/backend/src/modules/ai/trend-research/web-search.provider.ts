@@ -6,6 +6,7 @@
 // （key=name|query|limit）+ 8s 超时；失败抛可读错误（上层 Promise.allSettled 降级跳过）。
 
 import { createBingSearchProvider } from './web-search-bing';
+import { createQwenSearchProvider } from './web-search-qwen';
 import { createVendorSearchProvider } from './web-search-vendor';
 import type { ResearchItem } from './research-item';
 import type { LlmEndpoint } from '../llm-client';
@@ -36,12 +37,14 @@ export interface VendorWebSearchProvider extends WebSearchProvider {
  */
 export function createWebSearchProvider(
   providerName: string,
-  cfg: { baseUrl?: string; apiKey?: string; vendorEndpoint?: LlmEndpoint },
+  cfg: { baseUrl?: string; apiKey?: string; model?: string; vendorEndpoint?: LlmEndpoint },
 ): WebSearchProvider {
   const name = (providerName || '').trim().toLowerCase();
   switch (name) {
     case 'bing':
       return createBingSearchProvider(cfg);
+    case 'qwen':
+      return createQwenSearchProvider(cfg);
     case 'baidu':
       throw new Error('baidu 搜索适配器尚未接入');
     case 'vendor':
@@ -102,3 +105,4 @@ export async function cacheableSearch(provider: WebSearchProvider, q: WebSearchQ
 
 // re-export，便于统一入口
 export { createBingSearchProvider };
+export { createQwenSearchProvider };
