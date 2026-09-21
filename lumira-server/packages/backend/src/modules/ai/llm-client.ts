@@ -70,7 +70,7 @@ export interface ToolChatInput {
 }
 
 const DEFAULT_TEMPERATURE = 0.3;
-const DEFAULT_TIMEOUT_MS = 90_000;
+const DEFAULT_TIMEOUT_MS = 300_000;
 const MAX_TOKENS = 4096;
 
 /** 网络层错误 → 运营可读 message：AbortError/TimeoutError 视为超时，其余视为连接失败 */
