@@ -115,7 +115,7 @@ export class AdminService {
     const invitedSubquery = db
       .select({
         inviterDeviceId: inviteRecords.inviterDeviceId,
-        invitedCount: sql<number>`COUNT(${inviteRecords.id})`,
+        invitedCount: sql<number>`COUNT(${inviteRecords.id})`.as('invitedCount'),
       })
       .from(inviteRecords)
       .groupBy(inviteRecords.inviterDeviceId)
