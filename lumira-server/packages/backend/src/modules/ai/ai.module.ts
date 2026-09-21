@@ -20,6 +20,7 @@ import { ImageDescribeService } from './image-describe.service';
 import { PoseRefSheetService } from './pose-ref-sheet.service';
 import { ParamValidateService } from './param-validate.service';
 import { ImageScoreService } from './image-score.service';
+import { DraftRefineService } from './draft-refine.service';
 import { AiOrchestratorService } from './ai-orchestrator.service';
 import { GoldenSetService } from './golden-set.service';
 import { RenderApproxService } from './render-approx.service';
@@ -30,7 +31,7 @@ import { RenderApproxService } from './render-approx.service';
   providers: [
     AiConfigService, AiAnalyzeService, AiAnalyzeTaskService, AiGenerateImageService, AiImageTaskService, AiSilhouetteService, AiSilhouetteTaskService,
     // Task 9 Agentic 管线工具 + 中枢（稳定性：getActiveConfig 缺 search 配置时 research 自动降级关闭）
-    TrendResearchService, ImageDescribeService, PoseRefSheetService, ParamValidateService, ImageScoreService,
+    TrendResearchService, ImageDescribeService, PoseRefSheetService, ParamValidateService, ImageScoreService, DraftRefineService,
     AiOrchestratorService,
     RenderApproxService,
     // Task 11 Golden Set 回归门禁（db 经 DatabaseService.getDb() 提供，避免裸注入 MySql2Database token 解析失败）

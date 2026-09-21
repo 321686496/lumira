@@ -19,6 +19,7 @@ import type { PoseRefSheet } from './pose-ref-sheet.service';
 import { ParamValidateService } from './param-validate.service';
 import { ImageScoreService } from './image-score.service';
 import type { ImageScoreInput } from './image-score.service';
+import { DraftRefineService } from './draft-refine.service';
 import { normalizeDraft } from './normalize';
 import type { CategoryNode } from './normalize';
 
@@ -64,6 +65,7 @@ export class AiOrchestratorService {
     private readonly poseRefSheet: PoseRefSheetService,
     private readonly paramValidate: ParamValidateService,
     private readonly imageScore: ImageScoreService,
+    private readonly draftRefine: DraftRefineService,
   ) {}
 
   async run(input: OrchestratorInput, opts: OrchestratorRunOptions): Promise<OrchestratorResult> {
@@ -129,8 +131,12 @@ export class AiOrchestratorService {
     )) ?? { shared: {} as PoseRefSheet['shared'], perPose: [] };
 
     // (5)+(6) 参数校准 + 评分闸门（再判 ≤ MAX_SCORE_ITERATIONS）
+    // 收敛两件事同时做：retry 时把评审 suggests 喂回草稿细化（draft-refine）；历史最高分草稿兜底（bestDraft）。
     let workingDraft = initialDraft;
+    let bestDraft = initialDraft;
+    let bestScore = -1;
     for (let i = 0; i < MAX_SCORE_ITERATIONS; i++) {
+      // 5 参数校准（规则裁剪；幂等——已合规则不改）
       const validated = await this.wrapStep('paramValidate', 'param-validate', trace, () =>
         this.paramValidate.validate(workingDraft),
       );
@@ -139,24 +145,47 @@ export class AiOrchestratorService {
         warnings.push(...validated.adjustments);
       }
 
+      // 6 评分闸门
       const scoreInput: ImageScoreInput = {
         desc: desc as ImageDescription,
         poseSheet,
         research,
         draft: workingDraft,
       };
-      const scored = await this.wrapStep<{ score: number; verdict: 'pass' | 'retry' }>(
+      const scored = await this.wrapStep<{ score: number; verdict: 'pass' | 'retry'; suggests?: string[] }>(
         'imageScore', 'image-score', trace, () => this.imageScore.score(scoreInput),
       );
       const result = scored ?? { score: 0, verdict: 'retry' as const };
       const last = trace[trace.length - 1];
       if (last && last.step === 'imageScore') last.score = result.score;
+
+      // 保留历史最高分候选（避免最后取的却是更低分版本）
+      if (result.score > bestScore) {
+        bestScore = result.score;
+        bestDraft = workingDraft;
+      }
       if (result.verdict === 'pass') break;
       warnings.push(`评分 ${result.score} 低于闸门，进行第 ${i + 2} 次再校验`);
+
+      // 6.5 retry 时按评审建议细化草稿（收敛），下一圈 paramValidate 再裁剪
+      if (i < MAX_SCORE_ITERATIONS - 1) {
+        const before = JSON.stringify(workingDraft);
+        const refined = (await this.wrapStep<Record<string, unknown> | null>(
+          'draftRefine', 'draft-refine', trace,
+          () => this.draftRefine.refine({ draft: workingDraft, suggests: result.suggests ?? [], desc: desc as ImageDescription, poseSheet, research }),
+        )) ?? null;
+        if (refined && JSON.stringify(refined) !== before) {
+          workingDraft = refined;
+        } else {
+          // 无法产生有效改进 → 停止空转，用已有最佳候选收束
+          warnings.push(`评分 ${result.score} 低于闸门但无法生成有效改进，沿用最佳候选`);
+          break;
+        }
+      }
     }
 
-    // (6.5) 姿势参考面片写入草稿定稿（此前仅用于评分；供 normalize 透传下发）
-    workingDraft = { ...workingDraft, poseRefSheet: poseSheet };
+    // (6.5) 姿势参考面片写入最佳候选并定稿（此前仅用于评分；供 normalize 透传下发）
+    workingDraft = { ...bestDraft, poseRefSheet: poseSheet };
 
     // (7) 定稿归一化（fail-safe：categories 必传，输入为 object）
     const normalized = normalizeDraft(workingDraft, categories);
