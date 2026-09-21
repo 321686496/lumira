@@ -44,6 +44,7 @@ function row(overrides: Record<string, unknown> = {}) {
     enabled: 1,
     createdAt: 1,
     updatedAt: 1,
+    searchSite: null,
     ...overrides,
   };
 }
@@ -586,17 +587,29 @@ describe('AiConfigService — search qwen', () => {
     expect(cfg?.sources).toHaveLength(0);
   });
 
-  it('search_provider=general + sources=[bing]（老数据）→ 仍返回 bing source（向后兼容）', async () => {
+  it('search_provider=general + sources=[bing]（老数据）→ 归一化为 searxng source（向后兼容）', async () => {
     const service = new AiConfigService(readonlyDb(row({
       enabled: 1,
       searchEnabled: 1,
       searchProvider: 'general',
-      searchBaseUrl: 'https://api.bing.microsoft.com',
-      searchApiKey: 'sk-bing-long',
+      searchBaseUrl: 'http://lumira-searxng:8080',
       searchSources: JSON.stringify(['bing']),
     })));
     const cfg = await service.getSearchConfig();
     expect(cfg?.sources).toHaveLength(1);
-    expect(cfg?.sources[0]).toMatchObject({ name: 'bing', provider: 'bing' });
+    expect(cfg?.sources[0]).toMatchObject({ name: 'searxng', provider: 'searxng' });
+  });
+
+  it('search_provider=general + sources=[searxng] + searchSite → source 带 site', async () => {
+    const service = new AiConfigService(readonlyDb(row({
+      enabled: 1,
+      searchEnabled: 1,
+      searchProvider: 'general',
+      searchBaseUrl: 'http://lumira-searxng:8080',
+      searchSite: 'xiaohongshu.com',
+      searchSources: JSON.stringify(['searxng']),
+    })));
+    const cfg = await service.getSearchConfig();
+    expect(cfg?.sources[0]).toMatchObject({ name: 'searxng', provider: 'searxng', site: 'xiaohongshu.com' });
   });
 });

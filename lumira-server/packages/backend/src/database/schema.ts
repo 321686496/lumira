@@ -376,6 +376,8 @@ export const aiProviderConfig = mysqlTable('ai_provider_config', {
   searchApiKey: varchar('search_api_key', { length: 255 }),
   /** 启用的搜索来源 JSON 数组：['bing','vendor','baidu']（预留，通用 API 约定 'bing'） */
   searchSources: varchar('search_sources', { length: 255 }),
+  /** SearXNG 站点限定（可选，如 xiaohongshu.com / v.douyin.com） */
+  searchSite: varchar('search_site', { length: 255 }),
   /** 迭代上限（预算护栏，默认 3，绝不无限迭代） */
   maxIterations: int('max_iterations').notNull().default(3),
   /** Qwen 模型自带联网搜索端点（search_provider=qwen 时使用） */
