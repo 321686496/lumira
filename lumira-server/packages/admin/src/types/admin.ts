@@ -450,8 +450,10 @@ export interface AiProviderConfigView {
   searchBaseUrl: string;
   /** 通用搜索 API key（脱敏） */
   searchApiKeyMasked: string;
-  /** 启用的搜索来源（bing/vendor/baidu） */
+  /** 启用的搜索来源（searxng/vendor/baidu） */
   searchSources: string[];
+  /** 站点限定（searxng 时使用，'' = 全站搜索） */
+  searchSite: string;
   /** Qwen 模型自带搜索端点（searchProvider=qwen 时使用） */
   searchQwenBaseUrl: string;
   /** Qwen 搜索 API key（脱敏） */
@@ -492,8 +494,10 @@ export interface UpdateAiConfigPayload {
   searchProvider?: string;
   searchBaseUrl?: string;
   searchApiKey?: string;
-  /** 启用的搜索来源（bing/vendor/baidu） */
+  /** 启用的搜索来源（searxng/vendor/baidu） */
   searchSources?: string[];
+  /** 站点限定（searxng 时使用，空串/缺省 = 全站搜索） */
+  searchSite?: string;
   searchQwenBaseUrl?: string;
   searchQwenApiKey?: string;
   searchQwenModel?: string;
