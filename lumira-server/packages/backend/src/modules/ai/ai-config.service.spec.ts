@@ -541,3 +541,49 @@ describe('AiConfigService — 模态独立平台（text/image override）', () =
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ silhouetteApiKey: 'sk-stored' }));
   });
 });
+
+describe('AiConfigService — search qwen', () => {
+  it('search_provider=qwen 且端点+Key 齐全 → getSearchConfig 返回 sources=[qwen]（含 model）', async () => {
+    const service = new AiConfigService(readonlyDb(row({
+      enabled: 1,
+      searchEnabled: 1,
+      searchProvider: 'qwen',
+      searchSources: JSON.stringify(['qwen']),
+      searchQwenBaseUrl: 'https://qw.cn/v1',
+      searchQwenApiKey: 'sk-qwen-long',
+      searchQwenModel: 'qwen-plus',
+    })));
+    const cfg = await service.getSearchConfig();
+    expect(cfg?.enabled).toBe(true);
+    expect(cfg?.sources).toHaveLength(1);
+    expect(cfg?.sources[0]).toMatchObject({ name: 'qwen', provider: 'qwen', baseUrl: 'https://qw.cn/v1', apiKey: 'sk-qwen-long', model: 'qwen-plus' });
+  });
+
+  it('search_provider=qwen 但缺端点/Key → sources 为空且 enabled 保持开关状态（不抛）', async () => {
+    const service = new AiConfigService(readonlyDb(row({
+      enabled: 1,
+      searchEnabled: 1,
+      searchProvider: 'qwen',
+      searchSources: JSON.stringify(['qwen']),
+      searchQwenBaseUrl: '',
+      searchQwenApiKey: '',
+    })));
+    const cfg = await service.getSearchConfig();
+    expect(cfg?.enabled).toBe(true);
+    expect(cfg?.sources).toHaveLength(0);
+  });
+
+  it('search_provider=general + sources=[bing]（老数据）→ 仍返回 bing source（向后兼容）', async () => {
+    const service = new AiConfigService(readonlyDb(row({
+      enabled: 1,
+      searchEnabled: 1,
+      searchProvider: 'general',
+      searchBaseUrl: 'https://api.bing.microsoft.com',
+      searchApiKey: 'sk-bing-long',
+      searchSources: JSON.stringify(['bing']),
+    })));
+    const cfg = await service.getSearchConfig();
+    expect(cfg?.sources).toHaveLength(1);
+    expect(cfg?.sources[0]).toMatchObject({ name: 'bing', provider: 'bing' });
+  });
+});
