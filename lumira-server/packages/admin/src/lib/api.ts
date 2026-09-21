@@ -32,7 +32,8 @@ import type {
   UpdateAiConfigPayload,
   AiConfigTestResult,
   AiConfigTestTarget,
-  AiAnalyzeResult,
+  AiAnalyzeTaskId,
+  AiAnalyzeStatusResult,
   AiImageResult,
   AiImageBatchTaskId,
   AiBatchStatusResult,
@@ -560,12 +561,16 @@ export const api = {
       body: JSON.stringify(payload ?? {}),
     }),
 
-  /** multipart：image 文件（示例图，可选）+ text/textDesc 文字描述（可选，至少其一）+ creationReq/poseCount。AI 识别耗时较长，超时 300s */
-  aiAnalyze: (formData: FormData) =>
-    adminFetch<AiAnalyzeResult>('/templates/ai-analyze', {
+  /** 提交识别任务（multipart image/text/textDesc + creationReq/poseCount）→ 立即返回 taskId */
+  aiAnalyzeStart: (formData: FormData) =>
+    adminFetch<AiAnalyzeTaskId>('/templates/ai-analyze', {
       method: 'POST',
       body: formData,
     }, AI_ENDPOINT_TIMEOUT_MS),
+
+  /** 轮询识别任务状态（done 带 draft/warnings；error 带 error） */
+  aiAnalyzeStatus: (taskId: string) =>
+    adminFetch<AiAnalyzeStatusResult>(`/templates/ai-analyze/tasks/${taskId}`),
 
   /** 提交生图任务（multipart meta + reference 可选 + extraPrompt 附加提示词可选）→ 立即返回 taskId */
   aiGenerateImageStart: (formData: FormData) =>

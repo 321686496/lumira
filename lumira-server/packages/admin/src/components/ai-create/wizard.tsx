@@ -23,10 +23,10 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { compressImage } from '@/lib/image-compress';
 import {
-  aiAnalyzeAction,
+  aiAnalyzeStartAction,
   getAiConfigAction,
 } from '@/actions/ai';
-import { generateAiPoseImages, generateAiSilhouettes, type AiPoseProgress } from '@/lib/ai-task';
+import { generateAiPoseImages, generateAiSilhouettes, pollAiAnalyzeTask, type AiPoseProgress } from '@/lib/ai-task';
 import type { TemplateCategory, AiAnalyzeTraceEntry } from '@/types/admin';
 import { StepCover, type CoverCandidate } from './step-cover';
 import { StepSilhouette } from './step-silhouette';
@@ -205,14 +205,19 @@ export function AiCreateWizard({
       if (exampleFile) analyzeFd.set('image', exampleFile);
       if (inputText.trim()) analyzeFd.set('text', inputText.trim());
       setAnalyzeExtras(analyzeFd);
-      const result = await aiAnalyzeAction(analyzeFd);
-      if (!result || 'error' in result) {
-        // server action 可能因请求被中止/网关掐断返回 undefined，避免 `'error' in undefined` 崩溃
-        setErrorText(result?.error || '识别请求失败，请重试');
+      const started = await aiAnalyzeStartAction(analyzeFd);
+      if (!started || 'error' in started) {
+        // 提交失败（入参不合法/网关拒绝）直接提示，不进入轮询
+        setErrorText(started?.error || '识别提交失败，请重试');
+        return;
+      }
+      const result = await pollAiAnalyzeTask(started.taskId);
+      if (!result.draft) {
+        setErrorText('识别结果为空，请重试');
         return;
       }
       setDraft(result.draft);
-      setWarnings(result.warnings);
+      setWarnings(result.warnings ?? []);
       setTrace(result.trace ?? null);
       if (exampleFile) {
         setCandidates([{
@@ -250,15 +255,21 @@ export function AiCreateWizard({
       if (exampleFile) analyzeFd.set('image', exampleFile);
       if (inputText.trim()) analyzeFd.set('text', inputText.trim());
       setAnalyzeExtras(analyzeFd);
-      const analyzeResult = await aiAnalyzeAction(analyzeFd);
-      if (!analyzeResult || 'error' in analyzeResult) {
+      const started = await aiAnalyzeStartAction(analyzeFd);
+      if (!started || 'error' in started) {
         setAutoState(null);
-        setErrorText(analyzeResult?.error || '识别请求失败，请重试');
+        setErrorText(started?.error || '识别提交失败，请重试');
+        return;
+      }
+      const analyzeResult = await pollAiAnalyzeTask(started.taskId);
+      if (!analyzeResult.draft) {
+        setAutoState(null);
+        setErrorText('识别结果为空，请重试');
         return;
       }
       const draftLocal = analyzeResult.draft;
       setDraft(draftLocal);
-      setWarnings(analyzeResult.warnings);
+      setWarnings(analyzeResult.warnings ?? []);
       setTrace(analyzeResult.trace ?? null);
       setFormActivated(true);
       const exampleCandidate: CoverCandidate | null = exampleFile

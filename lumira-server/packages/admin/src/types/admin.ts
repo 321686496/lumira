@@ -578,6 +578,22 @@ export interface AiSilhouetteStatusResult {
   error?: string;
 }
 
+/** 提交 AI 识别任务 → 立即返回 taskId（异步任务式，前端轮询状态） */
+export interface AiAnalyzeTaskId {
+  taskId: string;
+}
+
+/** 查询 AI 识别任务状态（done 带 draft/warnings，error 带 error） */
+export interface AiAnalyzeStatusResult {
+  taskId: string;
+  status: 'pending' | 'running' | 'done' | 'error';
+  draft?: Record<string, unknown>;
+  warnings?: string[];
+  /** 研究管线（orchestrator）启用时返回的 trace 轨迹；旧后端/关闭时缺省 */
+  trace?: AiAnalyzeTraceEntry[];
+  error?: string;
+}
+
 // ===== 图片存储迁移（R2 迁移）=====
 
 export type StorageCategory = 'templates' | 'categories' | 'banners' | 'feedback' | 'users';

@@ -2,6 +2,7 @@
 // 批量姿势图已改为「一次性提交 → 拿到单个 batchId → 只轮询一个批次进度接口」的架构，
 // 后端在批次内维护 total/completed/current/status/results，前端据此实时展示「第 X/Y 张」。
 import {
+  aiAnalyzeStatusAction,
   aiGenerateImageBatchStartAction,
   aiGenerateImageBatchStatusAction,
   aiGenerateImageStatusAction,
@@ -9,6 +10,7 @@ import {
 } from '@/actions/ai';
 import { aiGenerateSilhouetteStartAction } from '@/actions/ai';
 import type {
+  AiAnalyzeStatusResult,
   AiImageStatusResult,
   AiSilhouetteStatusResult,
   AiBatchStatusResult,
@@ -184,5 +186,29 @@ export function pollAiSilhouetteTask(
       await sleep(intervalMs);
     }
     throw new AiTaskPollError('剪影生成超时，请稍后重试');
+  })();
+}
+
+/** 轮询 AI 识别异步任务直到完成，避免同步请求被网关 504 掐断。done → {draft/warnings}；error/超时 reject AiTaskPollError */
+export function pollAiAnalyzeTask(
+  taskId: string,
+  options: AiTaskPollOptions = {},
+  onTick?: (status: AiAnalyzeStatusResult['status']) => void,
+): Promise<AiAnalyzeStatusResult> {
+  const { intervalMs = DEFAULT_INTERVAL_MS, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+  const deadline = Date.now() + timeoutMs;
+
+  return (async () => {
+    while (Date.now() < deadline) {
+      const res = await aiAnalyzeStatusAction(taskId);
+      if (!res || 'error' in res) {
+        throw new AiTaskPollError((res as { error?: string } | undefined)?.error || '查询识别任务失败');
+      }
+      if (res.status === 'done') return res;
+      if (res.status === 'error') throw new AiTaskPollError(res.error || '识别失败，请重试');
+      onTick?.(res.status);
+      await sleep(intervalMs);
+    }
+    throw new AiTaskPollError('识别超时，请稍后重试');
   })();
 }
