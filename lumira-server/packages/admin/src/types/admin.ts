@@ -520,6 +520,14 @@ export interface AiAnalyzeTraceEntry {
   score?: number;
 }
 
+/** 趋势研究命中的参考来源（供数据分析：AI 参考了哪些 URL） */
+export interface AiResearchRef {
+  source: string;
+  title: string;
+  snippet?: string;
+  url?: string;
+}
+
 /** POST /admin/templates/ai-generate-silhouette 结果（同步，image = base64） */
 export interface AiImageResult {
   image: string;
@@ -583,7 +591,7 @@ export interface AiAnalyzeTaskId {
   taskId: string;
 }
 
-/** 查询 AI 识别任务状态（done 带 draft/warnings，error 带 error） */
+/** 查询 AI 识别任务状态（done 带 draft/warnings/trace/raw/research，error 带 error） */
 export interface AiAnalyzeStatusResult {
   taskId: string;
   status: 'pending' | 'running' | 'done' | 'error';
@@ -591,6 +599,10 @@ export interface AiAnalyzeStatusResult {
   warnings?: string[];
   /** 研究管线（orchestrator）启用时返回的 trace 轨迹；旧后端/关闭时缺省 */
   trace?: AiAnalyzeTraceEntry[];
+  /** LLM 直接吐出的原始结构化 JSON（extractJson 后、normalizeDraft 前） */
+  raw?: Record<string, unknown>;
+  /** 趋势研究命中的参考来源（含 URL） */
+  research?: AiResearchRef[];
   error?: string;
 }
 

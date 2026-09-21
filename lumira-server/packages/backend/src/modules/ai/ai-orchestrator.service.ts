@@ -47,6 +47,8 @@ export interface OrchestratorResult {
   draft: Record<string, unknown>;
   warnings: string[];
   trace: OrchestratorTraceEntry[];
+  /** 趋势研究阶段命中的来源（含 url），未启用/无主题时为空数组 */
+  research: ResearchItem[];
 }
 
 /** 评分闸门 / 再判迭代预算上限 */
@@ -150,7 +152,7 @@ export class AiOrchestratorService {
 
     // (7) 定稿归一化（fail-safe：categories 必传，输入为 object）
     const normalized = normalizeDraft(workingDraft, categories);
-    return { draft: normalized.draft, warnings: [...normalized.warnings, ...warnings], trace };
+    return { draft: normalized.draft, warnings: [...normalized.warnings, ...warnings], trace, research };
   }
 
   /** wrap 工具调用：成功返回其值，失败记录 trace 并返回 undefined（降级继续） */

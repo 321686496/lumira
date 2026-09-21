@@ -18,7 +18,8 @@ import {
 } from './analyze.prompt';
 import { extractJson, normalizeDraft, CategoryNode } from './normalize';
 import { AiOrchestratorService } from './ai-orchestrator.service';
-import type { OrchestratorInput } from './ai-orchestrator.service';
+import type { OrchestratorInput, OrchestratorTraceEntry } from './ai-orchestrator.service';
+import type { ResearchItem } from './trend-research/research-item';
 
 /** 允许的示例图 mimetype */
 const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -26,8 +27,12 @@ const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
 export interface AiAnalyzeResult {
   draft: Record<string, unknown>;
   warnings: string[];
-  /** 研究管线开启时由 orchestrator 返回；未开启/未接入时缺省（向后兼容） */
-  trace?: Array<{ step: string; tool?: string; resultBrief: string; score?: number }>;
+  /** 研究管线开启时由 orchestrator 返回；未开启/未接入时为 []（向后兼容） */
+  trace: OrchestratorTraceEntry[];
+  /** LLM 直接吐出的原始结构化 JSON（extractJson 后、normalizeDraft 前） */
+  raw: Record<string, unknown>;
+  /** 趋势研究阶段命中的来源（含 url） */
+  research: ResearchItem[];
 }
 
 @Injectable()
@@ -47,7 +52,7 @@ export class AiAnalyzeService {
     image: UploadFile | undefined,
     text: string | undefined,
     extra: { textDesc?: string | null; creationReq?: string | null; poseCount?: string | null } = {},
-  ): Promise<{ draft: Record<string, unknown>; warnings: string[] }> {
+  ): Promise<AiAnalyzeResult> {
     // 0. 姿势个数：'1'~'6' 整数字符串合法；其余（空/非法）= AI 自动判断
     let poseCount: number | null = null;
     if (extra.poseCount !== null && extra.poseCount !== undefined && extra.poseCount !== '') {
@@ -137,9 +142,10 @@ export class AiAnalyzeService {
         creationReq: extra.creationReq ?? undefined,
         poseCount: poseCount ?? undefined,
       };
-      return this.orchestrator.run(input, { categories, draft: json });
+      const r = await this.orchestrator.run(input, { categories, draft: json });
+      return { draft: r.draft, warnings: r.warnings, trace: r.trace, raw: json, research: r.research ?? [] };
     }
 
-    return normalized;
+    return { ...normalized, trace: [], raw: json, research: [] };
   }
 }
