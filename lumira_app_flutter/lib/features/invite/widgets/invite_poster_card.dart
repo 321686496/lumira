@@ -116,7 +116,8 @@ class _ArtworkBand extends StatelessWidget {
           ),
           const Positioned(
             top: 14,
-            left: 16,
+            left: 0,
+            right: 0,
             child: _BandBrandmark(),
           ),
         ],
@@ -132,56 +133,41 @@ class _BandBrandmark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        // AI 生成的毛笔从左往右扫过的暖白渐变背景（品牌 surface 色），替代手写 LinearGradient。
-        // 源图为暖白笔触画在纯黑底上：用「红通道→透明」的 luma-key 矩阵把黑色抠成透明，
-        // 让右侧笔锋渐隐、露出下方照片；配金色细边 + 小圆角。
-        image: const DecorationImage(
-          image: AssetImage('assets/images/invite_brand_stroke.jpg'),
-          fit: BoxFit.cover,
-          colorFilter: ColorFilter.matrix(<double>[
-            // 输出 RGB 保留原样（笔触即品牌暖白）
-            1, 0, 0, 0, 0,
-            0, 1, 0, 0, 0,
-            0, 0, 1, 0, 0,
-            // 输出 Alpha 取自红通道缩放（黑底→透明，暖白笔触→不透），实现 luma-key 抠图
-            1, 0, 0, 0, 0,
-          ]),
+      // 无背景图、无边框，纯 Logo + 文字，贴合装饰带顶部。
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        heightFactor: 1,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            // 品牌符号标（金色取景器符号，品牌主色）
+            LumiraLogo.symbol(size: 15),
+            SizedBox(width: 7),
+            Text(
+              'LUMIRA',
+              style: TextStyle(
+                fontFamily: 'Georgia',
+                fontSize: 8,
+                letterSpacing: 3,
+                color: PosterPalette.goldDeep,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(width: 9),
+            Text(
+              '如 画',
+              style: TextStyle(
+                fontFamily: 'Noto Serif SC',
+                fontFamilyFallback: ['Songti SC', 'SimSun', 'STSong'],
+                fontSize: 10,
+                letterSpacing: 4,
+                color: PosterPalette.ink,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ),
-        borderRadius: BorderRadius.circular(3),
-        border: Border.all(color: PosterPalette.line),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: const [
-          // 品牌符号标（金色取景器符号，品牌主色）
-          LumiraLogo.symbol(size: 15),
-          SizedBox(width: 7),
-          Text(
-            'LUMIRA',
-            style: TextStyle(
-              fontFamily: 'Georgia',
-              fontSize: 8,
-              letterSpacing: 3,
-              color: PosterPalette.goldDeep,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          SizedBox(width: 9),
-          Text(
-            '如 画',
-            style: TextStyle(
-              fontFamily: 'Noto Serif SC',
-              fontFamilyFallback: ['Songti SC', 'SimSun', 'STSong'],
-              fontSize: 10,
-              letterSpacing: 4,
-              color: PosterPalette.ink,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
       ),
     );
   }

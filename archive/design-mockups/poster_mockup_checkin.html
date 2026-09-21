@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>探店足迹分享海报 · 原风格 3:4</title>
+<style>
+  :root{
+    --paper:#FDFBF7;
+    --gold:#C9A96E;
+    --gold-dark:#B08D4F;
+    --ink:#3A3A37;
+    --ink-2:#6E6A60;
+    --ink-3:#8C877B;
+    --line:rgba(185,158,108,.45);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:"Songti SC","Noto Serif SC","SimSun",serif;
+    background:#EFECE4;color:var(--ink);
+    display:flex;gap:44px;justify-content:center;align-items:flex-start;flex-wrap:wrap;padding:52px 28px;
+  }
+  .section-head{width:100%;text-align:center;color:var(--ink-2);letter-spacing:4px;font-size:14px;margin-bottom:6px;}
+  .poster{
+    width:540px;min-height:780px;
+    background:var(--paper);
+    position:relative;
+    box-shadow:0 28px 58px rgba(60,52,40,.22), 0 4px 12px rgba(60,52,40,.10);
+    outline:1px solid var(--line);
+    overflow:hidden;
+    display:flex;flex-direction:column;align-items:center;
+    padding:32px 40px 28px;
+  }
+  .grain::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+    background-image:radial-gradient(rgba(185,158,108,.05) 1px,transparent 1px);background-size:5px 5px;}
+  .brand{font-size:13px;letter-spacing:5px;color:var(--gold-dark);font-weight:600;}
+  .brand small{letter-spacing:2px;}
+  .divider{width:66px;height:1px;background:var(--gold);margin:14px 0 6px;opacity:.85;}
+
+  /* 通用缺角相框工具 */
+  .frame{position:relative;box-shadow:0 14px 30px rgba(90,78,60,.18);background:#E9E0CF;}
+  .frame .cornerTL,.frame .cornerBR{position:absolute;border-color:var(--gold);border-style:solid;z-index:2;}
+  .frame img{display:block;position:relative;z-index:1;}
+  .frame .cta{position:absolute;inset:0;z-index:1;}
+  .cornerTL{top:-1px;left:-1px;border-width:2px 0 0 2px;}
+  .cornerBR{bottom:-1px;right:-1px;border-width:0 2px 2px 0;}
+
+  /* ===== 内容块 ===== */
+  .rating-block{margin-top:6px;display:flex;align-items:center;gap:10px;}
+  .stars{display:flex;gap:2px;color:var(--gold);font-size:18px;}
+  .rating-num{font-size:20px;font-weight:700;color:var(--gold-dark);letter-spacing:1px;}
+  .main-photo{margin-top:18px;width:430px;height:430px;
+    clip-path:polygon(30px 0,100% 0,100% calc(100% - 30px),calc(100% - 30px) 100%,0 100%,0 30px);}
+  .main-photo img{width:100%;height:100%;object-fit:cover;}
+
+  .name{font-size:40px;font-weight:700;letter-spacing:3px;margin-top:16px;line-height:1.12;text-align:center;}
+  .cat-row{margin-top:14px;display:flex;gap:12px;align-items:center;justify-content:center;}
+  .cat-tag{padding:3px 16px;font-size:13px;letter-spacing:3px;color:var(--gold-dark);border:1px solid var(--gold);border-radius:999px;}
+  .place{display:block;font-size:15px;letter-spacing:2px;color:var(--ink-2);margin-top:6px;}
+  .place i{font-style:normal;color:var(--gold);margin:0 8px;}
+  .date{font-size:12px;letter-spacing:3px;color:var(--ink-3);margin-top:5px;}
+
+  .note{margin:18px 4px 0;font-size:14px;line-height:2;color:var(--ink-2);text-align:center;
+    max-width:400px;font-style:italic;
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:13px 2px;}
+
+  .thumbs{display:flex;gap:11px;margin-top:22px;align-items:center;}
+  .thumb{width:80px;height:80px;
+    clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px);}
+  .thumb img{width:100%;height:100%;object-fit:cover;}
+  .thumb .cornerTL,.thumb .cornerBR{width:12px;height:12px;}
+  .thumb .cornerTL{border-width:1.6px 0 0 1.6px;}
+  .thumb .cornerBR{border-width:0 1.6px 1.6px 0;}
+  .thumb.add-box{background:var(--gold);opacity:.9;display:flex;align-items:center;justify-content:center;}
+  .thumb.add-box .plus{font-size:34px;color:#fff;font-weight:200;line-height:1;}
+
+  .foot{margin-top:24px;width:100%;display:flex;flex-direction:column;align-items:center;}
+  .foot .divider{margin:0 0 12px;}
+  .wm{font-size:12px;letter-spacing:3px;color:var(--gold-dark);}
+  .wm small{letter-spacing:1px;color:var(--ink-3);margin-left:6px;font-size:10px;}
+
+  .legend{max-width:400px;color:var(--ink-2);font-size:13px;line-height:2;padding-top:6px;letter-spacing:.5px;}
+  .legend b{color:var(--gold-dark);}
+  .legend .sw{display:inline-block;width:34px;height:18px;background:var(--paper);outline:1px solid var(--gold);vertical-align:middle;margin-right:6px;}
+</style>
+</head>
+<body>
+  <div class="section-head">原风格 · 3:4 竖版 · 完整信息 · 精选多图</div>
+
+  <div class="poster grain">
+    <!-- ① 品牌标 -->
+    <div class="brand">如 画 · LUMIRA</div>
+    <div class="divider"></div>
+
+    <!-- ② 大图（缺角 + 金L角标） -->
+    <div class="frame main-photo">
+      <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20cozy%20cafe%20window%20seat%20golden%20hour%20cappuccino%2C%20photorealistic%20editorial%20food%20photo&image_size=square_hd" />
+      <span class="cornerTL"></span><span class="cornerBR"></span>
+    </div>
+
+    <!-- ③ 评分 -->
+    <div class="rating-block">
+      <span class="stars">★★★★★</span>
+      <span class="rating-num">5.0</span>
+      <!-- ④ 分类 -->
+      <span class="cat-tag">咖啡 · AUCKLAND</span>
+    </div>
+
+    <!-- ⑤ 标题（店名） -->
+    <div class="name">屿 见 咖 啡</div>
+
+    <!-- ⑥ 地点 + ⑦ 日期 -->
+    <span class="place">愚 园 路 1 2 0 号<i>·</i>静安区</span>
+    <span class="date">2026 · 08 · 29 周六</span>
+
+    <!-- ⑧ 内容（心得） -->
+    <div class="note">临窗的一杯拿铁，配上午后斜阳，是这座城市里最安静的时刻。</div>
+
+    <!-- 小图带（精选多张） -->
+    <div class="thumbs">
+      <div class="frame thumb"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=latte%20art%20top%20view%20warm%20table%20cafe&image_size=square_hd"/><span class="cornerTL"></span><span class="cornerBR"></span></div>
+      <div class="frame thumb"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=minimalist%20cafe%20interior%20cozy%20plants%20warm%20tone&image_size=square_hd"/><span class="cornerTL"></span><span class="cornerBR"></span></div>
+      <div class="frame thumb"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=crusty%20sandwich%20ceramic%20plate%20warm%20cafe%20food&image_size=square_hd"/><span class="cornerTL"></span><span class="cornerBR"></span></div>
+      <div class="frame thumb add-box"><span class="plus">＋</span></div>
+    </div>
+
+    <!-- 底部水印 -->
+    <div class="foot">
+      <div class="divider"></div>
+      <div class="wm">如 画 · 探 店 足 迹 <small>LUMIRA</small></div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>完整内容构成（从上到下）</b><br/>
+    ① 品牌标 → ② 大图（缺角相框＋金L角标）→ ③ 评分 ★★★★★ 5.0 → ④ 分类胶囊 → ⑤ 店名标题（衬线大字）→ ⑥ 地点 → ⑦ 日期 → ⑧ 内容/心得（金线夹住斜体）→ 小图标（精选多张/可增删）→ 底部品牌水印<br/><br/>
+    <b>说明</b>：每张图外层都有暖色占位底，若网络图加载失败也会显示色块，不会空；<span style="color:var(--gold-dark)">照片为占位样例，最终用用户精选的真实照片</span>。
+  </div>
+</body>
+</html>

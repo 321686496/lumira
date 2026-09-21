@@ -1,0 +1,634 @@
+name: print
+ID: 32886
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:__data_loc char[] buffer;	offset:8;	size:4;	signed:1;
+
+print fmt: "%s", ((void *)((char *)REC + (REC->__data_loc_buffer & 0xffff)))
+name: print
+ID: 32886
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:__data_loc char[] buffer;	offset:8;	size:4;	signed:1;
+
+print fmt: "%s", ((void *)((char *)REC + (REC->__data_loc_buffer & 0xffff)))
+name: binder_transaction
+ID: 33180
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:int debug_id;	offset:8;	size:4;	signed:1;
+	field:int target_node;	offset:12;	size:4;	signed:1;
+	field:int to_proc;	offset:16;	size:4;	signed:1;
+	field:int to_thread;	offset:20;	size:4;	signed:1;
+	field:int8_t reply;	offset:24;	size:1;	signed:1;
+	field:unsigned int code;	offset:28;	size:4;	signed:0;
+	field:unsigned int flags;	offset:32;	size:4;	signed:0;
+
+print fmt: "transaction=%d dest_node=%d dest_proc=%d dest_thread=%d reply=%d flags=0x%x code=0x%x", REC->debug_id, REC->target_node, REC->to_proc, REC->to_thread, REC->reply, REC->flags, REC->code
+name: binder_transaction_received
+ID: 33181
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:int debug_id;	offset:8;	size:4;	signed:1;
+
+print fmt: "transaction=%d", REC->debug_id
+name: ext4_da_write_begin
+ID: 33175
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:dev_t dev;	offset:8;	size:8;	signed:0;
+	field:unsigned long ino;	offset:16;	size:8;	signed:0;
+	field:long long pos;	offset:24;	size:8;	signed:1;
+	field:unsigned int len;	offset:32;	size:4;	signed:0;
+	field:unsigned int flags;	offset:36;	size:4;	signed:0;
+
+print fmt: "dev %d,%d ino %lu pos %lld len %u flags %u", ((unsigned int) ((REC->dev) >> 20)), ((unsigned int) ((REC->dev) & ((1U << 20) - 1))), (unsigned long) REC->ino, REC->pos, REC->len, REC->flags
+name: ext4_da_write_end
+ID: 33176
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:dev_t dev;	offset:8;	size:8;	signed:0;
+	field:unsigned long ino;	offset:16;	size:8;	signed:0;
+	field:long long pos;	offset:24;	size:8;	signed:1;
+	field:unsigned int len;	offset:32;	size:4;	signed:0;
+	field:unsigned int copied;	offset:36;	size:4;	signed:0;
+
+print fmt: "dev %d,%d ino %lu pos %lld len %u copied %u", ((unsigned int) ((REC->dev) >> 20)), ((unsigned int) ((REC->dev) & ((1U << 20) - 1))), (unsigned long) REC->ino, REC->pos, REC->len, REC->copied
+name: ext4_sync_file_enter
+ID: 33173
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:dev_t dev;	offset:8;	size:8;	signed:0;
+	field:unsigned long ino;	offset:16;	size:8;	signed:0;
+	field:unsigned long parent;	offset:24;	size:8;	signed:0;
+	field:int datasync;	offset:32;	size:4;	signed:1;
+
+print fmt: "dev %d,%d ino %lu parent %lu datasync %d ", ((unsigned int) ((REC->dev) >> 20)), ((unsigned int) ((REC->dev) & ((1U << 20) - 1))), (unsigned long) REC->ino, (unsigned long) REC->parent, REC->datasync
+name: ext4_sync_file_exit
+ID: 33174
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:dev_t dev;	offset:8;	size:8;	signed:0;
+	field:unsigned long ino;	offset:16;	size:8;	signed:0;
+	field:int ret;	offset:24;	size:4;	signed:1;
+
+print fmt: "dev %d,%d ino %lu ret %d", ((unsigned int) ((REC->dev) >> 20)), ((unsigned int) ((REC->dev) & ((1U << 20) - 1))), (unsigned long) REC->ino, REC->ret
+name: block_bio_remap
+ID: 33298
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:uint32_t dev;	offset:8;	size:4;	signed:0;
+	field:uint64_t sector;	offset:16;	size:8;	signed:0;
+	field:uint32_t nr_sector;	offset:24;	size:4;	signed:0;
+	field:uint32_t old_dev;	offset:28;	size:4;	signed:0;
+	field:uint64_t old_sector;	offset:32;	size:8;	signed:0;
+
+print fmt: "%d,%d %llu + %u <- (%d,%d) %llu", ((unsigned int) ((REC->dev) >> 20U)), ((unsigned int) ((REC->dev) & ((1U << 20U) - 1U))), (unsigned long long)REC->sector, REC->nr_sector, ((unsigned int) ((REC->old_dev) >> 20U)), ((unsigned int) ((REC->old_dev) & ((1U << 20U) - 1U))), (unsigned long long)REC->old_sector
+name: block_rq_issue
+ID: 33294
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:uint32_t dev;	offset:8;	size:4;	signed:0;
+	field:uint64_t sector;	offset:16;	size:8;	signed:0;
+	field:uint32_t nr_sector;	offset:24;	size:4;	signed:0;
+	field:uint32_t bytes;	offset:28;	size:4;	signed:0;
+	field:char rwbs[16];	offset:32;	size:16;	signed:1;
+	field:char comm[16];	offset:48;	size:16;	signed:1;
+	field:char cmd[16];	offset:64;	size:16;	signed:1;
+
+print fmt: "%d,%d %s %u (%s) %llu + %u [%s]", ((unsigned int) ((REC->dev) >> 20U)), ((unsigned int) ((REC->dev) & ((1U << 20U) - 1U))), REC->rwbs, REC->bytes, REC->cmd, (unsigned long long)REC->sector, REC->nr_sector, REC->comm
+name: decrypt_endio_exit
+ID: 33305
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:uint32_t dev;	offset:8;	size:4;	signed:0;
+	field:uint64_t sector;	offset:16;	size:8;	signed:0;
+	field:uint32_t nr_sector;	offset:24;	size:4;	signed:0;
+	field:uint32_t old_dev;	offset:28;	size:4;	signed:0;
+	field:bool result;	offset:32;	size:1;	signed:0;
+
+print fmt: "%d,%d %llu + %u result= %d", ((unsigned int) ((REC->dev) >> 20U)), ((unsigned int) ((REC->dev) & ((1U << 20U) - 1U))), (unsigned long long)REC->sector, REC->nr_sector, REC->result
+name: decrypt_endio_entry
+ID: 33304
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:uint32_t dev;	offset:8;	size:4;	signed:0;
+	field:uint64_t sector;	offset:16;	size:8;	signed:0;
+	field:uint32_t nr_sector;	offset:24;	size:4;	signed:0;
+	field:uint32_t old_dev;	offset:28;	size:4;	signed:0;
+
+print fmt: "%d,%d %llu + %u", ((unsigned int) ((REC->dev) >> 20U)), ((unsigned int) ((REC->dev) & ((1U << 20U) - 1U))), (unsigned long long)REC->sector, REC->nr_sector
+name: block_rq_complete
+ID: 33295
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:uint32_t dev;	offset:8;	size:4;	signed:0;
+	field:uint64_t sector;	offset:16;	size:8;	signed:0;
+	field:uint32_t nr_sector;	offset:24;	size:4;	signed:0;
+	field:int error;	offset:28;	size:4;	signed:1;
+	field:char rwbs[16];	offset:32;	size:16;	signed:1;
+	field:char cmd[16];	offset:48;	size:16;	signed:1;
+
+print fmt: "%d,%d %s (%s) %llu + %u [%d]", ((unsigned int) ((REC->dev) >> 20U)), ((unsigned int) ((REC->dev) & ((1U << 20U) - 1U))), REC->rwbs, REC->cmd, (unsigned long long)REC->sector, REC->nr_sector, REC->error
+name: block_rq_insert
+ID: 33563
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:dev_t dev;	offset:8;	size:4;	signed:0;
+	field:sector_t sector;	offset:16;	size:8;	signed:0;
+	field:unsigned int nr_sector;	offset:24;	size:4;	signed:0;
+	field:unsigned int bytes;	offset:28;	size:4;	signed:0;
+	field:char rwbs[8];	offset:32;	size:8;	signed:0;
+	field:char comm[16];	offset:40;	size:16;	signed:0;
+	field:__data_loc char[] cmd;	offset:56;	size:4;	signed:0;
+
+print fmt: "%d,%d %s %u (%s) %llu + %u [%s]", ((unsigned int) ((REC->dev) >> 20)), ((unsigned int) ((REC->dev) & ((1U << 20) - 1))), REC->rwbs, REC->bytes, __get_str(cmd), (unsigned long long)REC->sector, REC->nr_sector, REC->comm
+name: hmfs_readpage
+ID: 33085
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:dev_t dev;	offset:8;	size:8;	signed:0;
+	field:ino_t index;	offset:16;	size:8;	signed:0;
+	field:__data_loc char[] pgtype;	offset:24;	size:4;	signed:1;
+	field:__data_loc char[] dir;	offset:28;	size:4;	signed:1;
+	field:unsigned long page_index;	offset:32;	size:8;	signed:0;
+	field:int dirty;	offset:40;	size:4;	signed:1;
+	field:int uptodate;	offset:44;	size:4;	signed:1;
+
+print fmt: "dev = (%d,%d), ino = %lu, %s, %s, page_index = %lu, " "dirty = %d, uptodate = %d", ((unsigned int) (((REC)->dev) >> 20)), ((unsigned int) (((REC)->dev) & ((1U << 20) - 1))), ((unsigned long)((REC)->index)), ((char *)((void *)((char *)REC + (REC->__data_loc_pgtype & 0xffff)))), ((char *)((void *)((char *)REC + (REC->__data_loc_dir & 0xffff)))), (unsigned long)REC->page_index, REC->dirty, REC->uptodate
+name: hmfs_readpages
+ID: 33074
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:dev_t dev;	offset:8;	size:8;	signed:0;
+	field:unsigned long index;	offset:16;	size:8;	signed:0;
+	field:unsigned long start;	offset:24;	size:8;	signed:0;
+	field:unsigned int nrpage;	offset:32;	size:4;	signed:0;
+
+print fmt: "dev = (%d,%d), ino = %lu, start = %lu nrpage = %u", ((unsigned int) (((REC)->dev) >> 20)), ((unsigned int) (((REC)->dev) & ((1U << 20) - 1))), ((unsigned long)((REC)->index)), REC->start, REC->nrpage
+name: hmfs_writepage
+ID: 33086
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:dev_t dev;	offset:8;	size:8;	signed:0;
+	field:ino_t index;	offset:16;	size:8;	signed:0;
+	field:__data_loc char[] pgtype;	offset:24;	size:4;	signed:1;
+	field:__data_loc char[] dir;	offset:28;	size:4;	signed:1;
+	field:unsigned long page_index;	offset:32;	size:8;	signed:0;
+	field:int dirty;	offset:40;	size:4;	signed:1;
+	field:int uptodate;	offset:44;	size:4;	signed:1;
+
+print fmt: "dev = (%d,%d), ino = %lu, %s, %s, page_index = %lu, " "dirty = %d, uptodate = %d", ((unsigned int) (((REC)->dev) >> 20)), ((unsigned int) (((REC)->dev) & ((1U << 20) - 1))), ((unsigned long)((REC)->index)), ((char *)((void *)((char *)REC + (REC->__data_loc_pgtype & 0xffff)))), ((char *)((void *)((char *)REC + (REC->__data_loc_dir & 0xffff)))), (unsigned long)REC->page_index, REC->dirty, REC->uptodate
+name: hmfs_writepages
+ID: 33075
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:dev_t dev;	offset:8;	size:8;	signed:0;
+	field:unsigned long index;	offset:16;	size:8;	signed:0;
+	field:__data_loc char[] pgtype;	offset:24;	size:4;	signed:1;
+	field:long long range_start;	offset:32;	size:8;	signed:1;
+	field:long long range_end;	offset:40;	size:8;	signed:1;
+	field:long nr_to_write;	offset:48;	size:8;	signed:1;
+	field:__data_loc char[] wbctype;	offset:56;	size:4;	signed:1;
+	field:__data_loc char[] dir;	offset:60;	size:4;	signed:1;
+	field:__data_loc char[] skip_status;	offset:64;	size:4;	signed:1;
+
+print fmt: "dev = (%d,%d), ino = %lu, type = %s, %s, nr_to_write %ld, " "skipped %s, start %lld, end %lld, wbc_type %s", ((unsigned int) (((REC)->dev) >> 20)), ((unsigned int) (((REC)->dev) & ((1U << 20) - 1))), ((unsigned long)((REC)->index)), ((char *)((void *)((char *)REC + (REC->__data_loc_pgtype & 0xffff)))), ((char *)((void *)((char *)REC + (REC->__data_loc_dir & 0xffff)))), REC->nr_to_write, ((char *)((void *)((char *)REC + (REC->__data_loc_skip_status & 0xffff)))), REC->range_start, REC->range_end, ((char *)((void *)((char *)REC + (REC->__data_loc_wbctype & 0xffff))))
+name: hmfs_sync
+ID: 33118
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:dev_t dev;	offset:8;	size:8;	signed:0;
+	field:int dirty;	offset:16;	size:4;	signed:1;
+
+print fmt: "dev = (%d,%d), superblock is %s", ((unsigned int) ((REC->dev) >> 20)), ((unsigned int) ((REC->dev) & ((1U << 20) - 1))), REC->dirty ? "dirty" : "not dirty"
+name: hmfs_sync_exit
+ID: 33151
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:dev_t dev;	offset:8;	size:8;	signed:0;
+	field:ino_t index;	offset:16;	size:8;	signed:0;
+	field:int res;	offset:24;	size:4;	signed:1;
+
+print fmt: "dev = (%d,%d), ino = %lu, ret = %d", ((unsigned int) (((REC)->dev) >> 20)), ((unsigned int) (((REC)->dev) & ((1U << 20) - 1))), ((unsigned long)((REC)->index)), REC->res
+name: hmfs_sync_file_enter
+ID: 33119
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:dev_t dev;	offset:8;	size:8;	signed:0;
+	field:unsigned long ino;	offset:16;	size:8;	signed:0;
+	field:uint64_t size;	offset:24;	size:8;	signed:0;
+	field:mode_t mode;	offset:32;	size:4;	signed:0;
+
+print fmt: "dev = (%d,%d) ino = %lu," " i_mode = 0x%hx, size = %llu", ((unsigned int) ((REC->dev) >> 20)), ((unsigned int) ((REC->dev) & ((1U << 20) - 1))), REC->ino, REC->mode, REC->size
+name: hmfs_sync_file_exit
+ID: 33058
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:dev_t dev;	offset:8;	size:8;	signed:0;
+	field:unsigned long ino;	offset:16;	size:8;	signed:0;
+	field:uint64_t size;	offset:24;	size:8;	signed:0;
+	field:mode_t mode;	offset:32;	size:4;	signed:0;
+	field:int res;	offset:36;	size:4;	signed:1;
+
+print fmt: "dev=%d,%d ino=%lu i_mode=0x%hx size=%llu res=%d", ((unsigned int) ((REC->dev) >> 20)), ((unsigned int) ((REC->dev) & ((1U << 20) - 1))), REC->ino, REC->mode, REC->size, REC->res
+name: cpu_frequency
+ID: 33272
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:unsigned int state;	offset:8;	size:4;	signed:0;
+	field:unsigned int cpu_id;	offset:12;	size:4;	signed:0;
+
+print fmt: "state=%u cpu_id=%u", REC->state, REC->cpu_id
+name: clock_set_rate
+ID: 33269
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:__data_loc char[] name;	offset:8;	size:4;	signed:1;
+	field:__u64 state;	offset:16;	size:8;	signed:0;
+	field:__u64 cpu_id;	offset:24;	size:8;	signed:0;
+
+print fmt: "%s state=%lu cpu_id=%lu", ((char *)((void *)((char *)REC + (REC->__data_loc_name & 0xffff)))), (unsigned long)REC->state, (unsigned long)REC->cpu_id
+name: clock_set_rate
+ID: 32879
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:__data_loc char[] name;	offset:8;	size:4;	signed:1;
+	field:__u32 state;	offset:12;	size:4;	signed:0;
+	field:__u32 cpu_id;	offset:16;	size:4;	signed:0;
+
+print fmt: "%s state=%u cpu_id=%u", ((char *)((void *)((char *)REC + (REC->__data_loc_name & 0xffff)))), REC->state, REC->cpu_id
+name: cpu_frequency
+ID: 32869
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:unsigned int state;	offset:8;	size:4;	signed:0;
+	field:unsigned int cpu_id;	offset:12;	size:4;	signed:0;
+
+print fmt: "state=%u cpu_id=%u", REC->state, REC->cpu_id
+name: cpu_frequency_limits
+ID: 32870
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:__u32 min;	offset:8;	size:4;	signed:0;
+	field:__u32 max;	offset:12;	size:4;	signed:0;
+	field:__u32 cpu_id;	offset:16;	size:4;	signed:0;
+
+print fmt: "min=%u max=%u cpu_id=%u", REC->min, REC->max, REC->cpu_id
+name: cpu_frequency_limits
+ID: 33273
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:__u32 min;	offset:8;	size:4;	signed:0;
+	field:__u32 max;	offset:12;	size:4;	signed:0;
+	field:__u32 cpu_id;	offset:16;	size:4;	signed:0;
+
+print fmt: "min=%lu max=%lu cpu_id=%lu", (unsigned long)REC->min, (unsigned long)REC->max, (unsigned long)REC->cpu_id
+name: thermal_power_allocator
+ID: 33816
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:int tz_id;	offset:8;	size:4;	signed:1;
+	field:__data_loc u32[] req_power;	offset:12;	size:4;	signed:0;
+	field:u32 total_req_power;	offset:16;	size:4;	signed:0;
+	field:__data_loc u32[] granted_power;	offset:20;	size:4;	signed:0;
+	field:u32 total_granted_power;	offset:24;	size:4;	signed:0;
+	field:size_t num_actors;	offset:32;	size:8;	signed:0;
+	field:u32 power_range;	offset:40;	size:4;	signed:0;
+	field:u32 max_allocatable_power;	offset:44;	size:4;	signed:0;
+	field:int current_temp;	offset:48;	size:4;	signed:1;
+	field:s32 delta_temp;	offset:52;	size:4;	signed:1;
+
+print fmt: "thermal_zone_id=%d req_power={%s} total_req_power=%u granted_power={%s} total_granted_power=%u power_range=%u max_allocatable_power=%u current_temperature=%d delta_temperature=%d", REC->tz_id, __print_array(__get_dynamic_array(req_power), REC->num_actors, 4), REC->total_req_power, __print_array(__get_dynamic_array(granted_power), REC->num_actors, 4), REC->total_granted_power, REC->power_range, REC->max_allocatable_power, REC->current_temp, REC->delta_temp
+name: thermal_power_allocator_pid
+ID: 33817
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:int tz_id;	offset:8;	size:4;	signed:1;
+	field:s32 err;	offset:12;	size:4;	signed:1;
+	field:s32 err_integral;	offset:16;	size:4;	signed:1;
+	field:s64 p;	offset:24;	size:8;	signed:1;
+	field:s64 i;	offset:32;	size:8;	signed:1;
+	field:s64 d;	offset:40;	size:8;	signed:1;
+	field:s32 output;	offset:48;	size:4;	signed:1;
+
+print fmt: "thermal_zone_id=%d err=%d err_integral=%d p=%lld i=%lld d=%lld output=%d", REC->tz_id, REC->err, REC->err_integral, REC->p, REC->i, REC->d, REC->output
+name: tracing_mark_write
+ID: 32925
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:pid_t pid;	offset:8;	size:4;	signed:1;
+	field:char name[64];	offset:12;	size:64;	signed:1;
+	field:int start;	offset:76;	size:4;	signed:1;
+
+print fmt: "%c|%d|%s", "EB"[REC->start], REC->pid, REC->start ? REC->name : ""
+name: sched_wakeup
+ID: 32779
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:char pname[16];	offset:8;	size:16;	signed:1;
+	field:int pid;	offset:24;	size:4;	signed:1;
+	field:__s16 prio;	offset:28;	size:2;	signed:1;
+	field:__s8 target_cpu;	offset:30;	size:1;	signed:1;
+
+print fmt: "comm=%s pid=%d prio=%d target_cpu=%03d", REC->pname, REC->pid, REC->prio, REC->target_cpu
+name: sched_switch
+ID: 32771
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:char pname[16];	offset:8;	size:16;	signed:1;
+	field:int prev_tid;	offset:24;	size:4;	signed:1;
+	field:__s16 pprio;	offset:28;	size:2;	signed:1;
+	field:__u16 pstate;	offset:30;	size:2;	signed:0;
+	field:char nname[16];	offset:32;	size:16;	signed:1;
+	field:int next_tid;	offset:48;	size:4;	signed:1;
+	field:__s16 nprio;	offset:52;	size:2;	signed:1;
+	field:unsigned char ninfo[8];	offset:54;	size:8;	signed:0;
+
+print fmt: "prev_comm=%s prev_pid=%d prev_prio=%d prev_state=%s" " ==> next_comm=%s next_pid=%d next_prio=%d next_info=%s", REC->pname, REC->prev_tid, REC->pprio, hm_trace_tcb_state2str(REC->pstate), REC->nname, REC->next_tid, REC->nprio, hm_trace_tcb_unpack_schedinfo(REC->ninfo, sizeof(REC->ninfo))
+name: sched_blocked_reason
+ID: 32778
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:int pid;	offset:8;	size:4;	signed:1;
+	field:void * caller;	offset:16;	size:8;	signed:0;
+	field:bool iowait;	offset:24;	size:1;	signed:0;
+	field:__u64 delay;	offset:32;	size:8;	signed:0;
+	field:unsigned long offset;	offset:40;	size:8;	signed:0;
+	field:unsigned long size;	offset:48;	size:8;	signed:0;
+	field:char func_name[20];	offset:56;	size:20;	signed:1;
+	field:char mod_name[12];	offset:76;	size:12;	signed:1;
+
+print fmt: "pid=%d iowait=%d caller=%s+0x%lx/0x%lx[%s] delay=%llu", REC->pid, REC->iowait, REC->func_name, REC->offset, REC->size, REC->mod_name, REC->delay >> 10
+name: sched_wakeup_new
+ID: 32781
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:char pname[16];	offset:8;	size:16;	signed:1;
+	field:int pid;	offset:24;	size:4;	signed:1;
+	field:__s16 prio;	offset:28;	size:2;	signed:1;
+	field:__s8 target_cpu;	offset:30;	size:1;	signed:1;
+
+print fmt: "comm=%s pid=%d prio=%d target_cpu=%03d", REC->pname, REC->pid, REC->prio, REC->target_cpu
+name: dma_fence_emit
+ID: 33651
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:__data_loc char[] driver;	offset:8;	size:4;	signed:0;
+	field:__data_loc char[] timeline;	offset:12;	size:4;	signed:0;
+	field:unsigned int context;	offset:16;	size:4;	signed:0;
+	field:unsigned int seqno;	offset:20;	size:4;	signed:0;
+
+print fmt: "driver=%s timeline=%s context=%u seqno=%u", __get_str(driver), __get_str(timeline), REC->context, REC->seqno
+name: dma_fence_destroy
+ID: 33653
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:__data_loc char[] driver;	offset:8;	size:4;	signed:0;
+	field:__data_loc char[] timeline;	offset:12;	size:4;	signed:0;
+	field:unsigned int context;	offset:16;	size:4;	signed:0;
+	field:unsigned int seqno;	offset:20;	size:4;	signed:0;
+
+print fmt: "driver=%s timeline=%s context=%u seqno=%u", __get_str(driver), __get_str(timeline), REC->context, REC->seqno
+name: dma_fence_enable_signal
+ID: 33654
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:__data_loc char[] driver;	offset:8;	size:4;	signed:0;
+	field:__data_loc char[] timeline;	offset:12;	size:4;	signed:0;
+	field:unsigned int context;	offset:16;	size:4;	signed:0;
+	field:unsigned int seqno;	offset:20;	size:4;	signed:0;
+
+print fmt: "driver=%s timeline=%s context=%u seqno=%u", __get_str(driver), __get_str(timeline), REC->context, REC->seqno
+name: dma_fence_signaled
+ID: 33655
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:__data_loc char[] driver;	offset:8;	size:4;	signed:0;
+	field:__data_loc char[] timeline;	offset:12;	size:4;	signed:0;
+	field:unsigned int context;	offset:16;	size:4;	signed:0;
+	field:unsigned int seqno;	offset:20;	size:4;	signed:0;
+
+print fmt: "driver=%s timeline=%s context=%u seqno=%u", __get_str(driver), __get_str(timeline), REC->context, REC->seqno
+name: dma_fence_wait_end
+ID: 33657
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:__data_loc char[] driver;	offset:8;	size:4;	signed:0;
+	field:__data_loc char[] timeline;	offset:12;	size:4;	signed:0;
+	field:unsigned int context;	offset:16;	size:4;	signed:0;
+	field:unsigned int seqno;	offset:20;	size:4;	signed:0;
+
+print fmt: "driver=%s timeline=%s context=%u seqno=%u", __get_str(driver), __get_str(timeline), REC->context, REC->seqno
+name: dma_fence_wait_start
+ID: 33656
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:__data_loc char[] driver;	offset:8;	size:4;	signed:0;
+	field:__data_loc char[] timeline;	offset:12;	size:4;	signed:0;
+	field:unsigned int context;	offset:16;	size:4;	signed:0;
+	field:unsigned int seqno;	offset:20;	size:4;	signed:0;
+
+print fmt: "driver=%s timeline=%s context=%u seqno=%u", __get_str(driver), __get_str(timeline), REC->context, REC->seqno
+name: dma_fence_init
+ID: 33652
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:__data_loc char[] driver;	offset:8;	size:4;	signed:0;
+	field:__data_loc char[] timeline;	offset:12;	size:4;	signed:0;
+	field:unsigned int context;	offset:16;	size:4;	signed:0;
+	field:unsigned int seqno;	offset:20;	size:4;	signed:0;
+
+print fmt: "driver=%s timeline=%s context=%u seqno=%u", __get_str(driver), __get_str(timeline), REC->context, REC->seqno
+name: workqueue_execute_end
+ID: 33400
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:void * work;	offset:8;	size:8;	signed:0;
+	field:void * function;	offset:16;	size:8;	signed:0;
+
+print fmt: "work struct %p: function %ps", REC->work, REC->function
+name: workqueue_execute_start
+ID: 33399
+format:
+	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
+	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
+	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
+	field:int common_pid;	offset:4;	size:4;	signed:1;
+
+	field:void * work;	offset:8;	size:8;	signed:0;
+	field:void * function;	offset:16;	size:8;	signed:0;
+
+print fmt: "work struct %p: function %ps", REC->work, REC->function

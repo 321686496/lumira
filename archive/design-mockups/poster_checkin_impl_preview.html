@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>探店足迹海报 · Flutter 实现复刻核对稿</title>
+<style>
+  :root{
+    --page:#EAE3D8;
+    --sans:-apple-system,"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",sans-serif;
+    --serif:"Songti SC","STSong","Noto Serif SC","SimSun",serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--page);font-family:var(--sans);color:#4A4039;padding:36px 24px 80px;}
+  h1{text-align:center;font-size:15px;letter-spacing:4px;font-weight:600;color:#8A7E73;margin-bottom:6px;}
+  .sub{text-align:center;font-size:12px;color:#A29A8A;letter-spacing:1px;margin-bottom:34px;}
+  .row{display:flex;gap:40px;justify-content:center;align-items:flex-start;flex-wrap:wrap;margin-bottom:56px;}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:12px;}
+  .cell .cap{font-size:12px;letter-spacing:2px;color:#8A7E73;}
+  /* 画布按 320 逻辑 px 搭建，整体放大 2 倍便于核对 */
+  .stage{width:640px;height:1140px;position:relative;overflow:hidden;
+    box-shadow:0 24px 48px rgba(90,74,68,.18);}
+  .scaler{transform:scale(2);transform-origin:top left;width:320px;position:absolute;top:0;left:0;}
+
+  /* ---------- 占位照片 ---------- */
+  .ph{background:linear-gradient(135deg,#C8A98A,#8A6A4E);}
+  .ph2{background:linear-gradient(135deg,#A8B5A0,#5F7360);}
+  .ph3{background:linear-gradient(135deg,#D8B6A0,#9A6F5A);}
+  .ph4{background:linear-gradient(135deg,#B9A7C8,#6F5F86);}
+  .ph5{background:linear-gradient(135deg,#E2C9A0,#A98C4E);}
+
+  /* ================= 1. ckF 温柔手帐 ================= */
+  .ckF{width:320px;position:relative;overflow:hidden;border-radius:20.9px;
+    background:linear-gradient(160deg,#FFF9F2,#FFF3F1);
+    padding:19.7px 18.5px 16px;font-family:var(--sans);}
+  .ckF .dot{position:absolute;border-radius:50%;}
+  .ckF .d1{width:135.4px;height:135.4px;background:#FBE3DF;top:-36.9px;right:-30.8px;filter:blur(3.7px);}
+  .ckF .d2{width:110.8px;height:110.8px;background:#F4EEE0;bottom:-43.1px;left:-36.9px;filter:blur(3.7px);}
+  .ckF .brand{position:relative;display:flex;justify-content:space-between;align-items:center;}
+  .ckF .brand span{font-size:7.38px;font-weight:600;letter-spacing:.62px;color:#D9958D;}
+  .ckF .chip{background:rgba(255,255,255,.78);border-radius:999px;padding:3.69px 8.62px;
+    font-size:7.38px;color:#5B4A44;font-weight:400;}
+  .ckF .main{position:relative;margin-top:12.3px;width:283.1px;height:203.1px;border-radius:16px;overflow:hidden;}
+  .ckF .rate{position:absolute;left:9.85px;bottom:9.85px;background:rgba(255,255,255,.85);
+    border-radius:999px;padding:3.69px 8.62px;display:flex;align-items:center;gap:3.69px;}
+  .ckF .rate i{font-style:normal;font-size:9.85px;color:#F5B85A;}
+  .ckF .rate b{font-size:9.85px;color:#5B4A44;}
+  .ckF .name{margin-top:11.1px;font-size:16px;font-weight:700;letter-spacing:.31px;color:#5B4A44;}
+  .ckF .name small{font-size:8px;font-weight:500;color:#9A867E;margin-left:6px;}
+  .ckF .pills{margin-top:7.4px;display:flex;gap:6.15px;flex-wrap:wrap;}
+  .ckF .pill{background:rgba(255,255,255,.78);border-radius:999px;padding:3.08px 7.38px;font-size:7.38px;color:#5B4A44;}
+  .ckF .pill.r{color:#D9958D;} .ckF .pill.s{color:#F5B85A;}
+  .ckF .note{margin-top:9.85px;background:rgba(255,255,255,.78);border:1px solid rgba(255,255,255,.9);
+    border-radius:12.3px;padding:8.62px 11.1px;font-size:8.62px;line-height:1.9;color:#9A867E;}
+  .ckF .thumbs{margin-top:9.85px;display:flex;gap:6.15px;}
+  .ckF .thumbs div{width:66.2px;height:59.1px;border-radius:9.85px;overflow:hidden;}
+  .ckF .foot{margin-top:11.1px;display:flex;justify-content:space-between;align-items:center;
+    font-size:7px;letter-spacing:.62px;color:#9A867E;}
+  .ckF .foot b{color:#D9958D;font-weight:600;}
+
+  /* ================= 2. ckF2 奶油莫兰迪 ================= */
+  .ckF2{width:320px;background:#F6F1E9;padding:24.6px 27.1px 18.5px;font-family:var(--serif);}
+  .ckF2 .frame{position:relative;border:1px solid rgba(168,181,160,.35);padding:16px 12.3px 12.3px;}
+  .ckF2 .cn{position:absolute;width:9.85px;height:9.85px;border:1.23px solid #C98F78;}
+  .ckF2 .cn.tl{top:-1px;left:-1px;border-right:0;border-bottom:0;}
+  .ckF2 .cn.br{bottom:-1px;right:-1px;border-left:0;border-top:0;}
+  .ckF2 .eye{display:flex;align-items:center;justify-content:center;gap:6.15px;}
+  .ckF2 .eye i{display:block;width:14.8px;height:.62px;background:#C98F78;}
+  .ckF2 .eye span{font-size:7px;letter-spacing:3.08px;color:#B8A69B;text-align:center;}
+  .ckF2 .name{margin-top:8.62px;text-align:center;font-size:20.9px;font-weight:600;letter-spacing:2.46px;color:#4A4039;}
+  .ckF2 .meta{margin-top:8.62px;text-align:center;font-size:7.38px;letter-spacing:1.23px;color:#8A7E73;font-family:var(--sans);}
+  .ckF2 .meta em{font-style:normal;color:#C98F78;margin:0 4px;}
+  .ckF2 .main{margin-top:16px;width:241.2px;height:221.5px;border-radius:1.23px;overflow:hidden;}
+  .ckF2 .rate{margin-top:13.5px;display:flex;align-items:center;justify-content:center;gap:4.92px;color:#C98F78;}
+  .ckF2 .rate .st{font-size:9.23px;letter-spacing:1.23px;}
+  .ckF2 .rate .num{font-size:18.5px;font-weight:600;letter-spacing:1.23px;}
+  .ckF2 .rate .of{font-size:7.38px;letter-spacing:1.23px;}
+  .ckF2 .note{margin-top:11.1px;padding:8.62px 6.15px;font-size:8.62px;line-height:2;font-style:italic;
+    color:#8A7E73;text-align:center;border-top:1px solid rgba(168,181,160,.35);border-bottom:1px solid rgba(168,181,160,.35);}
+  .ckF2 .thumbs{margin-top:14.8px;display:flex;gap:7.38px;}
+  .ckF2 .thumbs div{width:54.8px;height:61.5px;border-radius:1.23px;overflow:hidden;}
+  .ckF2 .thumbs .more{border:1px dashed rgba(168,181,160,.35);display:flex;align-items:center;justify-content:center;
+    font-size:16px;color:#B8A69B;background:#FBF7EF;}
+  .ckF2 .foot{margin-top:16px;display:flex;justify-content:space-between;align-items:flex-end;font-family:var(--sans);}
+  .ckF2 .foot .l{font-size:7px;letter-spacing:1.23px;}
+  .ckF2 .foot .l b{color:#C98F78;font-weight:600;} .ckF2 .foot .l span{color:#B8A69B;}
+  .ckF2 .foot .r{font-size:7px;letter-spacing:.62px;color:#8A7E73;}
+
+  /* ================= 3. ckV2 鎏金画框 ================= */
+  .ckV2{width:320px;position:relative;background:#FDFBF7;font-family:var(--serif);
+    padding:17.8px 21.3px 15.4px;display:flex;flex-direction:column;align-items:center;}
+  .ckV2 .of{position:absolute;inset:8.3px;border:1px solid rgba(185,158,108,.45);}
+  .ckV2 .of::after{content:"";position:absolute;inset:1.78px;border:1px solid rgba(185,158,108,.28);}
+  .ckV2 .cn{position:absolute;width:17.8px;height:17.8px;border:1.78px solid #B08D4F;}
+  .ckV2 .cn.tl{top:3.56px;left:3.56px;border-right:0;border-bottom:0;}
+  .ckV2 .cn.br{bottom:3.56px;right:3.56px;border-left:0;border-top:0;}
+  .ckV2 .stamp{margin-top:13px;border:1px solid #C9A96E;border-radius:999px;padding:1.78px 9.48px;
+    font-size:7.11px;letter-spacing:2.37px;color:#B08D4F;}
+  .ckV2 .name{margin-top:8.3px;font-size:24.9px;font-weight:700;letter-spacing:2.37px;line-height:1.1;color:#3A3A37;text-align:center;}
+  .ckV2 .meta{margin-top:5.93px;font-size:8.3px;letter-spacing:1.19px;color:#6E6A60;text-align:center;}
+  .ckV2 .meta em{font-style:normal;color:#C9A96E;margin:0 4px;}
+  .ckV2 .date{margin-top:3.56px;font-size:7px;letter-spacing:1.78px;color:#8C877B;}
+  .ckV2 .main{margin-top:13px;width:260.7px;height:177.8px;position:relative;overflow:hidden;
+    clip-path:polygon(15.4px 0,100% 0,100% calc(100% - 15.4px),calc(100% - 15.4px) 100%,0 100%,0 15.4px);}
+  .ckV2 .main i{position:absolute;width:10.7px;height:10.7px;border:1.78px solid #C9A96E;}
+  .ckV2 .main .a{top:0;left:0;border-right:0;border-bottom:0;}
+  .ckV2 .main .b{bottom:0;right:0;border-left:0;border-top:0;}
+  .ckV2 .band{margin-top:8.3px;display:flex;gap:5.33px;}
+  .ckV2 .band div{position:relative;width:61.2px;height:56.9px;overflow:hidden;
+    clip-path:polygon(10.7px 0,100% 0,100% calc(100% - 10.7px),calc(100% - 10.7px) 100%,0 100%,0 10.7px);}
+  .ckV2 .band i{position:absolute;width:7.7px;height:7.7px;border:.95px solid #C9A96E;}
+  .ckV2 .band .a{top:0;left:0;border-right:0;border-bottom:0;}
+  .ckV2 .band .b{bottom:0;right:0;border-left:0;border-top:0;}
+  .ckV2 .info{margin-top:13px;width:260.7px;padding:9.48px 0;text-align:center;
+    border-top:1px solid rgba(185,158,108,.45);border-bottom:1px solid rgba(185,158,108,.45);}
+  .ckV2 .info .line1{display:flex;align-items:center;justify-content:center;}
+  .ckV2 .info .st{font-size:10.1px;color:#C9A96E;letter-spacing:1.19px;}
+  .ckV2 .info .num{font-size:10.7px;font-weight:700;color:#B08D4F;letter-spacing:.59px;margin-left:4.74px;}
+  .ckV2 .info .tag{margin-left:7.11px;border:1px solid #C9A96E;border-radius:999px;padding:1.19px 7.7px;
+    font-size:7.11px;letter-spacing:1.19px;color:#B08D4F;}
+  .ckV2 .info .note{margin:9.48px auto 0;width:237px;font-size:8.3px;line-height:2;font-style:italic;color:#6E6A60;}
+  .ckV2 .foot{margin-top:10.7px;width:277.3px;padding-top:10.7px;border-top:1px solid rgba(185,158,108,.45);
+    display:flex;justify-content:space-between;align-items:center;font-size:7.11px;letter-spacing:1.78px;color:#B08D4F;}
+  .ckV2 .foot small{font-size:7px;letter-spacing:.59px;color:#8C877B;}
+
+  /* ================= 4. ckM4 错落画廊 ================= */
+  .ckM4{width:320px;position:relative;background:#FDFBF7;font-family:var(--serif);padding:19.7px 20.9px 17.2px;}
+  .ckM4 .in{position:absolute;inset:7.38px;border:1px solid rgba(168,133,80,.38);}
+  .ckM4 .hero{display:flex;gap:13.5px;height:184.6px;}
+  .ckM4 .big{position:relative;width:152px;height:184.6px;overflow:hidden;}
+  .ckM4 .big i{position:absolute;top:0;left:0;width:9.85px;height:9.85px;border:.62px solid #A88550;
+    border-right:0;border-bottom:0;}
+  .ckM4 .side{width:112.6px;display:flex;flex-direction:column;justify-content:space-between;}
+  .ckM4 .eye{font-size:7px;letter-spacing:2.46px;color:#A29A8A;}
+  .ckM4 .rule{position:relative;height:4.92px;}
+  .ckM4 .rule i{position:absolute;left:2.15px;top:2.15px;width:20.9px;height:.62px;background:#C9A96E;}
+  .ckM4 .rule b{position:absolute;left:0;top:0;width:4.31px;height:4.31px;background:#FDFBF7;
+    border:.62px solid #C9A96E;transform:rotate(45deg);}
+  .ckM4 .name{margin-top:9.85px;font-size:24.6px;font-weight:600;letter-spacing:4.31px;line-height:1.15;color:#1A1A1A;}
+  .ckM4 .st{margin-top:8.62px;font-size:8px;color:#C9A96E;letter-spacing:1.23px;}
+  .ckM4 .score{margin-top:1.23px;font-size:14.8px;font-weight:600;color:#A88550;}
+  .ckM4 .meta{margin-top:8.62px;font-size:7px;letter-spacing:.62px;line-height:1.9;color:#5C5852;}
+  .ckM4 .tag{margin-top:3.69px;display:inline-block;border:1px solid #C9A96E;padding:1.23px 7.38px;
+    font-size:7px;letter-spacing:1.85px;color:#A88550;}
+  .ckM4 .gal{margin-top:13.5px;display:flex;gap:6.15px;align-items:flex-start;}
+  .ckM4 .gal .g{position:relative;width:64.9px;height:73.9px;overflow:hidden;}
+  .ckM4 .gal .g i{position:absolute;top:0;left:0;width:7.38px;height:7.38px;border:.62px solid #A88550;
+    border-right:0;border-bottom:0;}
+  .ckM4 .gal .g1{margin-top:16px;} .ckM4 .gal .g2{margin-top:0;}
+  .ckM4 .gal .g3{margin-top:8.62px;} .ckM4 .gal .g4{margin-top:3.69px;}
+  .ckM4 .gal .more{border:1px solid #C9A96E;background:#FDFBF7;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;color:#A88550;}
+  .ckM4 .gal .more b{font-size:14.8px;font-weight:400;}
+  .ckM4 .gal .more span{font-size:7px;letter-spacing:1.23px;margin-top:1.23px;}
+  .ckM4 .note{margin-top:14.8px;padding:8.62px 1.23px;font-size:8px;line-height:2.1;font-style:italic;
+    color:#5C5852;text-align:justify;
+    border-top:1px solid rgba(168,133,80,.38);border-bottom:1px solid rgba(168,133,80,.38);}
+  .ckM4 .foot{margin-top:13.5px;display:flex;justify-content:space-between;align-items:center;color:#A29A8A;}
+  .ckM4 .foot .l{font-size:7px;letter-spacing:2.46px;color:#A88550;}
+  .ckM4 .foot .l small{font-size:7px;letter-spacing:1.23px;color:#A29A8A;}
+  .ckM4 .foot .r{font-size:7px;letter-spacing:1.85px;}
+</style>
+</head>
+<body>
+  <h1>探店足迹分享海报 · Flutter 实现复刻核对稿</h1>
+  <div class="sub">画布逻辑宽 320px（等比放大 2 倍显示）· 数值与 checkin_poster_styles.dart 一一对应</div>
+
+  <div class="row">
+    <div class="cell">
+      <div class="stage"><div class="scaler">
+        <div class="ckF">
+          <span class="dot d1"></span><span class="dot d2"></span>
+          <div class="brand"><span>如画 · LUMIRA</span><span class="chip">探店足迹</span></div>
+          <div class="main ph"><div class="rate"><i>★</i><b>5.0</b></div></div>
+          <div class="name">屿见咖啡<small>愚园路 120 号</small></div>
+          <div class="pills">
+            <span class="pill">2026 · 08 · 29</span>
+            <span class="pill r">咖啡</span>
+            <span class="pill s">★★★★★</span>
+          </div>
+          <div class="note">临窗的一杯拿铁，配上午后斜阳，是这座城市里最温柔、最安静的时刻，想一直待下去。</div>
+          <div class="thumbs">
+            <div class="ph2"></div><div class="ph3"></div><div class="ph4"></div><div class="ph5"></div>
+          </div>
+          <div class="foot"><span>如画 LUMIRA · 探店足迹</span><b>每一帧都是心动</b></div>
+        </div>
+      </div></div>
+      <div class="cap">ckF 温柔手帐 → poster_mockup_checkin_f.html</div>
+    </div>
+
+    <div class="cell">
+      <div class="stage"><div class="scaler">
+        <div class="ckF2">
+          <div class="frame">
+            <span class="cn tl"></span><span class="cn br"></span>
+            <div class="eye"><i></i><span>STORE EXPLORATION · 探店足迹</span><i></i></div>
+            <div class="name">屿见咖啡</div>
+            <div class="meta">愚园路 120 号<em>·</em>2026 · 08 · 29<em>·</em>咖啡</div>
+            <div class="main ph"></div>
+            <div class="rate"><span class="st">★★★★★</span><span class="num">5.0</span><span class="of">/ 5</span></div>
+            <div class="note">临窗的拿铁与午后斜阳，克制而不喧嚣，是这条街最安静的浪漫。</div>
+            <div class="thumbs">
+              <div class="ph2"></div><div class="ph3"></div><div class="ph4"></div><div class="more">+</div>
+            </div>
+          </div>
+          <div class="foot">
+            <span class="l"><b>如画</b><span> LUMIRA</span></span>
+            <span class="r">LUMIRA · 探店足迹</span>
+          </div>
+        </div>
+      </div></div>
+      <div class="cap">ckF2 奶油莫兰迪 → poster_mockup_checkin_f2.html</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="cell">
+      <div class="stage"><div class="scaler">
+        <div class="ckV2">
+          <span class="of"></span><span class="cn tl"></span><span class="cn br"></span>
+          <div class="stamp">探 店 足 迹</div>
+          <div class="name">屿见咖啡</div>
+          <div class="meta">愚园路 120 号<em>·</em>咖啡</div>
+          <div class="date">2026 · 08 · 29</div>
+          <div class="main ph"><i class="a"></i><i class="b"></i></div>
+          <div class="band">
+            <div class="ph2"><i class="a"></i><i class="b"></i></div>
+            <div class="ph3"><i class="a"></i><i class="b"></i></div>
+            <div class="ph4"><i class="a"></i><i class="b"></i></div>
+            <div class="ph5"><i class="a"></i><i class="b"></i></div>
+          </div>
+          <div class="info">
+            <div class="line1">
+              <span class="st">★★★★★</span><span class="num">5.0</span><span class="tag">咖啡</span>
+            </div>
+            <div class="note">临窗的一杯拿铁，配上午后斜阳，是这座城市里最安静的时刻。</div>
+          </div>
+          <div class="foot"><span>如 画 · LUMIRA</span><span>探 店 足 迹 <small>LUMIRA</small></span></div>
+        </div>
+      </div></div>
+      <div class="cap">ckV2 鎏金画框 → poster_mockup_checkin_v2.html</div>
+    </div>
+
+    <div class="cell">
+      <div class="stage"><div class="scaler">
+        <div class="ckM4">
+          <span class="in"></span>
+          <div class="hero">
+            <div class="big ph"><i></i></div>
+            <div class="side">
+              <div class="eye">STORE DIARY</div>
+              <div class="rule"><i></i><b></b></div>
+              <div>
+                <div class="name">屿见咖啡</div>
+                <div class="st">★★★★★</div>
+                <div class="score">5.0</div>
+                <div class="meta">愚园路 120 号<br/>2026 · 08 · 29</div>
+                <span class="tag">咖啡</span>
+              </div>
+            </div>
+          </div>
+          <div class="gal">
+            <div class="g g1 ph2"><i></i></div>
+            <div class="g g2 ph3"><i></i></div>
+            <div class="g g3 ph4"><i></i></div>
+            <div class="g g4 more"><b>＋</b><span>更多</span></div>
+          </div>
+          <div class="note">临窗的拿铁，午后斜阳正好。出品安静而笃定，值得反复抵达。</div>
+          <div class="foot">
+            <span class="l">如画 · 探店足迹 <small>LUMIRA</small></span>
+            <span class="r">LUMIRA · 如画</span>
+          </div>
+        </div>
+      </div></div>
+      <div class="cap">ckM4 错落画廊 → poster_mockup_checkin_m4.html</div>
+    </div>
+  </div>
+</body>
+</html>
