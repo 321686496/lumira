@@ -6,7 +6,7 @@ import { Controller, Post, Get, Param, Req, UseGuards, BadRequestException, NotF
 import type { FastifyRequest } from 'fastify';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
 import { UploadFile } from '../templates/admin-templates.service';
-import { AiAnalyzeService } from './ai-analyze.service';
+import { AiAnalyzeTaskService } from './ai-analyze-task.service';
 import { AiImageTaskService } from './ai-image-task.service';
 import { AiSilhouetteService } from './ai-generate-silhouette.service';
 import { AiSilhouetteTaskService } from './ai-silhouette-task.service';
@@ -15,21 +15,38 @@ import { AiSilhouetteTaskService } from './ai-silhouette-task.service';
 @UseGuards(AdminAuthGuard)
 export class AiTemplatesController {
   constructor(
-    private readonly aiAnalyzeService: AiAnalyzeService,
+    private readonly aiAnalyzeTaskService: AiAnalyzeTaskService,
     private readonly aiImageTaskService: AiImageTaskService,
     private readonly aiSilhouetteService: AiSilhouetteService,
     private readonly aiSilhouetteTaskService: AiSilhouetteTaskService,
   ) {}
 
-  /** AI 识别 → 模板草稿（multipart：image 文件与 text/textDesc 文本至少一项；creationReq/poseCount 可选） */
+  /**
+   * AI 识别 → 模板草稿（异步任务式：multipart：image 文件与 text/textDesc 文本至少一项；creationReq/poseCount 可选）
+   * 返回 { taskId }，前端轮询 GET ai-analyze/tasks/:taskId 获取结果（避免同步长请求超时）。
+   */
   @Post('ai-analyze')
   async analyze(@Req() req: FastifyRequest) {
     const { image, text, textDesc, creationReq, poseCount } = await parseAiMultipart(req);
-    return this.aiAnalyzeService.analyze(image, text ?? textDesc ?? undefined, {
+    return this.aiAnalyzeTaskService.submit(image, text ?? textDesc ?? undefined, {
       textDesc,
       creationReq,
       poseCount,
     });
+  }
+
+  /** 查询识别任务状态（done 带 draft/warnings，error 带 error；任务不存在则 404） */
+  @Get('ai-analyze/tasks/:taskId')
+  async getAnalyzeTask(@Param('taskId') taskId: string) {
+    const task = this.aiAnalyzeTaskService.get(taskId);
+    if (!task) throw new NotFoundException('Analyze task not found');
+    return {
+      taskId: task.id,
+      status: task.status,
+      draft: task.result?.draft ?? null,
+      warnings: task.result?.warnings ?? [],
+      error: task.error,
+    };
   }
 
   /**

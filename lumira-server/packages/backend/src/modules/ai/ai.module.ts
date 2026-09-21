@@ -10,6 +10,7 @@ import { AiConfigController } from './ai-config.controller';
 import { AiConfigService } from './ai-config.service';
 import { AiTemplatesController } from './ai-templates.controller';
 import { AiAnalyzeService } from './ai-analyze.service';
+import { AiAnalyzeTaskService } from './ai-analyze-task.service';
 import { AiGenerateImageService } from './ai-generate-image.service';
 import { AiImageTaskService } from './ai-image-task.service';
 import { AiSilhouetteService } from './ai-generate-silhouette.service';
@@ -27,7 +28,7 @@ import { RenderApproxService } from './render-approx.service';
   imports: [DatabaseModule],
   controllers: [AiConfigController, AiTemplatesController],
   providers: [
-    AiConfigService, AiAnalyzeService, AiGenerateImageService, AiImageTaskService, AiSilhouetteService, AiSilhouetteTaskService,
+    AiConfigService, AiAnalyzeService, AiAnalyzeTaskService, AiGenerateImageService, AiImageTaskService, AiSilhouetteService, AiSilhouetteTaskService,
     // Task 9 Agentic 管线工具 + 中枢（稳定性：getActiveConfig 缺 search 配置时 research 自动降级关闭）
     TrendResearchService, ImageDescribeService, PoseRefSheetService, ParamValidateService, ImageScoreService,
     AiOrchestratorService,

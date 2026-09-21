@@ -12,8 +12,8 @@ import type {
   AiConfigTestTarget,
   UpdateAiConfigPayload,
   AiConfigTestResult,
-  AiAnalyzeResult,
-  AiImageResult,
+  AiAnalyzeTaskId,
+  AiAnalyzeStatusResult,
   AiImageBatchTaskId,
   AiBatchStatusResult,
   AiImageTaskId,
@@ -57,15 +57,24 @@ export async function testAiConfigAction(
   }
 }
 
-/** formData：image 文件（示例图，可选）+ text 文字描述（可选，至少其一） */
-export async function aiAnalyzeAction(
+/** formData：image 文件（示例图，可选）+ text 文字描述（可选，至少其一）→ 提交异步识别任务返回 taskId */
+export async function aiAnalyzeStartAction(
   formData: FormData,
-): Promise<AiAnalyzeResult | { error: string }> {
+): Promise<AiAnalyzeTaskId | { error: string }> {
   try {
-    const result = await api.aiAnalyze(formData);
-    // 兜底：后端/网关异常导致空值时不返回 undefined，否则调用方 `'error' in result` 会崩
-    if (!result) return { error: '识别结果为空，请重试' };
-    return result;
+    return await api.aiAnalyzeStart(formData);
+  } catch (e) {
+    if (e instanceof UnauthenticatedError) redirect('/login');
+    return { error: (e as Error).message };
+  }
+}
+
+/** 轮询识别异步任务状态（done 带 draft/warnings，error 带 error） */
+export async function aiAnalyzeStatusAction(
+  taskId: string,
+): Promise<AiAnalyzeStatusResult | { error: string }> {
+  try {
+    return await api.aiAnalyzeStatus(taskId);
   } catch (e) {
     if (e instanceof UnauthenticatedError) redirect('/login');
     return { error: (e as Error).message };
