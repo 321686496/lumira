@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>如画 LUMIRA · 邀请海报（全出血浮层 · 新方案）</title>
+<style>
+  /* ===== PosterPalette（poster_common.dart 1:1） ===== */
+  :root{
+    --surface:#FDFBF7; --surfaceAlt:#F6F1E8;
+    --gold:#C9A96E; --goldDeep:#B08D4F; --goldSoft:#E8CFA4;
+    --ink:#1A1A1A; --text2:#6B645C; --text3:#8E867B;
+    --line:rgba(201,169,110,.32);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+    background:linear-gradient(180deg,#ECE7DC,#E5E0D4); padding:48px 16px 64px;
+    font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif; -webkit-font-smoothing:antialiased;}
+  .caption{font-size:12px; color:#8A8478; letter-spacing:1.5px; text-align:center; line-height:1.9; max-width:860px;}
+
+  .scale-wrap{width:420px; height:746px; position:relative;}
+  /* PosterCanvas：300×533.33（9:16）· 金色细边 · 圆角 20 */
+  .poster{position:absolute; left:0; top:0; width:300px; height:533.33px;
+    transform:scale(1.4); transform-origin:top left; overflow:hidden; border-radius:20px;
+    background:var(--surface); position:relative;
+    box-shadow:0 40px 90px -36px rgba(40,28,16,.6);
+    border:1px solid var(--line);}
+
+  /* ===== 满幅照片（s3 全出血） ===== */
+  .photo{position:absolute; inset:0;}
+  .photo img{width:100%; height:100%; object-fit:cover; display:block;}
+  /* PosterScrim：底部压暗渐变（叠照片通用遮罩） */
+  .photo::after{content:""; position:absolute; inset:0;
+    background:linear-gradient(180deg,rgba(0,0,0,.10) 0%,rgba(0,0,0,0) 22%,rgba(0,0,0,0) 34%,rgba(0,0,0,.46) 62%,rgba(0,0,0,.66) 100%);}
+
+  /* ===== PosterBrandOnPhoto（左上，白字+投影） ===== */
+  .brand{position:absolute; top:20px; left:22px; z-index:3;
+    display:flex; align-items:center; gap:8px;
+    text-shadow:0 1px 6px rgba(0,0,0,.4);}
+  .brand .en{font-family:Georgia,serif; font-size:11px; font-weight:600; letter-spacing:4px; color:#fff; line-height:1.2;}
+  .brand .zh{font-size:10px; letter-spacing:2px; color:rgba(255,255,255,.72); line-height:1.2;}
+  /* 照片右上角：Invitation 邀请函小字 */
+  .tag{position:absolute; top:22px; right:22px; z-index:3;
+    font-family:Georgia,serif; font-style:italic; font-size:9px; letter-spacing:2.5px;
+    color:rgba(255,255,255,.85); line-height:1.2; text-shadow:0 1px 6px rgba(0,0,0,.4);}
+
+  /* ===== 底部信息浮层（左对齐，s3 结构） ===== */
+  .info{position:absolute; left:0; right:0; bottom:0; z-index:3;
+    padding:0 24px 18px; display:flex; flex-direction:column; align-items:flex-start;}
+
+  /* kicker（goldSoft） */
+  .kicker{font-size:9.5px; font-weight:600; letter-spacing:4px; color:var(--goldSoft); line-height:1.2;}
+
+  /* ① 口号：白色衬线大字 */
+  .title{margin-top:9px; font-family:"Noto Serif SC","Songti SC",STSong,Georgia,serif;
+    font-size:28px; font-weight:700; letter-spacing:2px; line-height:1.24; color:#fff;
+    text-shadow:0 2px 14px rgba(0,0,0,.35);}
+  .title em{font-style:normal; color:var(--goldSoft);}
+
+  /* ② 痛点：一行（金Soft 分隔） */
+  .pains{margin-top:10px; font-size:10px; letter-spacing:1.2px; color:rgba(255,255,255,.85); line-height:1.5;
+    text-shadow:0 1px 8px rgba(0,0,0,.4);}
+  .pains i{font-style:normal; color:var(--goldSoft); padding:0 3px;}
+
+  /* ③ 邀请人：引言 + 作者行（白） */
+  .inviter{margin-top:11px; display:flex; align-items:center; gap:9px;}
+  .ava{width:24px; height:24px; border-radius:50%; flex:none;
+    background:linear-gradient(135deg,var(--gold),#8E867B);
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-size:10px; font-weight:600; line-height:1;
+    box-shadow:0 1px 6px rgba(0,0,0,.35);}
+  .inviter .q{font-family:"Noto Serif SC","Songti SC",serif; font-size:11px; font-weight:600;
+    letter-spacing:.5px; color:rgba(255,255,255,.92); line-height:1.45;
+    text-shadow:0 1px 8px rgba(0,0,0,.4);}
+  .inviter .q b{color:var(--goldSoft); font-weight:700;}
+
+  /* ④⑤ 白卡行动区（s3 白卡 .94 + QrTip） */
+  .card{margin-top:13px; width:100%; background:rgba(255,255,255,.94); border-radius:14px;
+    padding:12px 14px; display:flex; align-items:center; gap:13px;}
+  .card .col{flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-start;}
+  .cap{font-size:8.5px; font-weight:600; letter-spacing:3px; color:var(--goldDeep); line-height:1.2;}
+  .numrow{margin-top:5px; display:flex; align-items:baseline; gap:3px;}
+  .plus{font-family:Georgia,serif; font-size:14px; font-weight:700; color:var(--goldDeep);}
+  .num{font-family:Georgia,serif; font-size:28px; font-weight:700; color:var(--goldDeep); line-height:1;}
+  .unit{font-size:10.5px; font-weight:600; color:var(--goldDeep); letter-spacing:1px;}
+  .use{margin-top:6px; font-size:9px; letter-spacing:.5px; color:var(--text3); line-height:1.4;}
+  .codeline{margin-top:6px; display:flex; align-items:baseline; gap:7px;}
+  .codeline .label{font-size:8px; letter-spacing:2px; color:var(--text3);}
+  .codeline .code{font-family:Georgia,serif; font-size:14px; font-weight:700; letter-spacing:3px; color:var(--ink);}
+  .codeline .scan{font-size:8.5px; letter-spacing:1px; color:var(--text3);}
+  .card .qr{flex:none; width:66px; height:66px; padding:5px; border-radius:9px;
+    background:var(--surfaceAlt); border:1px solid var(--line);}
+  .card .qr img{width:100%; height:100%; display:block;}
+
+  /* PosterFootOnPhoto（白28 上边线） */
+  .foot{margin-top:13px; width:100%; padding-top:11px;
+    border-top:1px solid rgba(255,255,255,.28);
+    display:flex; align-items:center;}
+  .foot .en{font-family:Georgia,serif; font-size:10px; font-weight:600; letter-spacing:3px; color:var(--goldSoft); line-height:1.2;}
+  .foot .zh{font-size:10px; color:rgba(255,255,255,.75); line-height:1.2; margin-left:4px;}
+  .foot .slogan{margin-left:auto; font-size:9px; letter-spacing:1px; color:rgba(255,255,255,.65); line-height:1.2;}
+</style>
+</head>
+<body>
+  <div class="scale-wrap">
+    <div class="poster">
+      <!-- 满幅成片 + 底部压暗 -->
+      <div class="photo">
+        <img src="https://picsum.photos/seed/lumira-invite-hero/600/1067.jpg" alt="template result"/>
+      </div>
+
+      <!-- 品牌行（压图） -->
+      <div class="brand">
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1.2 4.2V1.2h3M10.8 1.2h3v3M13.8 10.8v3h-3M4.2 13.8h-3v-3" stroke="#E8CFA4" stroke-width="1.4" stroke-linecap="round"/></svg>
+        <span class="en">LUMIRA</span>
+        <span class="zh">如画</span>
+      </div>
+      <div class="tag">Invitation</div>
+
+      <!-- 底部信息浮层 -->
+      <div class="info">
+        <!-- kicker -->
+        <div class="kicker">邀请好友 · 一起出片</div>
+
+        <!-- ① 口号 -->
+        <div class="title">不会拍照？<br/><em>套个模板</em>就会</div>
+
+        <!-- ② 痛点 -->
+        <div class="pains">调参数<i>·</i>摆姿势<i>·</i>找角度<i>·</i>照片普通，模板都替你配好</div>
+
+        <!-- ③ 邀请人 -->
+        <div class="inviter">
+          <div class="ava">满</div>
+          <div class="q"><b>@小满</b> 邀你加入 · 「我用它拍出了最近最满意的照片」</div>
+        </div>
+
+        <!-- ④⑤ 白卡：奖励 + 用处 + 二维码 -->
+        <div class="card">
+          <div class="col">
+            <div class="cap">新 人 礼</div>
+            <div class="numrow"><span class="plus">+</span><span class="num">30</span><span class="unit">积分 · 双方同得</span></div>
+            <div class="use">积分可解锁精美模板</div>
+            <div class="codeline">
+              <span class="label">邀请码</span>
+              <span class="code">K2A9XQ</span>
+              <span class="scan">长按识别领取</span>
+            </div>
+          </div>
+          <div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=K2A9XQ&margin=0" alt="QR" crossorigin="anonymous"/></div>
+        </div>
+
+        <!-- 落款（压图） -->
+        <div class="foot">
+          <span class="en">LUMIRA</span>
+          <span class="zh">· 如画</span>
+          <span class="slogan">如你所见，皆成画卷</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="caption">
+    新方案 · App「全出血浮层（s3）」海报语言：满幅成片 + 底部压暗渐变（PosterScrim）+ 左对齐信息浮层 + 白卡行动区 + 压图落款<br/>
+    内容五块：口号（白衬线 + goldSoft 强调）· 痛点一行（金Soft 分隔）· 邀请人（头像 + 证言一行）· 新人礼 +30 积分双方同得 ·
+    积分可解锁精美模板（小字）· 邀请码 + 二维码（K2A9XQ 可被扫一扫识别）<br/>
+    画布 300×533.33（9:16）· 色板 PosterPalette · 照片/昵称/邀请码为占位，接入取真实数据 · 预选方案见 poster_mockup_invite_brand.html
+  </div>
+</body>
+</html>
