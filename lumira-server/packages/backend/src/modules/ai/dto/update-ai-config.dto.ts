@@ -111,13 +111,19 @@ export class UpdateAiConfigDto {
   @MaxLength(255)
   searchApiKey?: string;
 
-  /** 启用的搜索来源数组（bing/vendor/baidu/qwen）；缺省 = 沿用原值 */
+  /** 启用的搜索来源数组（searxng/vendor/baidu/qwen）；缺省 = 沿用原值 */
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(3)
   @ArrayNotEmpty()
-  @IsIn(['bing', 'vendor', 'baidu', 'qwen'], { each: true })
+  @IsIn(['searxng', 'vendor', 'baidu', 'qwen'], { each: true })
   searchSources?: string[];
+
+  /** SearXNG 站点限定（可选，如 xiaohongshu.com / v.douyin.com）；空串/缺省 = 全站搜索 */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  searchSite?: string;
 
   /** 迭代上限（预算护栏，1~3）；缺省 = 沿用原值 */
   @IsOptional()
