@@ -110,27 +110,52 @@ function TraceTab({ entries }: { entries: AiAnalyzeTraceEntry[] }) {
       </p>
     );
   }
+
+  const isRefine = (s: string) => s === 'draftRefine';
+
   return (
     <ol className="relative space-y-4 border-l pl-6">
-      {entries.map((e, i) => (
-        <li key={i} className="relative">
-          <span className="absolute -left-[29px] top-1.5 h-3 w-3 rounded-full border-2 border-background bg-primary" />
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-mono font-semibold">{e.step}</span>
-            {e.tool && (
-              <Badge variant="outline" className="font-mono">
-                {e.tool}
-              </Badge>
+      {entries.map((e, i) => {
+        const refine = isRefine(e.step);
+        return (
+          <li
+            key={i}
+            className={cn(
+              'relative rounded-md border px-3 py-2.5',
+              refine && 'border-amber-300 bg-amber-50 ring-1 ring-amber-200',
             )}
-            {typeof e.score === 'number' && (
-              <Badge variant={e.score >= 60 ? 'secondary' : 'destructive'} className="font-mono">
-                评分 {e.score}
-              </Badge>
-            )}
-          </div>
-          <p className="mt-0.5 text-sm text-muted-foreground">{e.resultBrief}</p>
-        </li>
-      ))}
+          >
+            <span
+              className={cn(
+                'absolute -left-[33px] top-4 h-3 w-3 rounded-full border-2 border-background',
+                refine ? 'bg-amber-500 ring-2 ring-amber-300' : 'bg-primary',
+              )}
+            />
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-mono font-semibold">{e.step}</span>
+              {e.tool && (
+                <Badge
+                  variant={refine ? 'default' : 'outline'}
+                  className="font-mono"
+                >
+                  {e.tool}
+                </Badge>
+              )}
+              {refine && (
+                <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-100">
+                  评审修订
+                </Badge>
+              )}
+              {typeof e.score === 'number' && (
+                <Badge variant={e.score >= 60 ? 'secondary' : 'destructive'} className="font-mono">
+                  评分 {e.score}
+                </Badge>
+              )}
+            </div>
+            <p className="mt-0.5 text-sm text-muted-foreground">{e.resultBrief}</p>
+          </li>
+        );
+      })}
     </ol>
   );
 }
