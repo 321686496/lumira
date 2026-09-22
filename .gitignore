@@ -89,3 +89,6 @@ scripts/results/
 # 海报/滤镜诊断截图与失败产物
 /lumira_app_flutter/test/diag_*.png
 /lumira_app_flutter/test/failures/
+
+# 审核问题排查材料（trace/hilog/录屏等调试文件，本地保留不入库）
+/审核问题/
