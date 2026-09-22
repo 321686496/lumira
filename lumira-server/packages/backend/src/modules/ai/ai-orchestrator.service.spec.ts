@@ -181,7 +181,7 @@ describe('AiOrchestratorService.run', () => {
       };
     })();
 
-    const res = await service.service.run({ text: '奶油风人像', poseCount: 1 }, { categories: CATEGORIES });
+    const res = await service.service.run({ imageBase64: 'aGk=', imageMime: 'image/jpeg', text: '奶油风人像', poseCount: 1 }, { categories: CATEGORIES });
 
     expect(service.score.score).toHaveBeenCalledTimes(1); // 不空转
     expect(service.draftRefine.refine).toHaveBeenCalledTimes(1);
@@ -196,5 +196,16 @@ describe('AiOrchestratorService.run', () => {
     expect(describe.describe).not.toHaveBeenCalled();
     expect(poseRefSheet.generate).toHaveBeenCalled();
     expect(res.trace.some((t) => t.step === 'describe' && String(t.resultBrief).includes('skip'))).toBe(true);
+  });
+
+  it('无图 → 跳过 LLM 评分（skip-imageScore），不调用 score 与 refine，直接定稿', async () => {
+    const { service, score, draftRefine, optsRun } = build();
+
+    const res = await service.run({ text: '奶油风人像', poseCount: 1 }, optsRun);
+
+    expect(score.score).not.toHaveBeenCalled();
+    expect(draftRefine.refine).not.toHaveBeenCalled();
+    expect(res.trace.some((t) => t.step === 'imageScore' && String(t.resultBrief).includes('skip'))).toBe(true);
+    expect(res.draft).toBeDefined();
   });
 });
