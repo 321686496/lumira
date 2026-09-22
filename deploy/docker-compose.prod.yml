@@ -20,6 +20,7 @@
 #                              例：https://lumira.iwtle.top
 #                              未设置时后端会回退到 http://localhost:3000，
 #                              导致 App 端图片加载失败（详见 AGENTS.md 部署章节）
+#   SEARXNG_SECRET=...        （可空，SearXNG 实例密钥；未配置时容器每次重启自动生成新 secret，仅影响实例状态保持，建议配置）
 
 version: "3.8"
 
@@ -105,6 +106,21 @@ services:
     command: redis-server --appendonly yes
     volumes:
       - ./data/redis:/data
+    networks:
+      - lumira-net
+
+  # ---- SearXNG 元搜索服务（2026-09，研究管线免费搜索源）----
+  # 后端经内部网络访问 http://lumira-searxng:8080，不暴露端口到宿主机。
+  # settings.yml 由仓库 deploy/searxng/ 提供（compose 运行目录下 repo/ 为仓库克隆，CI 无需额外同步）。
+  # 服务器 .env 需新增：SEARXNG_SECRET=<openssl rand -hex 32>
+  lumira-searxng:
+    image: searxng/searxng:latest
+    restart: always
+    environment:
+      - SEARXNG_SECRET=${SEARXNG_SECRET}
+      - SEARXNG_BASE_URL=http://lumira-searxng:8080
+    volumes:
+      - ./repo/deploy/searxng/settings.yml:/etc/searxng/settings.yml:ro
     networks:
       - lumira-net
 

@@ -1,0 +1,24 @@
+# SearXNG 配置（研究管线免费搜索源）
+# 卷挂载：./repo/deploy/searxng/settings.yml:/etc/searxng/settings.yml:ro
+# 要点：开启 JSON 输出（format=json）；引擎限定为国内可访问集（排除被墙的 Google 等）；
+#       内部专用（limiter 关闭、非 public instance），不暴露端口到公网。
+use_default_settings: true
+general:
+  instance_name: Lumira Search
+search:
+  formats:
+    - html
+    - json
+  safe_search: 0
+server:
+  limiter: false
+  public_instance: false
+engines:
+  - name: bing
+    disabled: false
+  - name: duckduckgo
+    disabled: false
+  - name: qwant
+    disabled: false
+  - name: baidu
+    disabled: false
