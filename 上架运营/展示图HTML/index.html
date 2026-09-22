@@ -407,30 +407,36 @@
   <div class="cap"><b>⑦ 情感·分享</b><span>1080×1920</span></div>
   <div class="cell"><div class="artboard" style="background:linear-gradient(165deg,#FAF7F2,#F1E9DD 60%,#FAF7F2);">
     <div class="label">SCREEN 7 / 8</div>
-    <div style="position:absolute;top:56px;left:56px;right:56px;text-align:left;">
+    <div style="position:absolute;top:56px;left:56px;right:56px;">
       <div class="big-title" style="font-size:60px;">好看的照片，忍不住想分享</div>
       <div class="sub-title">一键生成专属分享海报</div>
     </div>
-    <div style="position:absolute;top:360px;left:64px;right:64px;display:flex;align-items:center;justify-content:center;">
-      <div style="width:820px;border-radius:34px;overflow:hidden;box-shadow:0 40px 80px rgba(60,50,40,.32);position:relative;">
-        <div class="pic" style="height:960px;background-image:url('https://picsum.photos/seed/lumira-share/820/1000');"></div>
-        <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(30,22,14,.45),transparent 45%);"></div>
-        <div style="position:absolute;inset:0;padding:30px;display:flex;flex-direction:column;justify-content:flex-end;">
-          <div style="border:3px dashed rgba(255,255,255,.7);border-radius:18px;display:flex;justify-content:space-between;align-items:flex-end;padding:22px;">
-            <div>
-              <div style="font-size:42px;font-weight:800;color:#fff;text-shadow:0 3px 14px rgba(0,0,0,.45);">秋日·咖啡午后</div>
-              <div style="font-size:22px;color:rgba(255,255,255,.9);margin-top:8px;">☀ 一键海报 · 扫码拍同款</div>
-            </div>
-            <div style="width:150px;height:150px;background:#fff;border-radius:16px;display:grid;place-items:center;">
-              <div style="width:112px;height:112px;background:repeating-conic-gradient(#1A1A1A 0 25%,#fff 0 50%);background-size:23px 23px;border:5px solid #fff;border-radius:5px;"></div>
+    <!-- 主次二分：左=手机(抽屉截图) 右=单张生成海报 -->
+    <!-- ↓↓↓ 替换真实素材：把下面两个 background-image url 换成你的真机截图/海报 ↓↓↓ -->
+    <div style="position:absolute;top:360px;left:34px;display:flex;align-items:flex-end;gap:60px;">
+      <!-- 手机：分享抽屉截图 -->
+      <div class="phone" style="position:relative;z-index:1;width:520px;">
+        <div class="screen" style="width:496px;height:1040px;">
+          <div class="notch"></div>
+          <!-- 换成：照片详情页「分享」弹出抽屉截图 -->
+          <div class="pic" style="position:absolute;inset:0;background-image:url('https://picsum.photos/seed/share-drawer/500/1060');"></div>
+          <!-- 抽屉底部：分享海报入口（占位，可删） -->
+          <div style="position:absolute;left:0;right:0;bottom:0;padding:20px 20px 30px;">
+            <div style="background:rgba(250,247,242,.98);border-radius:22px;padding:22px 24px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 -6px 24px rgba(60,50,40,.10);">
+              <div>
+                <div style="font-size:26px;font-weight:800;color:var(--ink);">分享照片海报</div>
+                <div style="font-size:17px;color:var(--ink-2);margin-top:4px;">一键生成 · 保存/分享</div>
+              </div>
+              <div style="width:58px;height:58px;border-radius:18px;background:var(--gold);display:grid;place-items:center;color:#fff;font-size:26px;">›</div>
             </div>
           </div>
         </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:20px;margin-left:20px;">
-        <div class="pic" style="width:128px;height:202px;border-radius:18px;background-image:url('https://picsum.photos/seed/p1/260/410');border:3px solid #fff;box-shadow:0 16px 32px rgba(60,50,40,.25);"></div>
-        <div class="pic" style="width:128px;height:202px;border-radius:18px;background-image:url('https://picsum.photos/seed/p2/260/410');border:3px solid #fff;box-shadow:0 16px 32px rgba(60,50,40,.25);"></div>
-        <div class="pic" style="width:128px;height:202px;border-radius:18px;background-image:url('https://picsum.photos/seed/p3/260/410');border:3px solid #fff;box-shadow:0 16px 32px rgba(60,50,40,.25);"></div>
+      <!-- 单张生成海报：清晰从属，比例小于手机，不抢主角 -->
+      <div style="position:relative;z-index:2;margin-bottom:70px;transform:rotate(-3deg);">
+        <!-- 换成：App 生成的代表性海报成品 -->
+        <div class="pic" style="width:420px;height:760px;border-radius:26px;background-image:url('https://picsum.photos/seed/shared-poster/430/780');border:4px solid #fff;box-shadow:0 30px 60px rgba(60,50,40,.28);"></div>
+        <div style="position:absolute;right:16px;top:16px;background:rgba(250,247,242,.94);border-radius:999px;padding:8px 18px;font-size:20px;font-weight:700;color:var(--gold-deep);">生成的海报</div>
       </div>
     </div>
   </div></div>

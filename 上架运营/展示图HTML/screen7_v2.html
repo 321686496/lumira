@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Screen7 分享 · 展示图 v2</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { background:#EFEAE2; }
+  body { padding:40px; display:flex; flex-direction:column; align-items:center; }
+  .note { font:14px/1.6 system-ui; color:#8a8176; margin-bottom:18px; max-width:1080px; text-align:center; }
+
+  /* 画布：1080×1920，导出时按此截图 */
+  .board {
+    position:relative; width:1080px; height:1920px; overflow:hidden; flex:none;
+    background:radial-gradient(120% 110% at 20% 0%, #FCFAF6 0%, #F6F0E7 55%, #EFE6D8 100%);
+  }
+  /* 暖金细饰线 */
+  .board .orn { position:absolute; left:56px; top:78px; width:220px; }
+
+  /* 顶部极简引导 */
+  .kicker {
+    position:absolute; top:72px; left:56px;
+    display:flex; align-items:center; gap:14px;
+  }
+  .kicker .line { width:44px; height:2px; background:#C9AE7C; border-radius:2px; }
+  .kicker .txt { font-family:"Songti SC","Noto Serif SC",serif; font-size:30px; color:#3A3329; letter-spacing:.06em; }
+
+  /* 手机：drawer.png 1308×2880 → 定宽360，高auto（≈793） */
+  .phone {
+    position:absolute; left:120px; top:480px; width:360px; height:793px; z-index:3;
+    border-radius:52px; background:#0E0C0B; padding:16px;
+    box-shadow:0 50px 90px -20px rgba(60,50,40,.40);
+  }
+  .phone .screen {
+    width:100%; height:100%; border-radius:38px; overflow:hidden; position:relative; background:#fff;
+  }
+  .phone .screen img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
+  .phone .island {
+    position:absolute; top:14px; left:50%; transform:translateX(-50%);
+    width:118px; height:30px; background:#0E0C0B; border-radius:20px; z-index:5;
+  }
+
+  /* 三张海报：真实比例，各自旋转错落，围绕手机散开 */
+  .p {
+    position:absolute; z-index:2; border-radius:20px; overflow:hidden;
+    box-shadow:0 34px 60px -18px rgba(60,50,40,.30);
+    border:2px solid #fff;
+  }
+  .p img { display:block; width:100%; height:auto; }
+  .p .tag {
+    position:absolute; top:12px; left:12px; z-index:4;
+    background:rgba(252,250,246,.92); border-radius:999px;
+    font:20px/1 "PingFang SC",system-ui; color:#8a6d3b; font-weight:600;
+    padding:8px 16px; letter-spacing:.05em;
+  }
+
+  /* poster1 1080×2308 (w264 → h564) 左上 */
+  .p1 { left:56px; top:360px; width:264px; transform:rotate(-6deg); }
+  /* poster2 1080×2488 (w300 → h691) 右上 */
+  .p2 { left:360px; top:150px; width:300px; transform:rotate(5deg); }
+  /* poster3 1080×2488 (w268 → h617) 右下 */
+  .p3 { left:856px; top:560px; width:268px; transform:rotate(-3deg); }
+</style>
+</head>
+<body>
+  <div class="note">
+    Screen7 · 情感分享展示图（1080×1920）<br>
+    素材为你的真实截图/海报，<b>未裁剪、未变形</b>，仅按原宽高比排版 → 浏览器按<div style="display:inline-block">此</div>页面截图导出即得高清图。
+  </div>
+
+  <div class="board" id="board">
+    <svg class="orn" width="220" height="3" viewBox="0 0 220 3"><line x1="0" y1="1.5" x2="220" y2="1.5" stroke="#C9AE7C" stroke-width="3" stroke-linecap="round"/></svg>
+
+    <div class="kicker">
+      <div class="line"></div>
+      <div class="txt">把你的照片，变成精致海报</div>
+    </div>
+
+    <!-- 手机主体：分享抽屉截图 -->
+    <div class="phone">
+      <div class="screen">
+        <img src="./assets/screen7/drawer.png" alt="share drawer">
+      </div>
+      <div class="island"></div>
+    </div>
+
+    <!-- 三张真实海报 -->
+    <div class="p p1">
+      <span class="tag">出片 ①</span>
+      <img src="./assets/screen7/poster1.jpg" alt="poster1">
+    </div>
+    <div class="p p2">
+      <span class="tag">出片 ②</span>
+      <img src="./assets/screen7/poster2.jpg" alt="poster2">
+    </div>
+    <div class="p p3">
+      <span class="tag">出片 ③</span>
+      <img src="./assets/screen7/poster3.jpg" alt="poster3">
+    </div>
+  </div>
+</body>
+</html>
