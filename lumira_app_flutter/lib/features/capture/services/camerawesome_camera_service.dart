@@ -171,6 +171,13 @@ class CamerawesomeCameraService implements CameraService {
   }
 
   @override
+  Stream<String> nativeLogs() {
+    // 原生诊断日志桥：仅 OHOS 插件推送；其余平台返回空流。
+    if (_delegate.platformTag != 'ohos') return Stream<String>.empty();
+    return ohos.CamerawesomePlugin.listenNativeLog() ?? Stream<String>.empty();
+  }
+
+  @override
   Future<void> switchCamera(String facing) async {
     // 切换摄像头后设备缩放范围可能变化，清空缓存强制下次重新查询
     _cachedMaxZoom = null;

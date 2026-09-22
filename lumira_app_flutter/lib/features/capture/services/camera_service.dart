@@ -31,6 +31,10 @@ abstract class CameraService {
   /// 非 OHOS 平台返回空流（无早帧机制，动画源回退成片）。
   Stream<String> photoEarlyFrames();
 
+  /// 原生诊断日志桥：原生关键拍照/早帧耗时日志转发到 Flutter console（仅 OHOS 有值）。
+  /// 非 OHOS 返回空流。调试只需看 flutter run 一路日志，无需另开 DevEco。
+  Stream<String> nativeLogs();
+
   /// 切换前后摄像头
   Future<void> switchCamera(String facing);
 

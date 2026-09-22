@@ -46,6 +46,8 @@ class CamerawesomePlugin {
 
   static const EventChannel _photoEarlyFrameChannel =
       EventChannel('camerawesome/photo_early_frame');
+  static const EventChannel _nativeLogChannel =
+      EventChannel('camerawesome/native_log');
 
   static Stream<CameraOrientations>? _orientationStream;
 
@@ -214,6 +216,16 @@ class CamerawesomePlugin {
         .receiveBroadcastStream('photoEarlyFrameChannel')
         .map((data) => data as String);
     return _photoEarlyFrameStream;
+  }
+
+  static Stream<String>? _nativeLogStream;
+
+  /// 原生诊断日志桥：原生关键拍照/早帧耗时日志转发到这里，Flutter console 直接可见。
+  static Stream<String>? listenNativeLog() {
+    _nativeLogStream ??= _nativeLogChannel
+        .receiveBroadcastStream('nativeLogChannel')
+        .map((data) => data as String);
+    return _nativeLogStream;
   }
 
   static Future<void> setupAnalysis({
