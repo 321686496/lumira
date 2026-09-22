@@ -59,10 +59,15 @@ function tokenize(...texts: string[]): string[] {
   return out.slice(0, 12);
 }
 
+/** 清洗引用字段：去掉 markdown 代码反引号、加粗星号、两端空白，返回干净字符串 */
+function clean(field: string): string {
+  return field.replace(/`+|[*_~]+/g, '').trim();
+}
+
 function toResearchItem(hit: SearchHit): ResearchItem {
-  const title = firstStr(hit.title) ?? '';
-  const snippet = firstStr(hit.snippet, hit.content) ?? '';
-  const url = firstStr(hit.url, hit.site, hit.caption);
+  const title = clean(firstStr(hit.title) ?? '');
+  const snippet = clean(firstStr(hit.snippet, hit.content) ?? '');
+  const url = clean(firstStr(hit.url, hit.site, hit.caption) ?? '');
   return { source: 'qwen', title, snippet, keywords: tokenize(snippet, title), url };
 }
 
@@ -70,7 +75,21 @@ function toResearchItem(hit: SearchHit): ResearchItem {
 function extractResearchItems(data: unknown): ResearchItem[] | null {
   if (!data || typeof data !== 'object') return null;
   const root = data as Record<string, unknown>;
-  const msg = root.message && typeof root.message === 'object' ? (root.message as Record<string, unknown>) : null;
+
+  // 0) 三方中转站 OpenAI 兼容格式：顶层 sources[]({title,url}) + choices[0].message.content
+  //    （如 qwen3.7-max 直连 enable_search 时由网关把引用放到顶层 sources，而非 tool_calls）
+  const topSources = Array.isArray(root.sources) ? (root.sources as SearchHit[]) : [];
+  if (topSources.length) {
+    return topSources.map(toResearchItem).filter((i) => i.title || i.url);
+  }
+  // 0b) 部分网关把 message 放 choices[0].message（等价地兜底一次报错提示）
+  let msg = root.message && typeof root.message === 'object' ? (root.message as Record<string, unknown>) : null;
+  if (!msg && Array.isArray(root.choices) && root.choices.length) {
+    const first = root.choices[0];
+    if (first && typeof first === 'object' && (first as Record<string, unknown>).message && typeof (first as Record<string, unknown>).message === 'object') {
+      msg = (first as Record<string, unknown>).message as Record<string, unknown>;
+    }
+  }
   if (!msg) return null;
 
   // 1) tool_calls[web_search] → arguments.search_info.search_results[]

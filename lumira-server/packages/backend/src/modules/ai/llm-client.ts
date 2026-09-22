@@ -95,6 +95,11 @@ async function upstreamError(res: Response): Promise<string> {
   return detail ? `AI 上游错误（HTTP ${res.status}）：${detail}` : `AI 上游错误（HTTP ${res.status}）`;
 }
 
+/** 短退避延时 */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /** 请求体构造参数（含可选 tools / tool_choice） */
 interface ChatRequestBase {
   model: string;
@@ -137,9 +142,16 @@ async function rawChatMessage(cfg: LlmEndpoint, input: ChatRequestBase, opts: { 
   };
 
   let res = await doFetch(input.jsonMode).catch(mapNetworkError);
-  // jsonMode 降级：部分厂商不认识 response_format，400/404 时去掉重试一次
+  // 容错重试（有界、最多各一次）：
+  //   jsonMode 400/404 → 去掉 response_format 降级重试一次；
+  //   任意 5xx（网关/服务瞬时故障，含 502/503/504/429）→ 短退避后原样重试一次。
+  // 两者互不叠加，保证失败时有界终止、不无限循环。
   if (!res.ok && input.jsonMode && (res.status === 400 || res.status === 404)) {
     res = await doFetch(false).catch(mapNetworkError);
+  }
+  if (!res.ok && res.status >= 500) {
+    await sleep(800);
+    res = await doFetch(input.jsonMode).catch(mapNetworkError);
   }
   if (res.status === 401 || res.status === 403) {
     throw new Error('AI 服务认证失败（apiKey 无效或无权限/欠费），请到后台「AI 设置」检查');

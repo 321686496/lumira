@@ -176,14 +176,16 @@ describe('visionChat', () => {
     expect(parseBody(fetchMock.mock.calls[1][1]).response_format).toBeUndefined();
   });
 
-  it('12. jsonMode 降级重试后仍失败 → 抛上游错误（不无限重试）', async () => {
+  it('12. jsonMode 降级重试后仍失败 → 抛上游错误（有界终止，不无限循环）', async () => {
+    // jsonMode 400 → 降级重试(500) → 5xx 退避重试(400 非重试错误) → 终止
     const fetchMock = jest
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(errorResponse(400, { error: { message: 'bad request' } }))
-      .mockResolvedValueOnce(errorResponse(500, { error: { message: '上游内部错误' } }));
+      .mockResolvedValueOnce(errorResponse(500, { error: { message: '上游内部错误' } }))
+      .mockResolvedValueOnce(errorResponse(400, { error: { message: '最终 400' } }));
 
-    await expect(visionChat(CFG, { ...baseInput(), jsonMode: true })).rejects.toThrow('上游内部错误');
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await expect(visionChat(CFG, { ...baseInput(), jsonMode: true })).rejects.toThrow('最终 400');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it('13. 非 jsonMode 的 400 → 不重试直接抛上游错误', async () => {
@@ -192,6 +194,34 @@ describe('visionChat', () => {
       .mockResolvedValue(errorResponse(400, { error: { message: '参数错误' } }));
 
     await expect(visionChat(CFG, baseInput())).rejects.toThrow('参数错误');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('14. 首次 504 → 短退避重试一次，第二次成功则该次请求成功', async () => {
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(errorResponse(504, {}))
+      .mockResolvedValueOnce(okResponse('retry-ok'));
+
+    await expect(visionChat(CFG, baseInput())).resolves.toBe('retry-ok');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('15. 首次 503 → 重试后仍 500 → 抛上游错误（不无限重试，仅一次）', async () => {
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(errorResponse(503, {}))
+      .mockResolvedValueOnce(errorResponse(500, { error: { message: '仍故障' } }));
+
+    const err = await expectReject(visionChat(CFG, baseInput()));
+    expect(err.message).toContain('仍故障');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('16. 2xx 成功 → 不发生 5xx 重试（仅调一次）', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(okResponse('ok'));
+
+    await expect(visionChat(CFG, baseInput())).resolves.toBe('ok');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
@@ -206,7 +236,7 @@ describe('textChat', () => {
     model: 'qwen-plus',
   };
 
-  it('14. 请求体为纯文本 messages（无 image_url），model 取 cfg.model', async () => {
+  it('17. 请求体为纯文本 messages（无 image_url），model 取 cfg.model', async () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValueOnce(okResponse('hello'));
 
     const out = await textChat(TEXT_CFG, { systemPrompt: 'sys', userText: 'hi' });
@@ -220,7 +250,7 @@ describe('textChat', () => {
     ]);
   });
 
-  it('15. 端点 model 各取各的：visionChat 用 CFG.model、textChat 用 TEXT_CFG.model（无客户端回退）', async () => {
+  it('18. 端点 model 各取各的：visionChat 用 CFG.model、textChat 用 TEXT_CFG.model（无客户端回退）', async () => {
     const fetchMock = jest
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(okResponse('hello'))
@@ -234,7 +264,7 @@ describe('textChat', () => {
     expect(parseBody(fetchMock.mock.calls[1][1]).model).toBe('qwen-plus');
   });
 
-  it('16. jsonMode 400 时自动降级重试（复用 visionChat 同款逻辑）', async () => {
+  it('19. jsonMode 400 时自动降级重试（复用 visionChat 同款逻辑）', async () => {
     const fetchMock = jest
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(errorResponse(400, { error: { message: 'response_format not supported' } }))

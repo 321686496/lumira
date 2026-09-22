@@ -92,6 +92,13 @@ jobs:
           echo "==> [1/5] 拉取最新代码"
           cd $DEPLOY_PATH/repo
 
+          # 磁盘使用率告警：超过 80% 时提前警示，避免 MySQL 等因磁盘满而崩溃
+          DISK_USE=$(df -h / | awk 'NR==2 {print $5}' | tr -d '%')
+          echo "==> 系统盘使用率：${DISK_USE}%"
+          if [ "${DISK_USE:-0}" -gt 80 ]; then
+            echo "::warning::系统盘已用 ${DISK_USE}%（>80%），建议下次部署前清理 /var/lib/docker 的镜像/构建缓存"
+          fi
+
           # 修复目录权限（确保当前用户有写权限）
           sudo chown -R $USER:$USER $DEPLOY_PATH/repo
 
@@ -141,7 +148,10 @@ jobs:
 
           echo "==> [5/5] 重启容器（--force-recreate 强制重建容器，确保新镜像生效）"
           sudo $COMPOSE_CMD -f docker-compose.prod.yml --env-file .env up -d --force-recreate
+          # 清理不再被容器引用的悬空镜像 + 构建缓存，防止 CI 反复 docker build 撑爆系统盘
+          # （此前曾见 /var/lib/docker 构建缓存累积至 23GB，导致 / 100% 满、MySQL InnoDB 写盘失败崩溃）
           sudo docker image prune -f
+          sudo docker builder prune -f
 
           echo "==> 部署完成，等待 15 秒后查看日志："
           sleep 15

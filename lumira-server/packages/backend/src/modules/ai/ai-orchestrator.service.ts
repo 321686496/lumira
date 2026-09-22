@@ -146,16 +146,26 @@ export class AiOrchestratorService {
       }
 
       // 6 评分闸门
+      const hasRefImage = Boolean(input.imageBase64 && input.imageMime);
       const scoreInput: ImageScoreInput = {
         desc: desc as ImageDescription,
         poseSheet,
         research,
         draft: workingDraft,
       };
+      // 无参考图时无可评审的"图"，跳过 LLM 评分（避免对空 draft 硬调文本模型导致超时/504），直接收束为通过。
+      let result: { score: number; verdict: 'pass' | 'retry'; suggests?: string[] };
+      if (!hasRefImage) {
+        trace.push({ step: 'imageScore', tool: 'image-score', resultBrief: 'skip-imageScore（无参考图）' });
+        result = { score: 1, verdict: 'pass', suggests: [] };
+        bestScore = 1;
+        bestDraft = workingDraft; // 无图 break 前把已 paramValidate 的草稿写为最佳候选
+        break; // 无图无需评审迭代，直接定稿
+      }
       const scored = await this.wrapStep<{ score: number; verdict: 'pass' | 'retry'; suggests?: string[] }>(
         'imageScore', 'image-score', trace, () => this.imageScore.score(scoreInput),
       );
-      const result = scored ?? { score: 0, verdict: 'retry' as const };
+      result = scored ?? { score: 0, verdict: 'retry' as const };
       const last = trace[trace.length - 1];
       if (last && last.step === 'imageScore') last.score = result.score;
 
