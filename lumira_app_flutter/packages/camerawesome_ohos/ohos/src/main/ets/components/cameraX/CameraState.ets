@@ -1091,7 +1091,7 @@ export class CameraState implements StreamHandler {
     }
     takePhotoStartAt = Date.now()
     await this.photoOutput?.capture(photoSettings);
-    Logger.info(TAG, `takePhoto capture() returned after ${Date.now() - takePhotoStartAt}ms`);
+    bridgeNativeLog(`[perf-cam] takePhoto capture() returned after ${Date.now() - takePhotoStartAt}ms`);
     Logger.info(TAG, 'takePicture end');
     // [性能拆解] 快照后 JPEG 交付是否为主要耗时：对比本行与 photoAvailable saved 的 elapsed。
   }
@@ -1129,7 +1129,7 @@ export class CameraState implements StreamHandler {
       this.photoOutput!!.on('photoAvailable',
         (err: BusinessError, photo: camera.Photo) => {
           Logger.info(TAG, 'photoAvailable begin');
-          Logger.info(TAG, `[perf-cam] photoAvailable begin elapsed=${Date.now() - takePhotoStartAt}ms`);
+          bridgeNativeLog(`[perf-cam] photoAvailable begin elapsed=${Date.now() - takePhotoStartAt}ms`);
           const ctx = this._photoDirectQueue.shift()
           if (ctx === undefined) {
             Logger.error(TAG, 'photoAvailable: no pending capture request, skip');
@@ -1151,14 +1151,14 @@ export class CameraState implements StreamHandler {
           ctx.directDone = true
           imageObj.getComponent(image.ComponentType.JPEG,
             (errCode: BusinessError, component: image.Component) => {
-              Logger.info(TAG, `[perf-cam] getComponent(jpeg) cb elapsed=${Date.now() - takePhotoStartAt}ms`);
+              bridgeNativeLog(`[perf-cam] getComponent(jpeg) cb elapsed=${Date.now() - takePhotoStartAt}ms`);
               if (!errCode && component && component.byteBuffer) {
                 try {
                   const buffer = component.byteBuffer as ArrayBuffer
                   const file = fileIo.openSync(ctx.path, fileIo.OpenMode.CREATE | fileIo.OpenMode.READ_WRITE)
                   const written = fileIo.writeSync(file.fd, buffer)
                   fileIo.closeSync(file)
-                  Logger.info(TAG, `photoAvailable: saved raw JPEG bytes=${written} elapsed=${Date.now() - takePhotoStartAt}ms to ${ctx.path}`)
+                  bridgeNativeLog(`[perf-cam] photoAvailable: saved raw JPEG bytes=${written} elapsed=${Date.now() - takePhotoStartAt}ms to ${ctx.path}`)
                   ctx.result.success(true)
                 } catch (e) {
                   Logger.error(TAG, `photoAvailable save failed: ${JSON.stringify(e)}`)
@@ -1177,6 +1177,7 @@ export class CameraState implements StreamHandler {
       this.photoOutput!!.on('photoAssetAvailable',
         (err: BusinessError, photoAsset: photoAccessHelper.PhotoAsset) => {
           Logger.info(TAG, 'photoAssetAvailable begin');
+          bridgeNativeLog(`[perf-cam] photoAssetAvailable begin elapsed=${Date.now() - takePhotoStartAt}ms`);
           if (err) {
             Logger.error(TAG, 'photo is err');
             return;
@@ -1196,9 +1197,17 @@ export class CameraState implements StreamHandler {
             // 一阶段低质量图（~672ms）作为水印动画源提前送达 Dart 触发动画，
             // 二阶段全质量图因成片已写出而跳过。
             Logger.info(TAG, 'photoAssetAvailable: raw JPEG written, request early anim frame');
+            bridgeNativeLog(`[perf-cam] requestEarlyFrame: raw JPEG direct-written, requesting early anim frame elapsed=${Date.now() - takePhotoStartAt}ms`);
             this.requestEarlyFrameForAnimation(photoAsset);
             return;
           }
+          // 增强兜底路径（photoAvailable 未在本设备触发，directDone 为 false）：
+          // 此处也额外发起 FAST_MODE 早帧交付（一阶段低质量图 ~694ms 先于成片到达），
+          // 使缩略图/水印动画源不依赖 photoAvailable 直出，先快后真。
+          // 成片仍由 _handlePhotoCb 全质量兜底写出，两请求走各自独立 requestId，互不干扰。
+          Logger.info(TAG, 'photoAssetAvailable: enhanced path, requesting early anim frame too');
+          bridgeNativeLog(`[perf-cam] requestEarlyFrame: enhanced fallback, requesting early anim frame elapsed=${Date.now() - takePhotoStartAt}ms`);
+          this.requestEarlyFrameForAnimation(photoAsset);
           this._handlePhotoCb(photoAsset, ctx.path, ctx.result, ctx);
         });
     } catch (err) {
@@ -1869,7 +1878,7 @@ class EarlyFrameHandler implements photoAccessHelper.MediaAssetDataHandler<Array
       return;
     }
     if (this.delivered) {
-      Logger.info(`[perf-cam] EarlyFrameHandler: full-quality skipped elapsed=${Date.now() - takePhotoStartAt}ms`);
+      bridgeNativeLog(`[perf-cam] EarlyFrameHandler: full-quality skipped elapsed=${Date.now() - takePhotoStartAt}ms`);
       return;
     }
     this.delivered = true
@@ -1877,12 +1886,37 @@ class EarlyFrameHandler implements photoAccessHelper.MediaAssetDataHandler<Array
       const file = await fileIo.open(this.path, fileIo.OpenMode.CREATE | fileIo.OpenMode.READ_WRITE);
       const written = fileIo.writeSync(file.fd, data);
       fileIo.closeSync(file);
-      Logger.info(`[perf-cam] EarlyFrameHandler: saved early anim frame bytes=${written} ` +
+      bridgeNativeLog(`[perf-cam] EarlyFrameHandler: saved early anim frame bytes=${written} ` +
         `elapsed=${Date.now() - takePhotoStartAt}ms to ${this.path}`);
       this.sink?.success(this.path)
     } catch (error) {
       Logger.error(`EarlyFrameHandler: write failed. code ${(error as BusinessError).code}, ` +
         `message ${(error as BusinessError).message}`);
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 原生诊断日志桥：原生关键拍照/早帧耗时日志经 EventChannel 'camerawesome/native_log'
+// 转发到 Dart 侧 debugPrint，只需看 flutter run 一个窗口即可定位性能问题。
+// ─────────────────────────────────────────────────────────────────────────
+let nativeLogSink: EventSink | null = null
+
+export function bridgeNativeLog(msg: string): void {
+  // 仍打 HiLog（保留原始日志），同时转发给 Flutter console。
+  Logger.info(TAG, msg)
+  nativeLogSink?.success(msg)
+}
+
+/** EventChannel 'camerawesome/native_log' 的 StreamHandler：仅持有 events sink，由 Dart 订阅触发。 */
+export class NativeLogStreamListener implements StreamHandler {
+  onListen(args: Any, events: EventSink): void {
+    nativeLogSink = events
+  }
+  onCancel(args: Any): void {
+    if (nativeLogSink) {
+      nativeLogSink.endOfStream()
+      nativeLogSink = null
     }
   }
 }

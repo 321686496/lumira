@@ -120,6 +120,10 @@ const int _ohosNativeMaxDim = 2560;
 // 自动 fit 回源分辨率，早帧源分辨率低于成片，不会被放大。
 const int _earlyFrameMaxDim = _ohosNativeMaxDim;
 
+// 快门冻结帧（水印动画源）的最大边像素：动画源短暂浮层使用，无需全屏高采样。
+// OHOS 上按 devicePixelRatio(~3x) 全屏 toImage + PNG 编码实测 3s+，限幅后显著提速。
+const int _kShutterFrameMaxDim = 1280;
+
 /// 早帧「初版成片」处理快照：快门时刻的有效参数（与成片原生快速路径同源同语义），
 /// 供早帧到达时直接走原生 processJpeg，无需再读 provider。
 class _EarlyFrameInterimJob {
@@ -286,6 +290,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// OHOS 分阶段拍照早帧订阅：一阶段低质量帧（~672ms）先于成片到达，
   /// 收到即提前触发水印动画（无需等待成片 capture() ~1.9s 返回）。
   StreamSubscription<String>? _earlyFrameSub;
+  StreamSubscription<String>? _nativeLogSub;
 
   /// 当前拍摄是否期望 OHOS 早帧（用于忽略上一帧残留事件，避免误触发动画）。
   bool _expectingEarlyFrame = false;
@@ -358,6 +363,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
     CaptureWorker.instance.ensureStarted().catchError((Object e) {
       debugPrint('[capture] worker 预热失败（首次拍照时会重试）: $e');
     });
+    // 原生诊断日志桥：订阅后原生关键拍照/早帧耗时日志直接打到 Flutter console，
+    // 无需另开 DevEco。initState 即订阅，保证拍照前原生侧 sink 已就绪。
+    _nativeLogSub ??= ref
+        .read(cameraServiceProvider)
+        .nativeLogs()
+        .listen((m) => debugPrint('[native] $m'));
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _applyRouteParamsToState();
       ref.read(CaptureState.currentTemplateIdProvider.notifier).state =
@@ -637,6 +648,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
     _delayTimer = null;
     _earlyFrameSub?.cancel();
     _earlyFrameSub = null;
+    _nativeLogSub?.cancel();
+    _nativeLogSub = null;
     // 释放常驻 worker isolate（性能优化 A：避免 isolate 泄漏）
     CaptureWorker.instance.dispose();
     WidgetsBinding.instance.removeObserver(this);
@@ -953,6 +966,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
           // 允许连续转场：interim 分支本地判定，避免「残留早帧误触发动画」的历史问题。
           _expectingEarlyFrame = false;
           final pid = _currentShutterPhotoId;
+          final swEarly = Stopwatch()..start();
           debugPrint('[capture] OHOS early frame arrived: $path pid=$pid');
           _earlyFrameRawPath = path;
           if (pid != null) {
@@ -978,6 +992,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
               )
                   .then((ok) {
                 if (!mounted) return;
+                swEarly.stop();
+                debugPrint('[perf] 早帧 processJpeg 初版成片: '
+                    '${swEarly.elapsedMilliseconds}ms ok=$ok');
                 final notifier = ref.read(captureThumbnailProvider.notifier);
                 if (ok) {
                   _earlyFrameProcPath = '$path.proc.jpg';
@@ -1697,10 +1714,22 @@ class _CapturePageState extends ConsumerState<CapturePage>
     }
     try {
       final sw = Stopwatch()..start();
-      final uiImage = await boundary.toImage(
-        pixelRatio: _viewfinderPixelRatio ?? 1.0,
-      );
-      final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.png);
+      // 水印动画源对分辨率不敏感（短暂浮层），无需按设备 pixelRatio 全屏高采样。
+      // 限制最大边 ~1280px，避免 OHOS toImage + PNG 编码在拍照瞬间拖慢主线程（实测 3s+）。
+      final basePr = _viewfinderPixelRatio ?? 1.0;
+      final size = boundary.size;
+      double pr = basePr;
+      if (size.width > 0 && size.height > 0) {
+        // 按最长边限制最大像素 ~1280px。
+        final longSide = size.width >= size.height ? size.width : size.height;
+        final capPr = _kShutterFrameMaxDim / longSide;
+        if (longSide > 0 && capPr < pr) pr = capPr;
+      }
+      if (pr < 1.0) pr = 1.0;
+      final uiImage = await boundary.toImage(pixelRatio: pr);
+      // 限幅后像素量减少 ~9x，PNG 编码也随之显著加速（动画源短暂使用，最大边 1280px 足够）。
+      final byteData =
+          await uiImage.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return null;
       final ts = DateTime.now().millisecondsSinceEpoch;
       String? chosen;

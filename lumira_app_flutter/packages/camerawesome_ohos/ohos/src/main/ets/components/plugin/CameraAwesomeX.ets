@@ -43,7 +43,7 @@ import { BusinessError } from '@ohos.base';
 import UIAbility from '@ohos.app.ability.UIAbility';
 import { CameraPermissions } from '../cameraX/CameraPermissions';
 import { CameraAbilityLifecycle } from '../cameraX/CameraAbilityLifecycle';
-import { CameraState, CaptureMode, PhotoCaptureContext, PhotoEarlyFrameStreamListener } from '../cameraX/CameraState';
+import { CameraState, CaptureMode, PhotoCaptureContext, PhotoEarlyFrameStreamListener, NativeLogStreamListener } from '../cameraX/CameraState';
 import { PhysicalButtonsHandler } from '../cameraX/PhysicalButtonsHandler';
 import { camera } from '@kit.CameraKit';
 import { abilityAccessCtrl } from '@kit.AbilityKit';
@@ -497,6 +497,10 @@ export default class CameraAwesomeX extends CameraInterface
     )
     new EventChannel(binding.getBinaryMessenger(), "camerawesome/photo_early_frame").setStreamHandler(
       this.photoEarlyFrameStreamListener
+    )
+    // 原生诊断日志桥：把原生关键拍照/早帧耗时日志转发到 Flutter console（无需开 DevEco）。
+    new EventChannel(binding.getBinaryMessenger(), "camerawesome/native_log").setStreamHandler(
+      new NativeLogStreamListener()
     )
     // 取景器实时特效（与 iOS 共用 camerawesome/preview_effects 通道语义）
     this.previewEffectsChannel = new MethodChannel(binding.getBinaryMessenger(),
