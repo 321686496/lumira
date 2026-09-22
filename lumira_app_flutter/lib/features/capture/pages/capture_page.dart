@@ -1928,15 +1928,20 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 后端 completeInvite 幂等：未绑定返回 none，已达成返回 alreadyAchieved。
   Future<void> _reportInviteAchieved() async {
     if (_inviteCompleteReported) return;
-    _inviteCompleteReported = true;
     try {
       final repo = await ref.read(inviteRepositoryProvider.future);
-      await repo.completeInvite();
+      final resp = await repo.completeInvite();
+      // 仅当后端明确返回「已达成」或「未绑定」时才停止上报（后端幂等）。
+      // 若本次调用异常（网络/会话/相机页销毁等），保持未标记状态，下次成片会重试，
+      // 避免首次上报失败后邀请永远停在 pending，导致邀请人页面的计数/达成状态不更新。
+      if (resp.succeeded || resp.isNone) {
+        _inviteCompleteReported = true;
+      }
       ref.invalidate(inviteStatsProvider);
-      debugPrint('[capture] invite complete reported');
+      debugPrint('[capture] invite complete reported: ${resp.status}');
     } catch (e) {
-      // 未绑定/网络异常静默，绝不阻塞拍照流程
-      debugPrint('[capture] invite complete report failed (silent): $e');
+      // 未绑定/网络异常静默，绝不阻塞拍照流程；失败则保留标记，下次成片重试
+      debugPrint('[capture] invite complete report failed (silent, will retry): $e');
     }
   }
 

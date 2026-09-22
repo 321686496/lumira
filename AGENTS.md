@@ -66,6 +66,7 @@
 | `lumira-server/packages/admin/vercel.json`    | Vercel 构建/安装命令                                           |
 | `lumira-server/packages/admin/next.config.js` | `/uploads/*` rewrite 代理（解决 Mixed Content）                |
 | `lumira-server/packages/backend/.env.example` | 后端环境变量模板                                                 |
+| `deploy/searxng/settings.yml`                 | SearXNG 配置（开启 json 格式 + 国内可访问引擎集），部署时随仓库同步 |
 
 ### 后端 SSH 部署（backend-deploy.yml）
 
@@ -115,6 +116,7 @@
 | `MYSQL_PASSWORD`      | 应用数据库用户密码（`openssl rand -hex 16` 生成）                        |
 | `NGINX_NETWORK`       | nginx 容器所在的 docker network 名（如 `lumira-net`）                |
 | `BACKEND_PUBLIC_URL`  | **后端 API 公网域名**，如 `https://lumira.iwtle.top`（详见下方图片 URL 章节） |
+| `SEARXNG_SECRET`      | SearXNG 实例密钥（`openssl rand -hex 32` 生成；可空，未配置时容器重启会重生成） |
 
 > ⚠️ **`BACKEND_PUBLIC_URL`** **必须配置**：后端 `buildPublicUrl()` 用它构造上传图片的可访问 URL，未设置时回退 `http://localhost:3000`，会导致 App 端图片加载失败。修改 `deploy/docker-compose.prod.yml` 后需在服务器 `.env` 同步补充该变量并重新部署。
 
