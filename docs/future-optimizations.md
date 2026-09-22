@@ -674,3 +674,25 @@
 - **背景/动机**：直连内容平台需处理其公开接口 / 反爬 / 合规与限速，风险与合规成本高于通用搜索，本次先以 bing + 厂商检索覆盖热点来源（符合「可开关、可降级、单源失败不阻断」约束）。
 - **目标状态**：新增 `web-search-baidu.ts` 与抖音/小红书直连适配器，注册进 `createWebSearchProvider` 工厂与 `search_sources` 可选列表；后台可切换启用，单源失败仍降级不影响主流程。
 - **状态**：⏳ 待优化
+
+---
+
+## 后端部署 Ops（2026-09-22）
+
+> 背景：生产服务器系统盘 `/` 100% 满（40G 全用光，剩 1.3M），导致 MySQL InnoDB 写盘失败反复崩溃（`No space left on device` + `#innodb_redo` 无法 resize + `ibtmp1` 无法创建），后台访问连带 502/后端容器停在 `created`。根因：CI（backend-deploy.yml）反复 `docker build` 但从不清理，`/var/lib/docker` 构建缓存累积至 **23.35GB**。已执行 `docker builder prune` + `image prune`（释放 23G）恢复。本条目记录已落地与后续项。
+
+### P1 · 服务器 Nginx 上游改用动态解析（upstream 启动时 resolve 一次后缓存 IP，容器重建 IP 漂移导致 502）
+
+- **模块**：生产部署 · Nginx（服务器独立 nginx 容器，非 compose 管理）
+- **优化点**：nginx.conf 的 `upstream lumira_backend_upstream { server backend-lumira-backend-1:3000; keepalive ... }` 采用静态解析——nginx 启动时对主机名仅 resolve 一次并缓存 IP；后端容器每次 `--force-recreate` 重建后 Docker 重配新 IP，nginx 内存仍挂旧 IP 即 `connect() failed (111) Connection refused` → 502，直到手动 `nginx -s reload` 才恢复。
+- **背景/动机**：2026-09-22 排查出 502 直接根因之一即此（后端容器重建后 IP 漂移，nginx 未 reload）；另一次是磁盘满导致后端容器未启动、nginx `host not found in upstream` 而 [emerg] 崩溃循环。二者本质同源：nginx 上游依赖「宿主名在启动时一次性解析」这一脆弱机制。
+- **目标状态**：nginx.conf 上游改为动态解析——`resolver 127.0.0.11 valid=10s;`（Docker DNS）+ `server backend-lumira-backend-1:3000 resolve;`，或每次后端重建后自动 `nginx -s reload`（可并入 backend-deploy.yml 部署步骤）；同时把 nginx 纳入 compose 管理以利用 `depends_on`+restart 编排。
+- **状态**：✅ 已实现（2026-09-22 服务器手动 `docker restart nginx` 恢复；CI 侧补 `docker builder prune -f` 防磁盘再次爆满）——动态解析改造为待后续优化
+
+### P2 · 服务器磁盘使用率告警 / 自动清理兜底
+
+- **模块**：生产部署 · CI/CD（`backend-deploy.yml`）
+- **优化点**：本次已落地——部署前置检测 `df -h /` 使用率 >80% 时在 Actions 打 warning；部署末尾追加 `docker builder prune -f`（原只有 `image prune -f`），防构建缓存再累积撑爆系统盘。
+- **背景/动机**：23.35GB 构建缓存一次性撑满 40G 小盘；单靠人为清理不可持续。
+- **目标状态**：可进一步加「磁盘使用率 >90% 时强制 prune 后再 continue」或定时清理 Cron；并考虑给 CI 构建缓存（GITHUB_ACTIONS 自带）与服务器 builder cache 预设上限。当前已有的 >80% 告警 + 部署后 prune 为起点。
+- **状态**：✅ 已实现（2026-09-22：部署后 `builder prune -f` + 磁盘告警已并入 backend-deploy.yml）
