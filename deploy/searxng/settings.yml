@@ -14,11 +14,13 @@ server:
   limiter: false
   public_instance: false
 engines:
+  # 国内服务器实测白名单（2026-09-22 容器内逐引擎探测）：
+  #   sogou         ✅ 可用（结果是唯一命中的，中文摄影查询 11 条）
+  #   bing         ⚠️ 有响应但中文摄影查询常 0 结果（保留，偶发可用）
+  #   baidu        ❌ CAPTCHA 风控（Suspended）——挂起但无结果，保留无益于命中
+  #   ddg/qwant/brave/google/wiki 等 ❌ timeout 不可达（国内服务器出不去）
+  # 只要有一个引擎出结果，searxng 整体就返回结果；其余失败只记 unresponsive 不拖垮。
+  - name: sogou
+    disabled: false
   - name: bing
-    disabled: false
-  - name: duckduckgo
-    disabled: false
-  - name: qwant
-    disabled: false
-  - name: baidu
     disabled: false
