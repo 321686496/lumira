@@ -91,4 +91,54 @@ describe('TrendResearchService', () => {
     const items = (await svc.research('x')).items;
     expect(items[0].imgUrl).toBe('https://img.example.com/1.jpg');
   });
+
+  it('研究前调用查询词重组：重组后 query 用于搜索（reorganize 可注入文本端点）', async () => {
+    const seen: string[] = [];
+    const providerFactory: SearchProviderFactory = () => ({
+      name: 'searxng',
+      search: async (q) => {
+        seen.push(q.query);
+        return [item('searxng', '重组命中')];
+      },
+    });
+    // 提供 getActiveConfig（text 端点 stub）：返回重组关键词查询
+    const aiConfig = {
+      getSearchConfig: async () => ({ enabled: true, sources: [{ name: 'searxng', provider: 'searxng' }] }),
+      getActiveConfig: async () => ({
+        text: { provider: 'test', baseUrl: 'http://x', apiKey: 'k', model: 'm' },
+      }),
+    } as unknown as AiConfigService;
+    // 用真实 TrendResearchService + 覆写 reorganizeQuery 为返回重组结果（内联服务，不先跑 LLM）
+    const svc = new TrendResearchService(aiConfig);
+    svc.factory = providerFactory;
+    // 打桩文本模型：textChat 不可直接注入，故覆写 reorganizeQuery 返回固定重组串，验证 research 使用之
+    svc.reorganizeQuery = async () => '电影感人像 横构图 侧拍';
+
+    await svc.research('电影感他拍，照片比例为横图16:9，三种不同姿势');
+    expect(seen).toEqual(['电影感人像 横构图 侧拍']);
+  });
+
+  it('重组失败（无文本端点/AI 未配置）→ 回退原 topic，研究仍正常执行', async () => {
+    const seen: string[] = [];
+    const providerFactory: SearchProviderFactory = () => ({
+      name: 'searxng',
+      search: async (q) => {
+        seen.push(q.query);
+        return [item('searxng', '命中')];
+      },
+    });
+    // getActiveConfig 抛错 → reorganizeQuery 兜底返回原 topic
+    const aiConfig = {
+      getSearchConfig: async () => ({ enabled: true, sources: [{ name: 'searxng', provider: 'searxng' }] }),
+      getActiveConfig: async () => {
+        throw new Error('AI 未配置');
+      },
+    } as unknown as AiConfigService;
+    const svc = new TrendResearchService(aiConfig);
+    svc.factory = providerFactory;
+
+    const res = await svc.research('胶片感 都市夜晚');
+    expect(seen).toEqual(['胶片感 都市夜晚']);
+    expect(res.items).toHaveLength(1);
+  });
 });

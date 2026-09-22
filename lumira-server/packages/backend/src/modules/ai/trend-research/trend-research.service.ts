@@ -10,6 +10,8 @@ import { AiConfigService } from '../ai-config.service';
 import { cacheableSearch, createWebSearchProvider } from './web-search.provider';
 import type { WebSearchProvider, WebSearchQuery } from './web-search.provider';
 import type { ResearchItem } from './research-item';
+import { textChat } from '../llm-client';
+import { extractJson } from '../normalize';
 
 /** 单个启用搜索来源的配置 */
 export interface SearchSourceConfig {
@@ -60,6 +62,39 @@ export class TrendResearchService {
   constructor(private readonly aiConfigService: AiConfigService) {}
 
   /**
+   * 用文本模型把「创作意图 / 口语化描述」重组成适合搜索引擎的关键词查询。
+   * AI 未配置 / 调用失败 / 解析失败 → 返回原 topic（降级，不阻断研究）。
+   */
+  async reorganizeQuery(topic: string): Promise<string> {
+    const trimmed = (topic || '').trim();
+    if (!trimmed) return topic;
+    try {
+      const cfg = await this.aiConfigService.getActiveConfig();
+      const content = await textChat(cfg.text, {
+        systemPrompt: [
+          '你负责把"照片模板创作的意图描述"改写成搜索引擎上能命中优质摄影/人像/姿势灵感的关键词查询。',
+          '## 规则',
+          '1. 提取可检索的核心名词短语：风格、场景、光线、机位、姿势、氛围、模特类型等，最多 6 个关键词组。',
+          '2. 保留创作者明确的硬约束（如竖构图/横构图、16:9、三种姿势、他拍/自拍），用通俗、SEO 可命中的说法表达。',
+          '3. 去掉废话、口语连接词、感叹词；不要编造事实，不要加入原意图没有的卖点。',
+          '4. 一份创作意图只需输出一组查询。',
+          '## 输出',
+          '只输出 JSON：{"query": "空格分隔的关键词串"}，不要 markdown 或解释；无法改写时返回 {"query": null}。',
+        ].join('\n'),
+        userText: `创作意图：${trimmed}`,
+        temperature: 0.3,
+        jsonMode: true,
+        timeoutMs: 30_000,
+      });
+      const json = extractJson(content);
+      const q = typeof json?.query === 'string' ? json.query.trim() : '';
+      return q || trimmed;
+    } catch {
+      return trimmed;
+    }
+  }
+
+  /**
    * 并行跑启用的来源，allSettled 聚合：失败来源跳过并收集原因；相同 source+title 去重（保留先出现者）。
    * 研究关闭或配置缺失 → { items: [] }。每条限数 limitPerSource（默认 10）。
    */
@@ -68,11 +103,13 @@ export class TrendResearchService {
     if (!cfg || !cfg.enabled || !cfg.sources.length) return { items: [] };
 
     const limit = opts.limitPerSource ?? 10;
+    // 查询词重组：避免把整段口语意图直接丢给搜索引擎（失败自动回退原 topic）
+    const query = await this.reorganizeQuery(topic);
     const sourceErrors: { name: string; error: string }[] = [];
     const settled = await Promise.allSettled(
       cfg.sources.map(async (src): Promise<ResearchItem[]> => {
         const provider = this.factory(src.name, src);
-        return cacheableSearch(provider, { query: topic, limit } as WebSearchQuery);
+        return cacheableSearch(provider, { query, limit } as WebSearchQuery);
       }),
     );
 
