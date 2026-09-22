@@ -1119,13 +1119,16 @@ class _CapturePageState extends ConsumerState<CapturePage>
         _expectingEarlyFrame = false;
       }
 
-      // 成品就绪前，先记录原图路径供点击预览。OHOS 早帧通常已先一步提供可见
-      // interim（缩略图 notifier 的 final 防降级 + interim 保持逻辑会正确处理：
-      // 可见 interim 不被打回转圈，final 就绪后本路径被丢弃），其余平台角标
-      // 保持加载态直到成品。
-      ref
-          .read(captureThumbnailProvider.notifier)
-          .setInterimResult(result.filePath, photoId: _currentShutterPhotoId);
+      // 成品就绪前记录"可点击预览"的 interim：仅 OHOS 需要（原生处理慢），
+      // OHOS 早帧通常已先一步提供可见 interim（final 防降级 + interim 保持逻辑
+      // 正确处理：可见 interim 不被打回转圈，final 就绪后本路径被丢弃）。
+      // iOS/Android 处理够快，不做"早帧→成品"：角标保持加载态直到成品就绪，
+      // 预览页只展示最终成品，避免首看(raw)/重看(processed)色彩不一致。
+      if (isOhos) {
+        ref
+            .read(captureThumbnailProvider.notifier)
+            .setInterimResult(result.filePath, photoId: _currentShutterPhotoId);
+      }
 
       // 【抗手抖-单帧选帧】清晰度评分（拉普拉斯方差）仅用于诊断日志，选帧/锐化
       // 决策不依赖单帧结果（防糊由系统层解决：OHOS 5MP 档位 + HIGH_QUALITY，
