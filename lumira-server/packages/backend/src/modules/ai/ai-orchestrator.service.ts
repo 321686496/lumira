@@ -39,10 +39,12 @@ export interface OrchestratorInput {
   poseCount?: number;
 }
 
-/** run 可选依赖：categories 供 normalizeDraft；draft 为调用方（ai-analyze）已产出的初始草稿 */
+/** run 可选依赖：categories 供 normalizeDraft；draft 为调用方（ai-analyze）已产出的初始草稿；research 为识别前置已搜出的结果（避免重复搜索） */
 export interface OrchestratorRunOptions {
   categories: CategoryNode[];
   draft?: Record<string, unknown>;
+  /** 识别阶段前置搜索的结果；数组（含空数组）= 已预计算，orchestrator 直接复用不再搜索 */
+  research?: ResearchItem[];
 }
 
 export interface OrchestratorResult {
@@ -85,7 +87,11 @@ export class AiOrchestratorService {
       (this.aiConfigService as { getSearchConfig?: () => Promise<unknown> | unknown | undefined }).getSearchConfig?.()
     )) as { enabled?: boolean; sources?: unknown[] } | undefined;
     const researchEnabled = Boolean(searchCfg?.enabled && Array.isArray(searchCfg.sources) && searchCfg.sources.length && topic);
-    if (!researchEnabled) {
+    if (Array.isArray(opts.research)) {
+      // 识别前置已搜出（ai-analyze 先搜后写草稿）→ 直接复用，trace 记录条数不重复搜索
+      research = opts.research;
+      trace.push({ step: 'research', tool: 'trend-research', resultBrief: `${research.length} 条（识别前置）` });
+    } else if (!researchEnabled) {
       trace.push({ step: 'research', tool: 'trend-research', resultBrief: 'skip-research' });
     } else {
       const result = (await this.wrapStep<ResearchResult>('research', 'trend-research', trace, () =>

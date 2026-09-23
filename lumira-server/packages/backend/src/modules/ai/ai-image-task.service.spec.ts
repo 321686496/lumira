@@ -155,4 +155,23 @@ describe('AiImageTaskService', () => {
     expect(results.every((r) => r.status === 'done' && r.error === undefined)).toBe(true);
     expect(generateMock).toHaveBeenCalledTimes(3);
   });
+
+  it('research 全链路透传：单任务 submit 与批量锚点/依赖任务均收到 research', async () => {
+    getActiveConfigMock.mockResolvedValue({} as never);
+    generateMock.mockResolvedValue({ base64: 'aGVsbG8=', mimeType: 'image/png' });
+    const researchJson = JSON.stringify([{ source: 'sogou', title: '千金风', snippet: '流行' }]);
+
+    const { taskId } = await service.submit(undefined, '{}', null, researchJson);
+    await waitStatus(taskId, 'done');
+    expect(generateMock).toHaveBeenCalledTimes(1);
+    expect(generateMock.mock.calls[0][3]).toBe(researchJson);
+
+    const draft = { pose: [{ index: 0 }, { index: 1 }] };
+    const { batchId } = await service.submitBatch(undefined, JSON.stringify(draft), null, researchJson);
+    await waitBatchStatus(batchId, 'done');
+    expect(generateMock).toHaveBeenCalledTimes(3); // 1 单任务 + 锚点 + 依赖
+    for (const call of generateMock.mock.calls) {
+      expect(call[3]).toBe(researchJson); // 识别阶段研究结果原样到达生图服务
+    }
+  });
 });

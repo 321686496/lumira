@@ -164,6 +164,8 @@ export interface AnalyzeUserPromptInput {
   creationReq?: string | null;
   /** 姿势个数：1~6 固定指定；空/undefined = AI 自动判断 */
   poseCount?: number | null;
+  /** 趋势研究摘要（识别前已搜索命中；结构化数据构思时贴合当下流行趋势） */
+  researchDigest?: string | null;
 }
 
 /** 构造姿势数量指令行（vision / text-only 共用） */
@@ -177,13 +179,20 @@ function poseCountLine(poseCount: number | null | undefined): string {
   );
 }
 
-/** 构造附加输入行（textDesc / creationReq，vision / text-only 共用） */
+/** 构造附加输入行（textDesc / creationReq / researchDigest，vision / text-only 共用） */
 function extrasLines(input: AnalyzeUserPromptInput): string[] {
   const lines: string[] = [];
   const textDesc = typeof input.textDesc === 'string' ? input.textDesc.trim() : '';
   if (textDesc) lines.push(`用户文字描述：${textDesc}`);
   const creationReq = typeof input.creationReq === 'string' ? input.creationReq.trim() : '';
   if (creationReq) lines.push(`创作要求：${creationReq}（识别/构思结果需向该要求倾斜）`);
+  const digest = typeof input.researchDigest === 'string' ? input.researchDigest.trim() : '';
+  if (digest) {
+    lines.push(
+      '网络趋势参考（当前实时搜索命中的流行素材；构思模板的主题、风格、场景、节日、姿势时优先贴合其中的有效信息，与创作要求冲突时以创作要求为准）：',
+      digest,
+    );
+  }
   return lines;
 }
 

@@ -136,6 +136,25 @@ describe('generateAiPoseImages', () => {
     expect(formData?.get('reference')).toBe(reference);
   });
 
+  it('传入研究结果时序列化为 research 字段提交；空数组不提交该字段', async () => {
+    batchStartMock.mockResolvedValue({ batchId: 'batch-1' });
+    batchStatusMock.mockResolvedValue({
+      batchId: 'batch-1', total: 1, completed: 1, current: 1, status: 'done',
+      results: [{ index: 0, status: 'done' as const, image: 'aGVsbG8=', mimeType: 'image/png' }],
+    });
+    const research = [{ source: 'sogou', title: '千金风', snippet: '流行' }];
+
+    await generateAiPoseImages({ draft: {}, research });
+
+    const formData = batchStartMock.mock.calls[0]?.[0];
+    expect(JSON.parse(formData?.get('research') as string)).toEqual(research);
+
+    await generateAiPoseImages({ draft: {}, research: [] });
+
+    const formData2 = batchStartMock.mock.calls[1]?.[0];
+    expect(formData2?.get('research')).toBeNull();
+  });
+
   it('批量提交失败时抛出错误并停止轮询', async () => {
     batchStartMock.mockResolvedValue({ error: '生图服务不可用' });
     await expect(generateAiPoseImages({ draft: {} })).rejects.toThrow('生图服务不可用');

@@ -329,6 +329,7 @@ export function AiCreateWizard({
       const poseResults = await generateAiPoseImages({
         draft: draftLocal,
         referenceFile: poseReferenceFile ?? exampleFile,
+        research: analyzeResult.research,
         onProgress: setPoseProgress,
         onResult: appendGeneratedPose,
       });
@@ -721,6 +722,7 @@ export function AiCreateWizard({
               setPoseReferenceUrl(url);
             }}
             draft={draft}
+            research={analyzeDetail?.research ?? null}
             candidates={candidates}
             setCandidates={setCandidates}
             busy={busy}

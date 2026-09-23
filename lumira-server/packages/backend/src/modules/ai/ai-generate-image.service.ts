@@ -9,7 +9,8 @@ import { UploadFile } from '../templates/admin-templates.service';
 import { AiConfigService } from './ai-config.service';
 import { GenerateImageResult, generateImage, mapSize } from './image-client';
 import { buildImagePrompt } from './image-prompt.builder';
-import { polishPrompt } from './prompt-polisher';
+import { composeImagePrompt } from './image-prompt.composer';
+import type { ResearchItem } from './trend-research/research-item';
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -75,12 +76,14 @@ export class AiGenerateImageService {
 
   /**
    * 生成模板效果图：取启用配置（未配置 503）→ 解析草稿 JSON（非法 400）→
-   * 构建 prompt（可选附加用户额外要求）+ 厂商尺寸 → generateImage（有参考图时 doubao/openai 走图生图）
+   * 结构化素材（草稿 + 姿势 + 研究结果 + 照片参数 + 生图要求）交文本模型整理为生图提示词
+   * （失败回退机械拼接）+ 厂商尺寸 → generateImage（有参考图时 doubao/openai 走图生图）
    */
   async generate(
     reference: UploadFile | undefined,
     metaJson: string | null,
     extraPrompt?: string | null,
+    researchJson?: string | null,
   ): Promise<GenerateImageResult> {
     // 1. 取启用配置（未配置/未启用 → 503 透传）
     const cfg = await this.aiConfigService.getActiveConfig();
@@ -98,10 +101,25 @@ export class AiGenerateImageService {
       }
     }
 
-    // 3. 构建 prompt（extraPrompt = 用户附加提示词，拼在末尾；拼接 → 文本模态润色，失败回退拼接值）
+    // 2.5 解析研究结果 JSON（识别阶段透传；非法/非数组静默降级为空，不阻断生图）
+    let research: ResearchItem[] = [];
+    if (researchJson) {
+      try {
+        const parsed = JSON.parse(researchJson);
+        if (Array.isArray(parsed)) research = parsed as ResearchItem[];
+      } catch {
+        // 非法 JSON → 无研究参考，走纯草稿素材
+      }
+    }
+
+    // 3. 机械拼接 prompt 作为兜底；结构化素材交文本模型整理为最终生图提示词（失败回退拼接值）
     //    + 按厂商映射尺寸 → 生图（有参考图时 doubao/openai 走图生图）
-    const rawPrompt = buildImagePrompt(draft, extraPrompt);
-    const { prompt } = await polishPrompt(cfg.text, rawPrompt);
+    const fallbackPrompt = buildImagePrompt(draft, extraPrompt);
+    const { prompt } = await composeImagePrompt(
+      cfg.text,
+      { draft, research, extraPrompt },
+      fallbackPrompt,
+    );
     // 网络生图（含 qwen 异步轮询/结果下载）纳入全局并发闸门，避免并发打爆上游厂商
     return imageSemaphore.run(() => generateImage(cfg.image, {
       prompt,

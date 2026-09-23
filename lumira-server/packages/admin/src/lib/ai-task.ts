@@ -14,6 +14,7 @@ import type {
   AiImageStatusResult,
   AiSilhouetteStatusResult,
   AiBatchStatusResult,
+  AiResearchRef,
 } from '@/types/admin';
 import { compressImage } from '@/lib/image-compress';
 
@@ -52,10 +53,12 @@ export function generateAiPoseImages(options: {
   draft: Record<string, unknown>;
   referenceFile?: File | null;
   extraPrompt?: string | null;
+  /** 识别阶段的网络趋势研究结果（透传给后端生图提示词组织器，与草稿同源保持一致） */
+  research?: AiResearchRef[] | null;
   onResult?: (result: AiTaskFileResult) => void;
   onProgress?: (progress: AiPoseProgress) => void;
 }): Promise<AiTaskFileResult[]> {
-  const { draft, referenceFile, extraPrompt, onResult, onProgress } = options;
+  const { draft, referenceFile, extraPrompt, research, onResult, onProgress } = options;
   return (async () => {
     const fd = new FormData();
     fd.set('meta', JSON.stringify({
@@ -65,6 +68,7 @@ export function generateAiPoseImages(options: {
     if (referenceFile) fd.set('reference', referenceFile);
     const extra = typeof extraPrompt === 'string' ? extraPrompt.trim() : '';
     if (extra) fd.set('extraPrompt', extra);
+    if (research && research.length > 0) fd.set('research', JSON.stringify(research));
 
     const started = await aiGenerateImageBatchStartAction(fd);
     if ('error' in started) throw new AiTaskPollError(started.error || '生成任务提交失败');

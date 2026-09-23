@@ -21,6 +21,8 @@ export interface ImageTask {
   batch?: {
     metaJson: string;
     extraPrompt?: string | null;
+    /** 识别阶段研究结果 JSON（ResearchItem[]；透传给生图提示词组织器） */
+    research?: string | null;
     dependencyTaskId?: string;
     dependents?: string[];
   };
@@ -104,11 +106,12 @@ export class AiImageTaskService implements OnModuleDestroy {
     reference: UploadFile | undefined,
     metaJson: string | null,
     extraPrompt?: string | null,
+    research?: string | null,
   ): Promise<{ taskId: string }> {
     await this.aiConfigService.getActiveConfig();
     const id = `img_${nanoid(16)}`;
     this.tasks.set(id, { id, status: 'pending', createdAt: Date.now() });
-    void this.run(id, reference, metaJson, extraPrompt);
+    void this.run(id, reference, metaJson, extraPrompt, research);
     return { taskId: id };
   }
 
@@ -121,6 +124,7 @@ export class AiImageTaskService implements OnModuleDestroy {
     reference: UploadFile | undefined,
     metaJson: string | null,
     extraPrompt?: string | null,
+    research?: string | null,
   ): Promise<{ batchId: string }> {
     await this.aiConfigService.getActiveConfig();
 
@@ -167,6 +171,7 @@ export class AiImageTaskService implements OnModuleDestroy {
             : { mode: 'strict', anchor: 'first' },
         }),
         extraPrompt,
+        research,
         dependencyTaskId: index === 0 ? undefined : entries[0].taskId,
         dependents: index === 0 ? entries.slice(1).map((e) => e.taskId) : undefined,
       };
@@ -186,7 +191,13 @@ export class AiImageTaskService implements OnModuleDestroy {
     });
 
     if (!anchor?.batch) throw new BadRequestException('批量姿势任务初始化失败');
-    void this.run(firstTaskId, reference, anchor.batch.metaJson, anchor.batch.extraPrompt);
+    void this.run(
+      firstTaskId,
+      reference,
+      anchor.batch.metaJson,
+      anchor.batch.extraPrompt,
+      anchor.batch.research,
+    );
     this.refreshBatch(batchId);
 
     return { batchId };
@@ -198,13 +209,14 @@ export class AiImageTaskService implements OnModuleDestroy {
     reference: UploadFile | undefined,
     metaJson: string | null,
     extraPrompt?: string | null,
+    research?: string | null,
   ): Promise<void> {
     const task = this.tasks.get(id);
     if (!task) return;
     task.status = 'running';
     this.refreshBatch(task.batchId);
     try {
-      const r = await this.generateWithRetry(reference, metaJson, extraPrompt);
+      const r = await this.generateWithRetry(reference, metaJson, extraPrompt, research);
       task.status = 'done';
       task.result = { image: r.base64, mimeType: r.mimeType };
       void this.startDependents(id);
@@ -220,11 +232,12 @@ export class AiImageTaskService implements OnModuleDestroy {
     reference: UploadFile | undefined,
     metaJson: string | null,
     extraPrompt?: string | null,
+    research?: string | null,
   ): Promise<{ base64: string; mimeType: string }> {
     let lastError: unknown;
     for (let attempt = 1; attempt <= GENERATE_RETRY_LIMIT; attempt += 1) {
       try {
-        return await this.aiGenerateImageService.generate(reference, metaJson, extraPrompt);
+        return await this.aiGenerateImageService.generate(reference, metaJson, extraPrompt, research);
       } catch (err) {
         lastError = err;
         const message = (err as Error)?.message || '';
@@ -294,7 +307,7 @@ export class AiImageTaskService implements OnModuleDestroy {
       const dependent = this.tasks.get(dependentId);
       const batch = dependent?.batch;
       if (!dependent || !batch) return null;
-      return this.run(dependentId, reference, batch.metaJson, batch.extraPrompt);
+      return this.run(dependentId, reference, batch.metaJson, batch.extraPrompt, batch.research);
     });
     void Promise.all(started.filter((p): p is Promise<void> => p !== null)).catch(() => undefined);
   }

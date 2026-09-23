@@ -20,9 +20,24 @@ import { extractJson, normalizeDraft, CategoryNode } from './normalize';
 import { AiOrchestratorService } from './ai-orchestrator.service';
 import type { OrchestratorInput, OrchestratorTraceEntry } from './ai-orchestrator.service';
 import type { ResearchItem } from './trend-research/research-item';
+import { TrendResearchService } from './trend-research/trend-research.service';
 
 /** 允许的示例图 mimetype */
 const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
+
+/** 研究摘要构造：Top 8 条「标题：摘要」，单条截断，总长上限 1200 字（注入草稿生成提示词） */
+function buildResearchDigest(items: ResearchItem[]): string {
+  return items
+    .slice(0, 8)
+    .map((it) => {
+      const title = (it.title || '').trim().slice(0, 60);
+      const snippet = (it.snippet || '').trim().slice(0, 120);
+      return title && snippet ? `${title}：${snippet}` : (title || snippet);
+    })
+    .filter(Boolean)
+    .join('\n')
+    .slice(0, 1200);
+}
 
 export interface AiAnalyzeResult {
   draft: Record<string, unknown>;
@@ -40,6 +55,7 @@ export class AiAnalyzeService {
   constructor(
     private readonly dbService: DatabaseService,
     private readonly aiConfigService: AiConfigService,
+    private readonly trendResearch: TrendResearchService,
     private readonly orchestrator?: AiOrchestratorService,
   ) {}
 
@@ -94,6 +110,24 @@ export class AiAnalyzeService {
     // 3. 取启用配置（未配置/未启用 → 503 透传）
     const cfg = await this.aiConfigService.getActiveConfig();
 
+    // 3.5 研究前置：搜索开启且主题非空 → 先搜后写草稿。
+    //     研究摘要注入草稿生成提示词，让结构性数据（主题/风格/场景/姿势描述）贴合当下趋势；
+    //     搜索失败静默降级（不阻断识别）。主题口径与 orchestrator 一致：创作要求 ?? 文字描述。
+    let research: ResearchItem[] = [];
+    let researchDigest = '';
+    if (cfg.search?.enabled) {
+      const topic = (extra.creationReq?.trim() || trimmedText).trim();
+      if (topic) {
+        try {
+          const r = await this.trendResearch.research(topic, { limitPerSource: 5 });
+          research = r.items;
+          researchDigest = buildResearchDigest(r.items);
+        } catch {
+          // 搜索失败 → 无摘要，草稿生成回到无研究参考的原路径
+        }
+      }
+    }
+
     // 4. 按输入组合分叉：有图走视觉模型（extras 注入识别指令），仅文字走文本模型
     let content: string;
     if (image) {
@@ -103,6 +137,7 @@ export class AiAnalyzeService {
           textDesc: extra.textDesc?.trim() || trimmedText || undefined,
           creationReq: extra.creationReq,
           poseCount,
+          researchDigest,
         }),
         imageBase64: image.buffer.toString('base64'),
         imageMime: image.mimetype,
@@ -116,6 +151,7 @@ export class AiAnalyzeService {
           textDesc: trimmedText,
           creationReq: extra.creationReq,
           poseCount,
+          researchDigest,
         }),
         temperature: 0.3,
         jsonMode: true,
@@ -142,10 +178,10 @@ export class AiAnalyzeService {
         creationReq: extra.creationReq ?? undefined,
         poseCount: poseCount ?? undefined,
       };
-      const r = await this.orchestrator.run(input, { categories, draft: json });
+      const r = await this.orchestrator.run(input, { categories, draft: json, research });
       return { draft: r.draft, warnings: r.warnings, trace: r.trace, raw: json, research: r.research ?? [] };
     }
 
-    return { ...normalized, trace: [], raw: json, research: [] };
+    return { ...normalized, trace: [], raw: json, research };
   }
 }

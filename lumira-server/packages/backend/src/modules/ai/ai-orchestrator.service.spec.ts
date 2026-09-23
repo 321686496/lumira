@@ -146,6 +146,21 @@ describe('AiOrchestratorService.run', () => {
     expect(String(researchTrace?.resultBrief)).not.toContain('skip-research');
   });
 
+  it('识别前置已带 research（数组）→ 直接复用不再重复搜索，trace 标记识别前置', async () => {
+    const { service, research, optsRun } = build();
+    const pre = [RESEARCH_ITEM];
+
+    const res = await service.run(
+      { text: '千金小姐他拍风格' } as never,
+      { ...optsRun, research: pre },
+    );
+
+    expect(research.research).not.toHaveBeenCalled();
+    const researchTrace = res.trace.find((t) => t.step === 'research');
+    expect(String(researchTrace?.resultBrief)).toContain('识别前置');
+    expect(res.research).toBe(pre);
+  });
+
   it('imageScore 先 retry 后 pass → 进入再判，score 被调用 2 次，二次通过后返回', async () => {
     const { service, score, draftRefine, optsRun } = build({ scoreSequence: ['retry', 'pass'] });
 
