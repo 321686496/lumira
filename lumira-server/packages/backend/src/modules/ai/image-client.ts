@@ -154,12 +154,26 @@ async function zhipuGenerate(cfg: ImageClientConfig, input: GenerateImageInput, 
   );
 }
 
+/**
+ * gpt-image 系列英文摄影锚点：该系列模型以英文语料训练为主、指令跟随强，
+ * 纯中文提示词会发生明显的「风格漂移」（东方少女/新中式题材易滑向动漫插画质感）。
+ * 在中文提示词后追加英文写实摄影指令，把输出锚定回「真实照片」分布。
+ */
+const ENGLISH_PHOTOREAL_ANCHOR =
+  'Candid real-life photograph taken with a real camera: realistic human skin with visible pores, fine vellus hair, subtle oily shine and uneven skin tone; authentic fabric and environment textures; natural ambient light with realistic falloff; slight sensor noise; candid imperfect framing. Strictly not anime, not illustration, not painting, not 3D render, not AI-retouched; no airbrushed or plastic skin.';
+
+export function withEnglishPhotorealism(prompt: string): string {
+  return `${prompt}\n${ENGLISH_PHOTOREAL_ANCHOR}`;
+}
+
 /** openai：无参考图 /images/generations（b64_json）；有参考图 /images/edits（FormData） */
 async function openaiGenerate(cfg: ImageClientConfig, input: GenerateImageInput, opts: GenerateImageOptions) {
+  // gpt-image 系列：中文提示词后追加英文写实摄影锚点（风格漂移 → 动漫质感的对症手段）
+  const prompt = withEnglishPhotorealism(input.prompt);
   if (!input.referenceBase64) {
     return syncGenerate(
       cfg,
-      { model: cfg.model, prompt: input.prompt, size: input.size, response_format: 'b64_json' },
+      { model: cfg.model, prompt, size: input.size, response_format: 'b64_json' },
       opts,
     );
   }
@@ -168,7 +182,7 @@ async function openaiGenerate(cfg: ImageClientConfig, input: GenerateImageInput,
   const refBuf = Buffer.from(input.referenceBase64, 'base64');
   const fd = new FormData();
   fd.append('image', new Blob([refBuf], { type: input.referenceMime ?? 'image/png' }), 'reference.png');
-  fd.append('prompt', input.prompt);
+  fd.append('prompt', prompt);
   fd.append('model', cfg.model);
   fd.append('size', input.size);
   // 显式要求 b64_json：edits 默认返回 url（dall-e-2 默认 response_format=url），

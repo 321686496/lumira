@@ -4,7 +4,7 @@
 // qwen wanx 异步任务轮询（注入小 pollIntervalMs/pollTimeoutMs，不依赖真实 2s 计时）。
 // mapSize 覆盖四厂商 + 未知 ratio/provider 兜底。
 
-import { GenerateImageInput, GenerateImageOptions, ImageClientConfig, generateImage, mapSize } from './image-client';
+import { GenerateImageInput, GenerateImageOptions, ImageClientConfig, generateImage, mapSize, withEnglishPhotorealism } from './image-client';
 
 /** 各用例覆盖 provider；baseUrl 故意带尾斜杠：验证拼接前先规范化去掉 */
 function cfg(provider: string, baseUrl: string): ImageClientConfig {
@@ -152,7 +152,7 @@ describe('generateImage', () => {
       expect(String(url)).toBe('https://api.openai.example.com/v1/images/generations');
       const body = parseBody(init);
       expect(body.model).toBe('image-model');
-      expect(body.prompt).toBe('一张 3:4 竖构图的人像摄影作品');
+      expect(body.prompt).toBe(withEnglishPhotorealism('一张 3:4 竖构图的人像摄影作品')); // gpt-image 英文摄影锚点
       expect(body.size).toBe('1024x1536');
       expect(body.response_format).toBe('b64_json');
       expect(res).toEqual({ base64: 'b3BlbmFp', mimeType: 'image/png' });
@@ -178,7 +178,7 @@ describe('generateImage', () => {
       expect(init?.body).toBeInstanceOf(FormData);
 
       const fd = init?.body as FormData;
-      expect(fd.get('prompt')).toBe('一张 3:4 竖构图的人像摄影作品');
+      expect(fd.get('prompt')).toBe(withEnglishPhotorealism('一张 3:4 竖构图的人像摄影作品')); // 图生图同样带英文锚点
       expect(fd.get('model')).toBe('image-model');
       expect(fd.get('size')).toBe('1024x1536');
       // 显式要求 b64_json：edits 默认返回 url，不设置会导致误报「内容为空」
