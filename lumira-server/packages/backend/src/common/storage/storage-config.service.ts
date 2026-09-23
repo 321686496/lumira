@@ -87,13 +87,13 @@ export class StorageConfigService implements OnApplicationBootstrap {
   }
 
   /** 保存某厂商配置（local 只需 publicUrl）；active=true 时切换为当前激活存储 */
-  async save(id: StorageId, payload: StorageConfigPayload, active: boolean): Promise<void> {
+  async save(id: StorageId, payload: StorageConfigPayload, active: boolean): Promise<{ ok: true }> {
     if (!STORAGE_IDS.includes(id)) throw new BadRequestException(`未知存储厂商：${id}`);
 
     if (id === 'local') {
       await this.upsert(id, '{}', active);
       if (active) setRuntimeConfig('local', payload.publicUrl || '');
-      return;
+      return { ok: true };
     }
 
     if (!payload.endpoint || !payload.accessKeyId || !payload.secretAccessKey || !payload.bucket) {
@@ -109,6 +109,7 @@ export class StorageConfigService implements OnApplicationBootstrap {
     await this.upsert(id, JSON.stringify(payload), active);
     seedAdapter(id, adapter);
     if (active) setRuntimeConfig(id, payload.publicUrl || '');
+    return { ok: true };
   }
 
   private async upsert(id: string, configJson: string, active: boolean): Promise<void> {
