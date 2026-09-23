@@ -162,7 +162,7 @@ export function createQwenSearchProvider(cfg: { baseUrl?: string; apiKey?: strin
           max_tokens: 4096,
           response_format: { type: 'json_object' },
         }),
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.timeout(180_000),
       }).catch((err: unknown) => {
         const name = (err as { name?: string } | null | undefined)?.name;
         if (name === 'AbortError' || name === 'TimeoutError') throw new Error(`Qwen 网上搜索超时（${q.query}）`);

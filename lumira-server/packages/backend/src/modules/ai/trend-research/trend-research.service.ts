@@ -13,6 +13,17 @@ import type { ResearchItem } from './research-item';
 import { textChat } from '../llm-client';
 import { extractJson } from '../normalize';
 
+/** 把重组后的长关键词串按空格拆成多组短查询（默认 ≤3 词/组，最多 4 组），避免单请求载荷过大超时。 */
+export function splitQueries(query: string, groupSize = 3, maxGroups = 4): string[] {
+  const tokens = (query || '').split(/\s+/).map((t) => t.trim()).filter(Boolean);
+  if (!tokens.length) return [''];
+  const groups: string[] = [];
+  for (let i = 0; i < tokens.length && groups.length < maxGroups; i += groupSize) {
+    groups.push(tokens.slice(i, i + groupSize).join(' '));
+  }
+  return groups;
+}
+
 /** 单个启用搜索来源的配置 */
 export interface SearchSourceConfig {
   /** 来源标识（bing / vendor / baidu） */
@@ -105,11 +116,27 @@ export class TrendResearchService {
     const limit = opts.limitPerSource ?? 10;
     // 查询词重组：避免把整段口语意图直接丢给搜索引擎（失败自动回退原 topic）
     const query = await this.reorganizeQuery(topic);
+    // 把长关键词串拆成多组短查询（≤3 词/组），避免单请求载荷过大导致模型侧超时；
+    // 拆词后逐组搜索，缩短每次单请求的处理时长，也利于搜索引擎命中率。
+    const queries = splitQueries(query);
     const sourceErrors: { name: string; error: string }[] = [];
     const settled = await Promise.allSettled(
       cfg.sources.map(async (src): Promise<ResearchItem[]> => {
         const provider = this.factory(src.name, src);
-        return cacheableSearch(provider, { query, limit } as WebSearchQuery);
+        const batch = await Promise.allSettled(
+          queries.map((q) => cacheableSearch(provider, { query: q, limit } as WebSearchQuery)),
+        );
+        // 聚合该来源所有短查询结果；有任一成功即算该来源成功
+        const items: ResearchItem[] = [];
+        const errs: string[] = [];
+        batch.forEach((b) => {
+          if (b.status === 'fulfilled') items.push(...b.value);
+          else errs.push(b.reason instanceof Error ? b.reason.message : String(b.reason));
+        });
+        if (!items.length && errs.length) {
+          throw new Error(errs[0]);
+        }
+        return items;
       }),
     );
 
