@@ -1202,12 +1202,14 @@ export class CameraState implements StreamHandler {
             return;
           }
           // 增强兜底路径（photoAvailable 未在本设备触发，directDone 为 false）：
-          // 此处也额外发起 FAST_MODE 早帧交付（一阶段低质量图 ~694ms 先于成片到达），
-          // 使缩略图/水印动画源不依赖 photoAvailable 直出，先快后真。
-          // 成片仍由 _handlePhotoCb 全质量兜底写出，两请求走各自独立 requestId，互不干扰。
-          Logger.info(TAG, 'photoAssetAvailable: enhanced path, requesting early anim frame too');
-          bridgeNativeLog(`[perf-cam] requestEarlyFrame: enhanced fallback, requesting early anim frame elapsed=${Date.now() - takePhotoStartAt}ms`);
-          this.requestEarlyFrameForAnimation(photoAsset);
+          // 先快：立即只读 fd 拷出 asset 原始 JPEG 作为早帧（~800ms 送达 Dart，
+          // 缩略图/初版成片提前上屏）。本设备无分段式拍照能力（photoAvailable 与
+          // FAST_MODE requestImageData 均不回调），photoAssetAvailable 时原始文件
+          // 已落盘，直接读文件是唯一 ~1s 内的早帧来源。
+          // 后真：成片仍由 _handlePhotoCb(HIGH_QUALITY_MODE) 增强交付（~2.4s），质量不变。
+          Logger.info(TAG, 'photoAssetAvailable: enhanced path, fd early frame + HIGH_QUALITY final');
+          bridgeNativeLog(`[perf-cam] fallback: fd early frame + HIGH_QUALITY deliver elapsed=${Date.now() - takePhotoStartAt}ms`);
+          this.deliverEarlyFrameFromAsset(photoAsset);
           this._handlePhotoCb(photoAsset, ctx.path, ctx.result, ctx);
         });
     } catch (err) {
@@ -1271,20 +1273,89 @@ export class CameraState implements StreamHandler {
     }
     const handler = new EarlyFrameHandler(earlyPath, this._photoEarlyFrameListener?.events ?? null)
     try {
+      bridgeNativeLog(`[perf-cam] requestEarlyFrame: calling requestImageData(FAST_MODE) path=${earlyPath}`)
       photoAccessHelper.MediaAssetManager.requestImageData(context, photoAsset, requestOptions, handler)
         .then((id: string) => {
           this._earlyFrameRequestId = id
           Logger.info(TAG, `requestEarlyFrameForAnimation: requestId=${id} path=${earlyPath}`)
+          bridgeNativeLog(`[perf-cam] requestEarlyFrame: OK requestId=${id}`)
         })
         .catch((err: BusinessError) => {
           Logger.error(TAG, `requestEarlyFrameForAnimation failed: ${err.code}, ${err.message}`)
+          bridgeNativeLog(`[perf-cam] requestEarlyFrame FAILED code=${err.code} msg=${err.message}`)
           this._earlyFrameRequestId = undefined
         })
     } catch (err) {
       let e = err as BusinessError
       Logger.error(TAG, `requestEarlyFrameForAnimation exception: ${e.code}, ${e.message}`)
+      bridgeNativeLog(`[perf-cam] requestEarlyFrame EXCEPTION code=${e.code} msg=${e.message}`)
       this._earlyFrameRequestId = undefined
     }
+  }
+
+  /**
+   * 快速早帧（无分段式拍照能力的设备兜底）：photoAssetAvailable（~700ms）时
+   * 通过只读 fd 直接拷出 asset 原始 JPEG，写入 cacheDir 并经
+   * 'camerawesome/photo_early_frame' 通知 Dart。原始文件此刻已完整落盘
+   * （分段/增强只影响 requestImageData 的交付时机，不影响磁盘文件），
+   * fd 直读绕开 MediaAssetManager 请求队列，~100ms 内完成拷贝。
+   * 仅作早帧（初版成片/缩略图），成片仍走 HIGH_QUALITY 增强交付，互不影响。
+   */
+  private deliverEarlyFrameFromAsset(photoAsset: photoAccessHelper.PhotoAsset): void {
+    const sink = this._photoEarlyFrameListener?.events ?? null
+    if (!sink) {
+      Logger.info(TAG, 'deliverEarlyFrameFromAsset: early-frame sink not ready, skip');
+      return
+    }
+    const context = this.uiAbility?.context
+    if (!context) {
+      Logger.error(TAG, 'deliverEarlyFrameFromAsset: uiAbility context missing');
+      return
+    }
+    const earlyPath = `${context.cacheDir}/anim_early_${Date.now()}.jpg`
+    this.tryEarlyFrameFd(photoAsset, sink, earlyPath, 1)
+  }
+
+  /**
+   * getReadOnlyFd 带重试：实测部分场景（如前置摄像头）photoAssetAvailable 触发时
+   * 媒体库内部尚未就绪（14000011 medialibrary inner fail），150ms 后重试可成功。
+   * 共 3 次，均失败则放弃早帧（成片路径不受影响）。
+   */
+  private tryEarlyFrameFd(photoAsset: photoAccessHelper.PhotoAsset,
+    sink: EventSink, earlyPath: string, attempt: number): void {
+    photoAsset.getReadOnlyFd().then(async (fd: number) => {
+      try {
+        const dest = fileIo.openSync(earlyPath,
+          fileIo.OpenMode.CREATE | fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.TRUNC)
+        await fileIo.copyFile(fd, dest.fd)
+        fileIo.closeSync(dest)
+        const size = fileIo.statSync(earlyPath).size
+        if (size > 20 * 1024) {
+          bridgeNativeLog(`[perf-cam] earlyFrameFd: copied bytes=${size} ` +
+            `elapsed=${Date.now() - takePhotoStartAt}ms attempt=${attempt} to ${earlyPath}`)
+          sink.success(earlyPath)
+        } else {
+          bridgeNativeLog(`[perf-cam] earlyFrameFd: too small (${size}B), skip`)
+        }
+      } catch (e) {
+        let be = e as BusinessError
+        bridgeNativeLog(`[perf-cam] earlyFrameFd: copy FAILED code=${be.code} msg=${be.message}`)
+      } finally {
+        photoAsset.close(fd).catch(() => {
+        })
+      }
+    }).catch((err: BusinessError) => {
+      if (attempt < 3) {
+        bridgeNativeLog(`[perf-cam] earlyFrameFd: getReadOnlyFd FAILED code=${err.code} ` +
+          `attempt=${attempt}, retry in 150ms`)
+        setTimeout(() => {
+          this.tryEarlyFrameFd(photoAsset, sink, earlyPath, attempt + 1)
+        }, 150)
+      } else {
+        bridgeNativeLog(`[perf-cam] earlyFrameFd: getReadOnlyFd FAILED after ${attempt} ` +
+          `attempts code=${err.code} msg=${err.message}, give up`)
+      }
+    })
   }
 
   setFocusPoint(previewSize: PreviewSize, x: number, y: number) {

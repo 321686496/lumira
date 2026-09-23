@@ -122,7 +122,9 @@ const int _earlyFrameMaxDim = _ohosNativeMaxDim;
 
 // 快门冻结帧（水印动画源）的最大边像素：动画源短暂浮层使用，无需全屏高采样。
 // OHOS 上按 devicePixelRatio(~3x) 全屏 toImage + PNG 编码实测 3s+，限幅后显著提速。
-const int _kShutterFrameMaxDim = 1280;
+// 1280px 实测仍 1.8-2.4s（PNG 编码随像素量线性），降到 720px（像素量再减 ~3.2x）
+// 使水印动画 ~1s 内可启动；动画源仅短暂显示后由成片替换，720px 足够。
+const int _kShutterFrameMaxDim = 720;
 
 /// 早帧「初版成片」处理快照：快门时刻的有效参数（与成片原生快速路径同源同语义），
 /// 供早帧到达时直接走原生 processJpeg，无需再读 provider。
@@ -285,6 +287,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
   /// 动画源是否已是屏幕空间 WYSIWYG 帧（取景器来源 = true，跳过方向对齐）。
   bool _animationSourceAligned = false;
+
+  /// 动画源是否需要强制水平镜像（回退源=OHOS 相册增强前置成品时 = true：
+  /// 增强成品已镜像而最终成片是真实方向，overlay 需补一翻对齐成片）。
+  bool _animationFlipSource = false;
   VoidCallback? _onAnimationComplete;
 
   /// OHOS 分阶段拍照早帧订阅：一阶段低质量帧（~672ms）先于成片到达，
@@ -981,7 +987,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
                 outputPath: '$path.proc.jpg',
                 targetRatio: job.targetRatio,
                 isPortrait: job.isPortrait,
-                isFront: job.isFront,
+                // fd 早帧=sensor 原始文件（真实方向、未镜像），与成片管线输入
+                // （相册增强成品=已镜像、processJpeg isFront 翻回真实）殊途同归。
+                // 此处若传 job.isFront 会把已是真实方向的早帧再翻一次 → 与成片
+                // 左右相反（用户可见「早帧镜像」）。故恒传 false 保持真实方向。
+                isFront: false,
                 matrix: job.matrix,
                 sharpen: job.sharpen,
                 clarity: job.clarity,
@@ -1031,7 +1041,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // 与成片 capture() 并行执行，不阻塞。
     final shutterFrameFuture =
         shouldAnimateNow && flashMode == CaptureFlashMode.off
-            ? _captureShutterViewfinderFrame()
+            ? _captureShutterViewfinderFrame(
+                flipHorizontal: facing == 'front')
             : Future<String?>.value(null);
 
     // 快照当前比例参数（避免连拍中切换比例导致参数不一致）
@@ -1076,6 +1087,19 @@ class _CapturePageState extends ConsumerState<CapturePage>
         shutterFramePath = await shutterFrameFuture;
       } catch (e) {
         debugPrint('[capture] shutterFrameForAnimation failed: $e');
+      }
+
+      // === 快门帧即上屏（按下即出） ===
+      // 取景器冻结帧（WYSIWYG，rawRgba+原生硬编码 ~300-400ms 就绪）先行填充
+      // 缩略图，几乎无感等待；随后早帧初版成片（~1.2s，全分辨率）与最终成片
+      // 原位替换。仅 flash off 且允许动画时才有快门帧，其余场景维持早帧/成片路径。
+      if (shutterFramePath != null && mounted) {
+        ref.read(captureThumbnailProvider.notifier).setInterimResult(
+              shutterFramePath,
+              photoId: _currentShutterPhotoId,
+              visible: true,
+            );
+        debugPrint('[capture] 快门帧 interim 上屏: $shutterFramePath');
       }
 
       // === 水印相框入场动画（动画源帧就绪即触发，不等成片） ===
@@ -1125,11 +1149,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
       // 回退：无动画源帧（闪光模式/取景器帧捕捉失败）且动画尚未启动 →
       // 用成片启动（成片是原始照片，需要方向对齐，sourceAligned=false）。
+      // 仅 OHOS 前置需 flipSource 补翻：其成片=相册增强成品（已镜像、与取景器
+      // 一致），而动画终点应与最终落库成片（真实方向）一致。iOS/Android 回退源
+      // 是相机原始照片（未镜像），沿用 overlay 原有 isFront&&横屏像素 规则即可。
       if (shouldAnimateNow && mounted && !_showWatermarkAnimation) {
         _startWatermarkAnimation(
           result.filePath,
           wmTemplate,
           sourceAligned: false,
+          flipSource: isOhos && facing == 'front',
         );
       }
       if (shouldAnimateNow) {
@@ -1702,11 +1730,16 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
   /// OHOS 快门冻结取景器帧：快门瞬间对「已合成取景器」toImage，作水印动画源。
   /// 取景器已含 ColorFiltered 色彩矩阵 + 前置镜像 + 比例裁切（WYSIWYG），
-  /// 因此动画内容与取景器一致。返回 PNG 文件路径；失败返回 null（上层回退成片）。
+  /// 因此动画内容与取景器一致。返回文件路径；失败返回 null（上层回退成片）。
   ///
   /// 仅捕获相机画面本身（filteredCamera），不含构图线/剪影/对焦框等 UI 叠层，
   /// 避免动画源被调试元素污染。
-  Future<String?> _captureShutterViewfinderFrame() async {
+  ///
+  /// [flipHorizontal]：前置时为 true——成片为真实方向（processJpeg 镜像语义与
+  /// 取景器相反），快门帧若保持取景器镜像会导致 interim/动画与成片左右相反
+  /// （用户可见「照片镜像」闪变），故前置时水平翻转对齐成片方向。
+  Future<String?> _captureShutterViewfinderFrame(
+      {bool flipHorizontal = false}) async {
     final boundary = _filteredPreviewKey.currentContext?.findRenderObject();
     if (boundary is! RenderRepaintBoundary) {
       debugPrint('[capture] shutterFrame: RepaintBoundary 不可用');
@@ -1715,22 +1748,70 @@ class _CapturePageState extends ConsumerState<CapturePage>
     try {
       final sw = Stopwatch()..start();
       // 水印动画源对分辨率不敏感（短暂浮层），无需按设备 pixelRatio 全屏高采样。
-      // 限制最大边 ~1280px，避免 OHOS toImage + PNG 编码在拍照瞬间拖慢主线程（实测 3s+）。
+      // 限制最大边，避免 OHOS toImage + 编码在拍照瞬间拖慢主线程（实测 3s+）。
       final basePr = _viewfinderPixelRatio ?? 1.0;
       final size = boundary.size;
       double pr = basePr;
       if (size.width > 0 && size.height > 0) {
-        // 按最长边限制最大像素 ~1280px。
+        // 按最长边限制最大像素。
         final longSide = size.width >= size.height ? size.width : size.height;
         final capPr = _kShutterFrameMaxDim / longSide;
         if (longSide > 0 && capPr < pr) pr = capPr;
       }
       if (pr < 1.0) pr = 1.0;
-      final uiImage = await boundary.toImage(pixelRatio: pr);
-      // 限幅后像素量减少 ~9x，PNG 编码也随之显著加速（动画源短暂使用，最大边 1280px 足够）。
-      final byteData =
-          await uiImage.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) return null;
+      var uiImage = await boundary.toImage(pixelRatio: pr);
+      debugPrint('[perf] shutterFrame toImage: ${sw.elapsedMilliseconds}ms '
+          '${uiImage.width}x${uiImage.height}');
+      // 前置：水平翻转对齐成片方向（真实方向），消除 interim→成片镜像闪变。
+      if (flipHorizontal) {
+        final w = uiImage.width, h = uiImage.height;
+        final rec = ui.PictureRecorder();
+        final canvas = ui.Canvas(rec);
+        canvas.translate(w.toDouble(), 0);
+        canvas.scale(-1, 1);
+        canvas.drawImage(uiImage, ui.Offset.zero, ui.Paint());
+        final flipped = await rec.endRecording().toImage(w, h);
+        uiImage.dispose();
+        uiImage = flipped;
+      }
+      // OHOS PNG 软编码极慢（720px 实测 ~900ms，占快门帧耗时主体）。
+      // 改走 rawRgba（纯内存拷贝）+ 原生硬件 JPEG 编码（encodeJpegFromRgba，
+      // 2.7MP 实测 ~150ms），快门帧总耗时降至 ~300-400ms 实现「按下即出」；
+      // 失败回退 PNG 软编码路径。
+      Uint8List? outBytes;
+      var ext = 'jpg';
+      try {
+        final rgba =
+            await uiImage.toByteData(format: ui.ImageByteFormat.rawRgba);
+        debugPrint('[perf] shutterFrame rawRgba: ${sw.elapsedMilliseconds}ms '
+            'len=${rgba?.lengthInBytes ?? -1}');
+        if (rgba != null) {
+          final jpeg = await OhosImageProcessor.instance.encodeJpegFromRgba(
+            rgba: Uint8List.view(
+                rgba.buffer, rgba.offsetInBytes, rgba.lengthInBytes),
+            width: uiImage.width,
+            height: uiImage.height,
+            quality: 90,
+          );
+          if (jpeg != null && jpeg.isNotEmpty) {
+            outBytes = jpeg;
+            debugPrint('[perf] shutterFrame encodeJpeg: '
+                '${sw.elapsedMilliseconds}ms bytes=${jpeg.length}');
+          } else {
+            debugPrint('[perf] shutterFrame encodeJpeg: 返回空（原生侧失败，'
+                '看 [OhosImageProcessor] encodeJpegFromRgba error 日志）');
+          }
+        }
+      } catch (e) {
+        debugPrint('[capture] shutterFrame rawRgba→JPEG 失败: $e');
+      }
+      if (outBytes == null) {
+        // 回退：PNG 软编码（慢但保底可用）。
+        final png = await uiImage.toByteData(format: ui.ImageByteFormat.png);
+        if (png == null) return null;
+        outBytes = png.buffer.asUint8List(png.offsetInBytes, png.lengthInBytes);
+        ext = 'png';
+      }
       final ts = DateTime.now().millisecondsSinceEpoch;
       String? chosen;
       String? lastErr;
@@ -1740,10 +1821,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
           if (!await photosDir.exists()) {
             await photosDir.create(recursive: true);
           }
-          chosen = p.join(photosDir.path, 'shutter_frame_$ts.png');
-          final bytes = byteData.buffer
-              .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes);
-          await File(chosen).writeAsBytes(bytes, flush: true);
+          chosen = p.join(photosDir.path, 'shutter_frame_$ts.$ext');
+          await File(chosen).writeAsBytes(outBytes, flush: true);
           break;
         } catch (e) {
           lastErr = e.toString();
@@ -1841,10 +1920,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// [sourceAligned]：动画源是否已是屏幕空间 WYSIWYG 帧（已旋转/已镜像）。
   /// 取景器来源帧为 true（overlay 跳过方向对齐，避免双重镜像/旋转）；
   /// 回退用原始成片时为 false（overlay 按设备方向 + 前置镜像对齐）。
+  ///
+  /// [flipSource]：强制对动画源做水平镜像。仅回退源=OHOS 相册增强前置成品时
+  /// 传 true：增强成品「已镜像」（与取景器一致），而最终成片管线
+  /// processJpeg(isFront) 会翻回真实方向，不补翻则动画与成片左右相反。
   void _startWatermarkAnimation(
     String photoPath,
     WatermarkTemplate template, {
     required bool sourceAligned,
+    bool flipSource = false,
   }) {
     if (!mounted) return;
     setState(() {
@@ -1852,6 +1936,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
       _animationPhotoPath = photoPath;
       _animationTemplate = template;
       _animationSourceAligned = sourceAligned;
+      _animationFlipSource = flipSource;
     });
     _onAnimationComplete = () {
       if (!mounted) return;
@@ -2578,6 +2663,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
                 isPortrait: isPortrait,
                 // 取景器来源帧已 WYSIWYG 对齐，跳过 overlay 二次旋转/镜像。
                 sourceAligned: _animationSourceAligned,
+                // 回退源=相册增强前置成品（已镜像）时强制补一翻对齐成片真实方向。
+                flipSource: _animationFlipSource,
                 onAnimationComplete: _onAnimationComplete ?? () {},
               ),
             ),

@@ -82,7 +82,12 @@ class OhosImageProcessor {
         },
       );
       if (result == null) return null;
-      if (result.containsKey('error')) return null;
+      if (result.containsKey('error')) {
+        // 原生侧失败原因必须可见（此前静默吞掉导致快门帧莫名回退 PNG 慢路径）。
+        debugPrint('[OhosImageProcessor] encodeJpegFromRgba error: '
+            '${result['error']}');
+        return null;
+      }
       final jpeg = result['jpeg'];
       if (jpeg is Uint8List) return jpeg;
       if (jpeg is List<int>) return Uint8List.fromList(jpeg);

@@ -6,8 +6,10 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../core/services/ohos_image_processor.dart';
+import '../../../shared/widgets/lumira/feedback/lumira_toast.dart';
 import '../domain/photo_template.dart';
 import '../services/preview_beauty_shader.dart'
     show loadFragmentProgramFromCandidates;
@@ -374,6 +376,18 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
   bool _rendering = false;
   DetailEffectsParams? _pending;
 
+  // ── 首帧像素校验（诊断）──
+  // 背景：iOS 真机（可能含部分 Android）FragmentShader 可能"静默渲染成原图"，
+  // 输出与输入逐像素相等，导致拖动磨皮/锐化照片无变化（OHOS 走原生预览不受此
+  // 影响，保存管线也因同根因做了逐像素校验 + CPU 回退）。本层原先无任何校验或
+  // 回退，静默失效时永远 fallback 原图。这里加首帧校验：把 core shader 渲染到
+  // 小画布，与同一张原图等比缩小逐像素对比，判定是否静默失效。
+  // 结果：debugPrint + 写 Documents/lumira_shader_diag.txt + 屏幕 Toast 一次，
+  // 便于无 console 的 TestFlight 场景复核（若确认为静默失效，后续可据此给 iOS
+  // 加 CPU 预览回退）。
+  bool _pixelVerifyStarted = false;
+  static const int _pixelVerifySize = 48;
+
   /// 当前效果参数指纹（用于跳过重复渲染；各字段钳到 0-255 后按 8 位错开，
   /// 负增量与 0 同签 —— 原生渲染本就把负增量钳为无效果，视觉等价）。
   static int _sigOf(DetailEffectsParams e) =>
@@ -401,6 +415,7 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
       _image = null;
       oldImg?.dispose();
       _resetOhosPreview(oldUrl: old.url);
+      _pixelVerifyStarted = false; // 新图重新首帧校验
       _decode();
       _applied = widget.effects;
       _pendingApply = null;
@@ -470,6 +485,126 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
     if (cacheId != null) {
       releaseOhosDetailCache(oldUrl);
     }
+  }
+
+  // ── 首帧像素校验实现 ──
+  /// 只在 build 首次抵达 shader 渲染路径时（core 或 full program 已就绪、
+  /// 有非零效果）触发一次。判定 core shader（磨皮/锐化）是否真正改变了像素。
+  Future<void> _runPixelVerify() async {
+    // 具体校验只覆盖「磨皮/锐化」的 core 分支（即本层对 iOS 实时预览的核心路径；
+    // 若 core 未加载而回落 full shader，需噪声采样，校验就跳过并直接上报加载结果）。
+    if (!_applied.hasAnyEffect) return;
+    final img = _image;
+    if (img == null) return;
+    final core = _coreProgram;
+    if (core == null) {
+      final full = _program;
+      _reportPixelVerify(
+        frames: '${img.width}x${img.height}',
+        verdict: full == null
+            ? 'SHADER_LOAD_FAIL (core+full 均 null) -> 实时预览回退原图'
+            : 'CORE_SHADER_LOAD_FAIL (回落 full shader, 跳过像素校验)',
+      );
+      return;
+    }
+    try {
+      const s = _pixelVerifySize;
+      final p = _applied;
+      final shader = core.fragmentShader()
+        ..setFloat(0, s.toDouble())
+        ..setFloat(1, s.toDouble())
+        ..setFloat(2, img.width.toDouble())
+        ..setFloat(3, img.height.toDouble())
+        ..setFloat(4, (p.sharpen / 100.0 * 6.0).clamp(-6.0, 6.0).toDouble())
+        ..setFloat(
+            5, (p.smoothStrength / 100.0).clamp(0.0, 1.0).toDouble())
+        ..setImageSampler(0, img);
+      final rec = ui.PictureRecorder();
+      ui.Canvas(rec).drawRect(
+            Offset.zero & Size.square(s.toDouble()),
+            Paint()..shader = shader,
+          );
+      final pic = rec.endRecording();
+      final out = await pic.toImage(s, s);
+      final outBytes =
+          await out.toByteData(format: ui.ImageByteFormat.rawRgba);
+      out.dispose();
+      if (outBytes == null) return;
+
+      // 基线：同一张原图等比缩小到同尺寸（唯一差异来自 shader 处理，而非缩放）。
+      final rec2 = ui.PictureRecorder();
+      ui.Canvas(rec2).drawImageRect(
+        img,
+        Rect.fromLTWH(
+            0, 0, img.width.toDouble(), img.height.toDouble()),
+        Rect.fromLTWH(0, 0, s.toDouble(), s.toDouble()),
+        Paint()..filterQuality = FilterQuality.high,
+      );
+      final pic2 = rec2.endRecording();
+      final base = await pic2.toImage(s, s);
+      final baseBytes =
+          await base.toByteData(format: ui.ImageByteFormat.rawRgba);
+      base.dispose();
+      if (baseBytes == null) return;
+
+      final ob = outBytes.buffer.asUint8List();
+      final bb = baseBytes.buffer.asUint8List();
+      var maxDiff = 0;
+      var changedPx = 0;
+      final n = math.min(ob.length, bb.length);
+      for (var i = 0; i + 3 < n; i += 4) {
+        final d = (ob[i] - bb[i]).abs() +
+            (ob[i + 1] - bb[i + 1]).abs() +
+            (ob[i + 2] - bb[i + 2]).abs();
+        if (d > maxDiff) maxDiff = d;
+        if (d > 15) changedPx++;
+      }
+      final hasFx = p.smoothStrength != 0 || p.sharpen != 0;
+      // 有非零效果却几乎逐像素一致 → 判定静默失效。
+      final silent = hasFx && maxDiff < 2;
+      _reportPixelVerify(
+        frames: '${img.width}x${img.height}',
+        verdict: silent
+            ? 'SHADER_SILENT_FAIL (maxDiff=$maxDiff, changedPx=$changedPx) -> '
+                '拖动磨皮/锐化无实时变化'
+            : 'SHADER_OK (maxDiff=$maxDiff, changedPx=$changedPx)',
+      );
+    } catch (e) {
+      debugPrint('[detail-effects] pixel verify failed: $e');
+    }
+  }
+
+  /// 上报校验/加载结论：debugPrint + 写诊断文件 + 屏幕 Toast 一次。
+  /// 写文件与 Toast 失败静默忽略，不影响正常预览。
+  void _reportPixelVerify({required String frames, required String verdict}) {
+    final line = '[pixel-verify] frames=$frames url=${widget.url} => $verdict';
+    debugPrint('[detail-effects] $line');
+    final ctx = mounted ? context : null;
+    if (ctx != null) {
+      try {
+        final overlay = Overlay.of(ctx, rootOverlay: true);
+        LumiraToast.showWithOverlay(
+          overlay,
+          'shader: $verdict',
+          duration: const Duration(seconds: 4),
+        );
+      } catch (_) {}
+    }
+    unawaited(_appendDiagFile(line));
+  }
+
+  /// 追加诊断到 Documents/lumira_shader_diag.txt（TestFlight 可从系统文件导出）。
+  Future<void> _appendDiagFile(String line) async {
+    try {
+      Directory dir;
+      try {
+        dir = await getApplicationDocumentsDirectory();
+      } catch (_) {
+        return;
+      }
+      final f = File('${dir.path}/lumira_shader_diag.txt');
+      await f.writeAsString('$line\n', mode: FileMode.append);
+    } catch (_) {}
   }
 
   /// 调度一次原生渲染：渲染中则合并（保留最新参数），空闲则立即执行。
@@ -638,6 +773,18 @@ class _DetailEffectsLayerState extends State<DetailEffectsLayer> {
     if (img == null) {
       // 未解码 / 解码失败 → 原图片路径。
       return widget.fallback();
+    }
+    // 诊断：非 OHOS（走 Dart shader）且进入「磨皮/锐化」core 渲染路径时，
+    // 首帧校验 shader 是否静默失效（输出==输入）。仅一次，结果见 Toast/诊断文件。
+    if (!OhosImageProcessor.isSupported &&
+        !_pixelVerifyStarted &&
+        _applied.hasAnyEffect &&
+        _applied.vignette == 0 &&
+        _applied.grain == 0 &&
+        _applied.legStretch == 0 &&
+        _coreProgram != null) {
+      _pixelVerifyStarted = true;
+      unawaited(_runPixelVerify());
     }
     final coreOnly = _applied.vignette == 0 &&
         _applied.grain == 0 &&

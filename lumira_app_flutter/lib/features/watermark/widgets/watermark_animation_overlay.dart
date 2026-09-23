@@ -44,6 +44,13 @@ class WatermarkAnimationOverlay extends StatefulWidget {
   /// （前置双重镜像 bug 的根因）；
   /// false：成片回退源（原始照片），按设备方向 + 前置镜像对齐。
   final bool sourceAligned;
+
+  /// 强制对源做水平镜像（回退源=相册增强成品时）：
+  /// OHOS 相册增强的前置成品「已镜像」（与取景器一致），而成片管线
+  /// processJpeg(isFront) 会再翻转成真实方向——动画直接用增强成品会与
+  /// 成片左右相反（用户可见「水印动画镜像翻转/直接出原图」），故强制补一翻。
+  /// 竖屏增强帧本不落入 needMirror（jpegIsLandscape=false），此参数补齐。
+  final bool flipSource;
   final VoidCallback onAnimationComplete;
 
   const WatermarkAnimationOverlay({
@@ -53,6 +60,7 @@ class WatermarkAnimationOverlay extends StatefulWidget {
     required this.isFront,
     required this.isPortrait,
     this.sourceAligned = false,
+    this.flipSource = false,
     required this.onAnimationComplete,
   });
 
@@ -269,7 +277,11 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
     // 前置镜像仅在「sensor-native 横屏像素」时补做：竖屏像素的前置 JPEG
     // （iOS WYSIWYG video 帧直出 / OHOS 相册增强成品）已是镜像结果，
     // 再镜像会双重水平翻转。与 capture_page._applyColorMatrixOnGpu 同规则。
-    final needMirror = widget.isFront && jpegIsLandscape;
+    // [flipSource] 例外：回退源=OHOS 相册增强前置成品（已镜像/与取景器一致），
+    // 而成片管线 processJpeg(isFront) 会翻回真实方向——此时无论竖横屏像素
+    // 都必须强制补一翻，否则动画与成片左右相反（用户可见「水印动画镜像」）。
+    final needMirror =
+        widget.flipSource || (widget.isFront && jpegIsLandscape);
     if (!needRotate && !needMirror) return src;
 
     final int rotation;

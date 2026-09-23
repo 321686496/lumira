@@ -481,8 +481,18 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   }
 
   /// 先快后真：full-res 后台处理完成，把预览页从 early 早帧原位升级为高清成片。
-  void _upgradeInterimToFinal(String finalPath) {
+  /// 成片先解码进图片缓存再切换，AnimatedSwitcher（见 _buildPhotoContent）与
+  /// 仍显示中的早帧做纯交叉淡化，无黑帧/闪烁（对齐 OHOS 原相机早帧→成片过渡）。
+  Future<void> _upgradeInterimToFinal(String finalPath) async {
     if (!mounted || finalPath.isEmpty || finalPath == _photoUrl) return;
+    // 先把高清成片解码进图片缓存再 setState：淡入的新帧首帧即就绪；
+    // 否则 Image.file 解码期间新帧透明、旧帧淡出 → 露出背景（黑闪）。
+    try {
+      await precacheImage(FileImage(File(finalPath)), context);
+    } catch (_) {
+      // 解码失败照常切换（Image errorBuilder 兜底）
+    }
+    if (!mounted || finalPath == _photoUrl) return;
     final prevUrl = _photoUrl;
     final interimUrl = _interimUrl;
     setState(() {
@@ -667,14 +677,24 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
           'smooth=${detailEffects.smoothStrength} '
           'sharpen=${detailEffects.sharpen} url=$photoUrl');
     }
-    final Widget baseImage = useDetailFx
-        ? DetailEffectsLayer(
-            url: photoUrl,
-            effects: detailEffects,
-            fallback: () => buildImage(),
-            key: ValueKey(photoUrl),
-          )
-        : buildImage();
+    // 早帧→成片（_photoUrl 变化）交叉淡化；后期参数/变换调整 key 不变，
+    // 原位更新不触发动画（拖滑块不会连续闪淡）。对比模式上方早退，不参与。
+    final Widget baseImage = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      child: SizedBox.expand(
+        key: ValueKey('fade:$photoUrl'),
+        child: useDetailFx
+            ? DetailEffectsLayer(
+                url: photoUrl,
+                effects: detailEffects,
+                fallback: () => buildImage(),
+                key: ValueKey(photoUrl),
+              )
+            : buildImage(),
+      ),
+    );
 
     return RotatedBox(
       quarterTurns: transform.rotation ~/ 90,

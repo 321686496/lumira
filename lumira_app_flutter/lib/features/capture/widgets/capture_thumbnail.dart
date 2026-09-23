@@ -67,10 +67,15 @@ class CaptureThumbnail extends ConsumerWidget {
           ),
         );
       case CaptureThumbnailStatus.interim:
-        // 先快后真：早帧（低质量）先作为可见缩略图，full-res 后升级到 final_。
+        // 先快后真：快门帧/早帧（低质量）先作为可见缩略图，full-res 后升级到 final_。
         final ip = state.interimPath;
         if (ip != null && File(ip).existsSync()) {
-          return Image.file(File(ip), fit: BoxFit.cover);
+          // cacheWidth 降采样解码（48dp 角标只需 3x=144px）：快门帧/早帧 JPEG
+          // 实际 720-1280px，全量解码换 48px 显示纯属浪费，缩放解码快数倍。
+          return _fadedImage(
+            Image.file(File(ip), fit: BoxFit.cover, cacheWidth: 144),
+            ip,
+          );
         }
         // 早帧文件尚未就绪：退回转圈态
         return Center(
@@ -83,12 +88,29 @@ class CaptureThumbnail extends ConsumerWidget {
       case CaptureThumbnailStatus.final_:
         final Uint8List? bytes = state.quickBytes;
         if (bytes != null) {
-          return Image.memory(bytes, fit: BoxFit.cover);
+          return _fadedImage(Image.memory(bytes, fit: BoxFit.cover),
+              'mem:${state.photoId}:${bytes.length}');
         }
         if (state.finalPath != null) {
-          return Image.file(File(state.finalPath!), fit: BoxFit.cover);
+          return _fadedImage(
+              Image.file(File(state.finalPath!), fit: BoxFit.cover),
+              state.finalPath!);
         }
         return const SizedBox.shrink();
     }
+  }
+
+  /// 先快后真的图片来源切换（快门帧→早帧→成片）用淡入过渡，
+  /// 避免硬切闪烁（对齐 OHOS 原相机早帧→成片的淡入观感）。
+  Widget _fadedImage(Widget image, String key) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 260),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      child: SizedBox.expand(
+        key: ValueKey(key),
+        child: image,
+      ),
+    );
   }
 }
