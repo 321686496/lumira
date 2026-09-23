@@ -11,6 +11,7 @@ import 'core/auth/auth_controller.dart';
 import 'core/compliance/compliance_gate.dart';
 import 'core/config/app_config.dart';
 import 'core/db/database_provider.dart';
+import 'core/db/seeders/dev_gallery_seeder.dart';
 import 'core/startup/post_compliance_init.dart';
 import 'core/router/route_names.dart';
 import 'core/services/deep_link_service.dart';
@@ -254,7 +255,17 @@ AuthController _createAuthController(Ref ref) {
 Future<void> _initStartupAsync(ProviderContainer container) async {
   try {
     // 首装最耗时：openDatabase onCreate 全量种子化内置模板/分类/场景。
-    await container.read(databaseProvider.future);
+    final db = await container.read(databaseProvider.future);
+
+    // 开发期演示数据：向内部相册灌入「使用了模板拍摄」的照片（仅 define 开启）。
+    // 不阻塞首帧关键路径，失败静默。
+    if (kLumiraDevSeedEnabled) {
+      // ignore: unawaited_futures
+      seedDevGallery(db).catchError((Object e, StackTrace st) {
+        debugPrint('[dev_seed] 演示数据 seed 异常: $e\n$st');
+        return false;
+      });
+    }
 
     // 合规门控：本地已同意版本与当前合规版本不一致即需先征得同意、
     // 在此之前不得联网/采集（注册、上报设备信息等全部延后到同意后由
