@@ -6,6 +6,7 @@
 import { textChat } from './llm-client';
 import type { LlmEndpoint } from './llm-client';
 import type { ResearchItem } from './trend-research/research-item';
+import { buildResearchLines } from './trend-research/research-digest';
 import { LUT_LABELS } from './enums';
 
 const COMPOSE_SYSTEM_PROMPT = `你是顶级人像摄影艺术指导兼生图提示词工程师。用户将提供一份结构化素材（模板基本信息 / 本张姿势 / 网络趋势参考 / 照片参数 / 生图要求），请把它们整理成一段高质量的中文生图提示词，最终喂给文生图模型。
@@ -107,13 +108,9 @@ export function buildPromptMaterial(input: PromptComposeInput): string {
     if (compDesc) sections.push(`【构图描述】\n- ${compDesc}`);
   }
 
-  // ③ 网络趋势参考（识别阶段实时搜索命中）
+  // ③ 网络趋势参考（识别阶段实时搜索命中；与研究摘要共用挑选规则：有摘要条目排前）
   if (research.length) {
-    const trendLines = research.slice(0, 8).map((it) => {
-      const title = (it.title || '').trim().slice(0, 60);
-      const snippet = (it.snippet || '').trim().slice(0, 120);
-      return `- ${title && snippet ? `${title}：${snippet}` : (title || snippet)}`;
-    }).filter((l) => l.length > 2);
+    const trendLines = buildResearchLines(research).map((l) => `- ${l}`);
     if (trendLines.length) {
       sections.push(`【网络趋势参考】（识别阶段实时搜索命中的当下流行素材，提炼为可见的视觉元素）\n${trendLines.join('\n')}`);
     }

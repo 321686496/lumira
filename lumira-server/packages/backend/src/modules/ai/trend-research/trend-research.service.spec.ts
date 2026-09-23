@@ -1,5 +1,5 @@
 // lumira-server/packages/backend/src/modules/ai/trend-research/trend-research.service.spec.ts
-// T1 trend-research 服务编排（Task 4，TDD）：来源并行 + allSettled 降级、source+title 去重、研究关闭返回 []
+// T1 trend-research 服务编排（Task 4，TDD）：来源并行 + allSettled 降级、source+title+snippet 去重、研究关闭返回 []
 
 import { TrendResearchService } from './trend-research.service';
 import type { SearchProviderFactory } from './trend-research.service';
@@ -49,7 +49,7 @@ describe('TrendResearchService', () => {
     expect(res.sourceErrors).toEqual([{ name: 'vendor', error: 'vendor 不可用' }]);
   });
 
-  it('重复标题去重（保留先出现者，key=source+title）', async () => {
+  it('重复标题去重（保留先出现者，key=source+title+snippet）', async () => {
     const searchConfig = {
       enabled: true,
       sources: [
@@ -71,6 +71,26 @@ describe('TrendResearchService', () => {
 
     expect(items.filter((i) => i.source === 'bing' && i.title === '热门')).toHaveLength(1);
     // 不同来源的「热门」因 source 不同不属于同一 key，故总数为 2
+    expect(items).toHaveLength(2);
+  });
+
+  it('同 source+title 但 snippet 不同 → 视为不同条目（多组查询的联网综述不被误去重）', async () => {
+    const searchConfig = {
+      enabled: true,
+      sources: [{ name: 'qwen', provider: 'qwen' }],
+    };
+    const providerFactory: SearchProviderFactory = () => ({
+      name: 'qwen',
+      search: async () => [
+        item('qwen', '联网综述', { snippet: '中秋 9/25 距今 2 天' }),
+        item('qwen', '联网综述', { snippet: '万圣节 10/31 戏剧光' }),
+        item('qwen', '联网综述', { snippet: '中秋 9/25 距今 2 天' }), // 完全重复 → 去重
+      ],
+    });
+
+    const svc = build(providerFactory, searchConfig);
+    const items = (await svc.research('x')).items;
+
     expect(items).toHaveLength(2);
   });
 

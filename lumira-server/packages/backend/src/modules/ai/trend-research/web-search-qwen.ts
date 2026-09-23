@@ -71,18 +71,25 @@ function toResearchItem(hit: SearchHit): ResearchItem {
   return { source: 'qwen', title, snippet, keywords: tokenize(snippet, title), url };
 }
 
+/** 正文综述捕获上限：保住节日日历/趋势清单核心信息，同时约束透传载荷 */
+const SUMMARY_SNIPPET_CAP = 2000;
+
+/** message.content 正文综述 → 首条 ResearchItem（title=联网综述）。
+ *  仅捕获非 JSON 的实质性文本（结构化 {results} 引用走分支 3 正式解析）；
+ *  keywords 留空——长综述无分词意义，避免污染下游 keywords 汇集。 */
+function toSummaryItem(msg: Record<string, unknown>): ResearchItem | null {
+  if (typeof msg.content !== 'string') return null;
+  const text = msg.content.trim();
+  if (!text || extractJson(text)) return null;
+  return { source: 'qwen', title: '联网综述', snippet: text.slice(0, SUMMARY_SNIPPET_CAP), keywords: [] };
+}
+
 /** 多形态提取引用 → ResearchItem[]；无引用返回 null */
 function extractResearchItems(data: unknown): ResearchItem[] | null {
   if (!data || typeof data !== 'object') return null;
   const root = data as Record<string, unknown>;
 
-  // 0) 三方中转站 OpenAI 兼容格式：顶层 sources[]({title,url}) + choices[0].message.content
-  //    （如 qwen3.7-max 直连 enable_search 时由网关把引用放到顶层 sources，而非 tool_calls）
-  const topSources = Array.isArray(root.sources) ? (root.sources as SearchHit[]) : [];
-  if (topSources.length) {
-    return topSources.map(toResearchItem).filter((i) => i.title || i.url);
-  }
-  // 0b) 部分网关把 message 放 choices[0].message（等价地兜底一次报错提示）
+  // 0) 解析 message（root.message 或 choices[0].message），供综述捕获与各分支复用
   let msg = root.message && typeof root.message === 'object' ? (root.message as Record<string, unknown>) : null;
   if (!msg && Array.isArray(root.choices) && root.choices.length) {
     const first = root.choices[0];
@@ -91,6 +98,19 @@ function extractResearchItems(data: unknown): ResearchItem[] | null {
     }
   }
   if (!msg) return null;
+
+  // 0a) 三方中转站 OpenAI 兼容格式：顶层 sources[]({title,url}) + choices[0].message.content
+  //    （如 qwen3.7-max 直连 enable_search 时由网关把引用放到顶层 sources，而非 tool_calls）。
+  //    message.content 的正文综述（节日日历/趋势清单类长文本）是最有价值的时效信息，
+  //    作为首条「联网综述」条目带出，顶层引用排其后 —— 不再因早返回丢弃正文。
+  const topSources = Array.isArray(root.sources) ? (root.sources as SearchHit[]) : [];
+  if (topSources.length) {
+    const items: ResearchItem[] = [];
+    const summary = toSummaryItem(msg);
+    if (summary) items.push(summary);
+    items.push(...topSources.map(toResearchItem).filter((i) => i.title || i.url));
+    if (items.length) return items;
+  }
 
   // 1) tool_calls[web_search] → arguments.search_info.search_results[]
   const calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];

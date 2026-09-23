@@ -151,10 +151,12 @@ export class TrendResearchService {
       }
     });
 
+    // 相同 source+title+snippet 去重（保留先出现者）：snippet 维度避免「联网综述」类
+    // 同名条目在多组查询下被误去重（不同查询组的综述正文不同，都应保留）。
     const seen = new Set<string>();
     const out: ResearchItem[] = [];
     for (const it of merged) {
-      const key = `${it.source}|${it.title}`;
+      const key = `${it.source}|${it.title}|${(it.snippet || '').trim().slice(0, 80)}`;
       if (!seen.has(key)) {
         seen.add(key);
         out.push(it);

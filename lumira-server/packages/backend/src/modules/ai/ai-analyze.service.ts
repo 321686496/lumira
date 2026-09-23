@@ -20,24 +20,11 @@ import { extractJson, normalizeDraft, CategoryNode } from './normalize';
 import { AiOrchestratorService } from './ai-orchestrator.service';
 import type { OrchestratorInput, OrchestratorTraceEntry } from './ai-orchestrator.service';
 import type { ResearchItem } from './trend-research/research-item';
+import { buildResearchDigest } from './trend-research/research-digest';
 import { TrendResearchService } from './trend-research/trend-research.service';
 
 /** 允许的示例图 mimetype */
 const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
-
-/** 研究摘要构造：Top 8 条「标题：摘要」，单条截断，总长上限 1200 字（注入草稿生成提示词） */
-function buildResearchDigest(items: ResearchItem[]): string {
-  return items
-    .slice(0, 8)
-    .map((it) => {
-      const title = (it.title || '').trim().slice(0, 60);
-      const snippet = (it.snippet || '').trim().slice(0, 120);
-      return title && snippet ? `${title}：${snippet}` : (title || snippet);
-    })
-    .filter(Boolean)
-    .join('\n')
-    .slice(0, 1200);
-}
 
 export interface AiAnalyzeResult {
   draft: Record<string, unknown>;

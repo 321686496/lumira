@@ -46,7 +46,7 @@ describe('web-search-qwen', () => {
     expect(items[0].title).toBe('公园人像构图');
   });
 
-  it('三方中转站顶层 sources[]（title+url 带反引号）→ 解析并清洗引用', async () => {
+  it('三方中转站顶层 sources[]（title+url 带反引号）→ 综述置首 + 解析并清洗引用', async () => {
     const gtw = {
       choices: [{ message: { role: 'assistant', content: '这是回答文本。' } }],
       sources: [
@@ -56,24 +56,51 @@ describe('web-search-qwen', () => {
     };
     jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify(gtw), { status: 200 }));
     const items = await provider.search({ query: '北京天气', limit: 10 });
-    expect(items).toHaveLength(2);
-    expect(items[0]).toMatchObject({
+    expect(items).toHaveLength(3);
+    expect(items[0]).toMatchObject({ source: 'qwen', title: '联网综述', snippet: '这是回答文本。' });
+    expect(items[1]).toMatchObject({
       source: 'qwen',
       title: 'weather.com.cn',
       url: 'https://www.weather.com.cn/weather/101010100.shtml', // 反引号被清洗
     });
-    expect(items[1].url).toBe('https://www.nmc.cn/publish/forecast/ABJ/beijing.html');
+    expect(items[2].url).toBe('https://www.nmc.cn/publish/forecast/ABJ/beijing.html');
   });
 
-  it('存在顶层 sources 时优先于 message 内引用（不遍历 content 回答文本）', async () => {
+  it('存在顶层 sources 时：content 正文作为「联网综述」条目置首，引用排其后（不再丢弃正文）', async () => {
     const gtw = {
       choices: [{ message: { role: 'assistant', content: '纯文本回答，非 JSON。' } }],
       sources: [{ index: 1, title: '源A', url: 'https://a.example' }],
     };
     jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify(gtw), { status: 200 }));
     const items = await provider.search({ query: '趋势', limit: 10 });
-    expect(items).toHaveLength(1);
-    expect(items[0].url).toBe('https://a.example');
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({ source: 'qwen', title: '联网综述', snippet: '纯文本回答，非 JSON。' });
+    expect(items[0].url).toBeUndefined();
+    expect(items[1].url).toBe('https://a.example');
+  });
+
+  it('正文为长 markdown 综述 + sources 仅域名 → 综述完整带出（不再只留裸域名）', async () => {
+    const content = [
+      '# 📷 编辑手记｜2026 下半年「未过节日」摄影模板日历',
+      '',
+      '| 节日 | 公历日期 | 距今 |',
+      '|---|---|---|',
+      '| 中秋节 | 9/25 | 2 天 |',
+      '| 国庆节 | 10/1 | 8 天 |',
+      '| 万圣节 | 10/31 | 38 天 |',
+    ].join('\n');
+    const gtw = {
+      choices: [{ message: { role: 'assistant', content } }],
+      sources: [{ index: 1, title: 'holidays-calendar.net', url: 'https://holidays-calendar.net' }],
+    };
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify(gtw), { status: 200 }));
+    const items = await provider.search({ query: '近期节日 节日摄影模板', limit: 10 });
+    expect(items).toHaveLength(2);
+    expect(items[0].title).toBe('联网综述');
+    expect(items[0].snippet).toContain('中秋节');
+    expect(items[0].snippet).toContain('10/1');
+    expect(items[0].keywords).toEqual([]);
+    expect(items[1].title).toBe('holidays-calendar.net');
   });
 
   it('无引用可解析 → 抛“未取到引用”错误', async () => {
