@@ -22,3 +22,15 @@ export function getUtc8DateStr(d: Date = new Date()): string {
   const day = String(shifted.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
+
+const WEEKDAY_CN = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+
+/**
+ * 供提示词注入的「今天」描述（UTC+8），如「今天是 2026-09-23（星期三），北京时间」。
+ * 用途：研究/构思链路若不知道当前日期，会凭训练记忆瞎猜节日（如把近期节日猜成端午）。
+ * 注意：必须在每次请求内调用（不能做成模块级常量），否则跨天后提示词仍是旧日期。
+ */
+export function describeTodayUtc8(d: Date = new Date()): string {
+  const shifted = new Date(d.getTime() + UTC8_OFFSET_MS);
+  return `今天是 ${getUtc8DateStr(d)}（${WEEKDAY_CN[shifted.getUTCDay()]}），北京时间`;
+}

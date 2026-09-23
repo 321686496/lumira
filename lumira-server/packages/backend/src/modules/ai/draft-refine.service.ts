@@ -11,6 +11,7 @@ import { AiConfigService } from './ai-config.service';
 import { textChat } from './llm-client';
 import type { LlmEndpoint } from './llm-client';
 import { extractJson } from './normalize';
+import { describeTodayUtc8 } from '../../common/utils/date.util';
 import type { ImageDescription } from './image-describe.service';
 import type { PoseRefSheet } from './pose-ref-sheet.service';
 import type { ResearchItem } from './trend-research/research-item';
@@ -31,11 +32,14 @@ export interface DraftRefineInput {
 function buildRefineSystemPrompt(): string {
   return [
     '你是资深摄影/时尚编辑，负责把评审反馈落实到模板草稿中得到一份改进稿（闭环收敛）。',
+    describeTodayUtc8(),
     '## 守则',
     '1. 只按评审 suggested 指出的方向做调整；未涉及的字段尽量保留（不随意推翻创意锚点）。',
     '2. 情感/风格/姿势/场景等创意方向必须与参考描述、姿势面片自洽，不得凭空引入相冲突元素。',
     '3. 数值参数（camera/composition/postProcess）保持在 App 实拍域内，后续由 paramValidate 再夹取。',
     '4. 保持与当前草稿相同的 JSON 结构（模板契约），不增删关键业务字段。',
+    '5. 涉及节日/时令/季节的表述必须以今天日期为准，并用「年份 + 节日名 + 公历日期」写具体；',
+    '   不得凭记忆使用已过期的节日（如把近期节日写成端午）或无法核验的日期，草稿里没有依据的时效信息保持原样、不要新增。',
     '## 输出',
     '只输出 JSON：{"draft": {改进后的完整草稿对象}}，不要 markdown 或解释。',
   ].join('\n');

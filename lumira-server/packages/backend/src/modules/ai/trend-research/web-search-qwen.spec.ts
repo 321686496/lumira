@@ -1,6 +1,7 @@
 // web-search-qwen.spec.ts
 import { createQwenSearchProvider } from './web-search-qwen';
 import type { WebSearchProvider } from './web-search.provider';
+import { describeTodayUtc8 } from '../../../common/utils/date.util';
 
 const OK_TOOL_CALL = {
   message: {
@@ -103,8 +104,33 @@ describe('web-search-qwen', () => {
     expect(items[1].title).toBe('holidays-calendar.net');
   });
 
-  it('无引用可解析 → 抛“未取到引用”错误', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ message: { content: '没有检索到相关资料。' } }), { status: 200 }));
+  it('系统提示词注入当天日期与「禁止凭记忆猜节日 / 结论须带来源链接」硬性要求', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify(OK_TOOL_CALL), { status: 200 }));
+    await provider.search({ query: '最近的节日 摄影模板', limit: 10 });
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(String((init as RequestInit).body));
+    const sys = (body.messages as { role: string; content: string }[]).find((m) => m.role === 'system')!.content;
+    expect(sys).toContain(describeTodayUtc8()); // 今天是 YYYY-MM-DD（星期X），北京时间
+    expect(sys).toContain('严禁凭训练记忆猜测节日名称或日期');
+    expect(sys).toContain('来源链接');
+  });
+
+  it('无结构化引用但正文有实质内容 → 作为「联网综述」带出（不再整段丢弃正文）', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ message: { content: '根据检索到的公开资料：中秋为 9/25，国庆为 10/1。' } }), { status: 200 }),
+    );
+    const items = await provider.search({ query: '最近节日', limit: 10 });
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ source: 'qwen', title: '联网综述', snippet: '根据检索到的公开资料：中秋为 9/25，国庆为 10/1。' });
+  });
+
+  it('正文为空白 → 抛“未取到引用”错误（正文与引用皆无，才判定失败）', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ message: { content: '   ' } }), { status: 200 }));
+    await expect(provider.search({ query: '冷门', limit: 10 })).rejects.toThrow('未取到引用');
+  });
+
+  it('正文是 JSON 但无 results → 抛“未取到引用”错误（不把空壳 JSON 当综述）', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ message: { content: '{"foo":"bar"}' } }), { status: 200 }));
     await expect(provider.search({ query: '冷门', limit: 10 })).rejects.toThrow('未取到引用');
   });
 

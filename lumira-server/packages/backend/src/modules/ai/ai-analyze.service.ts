@@ -102,6 +102,8 @@ export class AiAnalyzeService {
     //     搜索失败静默降级（不阻断识别）。主题口径与 orchestrator 一致：创作要求 ?? 文字描述。
     let research: ResearchItem[] = [];
     let researchDigest = '';
+    /** 搜索开启且主题非空、但本次没取到任何条目（失败或空结果）→ 下游禁止编造时效信息 */
+    let researchUnavailable = false;
     if (cfg.search?.enabled) {
       const topic = (extra.creationReq?.trim() || trimmedText).trim();
       if (topic) {
@@ -112,6 +114,7 @@ export class AiAnalyzeService {
         } catch {
           // 搜索失败 → 无摘要，草稿生成回到无研究参考的原路径
         }
+        researchUnavailable = research.length === 0;
       }
     }
 
@@ -125,6 +128,7 @@ export class AiAnalyzeService {
           creationReq: extra.creationReq,
           poseCount,
           researchDigest,
+          researchUnavailable,
         }),
         imageBase64: image.buffer.toString('base64'),
         imageMime: image.mimetype,
@@ -139,6 +143,7 @@ export class AiAnalyzeService {
           creationReq: extra.creationReq,
           poseCount,
           researchDigest,
+          researchUnavailable,
         }),
         temperature: 0.3,
         jsonMode: true,

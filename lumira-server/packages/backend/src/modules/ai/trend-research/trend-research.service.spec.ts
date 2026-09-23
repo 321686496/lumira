@@ -6,6 +6,10 @@ import type { SearchProviderFactory } from './trend-research.service';
 import { AiConfigService } from '../ai-config.service';
 import { clearWebSearchCache } from './web-search.provider';
 import type { ResearchItem } from './research-item';
+import { describeTodayUtc8 } from '../../../common/utils/date.util';
+
+// 文本模型打桩：capture 提示词（重组查询词用例断言日期注入 + 时间约束规则）
+jest.mock('../llm-client', () => ({ textChat: jest.fn(async () => '{"query": null}') }));
 
 function item(source: string, title: string, extra: Partial<ResearchItem> = {}): ResearchItem {
   return { source, title, snippet: '', keywords: [], ...extra };
@@ -160,5 +164,23 @@ describe('TrendResearchService', () => {
     const res = await svc.research('胶片感 都市夜晚');
     expect(seen).toEqual(['胶片感 都市夜晚']);
     expect(res.items).toHaveLength(1);
+  });
+
+  it('重组提示词注入当天日期，并要求把时间/节日类约束换算成含年份的具体节假名（不得丢弃）', async () => {
+    const { textChat } = jest.requireMock('../llm-client') as { textChat: jest.Mock };
+    textChat.mockResolvedValueOnce(JSON.stringify({ query: '2026年10月 中秋节 国庆节 人像模板' }));
+    const aiConfig = {
+      getSearchConfig: async () => ({ enabled: true, sources: [{ name: 'qwen', provider: 'qwen' }] }),
+      getActiveConfig: async () => ({ text: { provider: 'test', baseUrl: 'http://x', apiKey: 'k', model: 'm' } }),
+    } as unknown as AiConfigService;
+    const svc = new TrendResearchService(aiConfig);
+
+    const q = await svc.reorganizeQuery('距离当前时间最近节日的特色模板，三种不同姿势');
+    expect(q).toBe('2026年10月 中秋节 国庆节 人像模板');
+
+    const { systemPrompt, userText } = textChat.mock.calls[0][1] as { systemPrompt: string; userText: string };
+    expect(systemPrompt).toContain(describeTodayUtc8()); // 今天是 YYYY-MM-DD（星期X），北京时间
+    expect(userText).toContain(describeTodayUtc8());
+    expect(systemPrompt).toContain('时间/节日/时令/档期类约束必须换算成具体可检索词');
   });
 });

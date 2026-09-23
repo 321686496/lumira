@@ -2,16 +2,29 @@
 // 千问(Qwen)模型自带联网搜索适配器：直连 Chat Completions + enable_search
 // 设计文档：docs/superpowers/specs/2026-09-21-qwen-web-search-design.md 3.1
 //
-// 多形态宽松解析引用：tool_calls.web_search.search_info.search_results[] /
-// message.content 数组引用块 / content 文本 JSON{results}。取不到引用 → 抛 Error
+// 多形态宽松解析引用：顶层 sources[] / tool_calls.web_search.search_info.search_results[] /
+// message.content 数组引用块 / content 文本 JSON{results}。仍取不到任何引用时，
+// 退化为保留「联网综述」正文（提示词已要求正文标注来源链接），只有正文也为空才抛 Error
 // （上层 allSettled 收集为 sourceErrors，绝不编造 URL）。
 
 import type { ResearchItem } from './research-item';
 import type { WebSearchProvider, WebSearchQuery } from './web-search.provider';
+import { describeTodayUtc8 } from '../../../common/utils/date.util';
 
 export const QWEN_SEARCH_DEFAULT_MODEL = 'qwen-plus';
 
-const SYSTEM_PROMPT = '你是资深摄影/时尚编辑，请基于联网检索结果输出对主题的发现。';
+/** 系统提示词按次构造（注入当天日期）：模块级常量会跨天变旧，导致节日/时效类判断错乱。 */
+function buildSystemPrompt(): string {
+  return [
+    '你是资深摄影/时尚编辑，请基于联网检索结果输出对主题的发现。',
+    describeTodayUtc8(),
+    '## 硬性要求',
+    '1. 凡涉及时效信息（节日、近期热点、季节时令、最新流行趋势），必须以上面的今天日期为基准，并且只采用联网检索到的结果；',
+    '   严禁凭训练记忆猜测节日名称或日期（例如把近期节日说成端午）。检索不到的时效信息，直接说明未检索到，不要编造。',
+    '2. 主题要求「最近的节日」时，先列出今天之后最近的 1~3 个节日及其公历日期与距今天数，再围绕其中最近的节日给灵感。',
+    '3. 输出的每条关键结论都要带可核验的来源链接（markdown 链接或裸 URL）；没有来源支撑的信息不要写。',
+  ].join('\n');
+}
 
 /** 一条引用命中（松散字段） */
 interface SearchHit {
@@ -153,6 +166,11 @@ function extractResearchItems(data: unknown): ResearchItem[] | null {
     }
   }
 
+  // 4) 兜底：正文有实质文本但未命中任何结构化引用形态（网关只返正文综述、无顶层 sources）
+  //    → 仍作为「联网综述」带出，不再整体丢弃；正文为空/纯 JSON 时才判为未取到引用。
+  const fallbackSummary = toSummaryItem(msg);
+  if (fallbackSummary) return [fallbackSummary];
+
   return null;
 }
 
@@ -174,7 +192,7 @@ export function createQwenSearchProvider(cfg: { baseUrl?: string; apiKey?: strin
         body: JSON.stringify({
           model,
           messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'system', content: buildSystemPrompt() },
             { role: 'user', content: q.query },
           ],
           enable_search: true,

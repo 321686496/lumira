@@ -242,7 +242,7 @@ describe('AiAnalyzeService', () => {
     expect(res.research[0]!.title).toBe('秋日千金风大片');
   });
 
-  it('搜索开启但搜索失败 → 静默降级：识别不中断、提示词无网络趋势参考', async () => {
+  it('搜索开启但搜索失败 → 识别不中断；提示词显式声明未取到联网来源并禁止编造时效信息', async () => {
     const select = jest.fn(() => chainable(CATEGORY_ROWS));
     const dbService = { getDb: () => ({ select }) } as unknown as DatabaseService;
     const cfgWithSearch = { ...ACTIVE_CFG, search: { enabled: true } };
@@ -258,7 +258,30 @@ describe('AiAnalyzeService', () => {
     const res = await service.analyze(undefined, '千金小姐他拍风格');
 
     expect(textChatMock).toHaveBeenCalledTimes(1);
-    expect(textChatMock.mock.calls[0][1].userText).not.toContain('网络趋势参考');
+    const userText = textChatMock.mock.calls[0][1].userText as string;
+    expect(userText).not.toContain('网络趋势参考');
+    expect(userText).toContain('本次未取到任何联网来源');
+    expect(userText).toContain('禁止凭训练记忆编造节日名称');
+    expect(res.research).toEqual([]);
+  });
+
+  it('搜索开启但结果为空 → 同样声明未取到联网来源（不允许静默无来源构思）', async () => {
+    const select = jest.fn(() => chainable(CATEGORY_ROWS));
+    const dbService = { getDb: () => ({ select }) } as unknown as DatabaseService;
+    const cfgWithSearch = { ...ACTIVE_CFG, search: { enabled: true } };
+    const getActiveConfig = jest.fn(async () => cfgWithSearch);
+    const researchMock = jest.fn(async () => ({ items: [], sourceErrors: [] }));
+    const service = new AiAnalyzeService(
+      dbService,
+      { getActiveConfig } as unknown as AiConfigService,
+      { research: researchMock } as unknown as TrendResearchService,
+    );
+    textChatMock.mockResolvedValueOnce(JSON.stringify(RAW_DRAFT));
+
+    const res = await service.analyze(undefined, '最近的节日 三种姿势');
+
+    const userText = textChatMock.mock.calls[0][1].userText as string;
+    expect(userText).toContain('本次未取到任何联网来源');
     expect(res.research).toEqual([]);
   });
 });

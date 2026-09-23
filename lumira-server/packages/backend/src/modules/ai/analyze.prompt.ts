@@ -166,6 +166,8 @@ export interface AnalyzeUserPromptInput {
   poseCount?: number | null;
   /** 趋势研究摘要（识别前已搜索命中；结构化数据构思时贴合当下流行趋势） */
   researchDigest?: string | null;
+  /** 已开启联网搜索但本次未取到任何来源/摘要 → 提示词显式声明，禁止凭训练知识编造时效信息 */
+  researchUnavailable?: boolean;
 }
 
 /** 构造姿势数量指令行（vision / text-only 共用） */
@@ -191,6 +193,12 @@ function extrasLines(input: AnalyzeUserPromptInput): string[] {
     lines.push(
       '网络趋势参考（当前实时搜索命中的流行素材；构思模板的主题、风格、场景、节日、姿势时优先贴合其中的有效信息，与创作要求冲突时以创作要求为准）：',
       digest,
+    );
+  } else if (input.researchUnavailable) {
+    lines.push(
+      '联网检索状态：本次未取到任何联网来源（无参考素材）。',
+      '因此涉及时效信息时：只能使用用户输入中明确写出的时间/节日/季节信息，禁止凭训练记忆编造节日名称、节日日期、',
+      '"最近/最新"类趋势结论；确实无法确定时用泛化的季节/氛围表述，不要写具体节日名与日期。',
     );
   }
   return lines;
