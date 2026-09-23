@@ -53,13 +53,13 @@ export class AiTemplatesController {
   }
 
   /**
-   * AI 生成模板效果图（异步任务式：multipart meta 草稿 JSON 文本语义 + reference 参考图可选 + extraPrompt 附加提示词可选）
+   * AI 生成模板效果图（异步任务式：multipart meta 草稿 JSON 文本语义 + reference 参考图可选 + extraPrompt 附加提示词可选 + research 识别研究结果可选）
    * 返回 { taskId }，前端轮询 GET ai-generate-image/tasks/:taskId 获取结果（避免同步长请求超时）。
    */
   @Post('ai-generate-image')
   async generateImage(@Req() req: FastifyRequest) {
-    const { meta, reference, extraPrompt } = await parseAiMultipart(req);
-    return this.aiImageTaskService.submit(reference, meta, extraPrompt);
+    const { meta, reference, extraPrompt, research } = await parseAiMultipart(req);
+    return this.aiImageTaskService.submit(reference, meta, extraPrompt, research);
   }
 
   /**
@@ -68,8 +68,8 @@ export class AiTemplatesController {
    */
   @Post('ai-generate-image/batch')
   async generateImageBatch(@Req() req: FastifyRequest) {
-    const { meta, reference, extraPrompt } = await parseAiMultipart(req);
-    return this.aiImageTaskService.submitBatch(reference, meta, extraPrompt);
+    const { meta, reference, extraPrompt, research } = await parseAiMultipart(req);
+    return this.aiImageTaskService.submitBatch(reference, meta, extraPrompt, research);
   }
 
   /** 查询批量姿势图进度（total/completed/current/status/results）；批次不存在则 404 */
@@ -156,12 +156,14 @@ export interface ParsedAiMultipart {
   poseCount: string | null;
   /** Step3 附加提示词（可选，拼接到封面生图提示词末尾） */
   extraPrompt: string | null;
+  /** 识别阶段研究结果 JSON（可选，ResearchItem[]；透传给生图提示词组织器） */
+  research: string | null;
   image?: UploadFile;
   reference?: UploadFile;
 }
 
 /** 文本字段名集合（multipart 循环内按字段名收集） */
-const TEXT_FIELDS = ['meta', 'text', 'textDesc', 'creationReq', 'poseCount', 'extraPrompt'] as const;
+const TEXT_FIELDS = ['meta', 'text', 'textDesc', 'creationReq', 'poseCount', 'extraPrompt', 'research'] as const;
 
 /**
  * 解析 AI 端点 multipart 请求，提取文本字段（meta / textDesc / creationReq / poseCount / extraPrompt）
@@ -169,7 +171,7 @@ const TEXT_FIELDS = ['meta', 'text', 'textDesc', 'creationReq', 'poseCount', 'ex
  * 使用 @fastify/multipart 的 request.parts() 异步迭代器（同 admin-templates.controller）。
  */
 export async function parseAiMultipart(req: FastifyRequest): Promise<ParsedAiMultipart> {
-  const result: ParsedAiMultipart = { meta: null, textDesc: null, creationReq: null, poseCount: null, extraPrompt: null };
+  const result: ParsedAiMultipart = { meta: null, textDesc: null, creationReq: null, poseCount: null, extraPrompt: null, research: null };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const reqAny = req as any;
   if (typeof reqAny.parts !== 'function') {

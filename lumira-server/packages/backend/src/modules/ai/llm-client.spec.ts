@@ -331,7 +331,8 @@ describe('toolChat / extractToolCalls', () => {
     expect(JSON.parse(out.toolCalls[0].tool_calls[0].function.arguments)).toEqual({ query: '秋日人像' });
     expect(out.content).toBeNull();
     // messages 是完整上下文（system + user + assistant tool_calls）
-    expect(out.messages[2].tool_calls).toHaveLength(1);
+    const msg = out.messages[2] as unknown as { tool_calls?: unknown[] };
+    expect(msg.tool_calls).toHaveLength(1);
   });
 
   it('toolChat：模型仅返回纯文本（无 tool_calls）→ content 透传、toolCalls 为空数组', async () => {

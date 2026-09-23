@@ -7,7 +7,7 @@ import { LocalStorageAdapter } from './local-storage.adapter';
 import { S3StorageAdapter, S3Config } from './s3-storage.adapter';
 import type { StorageAdapter } from './storage-adapter.interface';
 
-export const STORAGE_IDS = ['local', 'r2', 'aliyun', 'tencent'] as const;
+export const STORAGE_IDS = ['local', 'r2', 'aliyun', 'tencent', 'qiniu'] as const;
 export type StorageId = (typeof STORAGE_IDS)[number];
 
 /** 读取某厂商前缀对应的 S3 配置（如 R2_、ALIYUN_OSS_、TENCENT_COS_） */
@@ -36,6 +36,8 @@ export function buildStorageAdapter(id: StorageId, env: NodeJS.ProcessEnv = proc
       return new S3StorageAdapter(readS3Config('ALIYUN_OSS', env));
     case 'tencent':
       return new S3StorageAdapter(readS3Config('TENCENT_COS', env));
+    case 'qiniu':
+      return new S3StorageAdapter(readS3Config('QINIU', env)); // 七牛 Kodo（S3 兼容，endpoint 如 s3-cn-east-1.qiniucs.com）
     default:
       throw new Error(`未知存储厂商：${id}`);
   }

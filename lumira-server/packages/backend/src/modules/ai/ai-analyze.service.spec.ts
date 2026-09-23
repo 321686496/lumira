@@ -8,6 +8,7 @@ import { BadRequestException, ServiceUnavailableException } from '@nestjs/common
 import { AiAnalyzeService } from './ai-analyze.service';
 import { DatabaseService } from '../../database/database.service';
 import { AiConfigService } from './ai-config.service';
+import type { TrendResearchService } from './trend-research/trend-research.service';
 import { MAX_IMAGE_BYTES, UploadFile } from '../templates/admin-templates.service';
 import { visionChat, textChat } from './llm-client';
 
@@ -74,8 +75,10 @@ function buildService(opts: { categoryRows?: unknown[]; cfgError?: Error } = {})
     return Promise.resolve(ACTIVE_CFG);
   });
   const aiConfigService = { getActiveConfig } as unknown as AiConfigService;
+  // 构造器第 3 参：研究服务 stub（ACTIVE_CFG 无 search 配置 → 现有用例不触发搜索）
+  const trendResearch = { research: jest.fn() } as unknown as TrendResearchService;
   return {
-    service: new AiAnalyzeService(dbService, aiConfigService),
+    service: new AiAnalyzeService(dbService, aiConfigService, trendResearch),
     select,
     getActiveConfig,
   };
@@ -136,6 +139,7 @@ describe('AiAnalyzeService', () => {
     const service = new AiAnalyzeService(
       dbService,
       { getActiveConfig } as unknown as AiConfigService,
+      { research: jest.fn() } as unknown as TrendResearchService,
     );
     visionChatMock.mockImplementationOnce(async () => {
       order.push('visionChat');
@@ -205,6 +209,57 @@ describe('AiAnalyzeService', () => {
     visionChatMock.mockResolvedValueOnce('抱歉，这张图片我无法分析。');
 
     await expect(service.analyze(imageFile(), undefined)).rejects.toThrow('模型输出无法解析为 JSON，请重试识别');
+  });
+
+  it('搜索开启且主题非空：先搜后写草稿——研究摘要注入提示词、research 随结果透出', async () => {
+    const select = jest.fn(() => chainable(CATEGORY_ROWS));
+    const dbService = { getDb: () => ({ select }) } as unknown as DatabaseService;
+    const cfgWithSearch = { ...ACTIVE_CFG, search: { enabled: true } };
+    const getActiveConfig = jest.fn(async () => cfgWithSearch);
+    const researchMock = jest.fn(async () => ({
+      items: [
+        { source: 'sogou', title: '秋日千金风大片', snippet: '低调奢华的千金风正在流行', url: 'https://example.com/1' },
+      ],
+      sourceErrors: [],
+    }));
+    const service = new AiAnalyzeService(
+      dbService,
+      { getActiveConfig } as unknown as AiConfigService,
+      { research: researchMock } as unknown as TrendResearchService,
+    );
+    textChatMock.mockResolvedValueOnce(JSON.stringify(RAW_DRAFT));
+
+    const res = await service.analyze(undefined, '千金小姐他拍风格');
+
+    // 主题口径 = 创作要求 ?? 文字描述；先搜后写草稿
+    expect(researchMock).toHaveBeenCalledWith('千金小姐他拍风格', expect.anything());
+    // 研究摘要注入用户提示词（结构性数据构思贴合当下趋势）
+    const userText = textChatMock.mock.calls[0][1].userText as string;
+    expect(userText).toContain('网络趋势参考');
+    expect(userText).toContain('秋日千金风大片');
+    // 原单次路径（无 orchestrator）也透出 research，供前端生图透传
+    expect(res.research).toHaveLength(1);
+    expect(res.research[0]!.title).toBe('秋日千金风大片');
+  });
+
+  it('搜索开启但搜索失败 → 静默降级：识别不中断、提示词无网络趋势参考', async () => {
+    const select = jest.fn(() => chainable(CATEGORY_ROWS));
+    const dbService = { getDb: () => ({ select }) } as unknown as DatabaseService;
+    const cfgWithSearch = { ...ACTIVE_CFG, search: { enabled: true } };
+    const getActiveConfig = jest.fn(async () => cfgWithSearch);
+    const researchMock = jest.fn().mockRejectedValue(new Error('搜索超时'));
+    const service = new AiAnalyzeService(
+      dbService,
+      { getActiveConfig } as unknown as AiConfigService,
+      { research: researchMock } as unknown as TrendResearchService,
+    );
+    textChatMock.mockResolvedValueOnce(JSON.stringify(RAW_DRAFT));
+
+    const res = await service.analyze(undefined, '千金小姐他拍风格');
+
+    expect(textChatMock).toHaveBeenCalledTimes(1);
+    expect(textChatMock.mock.calls[0][1].userText).not.toContain('网络趋势参考');
+    expect(res.research).toEqual([]);
   });
 });
 

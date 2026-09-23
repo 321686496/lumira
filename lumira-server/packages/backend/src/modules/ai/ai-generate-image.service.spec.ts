@@ -130,6 +130,33 @@ describe('AiGenerateImageService', () => {
     expect(input.size).toBe('1024x1024'); // mapSize('doubao', undefined)
   });
 
+  it('researchJson 透传：组织器素材注入网络趋势参考（含标题与摘要）', async () => {
+    const { service } = buildService();
+    generateImageMock.mockResolvedValueOnce({ base64: 'aGVsbG8=', mimeType: 'image/png' });
+    const { textChat } = jest.requireMock('./llm-client') as { textChat: jest.Mock };
+    const researchJson = JSON.stringify([{ source: 'sogou', title: '千金风穿搭', snippet: '低调贵气' }]);
+
+    await service.generate(undefined, JSON.stringify(DRAFT), null, researchJson);
+
+    expect(textChat).toHaveBeenCalledTimes(1);
+    const input = textChat.mock.calls[0][1];
+    expect(input.userText).toContain('【网络趋势参考】');
+    expect(input.userText).toContain('千金风穿搭');
+    expect(input.userText).toContain('低调贵气');
+  });
+
+  it('researchJson 非法 → 静默降级为空（素材无网络趋势参考，不阻断生图）', async () => {
+    const { service } = buildService();
+    generateImageMock.mockResolvedValueOnce({ base64: 'aGVsbG8=', mimeType: 'image/png' });
+    const { textChat } = jest.requireMock('./llm-client') as { textChat: jest.Mock };
+
+    await service.generate(undefined, JSON.stringify(DRAFT), null, '{not valid json');
+
+    expect(textChat).toHaveBeenCalledTimes(1);
+    expect(textChat.mock.calls[0][1].userText).not.toContain('【网络趋势参考】');
+    expect(generateImageMock).toHaveBeenCalledTimes(1);
+  });
+
   it('meta 非法 JSON → 400，不调用生图客户端', async () => {
     const { service, getActiveConfig } = buildService();
 

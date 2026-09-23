@@ -8,7 +8,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { DatabaseService } from '../../database/database.service';
 import { storageMigrations } from '../../database/schema';
-import { buildStorageAdapter, resolveActiveStorageId, StorageId } from '../../common/storage/storage-registry';
+import { StorageId } from '../../common/storage/storage-registry';
+import { getAdapter, getActiveId } from '../../common/storage/runtime-storage';
 import { StorageMigrationAgent, MigrationSummary, FailureRecord } from './storage-migration.agent';
 
 export interface MigrationRecordView {
@@ -53,7 +54,7 @@ export class StorageMigrationService {
     }
     const id = `sm_${nanoid(10)}`;
     const now = Math.floor(Date.now() / 1000);
-    const sourceId = resolveActiveStorageId(); // 迁移源 = 当前激活存储（不再写死本地）
+    const sourceId = getActiveId(); // 迁移源 = 当前激活存储（后台可配，无需重启）
     const db = this.dbService.getDb();
     db.insert(storageMigrations).values({
       id, status: 'running', triggerBy, sourceId, targetId, startedAt: now, createdAt: now,
@@ -61,8 +62,8 @@ export class StorageMigrationService {
 
     const agent = new StorageMigrationAgent(
       this.dbService,
-      buildStorageAdapter(sourceId),
-      buildStorageAdapter(targetId),
+      getAdapter(sourceId),
+      getAdapter(targetId),
     );
     this.running = { id, agent };
 
@@ -92,8 +93,8 @@ export class StorageMigrationService {
 
     const agent = new StorageMigrationAgent(
       this.dbService,
-      buildStorageAdapter(sourceId),
-      buildStorageAdapter(targetId),
+      getAdapter(sourceId),
+      getAdapter(targetId),
     );
     this.running = { id, agent };
     void this.execute(id, triggerBy, now, () => agent.retryOnly(keys));

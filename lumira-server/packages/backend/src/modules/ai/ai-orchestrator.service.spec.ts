@@ -102,8 +102,7 @@ describe('AiOrchestratorService.run', () => {
     expect(poseRefSheet.generate).toHaveBeenCalled();
     expect(score.score).toHaveBeenCalledTimes(1);
     // 经过 normalizeDraft 归一化：meta.name / category 落在输出
-    expect(res.draft.meta).toBeDefined();
-    expect(res.draft.meta.category).toBe('portrait');
+    expect((res.draft.meta as { category?: string } | undefined)?.category).toBe('portrait');
     // poseRefSheet 已写入草稿定稿：含 shared 锚点 + perPose 数组
     expect(res.draft.poseRefSheet).toMatchObject({
       shared: { outfit: '米色针织' },
@@ -144,6 +143,21 @@ describe('AiOrchestratorService.run', () => {
     expect(String(researchTrace?.resultBrief)).toContain('research-0');
     expect(String(researchTrace?.resultBrief)).toContain('vendor: vendor 不可用');
     expect(String(researchTrace?.resultBrief)).not.toContain('skip-research');
+  });
+
+  it('识别前置已带 research（数组）→ 直接复用不再重复搜索，trace 标记识别前置', async () => {
+    const { service, research, optsRun } = build();
+    const pre = [RESEARCH_ITEM];
+
+    const res = await service.run(
+      { text: '千金小姐他拍风格' } as never,
+      { ...optsRun, research: pre },
+    );
+
+    expect(research.research).not.toHaveBeenCalled();
+    const researchTrace = res.trace.find((t) => t.step === 'research');
+    expect(String(researchTrace?.resultBrief)).toContain('识别前置');
+    expect(res.research).toBe(pre);
   });
 
   it('imageScore 先 retry 后 pass → 进入再判，score 被调用 2 次，二次通过后返回', async () => {

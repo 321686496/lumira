@@ -11,6 +11,7 @@ import '../../../core/compliance/compliance_gate.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/startup/post_compliance_init.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../onboarding/services/questionnaire_sync_providers.dart';
@@ -198,54 +199,66 @@ class _SplashPageState extends ConsumerState<SplashPage> {
     final tokens = ref.watch(appThemeProvider).tokens;
     final auth = ref.watch(authControllerProvider);
 
+    // 状态区内容：loading / failed / 无（空白占位）（Dart 2 兼容，用 if/else）
+    Widget statusArea;
+    if (auth.status == AuthStatus.loading) {
+      statusArea = LumiraProgress.circular();
+    } else if (auth.status == AuthStatus.failed) {
+      statusArea = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '网络连接失败',
+            style: TextStyle(fontSize: 13, color: tokens.textTertiary),
+          ),
+          const SizedBox(height: 12),
+          LumiraButton(
+            variant: ButtonVariant.primary,
+            onPressed: _retryRegistration,
+            child: const Text('重试'),
+          ),
+        ],
+      );
+    } else {
+      statusArea = const SizedBox.shrink();
+    }
+
     return Scaffold(
       // #FAF7F2 默认主题 canvas；用 tokens.canvas 让所有主题都对齐
       backgroundColor: tokens.canvas,
       body: SafeArea(
-        child: Center(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 24),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 品牌 logo + 主题色光晕（logo 后方叠径向渐变圆形）
+              const Spacer(),
+              // 品牌区：符号标（无光晕）→ 细金发丝线 → 标题 → 副标题
               FadeUp(
                 child: SizedBox(
-                  width: 160,
-                  height: 160,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // 主题色光晕
-                      Container(
-                        width: 160,
-                        height: 160,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              tokens.brandSubtle.withOpacity(0.45),
-                              tokens.brandLight.withOpacity(0.18),
-                              tokens.canvas.withOpacity(0),
-                            ],
-                            stops: const [0.0, 0.55, 1.0],
-                          ),
-                        ),
-                      ),
-                      // 品牌 logo（设计好的取景器符号标 SVG）
-                      const SizedBox(
-                        width: 80, // 略放大承载 SVG 描边细节
-                        height: 80,
-                        child: LumiraLogo.symbol(
-                          size: 80,
-                          semanticsLabel: '如画品牌符号标',
-                        ),
-                      ),
-                    ],
+                  width: 128,
+                  height: 128,
+                  child: Center(
+                    child: LumiraLogo.symbol(
+                      size: 72,
+                      semanticsLabel: '如画品牌符号标',
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 24), // margin-bottom 48rpx → 24dp
-              // 文字组
+              const SizedBox(height: 14),
+              FadeUp(
+                delay: const Duration(milliseconds: 200),
+                child: Container(
+                  key: const Key('splash-brand-line'),
+                  width: 36,
+                  height: 0.8,
+                  decoration: BoxDecoration(
+                    color: tokens.brand.withOpacity(0.25),
+                    borderRadius: BorderRadius.circular(1),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
               FadeUp(
                 delay: const Duration(milliseconds: 200),
                 child: Column(
@@ -254,45 +267,44 @@ class _SplashPageState extends ConsumerState<SplashPage> {
                     Text(
                       '如画 Lumira',
                       style: TextStyle(
-                        fontSize: 24, // 48rpx → 24dp
+                        fontSize: 26,
                         fontWeight: FontWeight.w600,
                         color: tokens.textPrimary,
-                        letterSpacing: -0.01 * 24,
+                        letterSpacing: -0.06,
                         height: 1.3,
                       ),
                     ),
-                    const SizedBox(height: 6), // gap 12rpx → 6dp
+                    const SizedBox(height: 10),
                     Text(
                       '如你所见，皆成画卷',
                       style: TextStyle(
-                        fontSize: 13, // 26rpx → 13dp
+                        fontSize: 14,
                         color: tokens.textTertiary,
-                        letterSpacing: 0.04 * 13,
-                        height: 1.3,
+                        letterSpacing: 1.2,
+                        height: 1.4,
                       ),
                     ),
                   ],
                 ),
               ),
-              // 状态指示器（loading / failed）
+              // 状态区：固定高度槽位，三态切换不跳动
+              // （高度取「失败态」重试按钮组的实际高度，避免 fixed 高度过小导致溢出）
               const SizedBox(height: 32),
-              if (auth.status == AuthStatus.loading)
-                LumiraProgress.circular()
-              else if (auth.status == AuthStatus.failed) ...[
-                Text(
-                  '网络连接失败',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: tokens.textTertiary,
-                  ),
+              SizedBox(
+                height: 88,
+                child: Center(child: statusArea),
+              ),
+              const Spacer(),
+              // 底部版本号（填充底部空白，随 pubspec 对齐）
+              Text(
+                'v${AppConfig.appVersion}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: tokens.textTertiary,
+                  letterSpacing: 0.7,
+                  height: 1.4,
                 ),
-                const SizedBox(height: 16),
-                LumiraButton(
-                  variant: ButtonVariant.primary,
-                  onPressed: _retryRegistration,
-                  child: const Text('重试'),
-                ),
-              ],
+              ),
             ],
           ),
         ),

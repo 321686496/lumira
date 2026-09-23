@@ -19,5 +19,12 @@ class AppConfig {
   static const int connectTimeoutMs = 8000;
   static const int receiveTimeoutMs = 10000;
 
+  /// App 版本号（与 pubspec.yaml version 对齐：1.0.0+1）
+  /// 通过 --dart-define=APP_VERSION=xxx 覆盖，未传入时回退默认值
+  static const String appVersion = String.fromEnvironment(
+    'APP_VERSION',
+    defaultValue: '1.0.0',
+  );
+
   static bool get isRelease => kReleaseMode;
 }

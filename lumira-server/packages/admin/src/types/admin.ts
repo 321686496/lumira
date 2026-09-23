@@ -623,14 +623,34 @@ export interface AiAnalyzeStatusResult {
 
 export type StorageCategory = 'templates' | 'categories' | 'banners' | 'feedback' | 'users';
 
-export type StorageId = 'local' | 'r2' | 'aliyun' | 'tencent';
+export type StorageId = 'local' | 'r2' | 'aliyun' | 'tencent' | 'qiniu';
 
 export const STORAGE_OPTIONS: { value: StorageId; label: string }[] = [
   { value: 'local', label: '本地磁盘' },
   { value: 'r2', label: 'Cloudflare R2' },
   { value: 'aliyun', label: '阿里云 OSS' },
   { value: 'tencent', label: '腾讯云 COS' },
+  { value: 'qiniu', label: '七牛云 Kodo' },
 ];
+
+export interface StorageConfigView {
+  id: StorageId;
+  isActive: boolean;
+  configured: boolean;
+  endpoints: { endpoint?: string; bucket?: string; region?: string; publicUrl?: string };
+  hasCredentials: boolean;
+  secretMasked: string;
+  updatedAt: number | null;
+}
+
+export interface StorageConfigPayload {
+  endpoint?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+  bucket?: string;
+  region?: string;
+  publicUrl?: string;
+}
 
 export interface CategoryReport {
   category: StorageCategory;
