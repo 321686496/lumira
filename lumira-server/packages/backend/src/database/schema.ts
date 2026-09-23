@@ -439,3 +439,10 @@ export const storageMigrations = mysqlTable('storage_migrations', {
   failureFile: varchar('failure_file', { length: 512 }),
   createdAt: int('created_at').notNull(),
 });
+
+export const storageConfigs = mysqlTable('storage_config', {
+  id: varchar('id', { length: 32 }).primaryKey(), // local|r2|aliyun|tencent|qiniu
+  configJson: longtext('config_json'), // { endpoint, accessKeyId, secretAccessKey, bucket, region, publicUrl }
+  isActive: int('is_active').notNull().default(0),
+  updatedAt: int('updated_at'),
+});

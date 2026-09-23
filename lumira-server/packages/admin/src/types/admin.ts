@@ -633,6 +633,25 @@ export const STORAGE_OPTIONS: { value: StorageId; label: string }[] = [
   { value: 'qiniu', label: '七牛云 Kodo' },
 ];
 
+export interface StorageConfigView {
+  id: StorageId;
+  isActive: boolean;
+  configured: boolean;
+  endpoints: { endpoint?: string; bucket?: string; region?: string; publicUrl?: string };
+  hasCredentials: boolean;
+  secretMasked: string;
+  updatedAt: number | null;
+}
+
+export interface StorageConfigPayload {
+  endpoint?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+  bucket?: string;
+  region?: string;
+  publicUrl?: string;
+}
+
 export interface CategoryReport {
   category: StorageCategory;
   dbTotal: number;

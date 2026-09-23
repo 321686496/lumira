@@ -43,6 +43,8 @@ import type {
   AiSilhouetteStatusResult,
   MigrationRecordView,
   MigrationRunningView,
+  StorageConfigView,
+  StorageConfigPayload,
 } from '@/types/admin';
 
 // 重新导出纯函数，供 server-only 调用方使用（客户端组件请直接从 @/lib/category-tree 导入）
@@ -635,5 +637,13 @@ export const api = {
     adminFetch<{ id: string; sourceId: string; targetId: string }>(`/storage/migrate/retry/${id}`, {
       method: 'POST',
       body: JSON.stringify({}),
+    }),
+
+  listStorageConfig: () => adminFetch<StorageConfigView[]>('/storage/config'),
+
+  saveStorageConfig: (id: string, payload: StorageConfigPayload & { active?: boolean }) =>
+    adminFetch<{ ok: boolean }>(`/storage/config/${id}`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     }),
 };
