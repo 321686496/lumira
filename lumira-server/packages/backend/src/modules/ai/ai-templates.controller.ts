@@ -2,7 +2,7 @@
 // AI 模板制作端点（Task 5：ai-analyze 识别；Task 7/9 再并入生图 / 剪影端点）
 // 设计文档：docs/specs/2026-09-09-ai-template-one-click-creation-design.md 第三节
 
-import { Controller, Post, Get, Param, Req, UseGuards, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
+import { Controller, Post, Get, Param, Query, Req, UseGuards, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
 import { UploadFile } from '../templates/admin-templates.service';
@@ -35,11 +35,16 @@ export class AiTemplatesController {
     });
   }
 
-  /** 查询识别任务状态（done 带 draft/warnings，error 带 error；任务不存在则 404） */
+  /**
+   * 查询识别任务状态（done 带 draft/warnings，error 带 error；任务不存在则 404）。
+   * events = 实时流程事件（阶段/提示词/响应，按 seq 递增）；传 since=上个 seq 只取增量，
+   * 后台据此像聊天一样实时渲染"走到哪一步、这一步提示词与响应是什么"。
+   */
   @Get('ai-analyze/tasks/:taskId')
-  async getAnalyzeTask(@Param('taskId') taskId: string) {
+  async getAnalyzeTask(@Param('taskId') taskId: string, @Query('since') since?: string) {
     const task = this.aiAnalyzeTaskService.get(taskId);
     if (!task) throw new NotFoundException('Analyze task not found');
+    const sinceSeq = Number.isFinite(Number(since)) ? Number(since) : 0;
     return {
       taskId: task.id,
       status: task.status,
@@ -48,6 +53,10 @@ export class AiTemplatesController {
       trace: task.result?.trace ?? [],
       raw: task.result?.raw ?? null,
       research: task.result?.research ?? [],
+      /** 增量流程事件（seq > since）；since 缺省返回全部 */
+      events: task.events.filter((e) => e.seq > sinceSeq),
+      /** 已产生的最大 seq（前端下次拉取的 since） */
+      lastSeq: task.events.length ? task.events[task.events.length - 1]!.seq : 0,
       error: task.error,
     };
   }

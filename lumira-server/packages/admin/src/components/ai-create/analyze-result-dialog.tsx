@@ -1,10 +1,11 @@
 'use client';
 
 // src/components/ai-create/analyze-result-dialog.tsx
-// AI 识别结果详情弹窗（供数据分析）：三块内容用 Tab 切换。
-// 1) 识别过程：Agentic 研究管线逐步执行的 trace（研究/识别/姿势面片/评分等）。
-// 2) 原始结构数据：LLM 直接吐出的原始 JSON（raw）与归一化后的 draft 对比。
-// 3) 参考来源（URL）：趋势研究阶段命中的来源（title 可点外链 + source 标签 + 摘要）。
+// AI 识别结果详情弹窗（供数据分析）：多块内容用 Tab 切换。
+// 1) 实时流程：识别全程事件流（阶段推进 + 每步提示词 + 模型响应 + 检索命中，与进行中一致）。
+// 2) 识别过程：Agentic 研究管线逐步执行的 trace（研究/识别/姿势面片/评分等）。
+// 3) 原始结构数据：LLM 直接吐出的原始 JSON（raw）与归一化后的 draft 对比。
+// 4) 参考来源（URL）：趋势研究阶段命中的来源（title 可点外链 + source 标签 + 摘要）。
 // 研究管线未开启时 trace/research 为空，对应 Tab 友好降级。
 
 import * as React from 'react';
@@ -18,26 +19,28 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { AnalyzeTraceStream } from './analyze-trace-stream';
 import type { AiAnalyzeStatusResult, AiAnalyzeTraceEntry, AiResearchRef } from '@/types/admin';
 
-type TabKey = 'trace' | 'raw' | 'research';
+type TabKey = 'flow' | 'trace' | 'raw' | 'research';
 
 interface AnalyzeResultDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** 识别完成后的全量结果（含 trace/raw/research） */
+  /** 识别完成后的全量结果（含 events/trace/raw/research） */
   result: AiAnalyzeStatusResult | null;
 }
 
 export function AnalyzeResultDialog({ open, onOpenChange, result }: AnalyzeResultDialogProps) {
-  const [tab, setTab] = useState<TabKey>('trace');
+  const [tab, setTab] = useState<TabKey>('flow');
 
   // 关闭后重置到第一个 Tab，下次打开从头看
   React.useEffect(() => {
-    if (!open) setTab('trace');
+    if (!open) setTab('flow');
   }, [open]);
 
   const trace = result?.trace ?? [];
+  const events = result?.events ?? [];
   const research = useMemo<(AiResearchRef & { url?: string })[]>(
     () => (result?.research ?? []).filter((r) => typeof r?.url === 'string' && r.url),
     [result],
@@ -51,6 +54,7 @@ export function AnalyzeResultDialog({ open, onOpenChange, result }: AnalyzeResul
   );
 
   const tabs: { key: TabKey; label: string; count?: number }[] = [
+    { key: 'flow', label: '实时流程', count: events.length },
     { key: 'trace', label: '识别过程', count: trace.length },
     { key: 'raw', label: '原始结构数据' },
     { key: 'research', label: '参考来源', count: research.length },
@@ -92,6 +96,14 @@ export function AnalyzeResultDialog({ open, onOpenChange, result }: AnalyzeResul
 
         {/* 内容区 */}
         <div className="flex-1 overflow-y-auto p-1">
+          {tab === 'flow' && (
+            <AnalyzeTraceStream
+              events={events}
+              title={null}
+              bodyClassName="max-h-[60vh]"
+              className="border-0 bg-transparent"
+            />
+          )}
           {tab === 'trace' && <TraceTab entries={trace} />}
           {tab === 'raw' && <RawTab raw={raw} draft={result?.draft} draftEntries={draftEntries} />}
           {tab === 'research' && <ResearchTab items={research} />}

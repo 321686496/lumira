@@ -22,6 +22,7 @@ import type { ImageScoreInput } from './image-score.service';
 import { DraftRefineService } from './draft-refine.service';
 import { normalizeDraft } from './normalize';
 import type { CategoryNode } from './normalize';
+import { traceNote, traceStep } from './llm-trace';
 
 /** 单条 trace：记录各阶段发生了什么（供后台展示/调试） */
 export interface OrchestratorTraceEntry {
@@ -58,6 +59,16 @@ export interface OrchestratorResult {
 /** 评分闸门 / 再判迭代预算上限 */
 const MAX_SCORE_ITERATIONS = 3;
 
+/** 阶段中文名（后台实时流程展示用；未列出的阶段回退 step 原文） */
+const STEP_TITLES: Record<string, string> = {
+  research: '趋势研究',
+  describe: '示例图识别',
+  poseRefSheet: '姿势参考面片',
+  paramValidate: '参数校准',
+  imageScore: '质量评分',
+  draftRefine: '草稿细化',
+};
+
 @Injectable()
 export class AiOrchestratorService {
   constructor(
@@ -91,8 +102,10 @@ export class AiOrchestratorService {
       // 识别前置已搜出（ai-analyze 先搜后写草稿）→ 直接复用，trace 记录条数不重复搜索
       research = opts.research;
       trace.push({ step: 'research', tool: 'trend-research', resultBrief: `${research.length} 条（识别前置）` });
+      traceNote('research', STEP_TITLES.research!, `${research.length} 条（复用识别前置检索）`);
     } else if (!researchEnabled) {
       trace.push({ step: 'research', tool: 'trend-research', resultBrief: 'skip-research' });
+      traceNote('research', STEP_TITLES.research!, 'skip-research（研究未开启/无主题）');
     } else {
       const result = (await this.wrapStep<ResearchResult>('research', 'trend-research', trace, () =>
         this.trendResearch.research(topic, { limitPerSource: 5 }),
@@ -120,6 +133,7 @@ export class AiOrchestratorService {
       );
     } else {
       trace.push({ step: 'describe', resultBrief: 'skip-describe（无图）' });
+      traceNote('describe', STEP_TITLES.describe!, 'skip-describe（无参考图）');
     }
     if (!desc) {
       // 无参考描述时构造最简占位（供 poseRefSheet 骨架，避免崩溃）
@@ -163,6 +177,7 @@ export class AiOrchestratorService {
       let result: { score: number; verdict: 'pass' | 'retry'; suggests?: string[] };
       if (!hasRefImage) {
         trace.push({ step: 'imageScore', tool: 'image-score', resultBrief: 'skip-imageScore（无参考图）' });
+        traceNote('imageScore', STEP_TITLES.imageScore!, 'skip-imageScore（无参考图，直接收束）');
         result = { score: 1, verdict: 'pass', suggests: [] };
         bestScore = 1;
         bestDraft = workingDraft; // 无图 break 前把已 paramValidate 的草稿写为最佳候选
@@ -205,20 +220,22 @@ export class AiOrchestratorService {
 
     // (7) 定稿归一化（fail-safe：categories 必传，输入为 object）
     const normalized = normalizeDraft(workingDraft, categories);
+    traceNote('finalize', '定稿归一化', `草稿就绪；修正提示 ${normalized.warnings.length} 条`);
     return { draft: normalized.draft, warnings: [...normalized.warnings, ...warnings], trace, research };
   }
 
-  /** wrap 工具调用：成功返回其值，失败记录 trace 并返回 undefined（降级继续） */
+  /** wrap 工具调用：成功返回其值，失败记录 trace 并返回 undefined（降级继续）。
+ *  识别流程采集中同时把该阶段（含耗时/结论）推给后台实时流程面板。 */
   private async wrapStep<T>(
     step: string,
     tool: string,
     trace: OrchestratorTraceEntry[],
     fn: () => T | Promise<T>,
   ): Promise<T | undefined> {
+    const title = STEP_TITLES[step] ?? step;
     try {
-      const value = await fn();
-      const brief = this.brief(value);
-      trace.push({ step, tool, resultBrief: brief });
+      const value = await traceStep(step, title, async () => fn(), (v) => this.brief(v));
+      trace.push({ step, tool, resultBrief: this.brief(value) });
       return value;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

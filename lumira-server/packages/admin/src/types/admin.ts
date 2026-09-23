@@ -604,6 +604,36 @@ export interface AiAnalyzeTaskId {
   taskId: string;
 }
 
+/** 识别流程事件类型：阶段 / LLM 调用 / 联网检索 / 说明性节点 */
+export type AiTraceEventType = 'step' | 'llm' | 'search' | 'note';
+export type AiTraceEventStatus = 'running' | 'done' | 'fail';
+
+/** 一条识别流程事件（后端 llm-trace 产出；前端按 seq 增量拉取，像聊天一样实时渲染） */
+export interface AiTraceEvent {
+  /** 递增序号（增量拉取与去重依据） */
+  seq: number;
+  /** 记录时间（ms epoch） */
+  ts: number;
+  type: AiTraceEventType;
+  /** 阶段标识：reorganize / research / analyze / describe / poseRefSheet / paramValidate / imageScore / draftRefine / finalize */
+  step: string;
+  /** 阶段中文名 */
+  title: string;
+  status: AiTraceEventStatus;
+  /** LLM 模型名 / 检索来源名 */
+  model?: string;
+  systemPrompt?: string;
+  userPrompt?: string;
+  /** 附带图片时的字节数（不展开 base64） */
+  imageBytes?: number;
+  /** 响应正文（LLM 输出 / 检索命中摘要） */
+  response?: string;
+  /** 阶段结论简述 */
+  resultBrief?: string;
+  error?: string;
+  durationMs?: number;
+}
+
 /** 查询 AI 识别任务状态（done 带 draft/warnings/trace/raw/research，error 带 error） */
 export interface AiAnalyzeStatusResult {
   taskId: string;
@@ -616,6 +646,10 @@ export interface AiAnalyzeStatusResult {
   raw?: Record<string, unknown>;
   /** 趋势研究命中的参考来源（含 URL） */
   research?: AiResearchRef[];
+  /** 识别流程实时事件流（含每步提示词与响应，按 seq 递增） */
+  events?: AiTraceEvent[];
+  /** 已产生的最大 seq（下一次增量拉取的 since） */
+  lastSeq?: number;
   error?: string;
 }
 

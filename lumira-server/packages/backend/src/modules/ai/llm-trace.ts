@@ -1,0 +1,212 @@
+// lumira-server/packages/backend/src/modules/ai/llm-trace.ts
+// AI 识别流程的实时轨迹采集：把「走到哪一步 / 该步提示词 / 模型响应」按发生顺序记成事件流，
+// 由 ai-analyze-task 的任务对象持有，后台轮询增量拉取并像聊天一样实时渲染。
+//
+// 实现方式：AsyncLocalStorage 存「当前任务的 sink + 当前阶段」，各层（llm-client / 检索 /
+// 编排 / 识别服务）只调用 traceStep / traceLlmCall / traceSearchCall，无需改服务签名。
+// 未开启采集上下文（定时任务、单测、其它调用方）时全部 no-op，零副作用。
+
+import { AsyncLocalStorage } from 'node:async_hooks';
+
+export type AiTraceEventType = 'step' | 'llm' | 'search' | 'note';
+export type AiTraceEventStatus = 'running' | 'done' | 'fail';
+
+/** 一条流程事件（展示单位：阶段或一次 LLM/检索调用） */
+export interface AiTraceEvent {
+  /** 递增序号（前端按 since 增量拉取与去重） */
+  seq: number;
+  /** 记录时间（ms epoch） */
+  ts: number;
+  type: AiTraceEventType;
+  /** 阶段标识：reorganize / research / analyze / describe / poseRefSheet / paramValidate / imageScore / draftRefine / finalize */
+  step: string;
+  /** 阶段中文名（后台直接展示） */
+  title: string;
+  status: AiTraceEventStatus;
+  /** LLM 模型名 / 检索来源名 */
+  model?: string;
+  /** 请求：system 提示词 */
+  systemPrompt?: string;
+  /** 请求：user 提示词（含图时图中内容不展开） */
+  userPrompt?: string;
+  /** 附带图片时的字节数（提示词不展示 base64） */
+  imageBytes?: number;
+  /** 响应正文（LLM 原始输出 / 检索综述 / 命中摘要） */
+  response?: string;
+  /** 阶段结论简述（条数、是否跳过、校验结果等） */
+  resultBrief?: string;
+  /** 失败原因 */
+  error?: string;
+  /** 耗时（ms；running 事件无此字段） */
+  durationMs?: number;
+}
+
+/** 事件收集回调（由识别任务注入：分配 seq/ts 并追加到任务） */
+export type TraceSink = (ev: Omit<AiTraceEvent, 'seq' | 'ts'>) => void;
+
+interface TraceStore {
+  sink: TraceSink;
+  /** 当前阶段（LLM/检索事件据此归属到所属步骤） */
+  currentStep?: { step: string; title: string };
+}
+
+const storage = new AsyncLocalStorage<TraceStore>();
+
+/** 单个字段（提示词 / 响应）保留上限：够看全内容，又不让任务对象被超长文本撑爆 */
+export const TRACE_TEXT_CAP = 20_000;
+
+/** 截断超长文本并标注（不静默丢内容） */
+function capText(text: string | undefined, cap = TRACE_TEXT_CAP): string | undefined {
+  if (typeof text !== 'string') return undefined;
+  if (text.length <= cap) return text;
+  return `${text.slice(0, cap)}\n…（已截断，原长 ${text.length} 字）`;
+}
+
+/** 在该 sink 的采集上下文内执行；嵌套调用沿用最外层上下文 */
+export function runWithTrace<T>(sink: TraceSink, fn: () => Promise<T>): Promise<T> {
+  return storage.run({ sink }, fn);
+}
+
+/** 是否有采集上下文（少数需要预先判断的场景） */
+export function hasTrace(): boolean {
+  return Boolean(storage.getStore());
+}
+
+/** 当前阶段（无上下文返回 undefined） */
+export function currentTraceStep(): { step: string; title: string } | undefined {
+  return storage.getStore()?.currentStep;
+}
+
+/** 记录一条独立事件（如「任务已提交」「定稿完成」） */
+export function traceNote(step: string, title: string, resultBrief?: string): void {
+  storage.getStore()?.sink({ type: 'note', step, title, status: 'done', resultBrief });
+}
+
+/**
+ * 记录一个阶段的开始/结束（异常也记录 fail 后原样抛出）。
+ * 无采集上下文时等价于直接执行 fn（零额外开销）。
+ */
+export async function traceStep<T>(
+  step: string,
+  title: string,
+  fn: () => Promise<T>,
+  brief?: (value: T) => string,
+): Promise<T> {
+  const store = storage.getStore();
+  if (!store) return fn();
+
+  const prev = store.currentStep;
+  store.currentStep = { step, title };
+  const startedAt = Date.now();
+  store.sink({ type: 'step', step, title, status: 'running' });
+  try {
+    const value = await fn();
+    store.sink({
+      type: 'step',
+      step,
+      title,
+      status: 'done',
+      resultBrief: brief?.(value),
+      durationMs: Date.now() - startedAt,
+    });
+    return value;
+  } catch (err) {
+    store.sink({
+      type: 'step',
+      step,
+      title,
+      status: 'fail',
+      error: err instanceof Error ? err.message : String(err),
+      durationMs: Date.now() - startedAt,
+    });
+    throw err;
+  } finally {
+    store.currentStep = prev;
+  }
+}
+
+/** 一次调用（LLM / 检索）的完成句柄；无采集上下文时为 null */
+export interface TraceCallHandle {
+  done(response?: string, extra?: { resultBrief?: string }): void;
+  fail(err: unknown): void;
+}
+
+interface TraceCallInput {
+  type: 'llm' | 'search';
+  title: string;
+  model?: string;
+  systemPrompt?: string;
+  userPrompt?: string;
+  imageBytes?: number;
+}
+
+/** 开始记录一次外部调用（提示词在开始时就记下，响应在完成时补记） */
+function startCall(input: TraceCallInput): TraceCallHandle | null {
+  const store = storage.getStore();
+  if (!store) return null;
+  const { step, title } = store.currentStep ?? { step: 'call', title: input.title };
+  const startedAt = Date.now();
+  store.sink({
+    type: input.type,
+    step,
+    title: input.title || title,
+    status: 'running',
+    model: input.model,
+    systemPrompt: capText(input.systemPrompt),
+    userPrompt: capText(input.userPrompt),
+    imageBytes: input.imageBytes,
+  });
+  return {
+    done(response, extra) {
+      store.sink({
+        type: input.type,
+        step,
+        title: input.title || title,
+        status: 'done',
+        model: input.model,
+        response: capText(response),
+        resultBrief: extra?.resultBrief,
+        durationMs: Date.now() - startedAt,
+      });
+    },
+    fail(err) {
+      store.sink({
+        type: input.type,
+        step,
+        title: input.title || title,
+        status: 'fail',
+        model: input.model,
+        error: err instanceof Error ? err.message : String(err),
+        durationMs: Date.now() - startedAt,
+      });
+    },
+  };
+}
+
+/** 记录一次 LLM 调用（llm-client 内调用） */
+export function traceLlmCall(input: {
+  model: string;
+  systemPrompt?: string;
+  userPrompt?: string;
+  imageBytes?: number;
+  title?: string;
+}): TraceCallHandle | null {
+  const stepTitle = currentTraceStep()?.title;
+  return startCall({
+    type: 'llm',
+    title: input.title || (stepTitle ? `${stepTitle} · LLM` : `LLM · ${input.model}`),
+    model: input.model,
+    systemPrompt: input.systemPrompt,
+    userPrompt: input.userPrompt,
+    imageBytes: input.imageBytes,
+  });
+}
+
+/** 记录一次联网检索调用（检索适配器内调用） */
+export function traceSearchCall(input: {
+  title: string;
+  model?: string;
+  query: string;
+}): TraceCallHandle | null {
+  return startCall({ type: 'search', title: input.title, model: input.model, userPrompt: input.query });
+}

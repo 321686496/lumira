@@ -9,6 +9,8 @@ import { nanoid } from 'nanoid';
 import { UploadFile } from '../templates/admin-templates.service';
 import { AiAnalyzeService } from './ai-analyze.service';
 import type { AiAnalyzeResult } from './ai-analyze.service';
+import { runWithTrace, traceNote } from './llm-trace';
+import type { AiTraceEvent } from './llm-trace';
 
 export type AiAnalyzeTaskStatus = 'pending' | 'running' | 'done' | 'error';
 
@@ -16,6 +18,8 @@ export interface AiAnalyzeTask {
   id: string;
   status: AiAnalyzeTaskStatus;
   createdAt: number;
+  /** 实时流程事件（追加式：阶段开始/结束 + 每步提示词与响应），后台轮询增量渲染 */
+  events: AiTraceEvent[];
   /** 仅 done 时存在 */
   result?: AiAnalyzeResult;
   /** 仅 error 时存在 */
@@ -25,6 +29,8 @@ export interface AiAnalyzeTask {
 /** 已完成/错误任务的保留时长（超时即清理，防草稿 JSON 占用内存） */
 const RESULT_TTL_MS = 15 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 60 * 1000;
+/** 单任务事件上限（超出丢弃后续事件，兜住异常长流程的内存占用） */
+const MAX_TRACE_EVENTS = 300;
 
 @Injectable()
 export class AiAnalyzeTaskService implements OnModuleDestroy {
@@ -58,12 +64,13 @@ export class AiAnalyzeTaskService implements OnModuleDestroy {
       throw new BadRequestException('请至少提供示例图或文字描述之一');
     }
     const id = `anl_${nanoid(16)}`;
-    this.tasks.set(id, { id, status: 'pending', createdAt: Date.now() });
+    this.tasks.set(id, { id, status: 'pending', createdAt: Date.now(), events: [] });
     void this.run(id, image, text, extra);
     return { taskId: id };
   }
 
-  /** 后台执行：置 running → analyze → 置 done 存 draft/warnings；异常置 error 写错误信息 */
+  /** 后台执行：置 running → analyze → 置 done 存 draft/warnings；异常置 error 写错误信息。
+   *  analyze 全程在 trace 采集上下文内跑，各阶段/提示词/响应按发生顺序落到 task.events。 */
   private async run(
     id: string,
     image: UploadFile | undefined,
@@ -73,13 +80,23 @@ export class AiAnalyzeTaskService implements OnModuleDestroy {
     const task = this.tasks.get(id);
     if (!task) return;
     task.status = 'running';
+    const sink = (ev: Omit<AiTraceEvent, 'seq' | 'ts'>): void => {
+      if (task.events.length >= MAX_TRACE_EVENTS) return;
+      task.events.push({ ...ev, seq: task.events.length + 1, ts: Date.now() });
+    };
     try {
-      const result = await this.aiAnalyzeService.analyze(image, text, extra);
+      const result = await runWithTrace(sink, async () => {
+        traceNote('task', '识别任务已提交', `输入：${image ? '示例图' : '无图'}${(text ?? '').trim() ? ' + 文字描述' : ''}`);
+        return this.aiAnalyzeService.analyze(image, text, extra);
+      });
       task.status = 'done';
       task.result = result;
+      sink({ type: 'note', step: 'task', title: '识别完成', status: 'done', resultBrief: '草稿已生成，可进入下一步' });
     } catch (err) {
+      const msg = (err as Error)?.message || '识别失败，请重试';
       task.status = 'error';
-      task.error = (err as Error)?.message || '识别失败，请重试';
+      task.error = msg;
+      sink({ type: 'note', step: 'task', title: '识别失败', status: 'fail', error: msg });
     }
   }
 

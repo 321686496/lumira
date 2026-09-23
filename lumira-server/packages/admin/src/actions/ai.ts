@@ -69,12 +69,13 @@ export async function aiAnalyzeStartAction(
   }
 }
 
-/** 轮询识别异步任务状态（done 带 draft/warnings，error 带 error） */
+/** 轮询识别异步任务状态（done 带 draft/warnings，error 带 error）；since 传上个 seq 只取增量流程事件 */
 export async function aiAnalyzeStatusAction(
   taskId: string,
+  since?: number,
 ): Promise<AiAnalyzeStatusResult | { error: string }> {
   try {
-    return await api.aiAnalyzeStatus(taskId);
+    return await api.aiAnalyzeStatus(taskId, since);
   } catch (e) {
     if (e instanceof UnauthenticatedError) redirect('/login');
     return { error: (e as Error).message };

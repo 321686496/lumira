@@ -10,6 +10,7 @@ import { createQwenSearchProvider } from './web-search-qwen';
 import { createVendorSearchProvider } from './web-search-vendor';
 import type { ResearchItem } from './research-item';
 import type { LlmEndpoint } from '../llm-client';
+import { traceSearchCall } from '../llm-trace';
 
 /** 单次搜索请求 */
 export interface WebSearchQuery {
@@ -93,14 +94,25 @@ export function clearWebSearchCache(): void {
 /**
  * 包一层 LRU 缓存（name|query|limit）按需搜索：命中直接返回缓存，
  * 未命中调 provider.search 并写入；provider 失败抛错（不缓存失败）。
+ * 识别流程采集中会记录本次检索的查询词与命中摘要（供后台实时展示）。
  */
 export async function cacheableSearch(provider: WebSearchProvider, q: WebSearchQuery): Promise<ResearchItem[]> {
   const key = `${provider.name}|${q.query}|${q.limit ?? 10}`;
   const hit = searchCache.get(key);
   if (hit) return hit;
-  const items = await provider.search(q);
-  searchCache.set(key, items);
-  return items;
+  const handle = traceSearchCall({ title: `联网检索 · ${provider.name}`, model: provider.name, query: q.query });
+  try {
+    const items = await provider.search(q);
+    handle?.done(
+      items.map((it) => [it.title, it.snippet].filter(Boolean).join('：')).join('\n'),
+      { resultBrief: `${items.length} 条` },
+    );
+    searchCache.set(key, items);
+    return items;
+  } catch (err) {
+    handle?.fail(err);
+    throw err;
+  }
 }
 
 // re-export，便于统一入口

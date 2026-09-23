@@ -22,6 +22,7 @@ import type { OrchestratorInput, OrchestratorTraceEntry } from './ai-orchestrato
 import type { ResearchItem } from './trend-research/research-item';
 import { buildResearchDigest } from './trend-research/research-digest';
 import { TrendResearchService } from './trend-research/trend-research.service';
+import { traceNote, traceStep } from './llm-trace';
 
 /** 允许的示例图 mimetype */
 const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -108,7 +109,12 @@ export class AiAnalyzeService {
       const topic = (extra.creationReq?.trim() || trimmedText).trim();
       if (topic) {
         try {
-          const r = await this.trendResearch.research(topic, { limitPerSource: 5 });
+          const r = await traceStep(
+            'research',
+            '趋势研究（联网检索）',
+            () => this.trendResearch.research(topic, { limitPerSource: 5 }),
+            (res) => (res.items.length ? `${res.items.length} 条参考来源` : '未取到来源'),
+          );
           research = r.items;
           researchDigest = buildResearchDigest(r.items);
         } catch {
@@ -121,33 +127,45 @@ export class AiAnalyzeService {
     // 4. 按输入组合分叉：有图走视觉模型（extras 注入识别指令），仅文字走文本模型
     let content: string;
     if (image) {
-      content = await visionChat(cfg.vision, {
-        systemPrompt: buildAnalyzeSystemPrompt(categories),
-        userText: buildAnalyzeUserPrompt({
-          textDesc: extra.textDesc?.trim() || trimmedText || undefined,
-          creationReq: extra.creationReq,
-          poseCount,
-          researchDigest,
-          researchUnavailable,
-        }),
-        imageBase64: image.buffer.toString('base64'),
-        imageMime: image.mimetype,
-        temperature: 0.3,
-        jsonMode: true,
-      });
+      content = await traceStep(
+        'analyze',
+        '识图生成模板草稿',
+        () =>
+          visionChat(cfg.vision, {
+            systemPrompt: buildAnalyzeSystemPrompt(categories),
+            userText: buildAnalyzeUserPrompt({
+              textDesc: extra.textDesc?.trim() || trimmedText || undefined,
+              creationReq: extra.creationReq,
+              poseCount,
+              researchDigest,
+              researchUnavailable,
+            }),
+            imageBase64: image.buffer.toString('base64'),
+            imageMime: image.mimetype,
+            temperature: 0.3,
+            jsonMode: true,
+          }),
+        (c) => `模型输出 ${c.length} 字`,
+      );
     } else {
-      content = await textChat(cfg.text, {
-        systemPrompt: buildTextOnlySystemPrompt(categories),
-        userText: buildTextOnlyUserPrompt({
-          textDesc: trimmedText,
-          creationReq: extra.creationReq,
-          poseCount,
-          researchDigest,
-          researchUnavailable,
-        }),
-        temperature: 0.3,
-        jsonMode: true,
-      });
+      content = await traceStep(
+        'analyze',
+        '文字构思模板草稿',
+        () =>
+          textChat(cfg.text, {
+            systemPrompt: buildTextOnlySystemPrompt(categories),
+            userText: buildTextOnlyUserPrompt({
+              textDesc: trimmedText,
+              creationReq: extra.creationReq,
+              poseCount,
+              researchDigest,
+              researchUnavailable,
+            }),
+            temperature: 0.3,
+            jsonMode: true,
+          }),
+        (c) => `模型输出 ${c.length} 字`,
+      );
     }
 
     // 5. 容错提取 JSON（失败 → 400 引导重试识别）
@@ -174,6 +192,7 @@ export class AiAnalyzeService {
       return { draft: r.draft, warnings: r.warnings, trace: r.trace, raw: json, research: r.research ?? [] };
     }
 
+    traceNote('finalize', '定稿归一化', `草稿就绪；修正提示 ${normalized.warnings.length} 条`);
     return { ...normalized, trace: [], raw: json, research };
   }
 }

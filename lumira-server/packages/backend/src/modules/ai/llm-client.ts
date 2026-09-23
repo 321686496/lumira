@@ -6,6 +6,9 @@
 //
 // 纯函数层：ai-config 模块提供 LlmEndpoint（单模态端点），ai-analyze 等端点调用 visionChat / textChat。
 // 使用 Node 20 原生 fetch + AbortSignal.timeout，不引入 axios。
+// 识别流程采集：调用 traceLlmCall 记录提示词/响应（无采集上下文时 no-op，见 llm-trace.ts）。
+
+import { traceLlmCall } from './llm-trace';
 
 export interface LlmEndpoint {
   provider: string;   // 预留（chat 请求只用 baseUrl + apiKey）
@@ -171,7 +174,7 @@ async function chatRequest(cfg: LlmEndpoint, input: ChatRequestBase): Promise<st
   return content;
 }
 
-/** 带图 chat（对外签名与行为不变） */
+/** 带图 chat（对外签名与行为不变）；识别流程采集中会额外记录提示词与响应 */
 export async function visionChat(cfg: LlmEndpoint, input: VisionChatInput): Promise<string> {
   const messages = [
     { role: 'system', content: input.systemPrompt },
@@ -180,28 +183,53 @@ export async function visionChat(cfg: LlmEndpoint, input: VisionChatInput): Prom
       { type: 'image_url', image_url: { url: `data:${input.imageMime};base64,${input.imageBase64}` } },
     ] },
   ];
-  return chatRequest(cfg, {
+  const handle = traceLlmCall({
     model: cfg.model,
-    messages,
-    temperature: input.temperature ?? DEFAULT_TEMPERATURE,
-    jsonMode: input.jsonMode ?? false,
-    timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    systemPrompt: input.systemPrompt,
+    userPrompt: input.userText,
+    imageBytes: Math.round(input.imageBase64.length * 0.75), // base64 → 近似原始字节
   });
+  try {
+    const content = await chatRequest(cfg, {
+      model: cfg.model,
+      messages,
+      temperature: input.temperature ?? DEFAULT_TEMPERATURE,
+      jsonMode: input.jsonMode ?? false,
+      timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    });
+    handle?.done(content);
+    return content;
+  } catch (err) {
+    handle?.fail(err);
+    throw err;
+  }
 }
 
-/** 纯文本 chat：model 取 cfg.model（textModel → visionModel 回退由 getActiveConfig 负责） */
+/** 纯文本 chat：model 取 cfg.model（textModel → visionModel 回退由 getActiveConfig 负责）；识别流程采集中会记录提示词与响应 */
 export async function textChat(cfg: LlmEndpoint, input: TextChatInput): Promise<string> {
   const messages = [
     { role: 'system', content: input.systemPrompt },
     { role: 'user', content: input.userText },
   ];
-  return chatRequest(cfg, {
+  const handle = traceLlmCall({
     model: cfg.model,
-    messages,
-    temperature: input.temperature ?? DEFAULT_TEMPERATURE,
-    jsonMode: input.jsonMode ?? false,
-    timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    systemPrompt: input.systemPrompt,
+    userPrompt: input.userText,
   });
+  try {
+    const content = await chatRequest(cfg, {
+      model: cfg.model,
+      messages,
+      temperature: input.temperature ?? DEFAULT_TEMPERATURE,
+      jsonMode: input.jsonMode ?? false,
+      timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    });
+    handle?.done(content);
+    return content;
+  } catch (err) {
+    handle?.fail(err);
+    throw err;
+  }
 }
 
 /**

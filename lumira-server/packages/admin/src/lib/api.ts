@@ -570,9 +570,11 @@ export const api = {
       body: formData,
     }, AI_ENDPOINT_TIMEOUT_MS),
 
-  /** 轮询识别任务状态（done 带 draft/warnings；error 带 error） */
-  aiAnalyzeStatus: (taskId: string) =>
-    adminFetch<AiAnalyzeStatusResult>(`/templates/ai-analyze/tasks/${taskId}`),
+  /** 轮询识别任务状态（done 带 draft/warnings；error 带 error）；since 只取增量流程事件 */
+  aiAnalyzeStatus: (taskId: string, since?: number) =>
+    adminFetch<AiAnalyzeStatusResult>(
+      `/templates/ai-analyze/tasks/${taskId}${since && since > 0 ? `?since=${since}` : ''}`,
+    ),
 
   /** 提交生图任务（multipart meta + reference 可选 + extraPrompt 附加提示词可选）→ 立即返回 taskId */
   aiGenerateImageStart: (formData: FormData) =>

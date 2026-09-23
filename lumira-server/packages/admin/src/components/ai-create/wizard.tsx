@@ -27,10 +27,11 @@ import {
   getAiConfigAction,
 } from '@/actions/ai';
 import { generateAiPoseImages, generateAiSilhouettes, pollAiAnalyzeTask, type AiPoseProgress } from '@/lib/ai-task';
-import type { TemplateCategory, AiAnalyzeTraceEntry, AiAnalyzeStatusResult } from '@/types/admin';
+import type { TemplateCategory, AiAnalyzeTraceEntry, AiAnalyzeStatusResult, AiTraceEvent } from '@/types/admin';
 import { StepCover, type CoverCandidate } from './step-cover';
 import { StepSilhouette } from './step-silhouette';
 import { AnalyzeResultDialog } from './analyze-result-dialog';
+import { AnalyzeTraceStream } from './analyze-trace-stream';
 import { Upload } from '@phosphor-icons/react/dist/csr/Upload';
 import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
 import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
@@ -76,8 +77,10 @@ export function AiCreateWizard({
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
   /** 研究管线 trace：各阶段（研究/识别/姿势面片/评分）执行轨迹；未开启时缺省 */
   const [trace, setTrace] = useState<AiAnalyzeTraceEntry[] | null>(null);
-  /** 识别完成后的全量结果（含 trace/raw/research），供数据分析详情弹窗 */
+  /** 识别完成后的全量结果（含 trace/raw/research/events），供数据分析详情弹窗 */
   const [analyzeDetail, setAnalyzeDetail] = useState<AiAnalyzeStatusResult | null>(null);
+  /** 识别流程实时事件流（阶段 / 提示词 / 响应，轮询增量累积），识别期间像聊天一样实时出现 */
+  const [traceEvents, setTraceEvents] = useState<AiTraceEvent[]>([]);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   /** 模板表单当前实际效果图列表；剪影必须以此为准，避免继续使用已废弃的 Step3 候选缓存 */
   const [formImages, setFormImages] = useState<File[]>([]);
@@ -149,6 +152,7 @@ export function AiCreateWizard({
     setTrace(null);
     setWarnings([]);
     setAnalyzeDetail(null);
+    setTraceEvents([]);
     setDetailDialogOpen(false);
     setCandidates([]);
     setSilhouetteFile(null);
@@ -206,6 +210,7 @@ export function AiCreateWizard({
     if (!hasInput) return;
     setAnalyzing(true);
     setErrorText(null);
+    setTraceEvents([]);
     try {
       const analyzeFd = new FormData();
       if (exampleFile) analyzeFd.set('image', exampleFile);
@@ -217,7 +222,7 @@ export function AiCreateWizard({
         setErrorText(started?.error || '识别提交失败，请重试');
         return;
       }
-      const result = await pollAiAnalyzeTask(started.taskId);
+      const result = await pollAiAnalyzeTask(started.taskId, { onEvents: setTraceEvents });
       if (!result.draft) {
         setErrorText('识别结果为空，请重试');
         return;
@@ -255,6 +260,7 @@ export function AiCreateWizard({
     if (!hasInput) return;
     setErrorText(null);
     let stage: AutoStage = 'analyzing';
+    setTraceEvents([]);
     setAutoState({ running: true, stage });
     try {
       // ① 识别（含 Step1 附加输入：创作要求 / 姿势个数；主文字描述同时作为 textDesc）
@@ -268,7 +274,7 @@ export function AiCreateWizard({
         setErrorText(started?.error || '识别提交失败，请重试');
         return;
       }
-      const analyzeResult = await pollAiAnalyzeTask(started.taskId);
+      const analyzeResult = await pollAiAnalyzeTask(started.taskId, { onEvents: setTraceEvents });
       if (!analyzeResult.draft) {
         setAutoState(null);
         setErrorText('识别结果为空，请重试');
@@ -619,6 +625,14 @@ export function AiCreateWizard({
               <p className="text-xs text-muted-foreground">
                 全自动：识别 → 生图作封面 → 生成线稿剪影 → 创建并上架；任一步失败将停在对应步骤转人工，已成功的资产（草稿 / 封面）保留。
               </p>
+
+              {/* 识别流程实时过程：阶段推进 / 每步提示词 / 模型响应，随轮询实时出现 */}
+              {(analyzing || traceEvents.length > 0) && (
+                <AnalyzeTraceStream
+                  events={traceEvents}
+                  running={analyzing || (autoState?.running === true && autoState.stage === 'analyzing')}
+                />
+              )}
             </CardContent>
           </Card>
         )}

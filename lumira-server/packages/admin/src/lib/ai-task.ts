@@ -15,6 +15,7 @@ import type {
   AiSilhouetteStatusResult,
   AiBatchStatusResult,
   AiResearchRef,
+  AiTraceEvent,
 } from '@/types/admin';
 import { compressImage } from '@/lib/image-compress';
 
@@ -193,23 +194,40 @@ export function pollAiSilhouetteTask(
   })();
 }
 
-/** 轮询 AI 识别异步任务直到完成，避免同步请求被网关 504 掐断。done → {draft/warnings}；error/超时 reject AiTaskPollError */
+/**
+ * 轮询 AI 识别异步任务直到完成，避免同步请求被网关 504 掐断。done → {draft/warnings}；error/超时 reject AiTaskPollError。
+ * 传入 options.onEvents 时，按 since 增量拉取流程事件并累积后回调（后台据此实时渲染"走到哪一步 / 提示词 / 响应"）；
+ * done 时返回体带上完整 events，供结束后回看整个过程。
+ */
 export function pollAiAnalyzeTask(
   taskId: string,
-  options: AiTaskPollOptions = {},
+  options: AiTaskPollOptions & { onEvents?: (events: AiTraceEvent[]) => void } = {},
   onTick?: (status: AiAnalyzeStatusResult['status']) => void,
 ): Promise<AiAnalyzeStatusResult> {
-  const { intervalMs = DEFAULT_INTERVAL_MS, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+  const { intervalMs = DEFAULT_INTERVAL_MS, timeoutMs = DEFAULT_TIMEOUT_MS, onEvents } = options;
   const deadline = Date.now() + timeoutMs;
+  let since = 0;
+  const events: AiTraceEvent[] = [];
+
+  /** 拉取到的增量事件追加进累积列表并回调（去重靠后端 seq 递进） */
+  const absorb = (res: AiAnalyzeStatusResult) => {
+    if (!res.events?.length) return;
+    since = res.lastSeq ?? since;
+    events.push(...res.events);
+    onEvents?.(events.slice());
+  };
 
   return (async () => {
     while (Date.now() < deadline) {
-      const res = await aiAnalyzeStatusAction(taskId);
+      const res = await aiAnalyzeStatusAction(taskId, since);
       if (!res || 'error' in res) {
         throw new AiTaskPollError((res as { error?: string } | undefined)?.error || '查询识别任务失败');
       }
-      if (res.status === 'done') return res;
-      if (res.status === 'error') throw new AiTaskPollError(res.error || '识别失败，请重试');
+      absorb(res);
+      if (res.status === 'done') return { ...res, events };
+      if (res.status === 'error') {
+        throw new AiTaskPollError(res.error || '识别失败，请重试');
+      }
       onTick?.(res.status);
       await sleep(intervalMs);
     }
