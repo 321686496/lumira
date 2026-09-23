@@ -250,7 +250,11 @@ describe('generateImage', () => {
       const body = parseBody(submitInit);
       expect(body.model).toBe('image-model');
       expect(body.input).toEqual({ prompt: '一张 3:4 竖构图的人像摄影作品' });
-      expect(body.parameters).toEqual({ size: '720*1280', n: 1 });
+      expect(body.parameters).toEqual({
+        size: '720*1280',
+        n: 1,
+        negative_prompt: expect.stringContaining('动漫'), // wanx 原生负面提示词
+      });
 
       // 任务查询带 Bearer
       const pollInit = fetchMock.mock.calls[1][1];

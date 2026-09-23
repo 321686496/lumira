@@ -6,7 +6,7 @@
 // meta 非对象 400 / meta 缺省空草稿兜底 / 无参考图字段缺省 / 结果透传 / 润色失败回退。
 
 import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
-import { AiGenerateImageService } from './ai-generate-image.service';
+import { AiGenerateImageService, hardenPhotoRealism } from './ai-generate-image.service';
 import { AiConfigService } from './ai-config.service';
 import { generateImage } from './image-client';
 import { buildImagePrompt } from './image-prompt.builder';
@@ -88,7 +88,7 @@ describe('AiGenerateImageService', () => {
     expect(generateImageMock).toHaveBeenCalledTimes(1);
     const [cfg, input] = generateImageMock.mock.calls[0];
     expect(cfg).toEqual(ACTIVE_CFG.image);
-    expect(input.prompt).toBe('润色后的提示词'); // textChat mock 默认润色值
+    expect(input.prompt).toBe(hardenPhotoRealism('润色后的提示词')); // 出口统一照片写实加固
     expect(input.size).toBe('864x1152'); // mapSize('doubao', '3:4')
     expect(input.referenceBase64).toBe(Buffer.from('ref-bytes').toString('base64'));
     expect(input.referenceMime).toBe('image/jpeg');
@@ -105,7 +105,19 @@ describe('AiGenerateImageService', () => {
 
     expect(generateImageMock).toHaveBeenCalledTimes(1);
     const input = generateImageMock.mock.calls[0][1];
-    expect(input.prompt).toBe(buildImagePrompt(DRAFT)); // 润色失败静默回退拼接值
+    expect(input.prompt).toBe(hardenPhotoRealism(buildImagePrompt(DRAFT))); // 润色失败静默回退拼接值（含出口加固）
+  });
+
+  it('出口加固：生图 prompt 包含照片媒介声明与反动漫负面清单', async () => {
+    const { service } = buildService();
+    generateImageMock.mockResolvedValueOnce({ base64: 'aGVsbG8=', mimeType: 'image/png' });
+
+    await service.generate(undefined, JSON.stringify(DRAFT));
+
+    const input = generateImageMock.mock.calls[0][1];
+    expect(input.prompt.startsWith('一张真实相机直出的实拍照片：')).toBe(true);
+    expect(input.prompt).toContain('毛孔');
+    expect(input.prompt).toContain('禁止：动漫、二次元、漫画、插画');
   });
 
   it('无参考图 → referenceBase64/referenceMime 为 undefined', async () => {
@@ -126,7 +138,7 @@ describe('AiGenerateImageService', () => {
     await service.generate(undefined, null);
 
     const input = generateImageMock.mock.calls[0][1];
-    expect(input.prompt).toBe('润色后的提示词'); // 空草稿兜底 prompt 同样过润色
+    expect(input.prompt).toBe(hardenPhotoRealism('润色后的提示词')); // 空草稿兜底 prompt 同样过润色 + 出口加固
     expect(input.size).toBe('1024x1024'); // mapSize('doubao', undefined)
   });
 

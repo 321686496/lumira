@@ -207,7 +207,14 @@ async function qwenGenerate(cfg: ImageClientConfig, input: GenerateImageInput, o
     body: JSON.stringify({
       model: cfg.model,
       input: { prompt: input.prompt },
-      parameters: { size: input.size, n: 1 },
+      parameters: {
+        size: input.size,
+        n: 1,
+        // wanx 原生负面提示词：对抗中文生图模型对「少女/新中式/氛围感」等词的动漫插画先验
+        // （正文内的负面清单多数模型不敏感，原生字段才是有效手段）
+        negative_prompt:
+          '动漫，二次元，漫画，插画，赛璐璐，厚涂，CG渲染，3D渲染，油画，游戏立绘，美颜磨皮，塑料质感，过度光滑的皮肤，过度对称的脸，影楼布光，高饱和炫彩',
+      },
     }),
     signal: AbortSignal.timeout(opts.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS),
   }).catch(mapNetworkError);

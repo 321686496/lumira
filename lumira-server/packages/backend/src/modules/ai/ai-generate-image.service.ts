@@ -70,6 +70,21 @@ function extractAspectRatio(draft: Record<string, unknown>): string | undefined 
   return typeof ratio === 'string' && ratio.trim() !== '' ? ratio.trim() : undefined;
 }
 
+/**
+ * 照片写实最终加固：组织器/拼接器产出的提示词在送厂商前统一包裹，全厂商生效。
+ * 中文生图模型对「少女 / 新中式 / 夜景 / 氛围感」等关键词有强烈的动漫插画先验
+ * （塑料皮肤、绘画化场景、假光线），仅靠素材里的真实感条款不足以压制——
+ * 出口处强制声明照片媒介 + 真实材质细节 + 反动漫负面清单，保证无论上游提示词
+ * 整理得好坏，进入生图 API 的永远是「实拍照片」语境。
+ */
+const PHOTO_REALISM_PREFIX = '一张真实相机直出的实拍照片：';
+const PHOTO_REALISM_SUFFIX =
+  '。真实摄影质感：皮肤为真实人类皮肤材质——可见毛孔、细小绒毛、轻微油光与肤色不均，绝不磨皮、绝不过度光滑发亮；布料、道具、街景均为真实材质纹理；光线来自真实环境光源，有自然的衰减、散射与阴影过渡；画面带轻微噪点与白平衡偏差，像朋友随手抓拍的实拍照片。禁止：动漫、二次元、漫画、插画、赛璐璐、厚涂、CG、3D 渲染、油画、游戏立绘、影楼写真、网红精修风。';
+
+export function hardenPhotoRealism(prompt: string): string {
+  return `${PHOTO_REALISM_PREFIX}${prompt}${PHOTO_REALISM_SUFFIX}`;
+}
+
 @Injectable()
 export class AiGenerateImageService {
   constructor(private readonly aiConfigService: AiConfigService) {}
@@ -121,8 +136,9 @@ export class AiGenerateImageService {
       fallbackPrompt,
     );
     // 网络生图（含 qwen 异步轮询/结果下载）纳入全局并发闸门，避免并发打爆上游厂商
+    // prompt 出口统一照片写实加固（媒介声明 + 真实材质 + 反动漫负面清单）
     return imageSemaphore.run(() => generateImage(cfg.image, {
-      prompt,
+      prompt: hardenPhotoRealism(prompt),
       size: mapSize(cfg.image.provider, extractAspectRatio(draft)),
       referenceBase64: reference?.buffer.toString('base64'),
       referenceMime: reference?.mimetype,
