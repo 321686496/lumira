@@ -93,15 +93,27 @@ Widget _wrapWithRouter(
 }
 
 void main() {
-  testWidgets('SplashPage renders logo + title + caption + brand halo', (tester) async {
+  testWidgets('SplashPage 无光晕，渲染 符号标 + 发丝线 + 标题 + 副标题 + 版权', (tester) async {
     await tester.pumpWidget(_wrapWithRouter(const SplashPage()));
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('如画 Lumira'), findsOneWidget);
     expect(find.text('如你所见，皆成画卷'), findsOneWidget);
     expect(find.byType(LumiraLogo), findsOneWidget);
-    // 主题色光晕：用 Stack + Container(circle + RadialGradient)
-    expect(find.byType(Stack), findsWidgets);
+    expect(find.text('Design · 如画'), findsOneWidget);
+    // 发丝线通过 Key 定位
+    expect(find.byKey(const Key('splash-brand-line')), findsOneWidget);
+    // 明确不再渲染任何圆形 RadialGradient 光晕
+    expect(
+      find.byWidgetPredicate(
+        (w) =>
+            w is Container &&
+            w.decoration is BoxDecoration &&
+            (w.decoration as BoxDecoration).shape == BoxShape.circle &&
+            (w.decoration as BoxDecoration).gradient is RadialGradient,
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('SplashPage uses tokens.canvas as background', (tester) async {
