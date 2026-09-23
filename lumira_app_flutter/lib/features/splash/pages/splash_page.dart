@@ -11,6 +11,7 @@ import '../../../core/compliance/compliance_gate.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/startup/post_compliance_init.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../onboarding/services/questionnaire_sync_providers.dart';
@@ -294,9 +295,9 @@ class _SplashPageState extends ConsumerState<SplashPage> {
                 child: Center(child: statusArea),
               ),
               const Spacer(),
-              // 底部排版版权
+              // 底部版本号（填充底部空白，随 pubspec 对齐）
               Text(
-                'Design · 如画',
+                'v${AppConfig.appVersion}',
                 style: TextStyle(
                   fontSize: 12,
                   color: tokens.textTertiary,

@@ -93,14 +93,14 @@ Widget _wrapWithRouter(
 }
 
 void main() {
-  testWidgets('SplashPage 无光晕，渲染 符号标 + 发丝线 + 标题 + 副标题 + 版权', (tester) async {
-    await tester.pumpWidget(_wrapWithRouter(const SplashPage()));
-    await tester.pump(const Duration(milliseconds: 100));
+  testWidgets('SplashPage 无光晕，渲染 符号标 + 发丝线 + 标题 + 副标题 + 版本', (tester) async {
+  await tester.pumpWidget(_wrapWithRouter(const SplashPage()));
+  await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('如画 Lumira'), findsOneWidget);
-    expect(find.text('如你所见，皆成画卷'), findsOneWidget);
-    expect(find.byType(LumiraLogo), findsOneWidget);
-    expect(find.text('Design · 如画'), findsOneWidget);
+  expect(find.text('如画 Lumira'), findsOneWidget);
+  expect(find.text('如你所见，皆成画卷'), findsOneWidget);
+  expect(find.byType(LumiraLogo), findsOneWidget);
+  expect(find.text('v1.0.0'), findsOneWidget);
     // 发丝线通过 Key 定位
     expect(find.byKey(const Key('splash-brand-line')), findsOneWidget);
     // 明确不再渲染任何圆形 RadialGradient 光晕
