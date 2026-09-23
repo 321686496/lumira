@@ -23,7 +23,7 @@ const DESC: ImageDescription = {
   },
   people: [],
   scene: { location: '飘窗', depthLayers: { near: [], middle: [], far: [] }, props: [], furniture: [], texture: '', cleanliness: '' },
-  cameraLike: {},
+  cameraLike: { lightSuggestion: '', wbSuggestion: '', evSuggestion: '', focusDepth: '' },
 };
 
 const POSE_SHEET: PoseRefSheet = {

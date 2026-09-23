@@ -20,7 +20,7 @@ const TEXT_ENDPOINT: LlmEndpoint = {
 };
 
 const RESEARCH = [
-  { source: 'sogou', title: '千金风他拍构图', snippet: '低调贵气、自然抓拍感正在流行', url: 'https://example.com/1' },
+  { source: 'sogou', title: '千金风他拍构图', snippet: '低调贵气、自然抓拍感正在流行', url: 'https://example.com/1', keywords: ['千金风', '他拍'] },
 ];
 
 /** 完整草稿（单姿势模式，含锚点一致性） */
