@@ -33,7 +33,7 @@ export class S3StorageAdapter implements StorageAdapter {
     }
     this.client = new S3Client({
       region: config.region || 'auto',
-      endpoint: config.endpoint,
+      endpoint: normalizeEndpoint(config.endpoint),
       credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
       forcePathStyle: true, // R2 / 自定义域名需要
     });
@@ -107,6 +107,11 @@ export class S3StorageAdapter implements StorageAdapter {
     } while (token);
     return keys;
   }
+}
+
+function normalizeEndpoint(raw: string): string {
+  const t = raw.trim().replace(/\/+$/, '');
+  return /^https?:\/\//i.test(t) ? t : `https://${t}`;
 }
 
 function mimeOf(filename: string): string {
