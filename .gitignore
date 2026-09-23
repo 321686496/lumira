@@ -95,3 +95,6 @@ scripts/results/
 
 # Android 构建产物（apk/aab/baseline profiles，可由 Gradle 重新生成，不入库）
 /android_project/app/release/
+
+# Flutter HAR 构建临时产物（不入库）
+.tmp_flutter_har.bin
