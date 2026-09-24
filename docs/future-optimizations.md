@@ -783,3 +783,15 @@
 - **背景/动机**：最终评审（opus）判定为 Important，但 `PosterAuthorRow` 为模板海报等 8 处以上共用的共享组件，在其中加 `Flexible`/`ellipsis` 属跨模块收紧，需连带回归模板海报，故本轮只登记不改。
 - **目标状态**：为 `PosterAuthorRow` 的姓名/落款加 `Flexible` + `TextOverflow.ellipsis`，或在 `_AuthorQrRow` 内用 `Expanded` 包裹并让内部文本可截断。
 - **状态**：⏳ 待优化
+
+---
+
+## AI 溯源面板（2026-09-24 · LLM 原始数据实时可见）
+
+### P1 · `collapseTraceCalls` 并发同名调用会静默丢弃提示词事件
+
+- **模块**：后台 AI 溯源（`lumira-server/packages/admin/src/components/ai-create/trace-call-card.tsx`）
+- **优化点**：合并键为 `种类(llm|search)|title|model`。当同一步骤内**并发**发起多次 title+model 完全相同的调用时（现实存在：`web-search-qwen.ts` 用固定 title `千问联网搜索 · 大模型调用`，`trend-research.service.ts` 的 `splitQueries` 把多组短查询经 `Promise.allSettled` 并发发出），第 2..N 条 `running` 事件会被 `if (open.has(key)) continue` 丢弃，其 System/User 提示词在面板上不可见；对应的 `done` 事件随后因槽位已被占用而退化为无提示词的孤立卡。
+- **背景/动机**：本轮按「一次调用合并成一张卡片」的设计（用户决策）实现，简报即预设了该单槽配对策略，作为最小改动落地无过错；但溯源面板的唯一目的正是提示词取证，静默丢失与信息重复同样不可接受。批次流（Task 7）按 `index` 分组后再调用，可规避跨图碰撞，同图内的并发搜索仍会命中。
+- **目标状态**：把单槽 Map 改为 **per-key 队列（多槽栈）**——同键的多个 `running` 依次排队，`done` 按 FIFO 消费队列头；或让后端为每次调用附带唯一 `callId` 并以其为配对键（更彻底，需同步改 `llm-trace.ts` 事件结构与两端类型）。补 `collapseTraceCalls` 的 vitest 用例覆盖：并发同名、孤立 done、fail、pending 四类边界。
+- **状态**：⏳ 待优化
