@@ -70,6 +70,8 @@ export class BannersService {
         kind: r.kind,
         position: r.position ?? null,
         externalUrl: r.externalUrl ?? null,
+        searchKeyword: r.searchKeyword ?? null,
+        searchScope: r.searchScope || 'all',
       })),
     };
     await this.redisService.setJson(LIST_CACHE_KEY, result, LIST_CACHE_TTL);
@@ -114,6 +116,8 @@ export class BannersService {
       sortOrder: dto.sortOrder ?? 0,
       position: dto.position ?? null,
       externalUrl: dto.externalUrl || null,
+      searchKeyword: dto.searchKeyword || null,
+      searchScope: dto.searchScope || 'all',
       createdAt: now,
       updatedAt: now,
     });
@@ -142,6 +146,9 @@ export class BannersService {
     if (dto.position !== undefined) patch.position = dto.position || null;
     // externalUrl：null/空串清除，其余原样存
     if (dto.externalUrl !== undefined) patch.externalUrl = dto.externalUrl || null;
+    // searchKeyword：空串/缺省清除；searchScope：缺省置 all
+    if ('searchKeyword' in dto) patch.searchKeyword = dto.searchKeyword || null;
+    if (dto.searchScope !== undefined) patch.searchScope = dto.searchScope || 'all';
     await db.update(operationBanners).set(patch).where(eq(operationBanners.id, id));
     await this.invalidateListCache();
     return (await this.getById(id))!;

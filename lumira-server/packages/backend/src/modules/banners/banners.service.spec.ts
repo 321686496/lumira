@@ -70,6 +70,8 @@ describe('BannersService', () => {
       id: 'op_invite', title: 'T', subtitle: 'S', tag: '邀请有礼',
       route: '/invite', imageUrl: '', condition: 'nonNewUserNotInvited',
       focusX: 0.5, focusY: 0.5, focusZoom: 1,
+      position: null, externalUrl: null,
+      searchKeyword: null, searchScope: 'all',
     }]);
     expect(redis.setJson).toHaveBeenCalledWith('lumira:cache:bannerList', expect.anything(), 60);
   });
@@ -207,5 +209,47 @@ describe('BannersService', () => {
       'banners', expect.stringMatching(/^bnr-/), 'image.png', expect.any(Buffer),
     );
     expect(res.url).toMatch(/\/uploads\/banners\/bnr-[^/]+\/image\.png$/);
+  });
+
+  it('listForApp 下发 search 条目的 searchKeyword/searchScope', async () => {
+    const { service } = buildService({
+      selectRows: [{
+        ...ROW, kind: 'search', position: 2,
+        searchKeyword: '电影感人像 侧拍', searchScope: 'template',
+      }],
+    });
+    const res = await service.listForApp();
+    expect(res.banners[0]).toMatchObject({
+      kind: 'search',
+      searchKeyword: '电影感人像 侧拍',
+      searchScope: 'template',
+    });
+  });
+
+  it('create 透传 searchKeyword/默认 searchScope=all 落库', async () => {
+    const { service, insertValues } = buildService();
+    await service.create({
+      ...CREATE_DTO, kind: 'search',
+      searchKeyword: '窗光人像', searchScope: 'scene',
+    });
+    const row = insertValues.mock.calls[0][0];
+    expect(row.searchKeyword).toBe('窗光人像');
+    expect(row.searchScope).toBe('scene');
+  });
+
+  it('create kind=search 未传 searchScope 时默认 all、searchKeyword 空转为 null', async () => {
+    const { service, insertValues } = buildService();
+    await service.create({ ...CREATE_DTO, kind: 'search', searchKeyword: '' });
+    const row = insertValues.mock.calls[0][0];
+    expect(row.searchScope).toBe('all');
+    expect(row.searchKeyword).toBeNull();
+  });
+
+  it('update 可 patch searchKeyword/searchScope；空串清除 searchKeyword', async () => {
+    const { service, updateSet } = buildService({ selectRows: [ROW] });
+    await service.update('op_invite', { searchKeyword: '', searchScope: 'all' });
+    const patch = updateSet.mock.calls[0][0];
+    expect(patch.searchKeyword).toBeNull();
+    expect(patch.searchScope).toBe('all');
   });
 });
