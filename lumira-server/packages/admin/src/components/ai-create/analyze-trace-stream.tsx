@@ -46,11 +46,14 @@ interface PhaseNode {
 }
 
 /** 扁平事件 → 阶段时间线（每阶段一行，LLM/检索调用回归所属阶段） */
-function buildTimeline(events: AiTraceEvent[]): { phases: PhaseNode[]; notes: AiTraceEvent[] } {
+function buildTimeline(events: AiTraceEvent[]): { phases: PhaseNode[]; notes: AiTraceEvent[]; orphans: AiTraceEvent[] } {
   const phases: PhaseNode[] = [];
   const notes: AiTraceEvent[] = [];
+  const orphans: AiTraceEvent[] = [];
   const map = new Map<string, PhaseNode>();
-  let openStep: string | null = null;
+  // 后端 traceStep 是栈式的（嵌套时内层先结束），故用栈记录未结束的阶段，
+  // 栈顶即当前真正打开的阶段；避免内层结束后仍把后续调用挂到内层。
+  const stack: string[] = [];
 
   for (const ev of events) {
     if (ev.type === 'note') {
@@ -70,25 +73,32 @@ function buildTimeline(events: AiTraceEvent[]): { phases: PhaseNode[]; notes: Ai
         phase.error = '';
         phase.durationMs = undefined;
         phase.ts = ev.ts;
+        stack.push(ev.step);
       } else {
         phase.status = ev.status;
         phase.brief = ev.resultBrief ?? '';
         phase.error = ev.error ?? '';
         phase.durationMs = ev.durationMs;
+        // 弹出与其匹配的阶段：优先栈顶，否则移除最后一个同名项（容错乱序）
+        if (stack[stack.length - 1] === ev.step) {
+          stack.pop();
+        } else {
+          const idx = stack.lastIndexOf(ev.step);
+          if (idx >= 0) stack.splice(idx, 1);
+        }
       }
-      openStep = ev.step;
       continue;
     }
-    // llm / search → 归属当前打开的阶段；无阶段时作孤立调用
+    // llm / search → 归属栈顶（当前打开）的阶段；栈空时作孤立调用
+    const openStep = stack[stack.length - 1];
     if (openStep) {
       const owner = map.get(openStep);
       if (owner) owner.calls.push(ev);
     } else {
-      const standalone: PhaseNode = { key: `orphan-${ev.seq}`, title: ev.title, step: '', status: ev.status, brief: '', error: '', ts: ev.ts, calls: [ev] };
-      phases.push(standalone);
+      orphans.push(ev);
     }
   }
-  return { phases, notes };
+  return { phases, notes, orphans };
 }
 
 export function AnalyzeTraceStream({ events, running = false, title = '识别流程实时过程', bodyClassName = 'max-h-[420px]', className }: AnalyzeTraceStreamProps) {
@@ -126,7 +136,7 @@ export function AnalyzeTraceStream({ events, running = false, title = '识别流
           <span className={cn('h-2 w-2 rounded-full', running ? 'bg-primary animate-pulse' : 'bg-muted-foreground/50')} />
           <span className="text-sm font-medium text-foreground">{title}</span>
           {running && <span className="text-xs text-primary">进行中…</span>}
-          <span className="ml-auto text-xs text-muted-foreground">{timeline.phases.length + timeline.notes.length} 项</span>
+          <span className="ml-auto text-xs text-muted-foreground">{timeline.phases.length + timeline.orphans.length + timeline.notes.length} 项</span>
           {!stick && (
             <button type="button" onClick={jumpToBottom} className="text-xs text-primary underline-offset-2 hover:underline">
               回到底部
@@ -142,6 +152,9 @@ export function AnalyzeTraceStream({ events, running = false, title = '识别流
           <>
             {timeline.phases.map((phase) => (
               <PhaseRow key={phase.key} phase={phase} />
+            ))}
+            {timeline.orphans.map((ev) => (
+              <CallCard key={ev.seq} ev={ev} />
             ))}
             {timeline.notes.map((note) => (
               <div key={note.seq} className="flex items-center gap-2 px-0.5 py-0.5">
