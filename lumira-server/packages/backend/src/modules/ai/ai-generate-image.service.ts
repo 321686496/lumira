@@ -99,7 +99,7 @@ export class AiGenerateImageService {
     metaJson: string | null,
     extraPrompt?: string | null,
     researchJson?: string | null,
-  ): Promise<GenerateImageResult> {
+  ): Promise<GenerateImageResult & { prompt: string; model: string }> {
     // 1. 取启用配置（未配置/未启用 → 503 透传）
     const cfg = await this.aiConfigService.getActiveConfig();
 
@@ -137,11 +137,13 @@ export class AiGenerateImageService {
     );
     // 网络生图（含 qwen 异步轮询/结果下载）纳入全局并发闸门，避免并发打爆上游厂商
     // prompt 出口统一照片写实加固（媒介声明 + 真实材质 + 反动漫负面清单）
-    return imageSemaphore.run(() => generateImage(cfg.image, {
-      prompt: hardenPhotoRealism(prompt),
+    const hardenedPrompt = hardenPhotoRealism(prompt);
+    const imageResult = await imageSemaphore.run(() => generateImage(cfg.image, {
+      prompt: hardenedPrompt,
       size: mapSize(cfg.image.provider, extractAspectRatio(draft)),
       referenceBase64: reference?.buffer.toString('base64'),
       referenceMime: reference?.mimetype,
     }));
+    return { ...imageResult, prompt: hardenedPrompt, model: cfg.image.model };
   }
 }
