@@ -30,6 +30,11 @@ function sleep(intervalMs: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, intervalMs));
 }
 
+/** 中止信号已触发时抛出统一的「已中止」错误（与超时 / 上游失败共用 AiTaskPollError） */
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new AiTaskPollError('已中止');
+}
+
 export interface AiTaskFileResult {
   index: number;
   file?: File;
@@ -57,13 +62,16 @@ export function generateAiPoseImages(options: {
   extraPrompt?: string | null;
   /** 识别阶段的网络趋势研究结果（透传给后端生图提示词组织器，与草稿同源保持一致） */
   research?: AiResearchRef[] | null;
+  /** 中止信号：命中后抛 AiTaskPollError('已中止')，仅供前端停止等待（不取消服务端任务） */
+  signal?: AbortSignal;
   onResult?: (result: AiTaskFileResult) => void;
   onProgress?: (progress: AiPoseProgress) => void;
   /** 逐张实时过程事件（按 seq 增量累积；用于可溯源的姿势图过程展示） */
   onEvents?: (events: AiBatchImageTraceEvent[]) => void;
 }): Promise<AiTaskFileResult[]> {
-  const { draft, referenceFile, extraPrompt, research, onResult, onProgress, onEvents } = options;
+  const { draft, referenceFile, extraPrompt, research, signal, onResult, onProgress, onEvents } = options;
   return (async () => {
+    throwIfAborted(signal);
     const fd = new FormData();
     fd.set('meta', JSON.stringify({
       ...draft,
@@ -86,6 +94,7 @@ export function generateAiPoseImages(options: {
       onProgress?.({ current: res.current, total: res.total, status: res.status });
 
     while (Date.now() < deadline) {
+      throwIfAborted(signal);
       const res = await aiGenerateImageBatchStatusAction(batchId, since);
       if ('error' in res) throw new AiTaskPollError(res.error || '查询生成任务失败');
       // 增量吸收实时过程事件（按 seq 去重）
@@ -124,14 +133,17 @@ export function generateAiSilhouettes(options: {
   mode: 'sketch' | 'solid';
   crop: boolean;
   engine: 'ai' | 'local';
+  /** 中止信号：命中后每张任务抛出「已中止」，聚合结果按 error 返回 */
+  signal?: AbortSignal;
   onCompleted?: (completed: number) => void;
 }): Promise<AiTaskFileResult[]> {
-  const { images, mode, crop, engine, onCompleted } = options;
+  const { images, mode, crop, engine, signal, onCompleted } = options;
   const generated = new Array<File | undefined>(images.length).fill(undefined);
   const publish = () => onCompleted?.(generated.filter(Boolean).length);
 
   return (async () => Promise.all(images.map(async (image, index) => {
     try {
+      throwIfAborted(signal);
       const source = await compressImage(image, { maxDim: 640, quality: 0.6 });
       const fd = new FormData();
       fd.set('image', source);
@@ -212,10 +224,14 @@ export function pollAiSilhouetteTask(
  */
 export function pollAiAnalyzeTask(
   taskId: string,
-  options: AiTaskPollOptions & { onEvents?: (events: AiTraceEvent[]) => void } = {},
+  options: AiTaskPollOptions & {
+    onEvents?: (events: AiTraceEvent[]) => void;
+    /** 中止信号：命中后 reject AiTaskPollError('已中止') */
+    signal?: AbortSignal;
+  } = {},
   onTick?: (status: AiAnalyzeStatusResult['status']) => void,
 ): Promise<AiAnalyzeStatusResult> {
-  const { intervalMs = DEFAULT_INTERVAL_MS, timeoutMs = DEFAULT_TIMEOUT_MS, onEvents } = options;
+  const { intervalMs = DEFAULT_INTERVAL_MS, timeoutMs = DEFAULT_TIMEOUT_MS, onEvents, signal } = options;
   const deadline = Date.now() + timeoutMs;
   let since = 0;
   const events: AiTraceEvent[] = [];
@@ -230,6 +246,7 @@ export function pollAiAnalyzeTask(
 
   return (async () => {
     while (Date.now() < deadline) {
+      throwIfAborted(signal);
       const res = await aiAnalyzeStatusAction(taskId, since);
       if (!res || 'error' in res) {
         throw new AiTaskPollError((res as { error?: string } | undefined)?.error || '查询识别任务失败');
