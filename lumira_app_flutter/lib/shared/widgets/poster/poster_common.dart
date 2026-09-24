@@ -525,7 +525,7 @@ class PosterQrTip extends StatelessWidget {
   }
 }
 
-/// 圆形首字头像（照片海报落款 @小满 用）。
+/// 圆形首字头像（照片海报真实落款昵称首字用）。
 class PosterAvatar extends StatelessWidget {
   const PosterAvatar({super.key, required this.char, this.size = 24});
   final String char;

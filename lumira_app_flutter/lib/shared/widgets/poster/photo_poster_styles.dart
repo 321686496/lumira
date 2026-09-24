@@ -553,8 +553,10 @@ class _D3Polaroid extends StatelessWidget {
         .map((s) => s.trim())
         .where((s) => s.isNotEmpty)
         .toList();
-    final metaK = segs.isEmpty ? '人像写真' : segs.first;
-    final metaV = segs.length > 1 ? '${segs.last} · VOL.01' : '摄影模板 · VOL.01';
+    // meta：题材（分类首段）+ 拍摄日期，均为真实数据；两者都空则不渲染该行
+    final metaK = segs.isEmpty ? '' : segs.first;
+    final metaV = d.dateText;
+    final hasMeta = metaK.isNotEmpty || metaV.isNotEmpty;
     return PosterCanvas(
       width: w,
       height: h,
@@ -637,27 +639,33 @@ class _D3Polaroid extends StatelessWidget {
             ],
           ),
           SizedBox(height: 24 * k),
-          // meta：题材 + 卷号
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                metaK,
-                style: posterPlain(10 * k, color: PosterPalette.goldDeep, weight: FontWeight.w600, letterSpacing: 3 * k),
-              ),
-              SizedBox(width: 8 * k),
-              Text(
-                '|',
-                style: posterPlain(10 * k, color: PosterPalette.line),
-              ),
-              SizedBox(width: 8 * k),
-              Text(
-                metaV,
-                style: posterPlain(10 * k, color: PosterPalette.text3, letterSpacing: 2 * k),
-              ),
-            ],
-          ),
-          SizedBox(height: 12 * k),
+          // meta：题材 + 拍摄日期（真实数据）
+          if (hasMeta) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (metaK.isNotEmpty)
+                  Text(
+                    metaK,
+                    style: posterPlain(10 * k, color: PosterPalette.goldDeep, weight: FontWeight.w600, letterSpacing: 3 * k),
+                  ),
+                if (metaK.isNotEmpty && metaV.isNotEmpty) ...[
+                  SizedBox(width: 8 * k),
+                  Text(
+                    '|',
+                    style: posterPlain(10 * k, color: PosterPalette.line),
+                  ),
+                  SizedBox(width: 8 * k),
+                ],
+                if (metaV.isNotEmpty)
+                  Text(
+                    metaV,
+                    style: posterPlain(10 * k, color: PosterPalette.text3, letterSpacing: 2 * k),
+                  ),
+              ],
+            ),
+            SizedBox(height: 12 * k),
+          ],
           Text(
             d.shareText,
             textAlign: TextAlign.center,
@@ -812,22 +820,23 @@ class _DAViewfinder extends StatelessWidget {
                           ),
                         ),
                       ),
-                      // 参数印章
-                      Positioned(
-                        bottom: 8 * k,
-                        right: 8 * k,
-                        child: Container(
-                          padding: EdgeInsets.symmetric(horizontal: 6 * k, vertical: 3 * k),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(.45),
-                            borderRadius: BorderRadius.circular(2 * k),
-                          ),
-                          child: Text(
-                            'LUMIRA · f/1.8 50mm',
-                            style: posterPlain(7 * k, color: Colors.white, letterSpacing: 1 * k),
+                      // 参数印章：打印真实拍摄日期（无日期则不打，不造假拍摄参数）
+                      if (d.dateText.isNotEmpty)
+                        Positioned(
+                          bottom: 8 * k,
+                          right: 8 * k,
+                          child: Container(
+                            padding: EdgeInsets.symmetric(horizontal: 6 * k, vertical: 3 * k),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(.45),
+                              borderRadius: BorderRadius.circular(2 * k),
+                            ),
+                            child: Text(
+                              d.dateText,
+                              style: posterPlain(7 * k, color: Colors.white, letterSpacing: 1 * k),
+                            ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -1005,14 +1014,16 @@ class _DCGeometric extends StatelessWidget {
                         ),
                       ),
                       Positioned.fill(child: ClipOval(child: d.photoBuilder(dia, dia))),
-                      Positioned(
-                        right: 2 * k,
-                        bottom: 12 * k,
-                        child: PosterAvatar(
-                          char: d.authorName.isEmpty ? '满' : d.authorName.characters.first,
-                          size: 26 * k,
+                      // 作者章：仅在有真实落款时渲染（不造假字）
+                      if (d.authorName.isNotEmpty)
+                        Positioned(
+                          right: 2 * k,
+                          bottom: 12 * k,
+                          child: PosterAvatar(
+                            char: d.authorName.characters.first,
+                            size: 26 * k,
+                          ),
                         ),
-                      ),
                       const Center(
                         child: SizedBox(
                           width: 7,
@@ -1094,11 +1105,6 @@ class _DMBottom extends StatelessWidget {
                   PosterKicker(text: posterKickerOf(d), size: 10 * k, letterSpacing: 4 * k),
                   SizedBox(height: 8 * k),
                   PosterTitle(text: d.title, size: 32 * k, letterSpacing: 3 * k, height: 1.25),
-                  SizedBox(height: 6 * k),
-                  Text(
-                    'LAZY FRENCH MOMENT',
-                    style: posterSerifEn(10 * k, color: PosterPalette.text2, letterSpacing: 3 * k),
-                  ),
                   SizedBox(height: 12 * k),
                   PosterRule(width: 44 * k),
                   SizedBox(height: 12 * k),
@@ -1159,10 +1165,18 @@ class _DMBottom extends StatelessWidget {
                             ],
                           ),
                         ),
-                        Text(
-                          '@${d.authorName} · 如画',
-                          style: posterPlain(9 * k, color: Colors.white70, letterSpacing: 1 * k),
-                        ),
+                        // 落款：仅在有真实昵称时渲染（不留 '@ ·' 空占位），过长省略不挤压二维码
+                        if (d.authorName.isNotEmpty)
+                          ConstrainedBox(
+                            constraints: BoxConstraints(maxWidth: w * 0.45),
+                            child: Text(
+                              '@${d.authorName} · 如画',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
+                              style: posterPlain(9 * k, color: Colors.white70, letterSpacing: 1 * k),
+                            ),
+                          ),
                       ],
                     ),
                   ),

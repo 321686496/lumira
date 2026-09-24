@@ -5,19 +5,37 @@ import 'package:lumira_app_flutter/shared/widgets/poster/poster_ratio.dart';
 import 'package:lumira_app_flutter/shared/widgets/poster/poster_style_types.dart';
 import 'package:lumira_app_flutter/shared/widgets/poster/poster_styles_shared.dart';
 
-PosterStyleData _data({String hint = '长按识别 · 查看高清原图'}) => PosterStyleData(
+PosterStyleData _data({
+  String hint = '长按识别 · 查看高清原图',
+  PosterKind kind = PosterKind.photo,
+  String authorName = '小满',
+}) =>
+    PosterStyleData(
       ratio: PosterRatio.fullScreen,
+      kind: kind,
       title: '晴空田园少女',
       category: '自然光 · 清新治愈 · 人像写真',
       qrData: 'https://example.com/photo/1',
       qrHint: hint,
       qrSub: '打开如画 · 保存原图',
       shareText: '测试文案',
-      authorName: '小满',
+      authorName: authorName,
       photoBuilder: (w, h) => SizedBox(width: w, height: h),
     );
 
 void main() {
+  test('固定文案按 kind 派生，不再靠落款是否为空推断', () {
+    final photo = _data(kind: PosterKind.photo, authorName: '');
+    expect(posterKickerOf(photo), posterPhotoKicker);
+    expect(posterQrHintOf(photo), posterPhotoQrHint);
+    expect(posterQrSubOf(photo), posterPhotoQrSub);
+
+    final template = _data(kind: PosterKind.template, authorName: '');
+    expect(posterKickerOf(template), posterTemplateKicker);
+    expect(posterQrHintOf(template), posterTemplateQrHint);
+    expect(posterQrSubOf(template), posterTemplateQrSub);
+  });
+
   test('posterQrMiniLinesOf 按「·」拆两行', () {
     expect(posterQrMiniLinesOf(_data()), <String>['长按识别', '查看高清原图']);
   });

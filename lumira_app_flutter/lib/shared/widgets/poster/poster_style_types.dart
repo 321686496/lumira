@@ -15,6 +15,7 @@ enum PosterKind { template, photo, checkin, collection }
 class PosterStyleData {
   const PosterStyleData({
     required this.ratio,
+    this.kind = PosterKind.photo,
     required this.title,
     required this.category,
     required this.qrData,
@@ -32,6 +33,12 @@ class PosterStyleData {
   });
 
   final PosterRatio ratio;
+
+  /// 海报种类：决定固定文案口径（模板=「LUMIRA TEMPLATE · 模板」，
+  /// 照片=「LUMIRA · 如画出品」等），不再靠 [authorName] 是否为空推断。
+  /// 默认 [PosterKind.photo]；模板分享海报构造数据时须显式传
+  /// [PosterKind.template]。
+  final PosterKind kind;
 
   /// 模板名 / 照片名 / 店名（海报主标题）。
   final String title;

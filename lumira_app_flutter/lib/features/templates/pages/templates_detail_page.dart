@@ -347,6 +347,7 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
           final cover = templateRecordCover(record);
           final data = PosterStyleData(
             ratio: ratio,
+            kind: PosterKind.template,
             title: record.name,
             category: record.category,
             qrData: buildTemplatePosterQrData(record),

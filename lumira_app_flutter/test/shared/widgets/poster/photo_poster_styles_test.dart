@@ -10,13 +10,17 @@ import 'package:lumira_app_flutter/shared/widgets/poster/poster_style_types.dart
 import 'package:lumira_app_flutter/shared/widgets/poster/poster_styles_shared.dart';
 
 PosterStyleData _data({
+  PosterRatio ratio = PosterRatio.fullScreen,
+  PosterKind kind = PosterKind.photo,
   String authorName = '小满',
   String dateText = '2026.09.24',
+  String category = '自然光 · 清新治愈 · 人像写真',
 }) =>
     PosterStyleData(
-      ratio: PosterRatio.fullScreen,
+      ratio: ratio,
+      kind: kind,
       title: '晴空田园少女',
-      category: '自然光 · 清新治愈 · 人像写真',
+      category: category,
       qrData: 'https://example.com/photo/1',
       qrHint: '长按识别 · 查看高清原图',
       qrSub: '打开如画 · 保存原图',
@@ -133,5 +137,111 @@ void main() {
     expect(find.textContaining('@'), findsNothing);
     expect(find.text('LUMIRA · 如画出品'), findsOneWidget);
     expect(find.textContaining('TEMPLATE'), findsNothing);
+  });
+
+  testWidgets('相纸卡片 pC 文案按 kind 判定，不因空落款把照片海报标成模板',
+      (tester) async {
+    // 照片款（默认 kind）无落款：kicker 仍为照片口径，落款行不渲染
+    await _pump(tester, 'pC', _data(ratio: PosterRatio.square, authorName: ''));
+    expect(tester.takeException(), isNull);
+    expect(find.text('LUMIRA · 如画出品'), findsOneWidget);
+    expect(find.textContaining('模板'), findsNothing);
+    expect(find.textContaining('@'), findsNothing);
+
+    // 模板款：走模板口径 + 分类行
+    await _pump(
+      tester,
+      'pC',
+      _data(ratio: PosterRatio.square, kind: PosterKind.template, authorName: ''),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('LUMIRA · 模板'), findsOneWidget);
+    expect(find.text('自然光 · 清新治愈 · 人像写真'), findsOneWidget);
+  });
+
+  testWidgets('全部「样式 × 比例」组合均可渲染且无溢出', (tester) async {
+    // 默认 800×600 测试视口装不下 1:1 / 4:3 / 16:9 画布，会误报 RenderFlex 溢出
+    await tester.binding.setSurfaceSize(const Size(1200, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    for (final s in photoPosterStyles()) {
+      for (final r in s.ratios) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(body: Center(child: s.builder(_data(ratio: r)))),
+          ),
+        );
+        expect(tester.takeException(), isNull, reason: '${s.id} @ $r 渲染应无异常');
+      }
+    }
+  });
+
+  testWidgets('相纸拼贴 d3 的 meta 用真实题材与拍摄日期（无 VOL./「人像写真」兜底）',
+      (tester) async {
+    await _pump(tester, 'd3', _data(ratio: PosterRatio.ratio34));
+    expect(find.text('自然光'), findsOneWidget);
+    expect(find.text('2026.09.24'), findsOneWidget);
+    expect(find.textContaining('VOL'), findsNothing);
+  });
+
+  testWidgets('相纸拼贴 d3 分类与日期都为空时不渲染 meta 行', (tester) async {
+    await _pump(
+      tester,
+      'd3',
+      _data(ratio: PosterRatio.ratio34, category: '', dateText: ''),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('人像写真'), findsNothing);
+    expect(find.textContaining('VOL'), findsNothing);
+    expect(find.textContaining('2026'), findsNothing);
+  });
+
+  testWidgets('取景器镜头 dA 参数印章打印真实拍摄日期（无假 f/1.8 50mm）',
+      (tester) async {
+    await _pump(tester, 'dA', _data(ratio: PosterRatio.ratio34));
+    expect(find.text('2026.09.24'), findsOneWidget);
+    expect(find.textContaining('f/1.8'), findsNothing);
+    expect(find.textContaining('50mm'), findsNothing);
+  });
+
+  testWidgets('取景器镜头 dA 日期为空时不渲染参数印章', (tester) async {
+    await _pump(tester, 'dA', _data(ratio: PosterRatio.ratio34, dateText: ''));
+    expect(tester.takeException(), isNull);
+    expect(find.text('2026.09.24'), findsNothing);
+  });
+
+  testWidgets('几何构成 dC 作者章仅在有真实落款时渲染（无「满」兜底）',
+      (tester) async {
+    await _pump(tester, 'dC', _data(ratio: PosterRatio.square));
+    // 照片上的作者章 + 落款行头像，均来自真实昵称首字
+    expect(tester.widgetList<PosterAvatar>(find.byType(PosterAvatar)).length, 2);
+
+    await _pump(tester, 'dC', _data(ratio: PosterRatio.square, authorName: ''));
+    expect(tester.takeException(), isNull);
+    expect(find.byType(PosterAvatar), findsNothing);
+  });
+
+  testWidgets('底图倒置 dM 无假英文副题、空落款不留 @ 占位', (tester) async {
+    await _pump(tester, 'dM', _data(ratio: PosterRatio.square));
+    expect(find.textContaining('LAZY'), findsNothing);
+    expect(find.textContaining('FRENCH'), findsNothing);
+    expect(find.textContaining('@小满'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await _pump(tester, 'dM', _data(ratio: PosterRatio.square, authorName: ''));
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('@'), findsNothing);
+  });
+
+  testWidgets('dM 超长落款省略显示，不把二维码条挤出画布', (tester) async {
+    await _pump(
+      tester,
+      'dM',
+      _data(ratio: PosterRatio.square, authorName: '小满今天也在努力拍照看世界'),
+    );
+    expect(tester.takeException(), isNull);
+    final canvas = tester.getRect(find.byType(PosterCanvas));
+    final qr = tester.getRect(find.byType(PosterQr));
+    expect(qr.right, lessThanOrEqualTo(canvas.right));
+    expect(qr.left, greaterThanOrEqualTo(canvas.left));
   });
 }

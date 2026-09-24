@@ -14,17 +14,22 @@ const String posterPhotoKicker = 'LUMIRA · 如画出品';
 const String posterPhotoQrHint = '长按识别 · 查看高清原图';
 const String posterPhotoQrSub = '打开如画 · 保存原图';
 
+/// 模板海报固定文案。
+const String posterTemplateKicker = 'LUMIRA TEMPLATE · 模板';
+const String posterTemplateQrHint = '长按识别 · 查看完整模板';
+const String posterTemplateQrSub = '打开如画，拍出同款';
+
 /// 顶部 kicker：模板=「LUMIRA TEMPLATE · 模板」，照片=「LUMIRA · 如画出品」。
 String posterKickerOf(PosterStyleData d) =>
-    d.authorName.isEmpty ? 'LUMIRA TEMPLATE · 模板' : posterPhotoKicker;
+    d.kind == PosterKind.template ? posterTemplateKicker : posterPhotoKicker;
 
 /// 二维码主提示：模板=「长按识别 · 查看完整模板」，照片=「长按识别 · 查看高清原图」。
 String posterQrHintOf(PosterStyleData d) =>
-    d.authorName.isEmpty ? '长按识别 · 查看完整模板' : posterPhotoQrHint;
+    d.kind == PosterKind.template ? posterTemplateQrHint : posterPhotoQrHint;
 
 /// 二维码副提示：模板=「打开如画，拍出同款」，照片=「打开如画 · 保存原图」。
 String posterQrSubOf(PosterStyleData d) =>
-    d.authorName.isEmpty ? '打开如画，拍出同款' : posterPhotoQrSub;
+    d.kind == PosterKind.template ? posterTemplateQrSub : posterPhotoQrSub;
 
 /// 照片顶部压暗渐变（保证浮层文字可读）。
 class PosterScrim extends StatelessWidget {
@@ -243,7 +248,9 @@ class PosterPrintCard extends StatelessWidget {
     final d = data;
     final k = posterScale(d.ratio);
     final w = posterCanvasWidth(d.ratio);
-    final isPhoto = d.authorName.isNotEmpty;
+    // 按 kind 判定模板/照片，而非落款是否为空（落款为真实昵称，可能为空，
+    // 靠它推断会把无昵称的照片海报错标成「LUMIRA · 模板」）。
+    final isPhoto = d.kind != PosterKind.template;
     // 内容宽 = 画布 − 1px 画布边框 ×2 − 左右 padding 26（设计稿 box-sizing 基准）。
     final contentW = w - 2 - 2 * 26 * k;
     final printW = contentW * _printWidthFactor;
