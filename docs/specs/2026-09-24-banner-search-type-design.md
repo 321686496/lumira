@@ -35,7 +35,7 @@
 
 ### 1. 后端（`lumira-server/packages/backend/`）
 
-**迁移**：新增 `037_banner_search.sql`
+**迁移**：新增 `044_banner_search.sql`
 ```sql
 ALTER TABLE `operation_banners`
   ADD COLUMN `search_keyword` varchar(128) NULL AFTER `external_url`,
@@ -128,7 +128,7 @@ builder: (context, state) => GlobalSearchPage(
 ## 改动文件清单
 
 后端：
-- `packages/backend/src/database/migrations/037_banner_search.sql`（新增）
+- `packages/backend/src/database/migrations/044_banner_search.sql`（新增）
 - `packages/backend/src/database/schema.ts`
 - `packages/backend/src/modules/banners/dto/create-banner.dto.ts`
 - `packages/backend/src/modules/banners/dto/update-banner.dto.ts`
