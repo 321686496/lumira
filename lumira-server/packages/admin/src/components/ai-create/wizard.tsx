@@ -27,11 +27,11 @@ import {
   getAiConfigAction,
 } from '@/actions/ai';
 import { generateAiPoseImages, generateAiSilhouettes, pollAiAnalyzeTask, type AiPoseProgress } from '@/lib/ai-task';
-import type { TemplateCategory, AiAnalyzeTraceEntry, AiAnalyzeStatusResult, AiTraceEvent } from '@/types/admin';
+import type { TemplateCategory, AiAnalyzeTraceEntry, AiAnalyzeStatusResult, AiTraceEvent, AiBatchImageTraceEvent } from '@/types/admin';
 import { StepCover, type CoverCandidate } from './step-cover';
 import { StepSilhouette } from './step-silhouette';
 import { AnalyzeResultDialog } from './analyze-result-dialog';
-import { AnalyzeTraceStream } from './analyze-trace-stream';
+import { GenerateProgressPanel } from './generate-progress-panel';
 import { Upload } from '@phosphor-icons/react/dist/csr/Upload';
 import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
 import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
@@ -95,6 +95,8 @@ export function AiCreateWizard({
   const [autoState, setAutoState] = useState<{ running: boolean; stage: AutoStage; error?: string } | null>(null);
   /** 全自动「生成封面」阶段实时进度（第 X/Y 张） */
   const [poseProgress, setPoseProgress] = useState<AiPoseProgress | null>(null);
+  /** 生成姿势图逐张实时过程事件（喂给常驻面板「姿势图生成」Tab） */
+  const [poseTraceEvents, setPoseTraceEvents] = useState<AiBatchImageTraceEvent[]>([]);
   /** Step1 附加输入：创作要求 / 姿势个数（'auto' = AI 自动判断）；主文字描述复用 inputText（同时作为 textDesc 附加输入） */
   const [creationReq, setCreationReq] = useState('');
   const [poseCount, setPoseCount] = useState('auto');
@@ -153,6 +155,7 @@ export function AiCreateWizard({
     setWarnings([]);
     setAnalyzeDetail(null);
     setTraceEvents([]);
+    setPoseTraceEvents([]);
     setDetailDialogOpen(false);
     setCandidates([]);
     setSilhouetteFile(null);
@@ -338,6 +341,7 @@ export function AiCreateWizard({
         research: analyzeResult.research,
         onProgress: setPoseProgress,
         onResult: appendGeneratedPose,
+        onEvents: setPoseTraceEvents,
       });
       const poseFiles = poseResults
         .filter((result): result is { index: number; file: File } => Boolean(result.file))
@@ -472,6 +476,19 @@ export function AiCreateWizard({
 
         {/* 非 xl：预览面板置于 stepper 下方 */}
         {!isXl && previewPanel}
+
+        {/* 常驻 AI 生成过程面板（步骤栏上方、跨步骤可见；运行中展开/结束后收拢） */}
+        <GenerateProgressPanel
+          recogEvents={traceEvents}
+          recogRunning={analyzing || (autoState?.running === true && autoState.stage === 'analyzing')}
+          poseEvents={poseTraceEvents}
+          poseRunning={autoState?.running === true && autoState.stage === 'generating-image'}
+          onOpenDetail={() => setDetailDialogOpen(true)}
+          onClose={() => {
+            setTraceEvents([]);
+            setPoseTraceEvents([]);
+          }}
+        />
 
         {/* 全自动进度 / 失败提示 */}
         {autoState?.running && (
@@ -625,14 +642,6 @@ export function AiCreateWizard({
               <p className="text-xs text-muted-foreground">
                 全自动：识别 → 生图作封面 → 生成线稿剪影 → 创建并上架；任一步失败将停在对应步骤转人工，已成功的资产（草稿 / 封面）保留。
               </p>
-
-              {/* 识别流程实时过程：阶段推进 / 每步提示词 / 模型响应，随轮询实时出现 */}
-              {(analyzing || traceEvents.length > 0) && (
-                <AnalyzeTraceStream
-                  events={traceEvents}
-                  running={analyzing || (autoState?.running === true && autoState.stage === 'analyzing')}
-                />
-              )}
             </CardContent>
           </Card>
         )}
@@ -711,15 +720,6 @@ export function AiCreateWizard({
                 <Button disabled={busy} onClick={() => goto(3)}>
                   下一步：选择封面 <ArrowRight size={14} className="ml-1" />
                 </Button>
-                {analyzeDetail && (
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => setDetailDialogOpen(true)}
-                  >
-                    查看识别详情 / 过程
-                  </Button>
-                )}
               </div>
             </CardContent>
           </Card>
