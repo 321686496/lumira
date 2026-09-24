@@ -339,6 +339,9 @@ export const operationBanners = mysqlTable('operation_banners', {
   position: int('position'),
   // 广告点击跳转的外部 URL（kind=ad 时必填）
   externalUrl: varchar('external_url', { length: 512 }),
+  // App 内搜索类型（kind=search）：跳转全局搜索页并预填关键字（spec 2026-09-24）
+  searchKeyword: varchar('search_keyword', { length: 128 }),
+  searchScope: varchar('search_scope', { length: 16 }).default('all'),
   createdAt: int('created_at').notNull(),
   updatedAt: int('updated_at').notNull(),
 });
