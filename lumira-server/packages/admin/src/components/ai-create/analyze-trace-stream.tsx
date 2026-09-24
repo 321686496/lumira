@@ -3,14 +3,15 @@
 // src/components/ai-create/analyze-trace-stream.tsx
 // AI 识别流程实时事件流（阶段时间线版）：
 // 把后端扁平事件按阶段归组——每个阶段只渲染一行，状态原位 running→done/fail 流转，
-// 消除"每阶段两行"与"残留执行中"；该阶段的 LLM/检索调用折叠收纳到阶段下，默认收拢。
-// 运行中自动滚底（用户上滑回看不打断），提示词/响应可折叠。
+// 消除"每阶段两行"与"残留执行中"；
+// 该阶段的 LLM/检索调用收纳到阶段下，提示词与上游原始响应默认展开、可一键复制（见 TraceCallCard）。
+// 运行中自动滚底（用户上滑回看不打断）。
 // 数据来源：后端 llm-trace 事件流（task.events），前端按 seq 增量拉取后累积渲染。
 
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { TraceCallCard, collapseTraceCalls } from '@/components/ai-create/trace-call-card';
 import type { AiTraceEvent, AiTraceEventStatus } from '@/types/admin';
 
 interface AnalyzeTraceStreamProps {
@@ -153,8 +154,8 @@ export function AnalyzeTraceStream({ events, running = false, title = '识别流
             {timeline.phases.map((phase) => (
               <PhaseRow key={phase.key} phase={phase} />
             ))}
-            {timeline.orphans.map((ev) => (
-              <CallCard key={ev.seq} ev={ev} />
+            {collapseTraceCalls(timeline.orphans).map(({ key, ev }) => (
+              <TraceCallCard key={key} ev={ev} />
             ))}
             {timeline.notes.map((note) => (
               <div key={note.seq} className="flex items-center gap-2 px-0.5 py-0.5">
@@ -195,7 +196,9 @@ function PhaseRow({ phase }: { phase: PhaseNode }) {
       )}
       {open && phase.calls.length > 0 && (
         <div className="mt-1.5 space-y-1.5 pl-1">
-          {phase.calls.map((ev) => <CallCard key={ev.seq} ev={ev} />)}
+          {collapseTraceCalls(phase.calls).map(({ key, ev }) => (
+            <TraceCallCard key={key} ev={ev} />
+          ))}
         </div>
       )}
     </div>
@@ -226,40 +229,3 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-function CallCard({ ev }: { ev: AiTraceEvent }) {
-  const duration = formatDuration(ev.durationMs);
-  const isSearch = ev.type === 'search';
-  return (
-    <div className="rounded-md border border-border bg-muted/40 px-3 py-2">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <Badge variant="outline" className="font-mono text-[10px]">{isSearch ? '联网检索' : 'LLM'}</Badge>
-        <span className="truncate text-xs font-medium text-foreground">{ev.title}</span>
-        {ev.model && <span className="font-mono text-[10px] text-muted-foreground">{ev.model}</span>}
-        <span className={cn('ml-auto flex shrink-0 items-center gap-2 text-[10px] text-muted-foreground')}>
-          {ev.status === 'running' ? <span className="text-primary">等待响应…</span>
-            : ev.status === 'fail' ? <span className="text-destructive">失败</span>
-            : ev.resultBrief ? <span>{ev.resultBrief}</span> : null}
-          {duration && <span>{duration}</span>}
-        </span>
-      </div>
-      {(ev.systemPrompt || ev.userPrompt) && (
-        <Collapsible label={isSearch ? '检索词' : '提示词'} text={[ev.systemPrompt, ev.userPrompt].filter(Boolean).join('\n\n---\n\n')} />
-      )}
-      {ev.response && <Collapsible label={isSearch ? '命中结果' : '响应'} text={ev.response} defaultOpen={isSearch || ev.response.length < 600} />}
-      {ev.error && !ev.response && <p className="mt-1.5 whitespace-pre-wrap break-all text-xs text-destructive">{ev.error}</p>}
-    </div>
-  );
-}
-
-function Collapsible({ label, text, defaultOpen = false }: { label: string; text: string; defaultOpen?: boolean }) {
-  return (
-    <details open={defaultOpen} className="mt-1.5">
-      <summary className="cursor-pointer text-[11px] text-muted-foreground hover:text-foreground">
-        {label}（{text.length} 字）
-      </summary>
-      <pre className="mt-1 max-h-56 overflow-auto rounded bg-muted p-2 text-[11px] leading-relaxed whitespace-pre-wrap break-all">
-        {text}
-      </pre>
-    </details>
-  );
-}

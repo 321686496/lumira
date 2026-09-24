@@ -123,3 +123,78 @@ export function TraceTextBlock({ label, text, defaultOpen = true }: { label: str
     </div>
   );
 }
+
+/** 可参与合并的事件源（识别流 AiTraceEvent 与批次流 AiBatchImageTraceEvent 的公共子集） */
+export interface TraceCallSource {
+  seq: number;
+  /** 识别流用 type；批次流用 kind */
+  type?: 'llm' | 'search' | 'step' | 'note' | 'pose';
+  kind?: 'pose' | 'llm' | 'search';
+  title: string;
+  model?: string;
+  status: string;
+  systemPrompt?: string;
+  userPrompt?: string;
+  response?: string;
+  rawResponse?: string;
+  attempts?: number;
+  resultBrief?: string;
+  error?: string;
+  durationMs?: number;
+}
+
+export interface TraceCallItem {
+  key: number;
+  ev: TraceCallCardData;
+}
+
+/** 只覆盖有值的字段，避免 done 事件把 running 已记录的提示词清成 undefined */
+function mergeDefined<T extends object>(base: T, patch: Partial<T>): T {
+  const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
+  for (const [k, v] of Object.entries(patch)) if (v !== undefined) out[k] = v;
+  return out as T;
+}
+
+/**
+ * 把「一次调用的两条事件」折叠成一张卡片的数据：
+ * running/pending 开一个待配对槽位并占据当前位置；随后同 种类+title+model 的 done/fail/error
+ * 原位补齐响应字段（key 不变 → React 不重建节点，表现为同一张卡片内容变完整）。
+ * 未能配对的事件各自单独成条（如只有 done 的历史事件、并发同名调用）。
+ */
+export function collapseTraceCalls(sources: TraceCallSource[]): TraceCallItem[] {
+  const items: TraceCallItem[] = [];
+  const open = new Map<string, number>();
+  for (const src of sources) {
+    const isSearch = src.kind === 'search' || src.type === 'search';
+    const ev: TraceCallCardData = {
+      type: isSearch ? 'search' : 'llm',
+      title: src.title,
+      model: src.model,
+      status: src.status as TraceCallCardData['status'],
+      systemPrompt: src.systemPrompt,
+      userPrompt: src.userPrompt,
+      response: src.response,
+      rawResponse: src.rawResponse,
+      attempts: src.attempts,
+      resultBrief: src.resultBrief,
+      error: src.error,
+      durationMs: src.durationMs,
+    };
+    const key = `${isSearch ? 'search' : 'llm'}|${src.title}|${src.model ?? ''}`;
+    const waiting = src.status === 'running' || src.status === 'pending';
+    if (waiting) {
+      if (open.has(key)) continue; // 同一次调用不会重复 running；重复时忽略以免卡片抖动
+      open.set(key, items.length);
+      items.push({ key: src.seq, ev });
+      continue;
+    }
+    const idx = open.get(key);
+    if (typeof idx === 'number') {
+      open.delete(key);
+      items[idx] = { key: items[idx].key, ev: mergeDefined(items[idx].ev, ev) };
+      continue;
+    }
+    items.push({ key: src.seq, ev });
+  }
+  return items;
+}
