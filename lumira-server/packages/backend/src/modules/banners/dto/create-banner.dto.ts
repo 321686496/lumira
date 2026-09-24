@@ -28,9 +28,9 @@ export class CreateBannerDto {
   @IsIn(OPERATION_BANNER_ROUTES)
   route?: string;
 
-  /** 条目类型：operation=条件触达运营位 / ad=活动广告曝光（默认 operation） */
+  /** 条目类型：operation=条件触达运营位 / ad=活动广告曝光 / search=App 内搜索（默认 operation） */
   @IsOptional()
-  @IsIn(['operation', 'ad'])
+  @IsIn(['operation', 'ad', 'search'])
   kind?: string;
 
   /** 目标模板 id（可空）：route 为 /templates/detail 时必填 */
@@ -77,6 +77,18 @@ export class CreateBannerDto {
   @IsNotEmpty()
   @MaxLength(512)
   externalUrl?: string;
+
+  /** App 内搜索关键字（kind=search 时必填，非空校验） */
+  @ValidateIf((o: CreateBannerDto) => o.kind === 'search')
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
+  searchKeyword?: string;
+
+  /** 搜索范围：all=全部 / template=模板 / scene=场景 / academy=美学院（默认 all） */
+  @IsOptional()
+  @IsIn(['all', 'template', 'scene', 'academy'])
+  searchScope?: string;
 
   /** 广告位绝对槽位下标（0 起）；缺省/越界 = 放最后一个槽位 */
   @IsOptional()
