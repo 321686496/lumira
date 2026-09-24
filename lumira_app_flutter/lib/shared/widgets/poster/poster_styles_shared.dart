@@ -9,17 +9,22 @@ import 'poster_style_types.dart';
 /// 承载「经典面板（pA/s1 下半部分）」「相纸卡片（pC）」两大复用布局，
 /// 及按 kind 派生的 kicker / 二维码提示文案。
 
+/// 照片海报固定文案（照片专用样式直接引用；不依赖落款是否为空来判断种类）。
+const String posterPhotoKicker = 'LUMIRA · 如画出品';
+const String posterPhotoQrHint = '长按识别 · 查看高清原图';
+const String posterPhotoQrSub = '打开如画 · 保存原图';
+
 /// 顶部 kicker：模板=「LUMIRA TEMPLATE · 模板」，照片=「LUMIRA · 如画出品」。
 String posterKickerOf(PosterStyleData d) =>
-    d.authorName.isEmpty ? 'LUMIRA TEMPLATE · 模板' : 'LUMIRA · 如画出品';
+    d.authorName.isEmpty ? 'LUMIRA TEMPLATE · 模板' : posterPhotoKicker;
 
 /// 二维码主提示：模板=「长按识别 · 查看完整模板」，照片=「长按识别 · 查看高清原图」。
 String posterQrHintOf(PosterStyleData d) =>
-    d.authorName.isEmpty ? '长按识别 · 查看完整模板' : '长按识别 · 查看高清原图';
+    d.authorName.isEmpty ? '长按识别 · 查看完整模板' : posterPhotoQrHint;
 
 /// 二维码副提示：模板=「打开如画，拍出同款」，照片=「打开如画 · 保存原图」。
 String posterQrSubOf(PosterStyleData d) =>
-    d.authorName.isEmpty ? '打开如画，拍出同款' : '打开如画 · 保存原图';
+    d.authorName.isEmpty ? '打开如画，拍出同款' : posterPhotoQrSub;
 
 /// 照片顶部压暗渐变（保证浮层文字可读）。
 class PosterScrim extends StatelessWidget {
@@ -458,36 +463,6 @@ class PosterFootMini extends StatelessWidget {
         Text('如你所见，皆成画卷',
             style: posterPlain(7.5, color: PosterPalette.text3, letterSpacing: 1)),
       ],
-    );
-  }
-}
-
-/// 题跋文本（画卷方向）：衬线 text2，默认 9.5px / 字距 2 / 行高 1.6。
-class PosterPara extends StatelessWidget {
-  const PosterPara({
-    super.key,
-    required this.text,
-    this.size = 9.5,
-    this.letterSpacing = 2,
-    this.height = 1.6,
-  });
-
-  final String text;
-  final double size;
-  final double letterSpacing;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: posterSerif(
-        size,
-        color: PosterPalette.text2,
-        letterSpacing: letterSpacing,
-        weight: FontWeight.w400,
-        height: height,
-      ),
     );
   }
 }

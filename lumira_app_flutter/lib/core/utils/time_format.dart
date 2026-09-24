@@ -40,3 +40,11 @@ String formatDateOnly(int timestampMs) {
   final dt = DateTime.fromMillisecondsSinceEpoch(timestampMs);
   return '${dt.month}月${dt.day}日';
 }
+
+/// 格式化日期为 "YYYY.MM.DD"（分享海报刊头/天头日期）
+String formatDotDate(int timestampMs) {
+  final dt = DateTime.fromMillisecondsSinceEpoch(timestampMs);
+  final m = dt.month.toString().padLeft(2, '0');
+  final d = dt.day.toString().padLeft(2, '0');
+  return '${dt.year}.$m.$d';
+}

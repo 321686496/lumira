@@ -53,17 +53,39 @@ void main() {
     expect(who.style?.fontSize, 10);
   });
 
-  testWidgets('PosterPara 使用衬线 text2 样式', (tester) async {
+  testWidgets('PosterAuthorRow 长名字在窄容器内省略不溢出', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
-          body: PosterPara(text: '九月晴午，光落草尖，见之成卷。'),
+          body: Center(
+            child: SizedBox(
+              width: 140,
+              child: PosterAuthorRow(
+                name: '很长很长的昵称名字',
+                whoSize: 10,
+                withSize: 8,
+                avatarSize: 18,
+                gap: 6,
+              ),
+            ),
+          ),
         ),
       ),
     );
-    final t = tester.widget<Text>(find.text('九月晴午，光落草尖，见之成卷。'));
-    expect(t.style?.color, PosterPalette.text2);
-    expect(t.style?.fontFamily, 'NotoSerifSC');
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('@'), findsOneWidget);
+  });
+
+  testWidgets('PosterAuthorRow 空名字不渲染占位', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: PosterAuthorRow(name: ''),
+        ),
+      ),
+    );
+    expect(find.textContaining('@'), findsNothing);
+    expect(find.textContaining('· 用'), findsNothing);
   });
 
   testWidgets('PosterVerticalText 逐字渲染', (tester) async {

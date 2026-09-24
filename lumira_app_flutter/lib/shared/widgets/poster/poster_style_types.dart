@@ -51,7 +51,7 @@ class PosterStyleData {
   /// 分享文案（部分样式展示）。
   final String shareText;
 
-  /// 照片海报落款作者名（如「小满」，显示为 @小满）。
+  /// 照片海报落款作者名（取真实本地资料昵称，显示为 @名字；为空不渲染落款行）。
   final String authorName;
 
   /// 照片按尺寸渲染：`photoBuilder(w, h)` 在 w×h 区域内以 cover 显示照片。
@@ -63,7 +63,7 @@ class PosterStyleData {
   /// 探店地点（可选）。
   final String place;
 
-  /// 探店打卡日期（可选，展示文案）。
+  /// 展示用日期文案（探店打卡日期 / 照片真实拍摄日 `yyyy.MM.dd`，可选）。
   final String dateText;
 
   /// 探店评分 0-5（0 表示未评分）。

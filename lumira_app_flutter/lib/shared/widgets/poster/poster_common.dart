@@ -557,7 +557,10 @@ class PosterAvatar extends StatelessWidget {
   }
 }
 
-/// 照片海报作者行：头像 + @小满 + · 用「如画」拍摄。
+/// 照片海报作者行：头像 + @名字 + · 用「如画」拍摄。
+///
+/// [name] 为空（未分配本地资料）时整行不渲染，避免出现只有「@」的占位；
+/// 行宽不足时名字/落款按需省略，保证同一行的其他元素（如二维码）不被挤出。
 class PosterAuthorRow extends StatelessWidget {
   const PosterAuthorRow({
     super.key,
@@ -577,7 +580,7 @@ class PosterAuthorRow extends StatelessWidget {
   final double avatarSize;
   final bool justifyCenter;
 
-  /// 「@小满」字号（9:16 新款式用 10 / 8.5）。
+  /// 「@名字」字号（9:16 新款式用 10 / 8.5）。
   final double whoSize;
 
   /// 落款「· 用「如画」拍摄」字号（9:16 新款式用 8）。
@@ -588,18 +591,29 @@ class PosterAuthorRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (name.isEmpty) return const SizedBox.shrink();
     final Color who = light ? Colors.white : PosterPalette.ink;
     final Color withC = light ? Colors.white70 : PosterPalette.text3;
     final row = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        PosterAvatar(char: name.isEmpty ? 'L' : name.characters.first, size: avatarSize),
+        PosterAvatar(char: name.characters.first, size: avatarSize),
         SizedBox(width: gap),
-        Text('@$name',
-            style: posterPlain(whoSize, color: who, weight: FontWeight.w600, letterSpacing: 1)),
+        Flexible(
+          child: Text('@$name',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: posterPlain(whoSize,
+                  color: who, weight: FontWeight.w600, letterSpacing: 1)),
+        ),
         if (suffix.isNotEmpty) ...[
           const SizedBox(width: 6),
-          Text('· $suffix', style: posterPlain(withSize, color: withC, letterSpacing: 1)),
+          Flexible(
+            child: Text('· $suffix',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: posterPlain(withSize, color: withC, letterSpacing: 1)),
+          ),
         ],
       ],
     );

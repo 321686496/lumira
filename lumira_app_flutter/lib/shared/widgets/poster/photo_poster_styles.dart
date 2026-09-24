@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'poster_common.dart';
 import 'poster_ratio.dart';
-import 'poster_seal.dart';
 import 'poster_style_types.dart';
 import 'poster_styles_shared.dart';
 
@@ -151,7 +150,7 @@ class _FramedPhoto extends StatelessWidget {
   }
 }
 
-/// 底行（净版/画刊通用）：作者信息（左）+ 二维码迷你卡（右）。
+/// 底行（画刊通用）：作者信息（左，超宽省略）+ 二维码迷你卡（右，宽度固定）。
 class _AuthorQrRow extends StatelessWidget {
   const _AuthorQrRow({required this.data});
   final PosterStyleData data;
@@ -160,14 +159,16 @@ class _AuthorQrRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        PosterAuthorRow(
-          name: data.authorName,
-          avatarSize: 18,
-          whoSize: 10,
-          withSize: 8,
-          gap: 6,
+        Expanded(
+          child: PosterAuthorRow(
+            name: data.authorName,
+            avatarSize: 18,
+            whoSize: 10,
+            withSize: 8,
+            gap: 6,
+          ),
         ),
-        const Spacer(),
+        const SizedBox(width: 8),
         PosterQrMini(data: data),
       ],
     );
@@ -219,13 +220,11 @@ class _F1FullBleed extends StatelessWidget {
     final d = data;
     final w = posterCanvasWidth(d.ratio);
     final h = posterFixedHeight(d.ratio);
-    final hint = d.qrHint.isNotEmpty ? d.qrHint : posterQrHintOf(d);
-    final sub = d.qrSub.isNotEmpty ? d.qrSub : posterQrSubOf(d);
+    final hint = d.qrHint.isNotEmpty ? d.qrHint : posterPhotoQrHint;
+    final sub = d.qrSub.isNotEmpty ? d.qrSub : posterPhotoQrSub;
     return PosterCanvas(
       width: w,
       height: h,
-      borderRadius: 0,
-      borderColor: Colors.transparent,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -238,8 +237,8 @@ class _F1FullBleed extends StatelessWidget {
               children: [
                 const PosterBrandOnPhoto(scale: 0.9),
                 const Spacer(),
-                PosterKicker(
-                  text: posterKickerOf(d),
+                const PosterKicker(
+                  text: posterPhotoKicker,
                   color: PosterPalette.goldSoft,
                   shadows: _textShadow,
                 ),
@@ -343,22 +342,15 @@ class _F1FullBleed extends StatelessWidget {
   }
 }
 
-/// 期号单行（m2/m3 刊头右侧）：VOL.01 + 第 028 期。
-class _VolNoInline extends StatelessWidget {
-  const _VolNoInline();
+/// 刊头右侧拍摄日期（真实数据：照片拍摄日 `yyyy.MM.dd`；为空时不渲染）。
+class _HeadDate extends StatelessWidget {
+  const _HeadDate({required this.dateText});
+  final String dateText;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('VOL.01',
-            style: posterSerifEn(9, color: PosterPalette.goldDeep, letterSpacing: 2)),
-        const SizedBox(width: 8),
-        Text('第 028 期',
-            style: posterPlain(7.5, color: PosterPalette.text3, letterSpacing: 1)),
-      ],
-    );
+    return Text(dateText,
+        style: posterSerifEn(9, color: PosterPalette.goldDeep, letterSpacing: 2));
   }
 }
 
@@ -382,10 +374,10 @@ class _M3VerticalColumn extends StatelessWidget {
               border: Border(bottom: BorderSide(color: PosterPalette.line)),
             ),
             child: Row(
-              children: const [
-                PosterBrandRow(),
-                Spacer(),
-                _VolNoInline(),
+              children: [
+                const PosterBrandRow(),
+                const Spacer(),
+                if (d.dateText.isNotEmpty) _HeadDate(dateText: d.dateText),
               ],
             ),
           ),
@@ -433,7 +425,7 @@ class _M3VerticalColumn extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        PosterKicker(text: posterKickerOf(d)),
+                        const PosterKicker(text: posterPhotoKicker),
                         const SizedBox(height: 3),
                         PosterCatText(category: d.category, size: 9, letterSpacing: 2),
                         const SizedBox(height: 7),
@@ -454,6 +446,9 @@ class _M3VerticalColumn extends StatelessWidget {
 }
 
 /// 立轴（9:16）：天头 / 裱边画心 / 地头三段式装裱结构。
+///
+/// 地头为品名 + 分类 + 款行 + 二维码行；题跋与小印已按用户反馈移除
+/// （避免假文案，款行只保留真实落款）。
 class _J1HangingScroll extends StatelessWidget {
   const _J1HangingScroll({required this.data});
   final PosterStyleData data;
@@ -483,9 +478,10 @@ class _J1HangingScroll extends StatelessWidget {
                     Text('如你所见，皆成画卷',
                         style:
                             posterPlain(8, color: PosterPalette.text3, letterSpacing: 1)),
-                    Text('No.028 · 2026 秋',
-                        style: posterSerifEn(8,
-                            color: PosterPalette.goldDeep, letterSpacing: 2)),
+                    if (d.dateText.isNotEmpty)
+                      Text(d.dateText,
+                          style: posterSerifEn(8,
+                              color: PosterPalette.goldDeep, letterSpacing: 2)),
                   ],
                 ),
               ],
@@ -514,21 +510,13 @@ class _J1HangingScroll extends StatelessWidget {
                 PosterTitle(text: d.title, size: 20, letterSpacing: 2, height: 1.25),
                 const SizedBox(height: 3),
                 PosterCatText(category: d.category, size: 9, letterSpacing: 2),
-                const SizedBox(height: 6),
-                const PosterPara(text: '九月晴午，光落草尖，见之成卷。'),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    PosterAuthorRow(
-                      name: d.authorName,
-                      avatarSize: 18,
-                      whoSize: 10,
-                      withSize: 8,
-                      gap: 6,
-                    ),
-                    const Spacer(),
-                    const PosterSeal(),
-                  ],
+                const SizedBox(height: 8),
+                PosterAuthorRow(
+                  name: d.authorName,
+                  avatarSize: 18,
+                  whoSize: 10,
+                  withSize: 8,
+                  gap: 6,
                 ),
                 const SizedBox(height: 8),
                 Row(

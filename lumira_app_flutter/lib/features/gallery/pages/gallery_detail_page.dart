@@ -28,6 +28,7 @@ import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../profile/providers/collection_providers.dart';
+import '../../profile/providers/profile_providers.dart';
 import '../../templates/widgets/adaptive_cover_image.dart';
 import '../../watermark/data/watermark_providers.dart';
 import '../../capture/data/scene_presets_data.dart';
@@ -542,10 +543,14 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
       if (!mounted) return;
       final tokens = ref.read(themeTokensProvider);
       final shareText = buildAutoShareText(template);
+      // 落款取真实本地资料（未分配资料时为空 → 海报不渲染落款行，不造假名字）
+      final profile = await ref.read(profileDataProvider.future);
+      if (!mounted) return;
       // 由照片本地文件解析海报比例（9:16 / 3:4 / 1:1 / 4:3 / 16:9），失败回退 9:16
       final ratio = await PosterRatio.fromFile(photoPath);
       if (!mounted) return;
-      // 照片详情分享海报：落款 @小满，二维码沿用拍摄模板链接（可扫码拍同款/查看模板）。
+      // 照片详情分享海报：落款 = 真实昵称，刊头日期 = 照片真实拍摄日，
+      // 二维码沿用拍摄模板链接（可扫码拍同款/查看模板）。
       await PosterGenerator.showPosterWithStylePicker(
         context: context,
         tokens: tokens,
@@ -560,7 +565,8 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
           qrHint: '长按识别 · 查看高清原图',
           qrSub: '打开如画 · 保存原图',
           shareText: shareText,
-          authorName: '小满',
+          authorName: profile?.username ?? '',
+          dateText: formatDotDate(photo.createdAt),
           photoBuilder: (w, h) => Image.file(
             File(photoPath),
             width: w,
