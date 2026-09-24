@@ -51,18 +51,18 @@ void main() {
   });
 
   group('PosterStyleRegistry 照片样式（kind=photo）', () {
-    test('9:16 提供三方向九款（净版/画刊/画卷）', () {
+    test('9:16 提供最终三款（满版照片 / 竖排刊 / 立轴）', () {
       final ids = _ids(PosterKind.photo, PosterRatio.fullScreen);
       expect(ids, <String>[
-        'n1', 'n2', 'n3', // 净版
-        'm1', 'm2', 'm3', // 画刊
-        'j1', 'j2', 'j3', // 画卷
+        'f1', // 满版照片（唯一压字款，排在首位即默认）
+        'm3', // 竖排刊
+        'j1', // 立轴
       ]);
     });
 
-    test('照片分享默认样式为满幅净版（n1）', () {
+    test('照片分享默认样式为满版照片（f1）', () {
       final def = PosterStyleRegistry.defaultFor(PosterKind.photo, PosterRatio.fullScreen);
-      expect(def?.id, 'n1');
+      expect(def?.id, 'f1');
     });
 
     test('3:4 提供 d3 / dA / s1', () {
@@ -87,12 +87,21 @@ void main() {
       expect(ids, <String>['pC']);
     });
 
-    test('9:16 九款带方向分组（净版 / 画刊 / 画卷）', () {
+    test('9:16 三款带方向分组（满版 / 画刊 / 画卷）', () {
       final styles = PosterStyleRegistry.stylesFor(PosterKind.photo, PosterRatio.fullScreen);
       expect(
         styles.map((s) => s.group).toList(),
-        <String>['净版', '净版', '净版', '画刊', '画刊', '画刊', '画卷', '画卷', '画卷'],
+        <String>['满版', '画刊', '画卷'],
       );
+    });
+
+    test('photo 按「样式 × 比例」展开合计 11（守护未误删既有比例款式）', () {
+      final total = PosterRatio.values
+          .map((r) => PosterStyleRegistry.stylesFor(PosterKind.photo, r).length)
+          .fold(0, (a, b) => a + b);
+      // 9:16 3 + 3:4 3 + 1:1 3 + 16:9 1 + 4:3 1 = 11
+      // （pC 一款同时支持 1:1 / 16:9 / 4:3，故 11 ≠ 样式数 9）
+      expect(total, 11);
     });
 
     test('既有 3:4 / 1:1 款不带分组（group 为空）', () {
