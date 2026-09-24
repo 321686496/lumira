@@ -459,6 +459,17 @@ export function AiCreateWizard({
 
   const stageIndex = autoState ? AUTO_STAGES.indexOf(autoState.stage) : -1;
 
+  /** 面板收拢态展示的进度文案（运行中优先，缺省回落 Tab 计数） */
+  const progressStatusText = analyzing
+    ? '正在识别…'
+    : autoState?.running
+      ? `进行中 · ${AUTO_STAGE_TEXT[autoState.stage]}${
+          autoState.stage === 'generating-image' && poseProgress
+            ? ` ${poseProgress.current}/${poseProgress.total}`
+            : ''
+        }`
+      : null;
+
   /** 常驻预览面板：识别前占位，识别后由 TemplateForm portal 填充宿主 */
   const previewPanel = (
     <div className="rounded-lg border border-border bg-card p-4">
@@ -508,6 +519,7 @@ export function AiCreateWizard({
             recogRunning={analyzing || (autoState?.running === true && autoState.stage === 'analyzing')}
             poseEvents={poseTraceEvents}
             poseRunning={poseTraceRunning || (autoState?.running === true && autoState.stage === 'generating-image')}
+            statusText={progressStatusText}
             onOpenDetail={() => setDetailDialogOpen(true)}
             onClose={() => setProgressPanelHidden(true)}
           />

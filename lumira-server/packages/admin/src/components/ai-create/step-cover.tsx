@@ -3,8 +3,8 @@
 
 'use client';
 
-import type { Dispatch, SetStateAction } from 'react';
-import { useRef, useState } from 'react';
+import type { Dispatch, ReactNode, SetStateAction } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -23,6 +23,8 @@ import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
 import { ImageSquare } from '@phosphor-icons/react/dist/csr/ImageSquare';
 import { ArrowLeft } from '@phosphor-icons/react/dist/csr/ArrowLeft';
 import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
+import { ArrowUp } from '@phosphor-icons/react/dist/csr/ArrowUp';
+import { Target } from '@phosphor-icons/react/dist/csr/Target';
 import { X } from '@phosphor-icons/react/dist/csr/X';
 import { DownloadSimple } from '@phosphor-icons/react/dist/csr/DownloadSimple';
 import { cn } from '@/lib/utils';
@@ -33,6 +35,39 @@ export interface CoverCandidate {
   file: File;
   url: string;
   source: 'example' | 'ai';
+}
+
+/** 候选图卡片底部的小图标按钮（28×28，带 title/aria-label 便于识别） */
+function IconButton({
+  label,
+  danger,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  danger?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        'flex h-7 w-7 items-center justify-center rounded transition-colors disabled:opacity-30',
+        danger
+          ? 'text-muted-foreground hover:bg-destructive/10 hover:text-destructive'
+          : 'text-muted-foreground hover:bg-muted hover:text-primary',
+      )}
+    >
+      {children}
+    </button>
+  );
 }
 
 export function StepCover({
@@ -76,6 +111,20 @@ export function StepCover({
   const referenceInputRef = useRef<HTMLInputElement>(null);
 
   const disabled = busy || generating;
+
+  // 放大查看时支持 ←/→ 翻页（与系统相册操作一致）
+  useEffect(() => {
+    if (viewIndex == null) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowLeft') {
+        setViewIndex((i) => (i == null ? i : Math.max(0, i - 1)));
+      } else if (event.key === 'ArrowRight') {
+        setViewIndex((i) => (i == null ? i : Math.min(candidates.length - 1, i + 1)));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [viewIndex, candidates.length]);
 
   /** 保存候选图到本地：优先用原始 File 生成 blob（objectURL 同源可下载） */
   const downloadCandidate = (c: CoverCandidate) => {
@@ -327,11 +376,16 @@ export function StepCover({
                 )}
               >
                 <div className="relative">
-                  {i === 0 && (
-                    <span className="absolute left-2 top-2 z-10 rounded bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
-                      封面
+                  <div className="absolute left-2 top-2 z-10 flex items-center gap-1">
+                    <span className="rounded bg-foreground/70 px-1.5 py-0.5 text-[10px] font-medium text-background">
+                      #{i + 1}
                     </span>
-                  )}
+                    {i === 0 && (
+                      <span className="rounded bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                        封面
+                      </span>
+                    )}
+                  </div>
                   {/* 点击放大查看 */}
                   <button
                     type="button"
@@ -343,54 +397,32 @@ export function StepCover({
                     <img src={c.url} alt="封面候选" className="aspect-[3/4] w-full object-cover" />
                   </button>
                 </div>
-                <div className="flex items-center justify-between border-t border-border bg-card px-1 py-1">
+                <div className="flex items-center justify-between gap-1 border-t border-border bg-card px-1 py-1">
                   <div className="flex">
-                    <button
-                      type="button"
-                      className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
-                      disabled={i === 0}
-                      onClick={() => move(i, -1)}
-                      aria-label="左移"
-                    >
+                    <IconButton label="左移" disabled={i === 0} onClick={() => move(i, -1)}>
                       <ArrowLeft size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
-                      disabled={i === candidates.length - 1}
-                      onClick={() => move(i, 1)}
-                      aria-label="右移"
-                    >
+                    </IconButton>
+                    <IconButton label="右移" disabled={i === candidates.length - 1} onClick={() => move(i, 1)}>
                       <ArrowRight size={14} />
-                    </button>
+                    </IconButton>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      className="rounded px-1 text-[10px] text-muted-foreground hover:text-primary disabled:opacity-30"
-                      disabled={disabled}
-                      onClick={() => onReferenceChange(c.file, c.url)}
-                    >
-                      设为参考
-                    </button>
+                  <div className="flex items-center gap-0.5">
+                    <IconButton label="设为姿势参考图" disabled={disabled} onClick={() => onReferenceChange(c.file, c.url)}>
+                      <Target size={14} />
+                    </IconButton>
                     {i !== 0 && (
-                      <button
-                        type="button"
-                        className="rounded px-1 text-[10px] text-muted-foreground hover:text-primary"
-                        onClick={() => toTop(i)}
-                      >
-                        设为封面
-                      </button>
+                      <IconButton label="设为封面" onClick={() => toTop(i)}>
+                        <ArrowUp size={14} />
+                      </IconButton>
                     )}
-                    <button
-                      type="button"
-                      className="rounded p-1 text-muted-foreground hover:text-destructive disabled:opacity-30"
+                    <IconButton
+                      label="删除该候选图"
+                      danger
                       disabled={candidates.length <= 1}
                       onClick={() => remove(i)}
-                      aria-label="删除"
                     >
                       <X size={14} />
-                    </button>
+                    </IconButton>
                   </div>
                 </div>
               </div>
@@ -409,7 +441,8 @@ export function StepCover({
               <DialogTitle className="sr-only">候选图放大预览</DialogTitle>
               <DialogDescription className="sr-only">姿势图/封面候选图放大预览</DialogDescription>
               <span className="text-sm text-muted-foreground">
-                {viewing && viewIndex != null ? `候选图 ${viewIndex + 1} / ${candidates.length}` : ''}
+                {viewIndex != null ? `#${viewIndex + 1} / 共 ${candidates.length} 张` : ''}
+                <span className="ml-2 text-xs text-muted-foreground/70">←/→ 切换</span>
               </span>
               {viewing && (
                 <Button
