@@ -81,10 +81,10 @@ export class AiTemplatesController {
     return this.aiImageTaskService.submitBatch(reference, meta, extraPrompt, research);
   }
 
-  /** 查询批量姿势图进度（total/completed/current/status/results）；批次不存在则 404 */
+  /** 查询批量姿势图进度（total/completed/current/status/results/events）；支持 ?since= 增量拉取事件；批次不存在则 404 */
   @Get('ai-generate-image/batch/:batchId')
-  async getImageBatch(@Param('batchId') batchId: string) {
-    const batch = this.aiImageTaskService.getBatch(batchId);
+  async getImageBatch(@Param('batchId') batchId: string, @Query('since') since?: string) {
+    const batch = this.aiImageTaskService.getBatch(batchId, since ? Number(since) : undefined);
     if (!batch) throw new NotFoundException('Image batch not found');
     return batch;
   }
