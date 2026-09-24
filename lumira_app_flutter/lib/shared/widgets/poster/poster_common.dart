@@ -77,8 +77,19 @@ double posterCanvasWidth(PosterRatio ratio) {
 /// 相对选型稿（330 宽画布）的缩放系数，用于固定高度/固定尺寸元素等比缩放。
 double posterScale(PosterRatio ratio) => posterCanvasWidth(ratio) / 330;
 
-/// 固定高度型海报（选型稿 min-height:760）在当前画布宽度下的高度。
-double posterFixedHeight(PosterRatio ratio) => 760 * posterScale(ratio);
+/// 固定高度型海报在当前画布宽度下的高度。
+///
+/// fullScreen 为 9:16 画布（300 宽）：高 = 宽 × 16/9 ≈ 533.33，与照片同比例，
+/// 社交分享全屏展示不裁切；其余比例沿用选型稿（330 宽画布 min-height:760）
+/// 的等比缩放值。
+double posterFixedHeight(PosterRatio ratio) {
+  switch (ratio) {
+    case PosterRatio.fullScreen:
+      return posterCanvasWidth(ratio) * 16 / 9;
+    default:
+      return 760 * posterScale(ratio);
+  }
+}
 
 /// 海报照片区目标宽高比（照片区按该比例撑高，照片以 cover 填充）。
 double posterPhotoAspect(PosterRatio ratio) {
