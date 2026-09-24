@@ -5,11 +5,11 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/services/external_url_launcher.dart';
 import '../../../shared/widgets/lumira/feedback/lumira_toast.dart';
 import '../../templates/widgets/template_cover_image.dart';
 import '../../usage/usage_providers.dart';
@@ -201,21 +201,11 @@ class _HomeBannerState extends ConsumerState<HomeBanner>
   }
 
   /// 用系统浏览器打开广告/外链。
-  /// OHOS 端 url_launcher 无原生实现，`launchUrl` 会抛异常；Android 上
-  /// 缺少匹配浏览器时返回 false。两种情况都降级为「复制链接 + Toast 提示」，
-  /// 避免点击广告后无声无息（曾有静默吞异常导致"无反应"缺陷）。
+  /// 跨平台由 ExternalUrlLauncher 统一处理：OHOS 走原生 openLink 通道拉起
+  /// 系统浏览器（url_launcher 无 ohos 实现），iOS/Android 回退 url_launcher。
+  /// 全部失败时降级为「复制链接 + Toast 提示」，避免点击广告后无声无息。
   Future<void> _openExternalUrl(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null || !uri.hasScheme) {
-      _fallbackOpenExternal(url);
-      return;
-    }
-    var opened = false;
-    try {
-      opened = await launchUrl(uri, mode: LaunchMode.platformDefault);
-    } catch (_) {
-      opened = false;
-    }
+    final opened = await ExternalUrlLauncher.instance.open(url);
     if (!opened && mounted) _fallbackOpenExternal(url);
   }
 
