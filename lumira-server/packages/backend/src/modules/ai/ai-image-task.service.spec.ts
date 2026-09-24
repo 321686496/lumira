@@ -174,4 +174,93 @@ describe('AiImageTaskService', () => {
       expect(call[3]).toBe(researchJson); // 识别阶段研究结果原样到达生图服务
     }
   });
+
+  it('批量姿势任务：getBatch(batchId, since) 只返回 seq > since 的事件（增量语义）', async () => {
+    getActiveConfigMock.mockResolvedValue({} as never);
+    generateMock.mockResolvedValue({ base64: 'cG9zZQ==', mimeType: 'image/png' });
+    const draft = { pose: [{ index: 0 }, { index: 1 }, { index: 2 }] };
+
+    const { batchId } = await service.submitBatch(undefined, JSON.stringify(draft));
+    await waitBatchStatus(batchId, 'done');
+
+    const full = service.getBatch(batchId)!;
+    expect(full.events.length).toBeGreaterThan(0);
+    // seq 从 1 开始且严格连续递增
+    expect(full.events.map((e) => e.seq)).toEqual(
+      Array.from({ length: full.events.length }, (_, i) => i + 1),
+    );
+    expect(full.lastSeq).toBe(full.events.length);
+
+    // 用返回的 lastSeq 再查一次：没有更新的 seq，返回空数组
+    const empty = service.getBatch(batchId, full.lastSeq)!;
+    expect(empty.events).toEqual([]);
+    expect(empty.lastSeq).toBe(full.lastSeq);
+
+    // 中间值 since：仅返回严格大于该 seq 的事件
+    const since = 2;
+    const tail = service.getBatch(batchId, since)!;
+    expect(tail.events.length).toBe(full.events.length - since);
+    expect(tail.events.every((e) => e.seq > since)).toBe(true);
+
+    // 不存在的 batchId 仍返回 null
+    expect(service.getBatch('bimg_nope', 1)).toBeNull();
+  });
+
+  it('批量姿势任务：submitBatch 即时为每张补发 pending 事件，index 覆盖 0..n-1', async () => {
+    getActiveConfigMock.mockResolvedValue({} as never);
+    generateMock.mockResolvedValue({ base64: 'cG9zZQ==', mimeType: 'image/png' });
+    const draft = { pose: [{ index: 0 }, { index: 1 }, { index: 2 }] };
+
+    const { batchId } = await service.submitBatch(undefined, JSON.stringify(draft));
+
+    // pending 事件在 run 触发前已写入；即便后台 run 已推进，pending 仍保留在事件日志中
+    const pending = service.getBatch(batchId)!.events.filter((e) => e.status === 'pending');
+    expect(pending.map((e) => e.index).sort((a, b) => a - b)).toEqual([0, 1, 2]);
+    expect(pending.every((e) => typeof e.seq === 'number' && typeof e.ts === 'number')).toBe(true);
+    expect(pending.every((e) => e.title.includes('排队'))).toBe(true);
+  });
+
+  it('批量姿势任务：done 事件透传 prompt/model，且带数字 durationMs', async () => {
+    getActiveConfigMock.mockResolvedValue({} as never);
+    generateMock.mockResolvedValue({
+      base64: 'cG9zZQ==',
+      mimeType: 'image/png',
+      prompt: '柔和暖光写真',
+      model: 'doubao-seedream',
+    });
+    const draft = { pose: [{ index: 0 }, { index: 1 }] };
+
+    const { batchId } = await service.submitBatch(undefined, JSON.stringify(draft));
+    await waitBatchStatus(batchId, 'done');
+
+    const progress = service.getBatch(batchId)!;
+    const doneEvents = progress.events.filter((e) => e.status === 'done');
+    expect(doneEvents.map((e) => e.index).sort((a, b) => a - b)).toEqual([0, 1]);
+    for (const ev of doneEvents) {
+      expect(ev.prompt).toBe('柔和暖光写真');
+      expect(ev.model).toBe('doubao-seedream');
+      expect(typeof ev.durationMs).toBe('number');
+    }
+    // 逐张明细同样透传 prompt/model
+    expect(progress.results.every((r) => r.prompt === '柔和暖光写真' && r.model === 'doubao-seedream')).toBe(
+      true,
+    );
+  });
+
+  it('批量姿势任务：耗尽重试后该 index 出现 error 事件并带错误文本', async () => {
+    getActiveConfigMock.mockResolvedValue({} as never);
+    generateMock.mockRejectedValue(new Error('AI 上游错误（HTTP 500）：boom'));
+    const draft = { pose: [{ index: 0 }] };
+
+    const { batchId } = await service.submitBatch(undefined, JSON.stringify(draft));
+    await waitBatchStatus(batchId, 'done');
+
+    // 可重试错误耗尽 GENERATE_RETRY_LIMIT(4) 次重试
+    expect(generateMock).toHaveBeenCalledTimes(4);
+    const errorEvents = service.getBatch(batchId)!.events.filter((e) => e.status === 'error');
+    expect(errorEvents).toHaveLength(1);
+    expect(errorEvents[0].index).toBe(0);
+    expect(errorEvents[0].error).toBe('AI 上游错误（HTTP 500）：boom');
+    expect(typeof errorEvents[0].durationMs).toBe('number');
+  }, 30000);
 });
