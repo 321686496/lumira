@@ -25,7 +25,7 @@ class PointTransactionTile extends StatelessWidget {
   final ThemeTokens tokens;
   final PointTransaction tx;
 
-  String get _typeLabel => pointSourceLabel(tx.source);
+  String get _typeLabel => pointTransactionTitle(tx);
 
   String get _deltaText {
     final v = tx.delta;
@@ -172,6 +172,8 @@ class PointTransactionDetailSheet extends ConsumerWidget {
         return '邀请里程碑达成，获得免费解锁次数';
       case 'ad':
         return '观看广告获得积分';
+      case 'admin_grant':
+        return '由后台充值发放到你的账号';
       default:
         return '积分变动记录';
     }
@@ -223,7 +225,7 @@ class PointTransactionDetailSheet extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      pointSourceLabel(tx.source),
+                      pointTransactionTitle(tx),
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,

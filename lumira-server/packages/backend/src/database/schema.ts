@@ -123,6 +123,8 @@ export const pointTransactions = mysqlTable('point_transactions', {
   delta: int('delta').notNull(),
   type: text('type').notNull(),
   refId: text('ref_id'),
+  // 备注原因（目前仅 admin_grant 后台充值填写，客户端优先展示该文案）
+  reason: varchar('reason', { length: 256 }),
   createdAt: int('created_at').notNull(),
 });
 

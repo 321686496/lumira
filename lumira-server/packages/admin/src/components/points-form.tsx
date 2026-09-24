@@ -23,14 +23,14 @@ export default function PointsForm({ deviceId }: { deviceId: string }) {
       setError('请输入有效的正整数积分');
       return;
     }
-    if (!reason.trim()) {
-      setError('请填写充值原因');
-      return;
-    }
 
     setLoading(true);
     try {
-      const result = await grantPointsAction(deviceId, amount, reason.trim());
+      const result = await grantPointsAction(
+        deviceId,
+        amount,
+        reason.trim() || undefined,
+      );
       if (result.error) {
         setError(result.error);
       } else {
@@ -61,7 +61,7 @@ export default function PointsForm({ deviceId }: { deviceId: string }) {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="reason">充值原因</Label>
+          <Label htmlFor="reason">充值原因（选填）</Label>
           <Input
             id="reason"
             placeholder="如：活动奖励、补偿等"

@@ -20,6 +20,7 @@ export interface PointTransaction {
   delta: number; // 正=获取，负=消耗
   type: PointTransactionType;
   refId: string | null;
+  reason: string | null; // 备注原因（后台充值填写，客户端优先展示）
   createdAt: number;
 }
 

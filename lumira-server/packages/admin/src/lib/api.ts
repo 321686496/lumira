@@ -411,10 +411,10 @@ export const api = {
   getUserPoints: (deviceId: string) =>
     adminFetch<UserPointsDetail>(`/devices/${deviceId}/points`),
 
-  grantPoints: (deviceId: string, delta: number, reason: string) =>
+  grantPoints: (deviceId: string, delta: number, reason?: string) =>
     adminFetch<GrantPointsResponse>(`/devices/${deviceId}/points/grant`, {
       method: 'POST',
-      body: JSON.stringify({ delta, reason }),
+      body: JSON.stringify(reason ? { delta, reason } : { delta }),
     }),
 
   deleteDevice: (deviceId: string, loginKey: string) =>

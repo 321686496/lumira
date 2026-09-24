@@ -64,6 +64,9 @@ class PointTransaction {
   /// level_reward/free_unlock/free_unlock_spend/redeem_code 等），用于展示中文来源
   final String source;
   final String? refId;
+
+  /// 备注原因（后台充值 admin_grant 时填写；有值时优先展示该文案）
+  final String? reason;
   final int createdAt;
 
   const PointTransaction({
@@ -73,6 +76,7 @@ class PointTransaction {
     required this.type,
     required this.source,
     this.refId,
+    this.reason,
     required this.createdAt,
   });
 
@@ -86,6 +90,7 @@ class PointTransaction {
       type: _parseTxType(j['type'], delta),
       source: source,
       refId: j['refId'] as String?,
+      reason: j['reason'] as String?,
       createdAt: (j['createdAt'] as num?)?.toInt() ?? 0,
     );
   }
@@ -101,6 +106,7 @@ class PointTransaction {
                 : 'unknown',
         'source': source,
         if (refId != null) 'refId': refId,
+        if (reason != null) 'reason': reason,
         'createdAt': createdAt,
       };
 }
@@ -135,6 +141,18 @@ String pointSourceLabel(String source) {
     default:
       return '积分变动';
   }
+}
+
+/// 流水展示标题
+///
+/// 后台充值（admin_grant）若填写了充值原因，则直接展示该原因，
+/// 未填写时回退到通用来源文案（「后台发放」）。
+String pointTransactionTitle(PointTransaction tx) {
+  if (tx.source == 'admin_grant') {
+    final reason = tx.reason?.trim();
+    if (reason != null && reason.isNotEmpty) return reason;
+  }
+  return pointSourceLabel(tx.source);
 }
 
 /// GET /points/transactions 响应体

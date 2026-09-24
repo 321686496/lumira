@@ -7,7 +7,7 @@ import { UnauthenticatedError } from '@/lib/auth';
 export async function grantPointsAction(
   deviceId: string,
   delta: number,
-  reason: string,
+  reason?: string,
 ) {
   try {
     const result = await api.grantPoints(deviceId, delta, reason);

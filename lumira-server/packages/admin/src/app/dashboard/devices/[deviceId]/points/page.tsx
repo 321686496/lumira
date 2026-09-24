@@ -129,13 +129,14 @@ export default async function DevicePointsPage({
                   <th className="text-left px-4 py-2 text-sm font-medium text-muted-foreground">时间</th>
                   <th className="text-left px-4 py-2 text-sm font-medium text-muted-foreground">类型</th>
                   <th className="text-right px-4 py-2 text-sm font-medium text-muted-foreground">变动</th>
+                  <th className="text-left px-4 py-2 text-sm font-medium text-muted-foreground">充值原因</th>
                   <th className="text-left px-4 py-2 text-sm font-medium text-muted-foreground">参考ID</th>
                 </tr>
               </thead>
               <tbody>
                 {userPoints.transactions.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-center text-muted-foreground py-8 px-4">
+                    <td colSpan={5} className="text-center text-muted-foreground py-8 px-4">
                       暂无流水记录
                     </td>
                   </tr>
@@ -148,6 +149,9 @@ export default async function DevicePointsPage({
                       </td>
                       <td className={`px-4 py-2 text-sm text-right font-medium ${tx.delta > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                         {tx.delta > 0 ? `+${tx.delta}` : tx.delta}
+                      </td>
+                      <td className="px-4 py-2 text-sm text-muted-foreground">
+                        {tx.reason || '—'}
                       </td>
                       <td className="px-4 py-2 text-sm text-muted-foreground font-mono text-xs">
                         {tx.refId || '—'}

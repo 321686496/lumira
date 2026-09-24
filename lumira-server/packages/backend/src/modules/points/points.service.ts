@@ -57,12 +57,15 @@ export class PointsService {
   /**
    * 增加积分（事务：upsert 余额 + 写流水）
    * 幂等性由调用方保证（如兑换码的 device+code 去重、签到的 device+date 去重）
+   *
+   * @param reason 备注原因（仅后台充值 admin_grant 使用，客户端优先展示该文案）
    */
   async earnPoints(
     deviceId: string,
     delta: number,
     type: PointTransactionType,
     refId: string | null = null,
+    reason: string | null = null,
   ): Promise<number> {
     if (delta <= 0) {
       throw new BadRequestException('earnPoints delta must be positive');
@@ -81,6 +84,7 @@ export class PointsService {
         delta,
         type,
         refId,
+        reason,
         createdAt: now,
       });
 
@@ -424,6 +428,7 @@ export class PointsService {
         delta: r.delta,
         type: r.type as PointTransactionType,
         refId: r.refId,
+        reason: r.reason,
         createdAt: r.createdAt,
       })),
       total,

@@ -118,6 +118,7 @@ class _PointsTransactionsPageState
     if (query.isNotEmpty) {
       list = list
           .where((t) =>
+              pointTransactionTitle(t).toLowerCase().contains(query) ||
               pointSourceLabel(t.source).toLowerCase().contains(query) ||
               t.source.toLowerCase().contains(query))
           .toList();

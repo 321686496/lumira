@@ -469,16 +469,19 @@ export class AdminService {
   async grantPoints(
     deviceId: string,
     delta: number,
-    reason: string,
+    reason?: string,
   ) {
     if (delta <= 0) {
       throw new BadRequestException('充值积分必须为正数');
     }
+    // 充值原因写入流水备注，App 端积分流水优先展示该原因（未填写则回退通用来源文案）
+    const trimmedReason = reason?.trim() ? reason.trim() : null;
     const newBalance = await this.pointsService.earnPoints(
       deviceId,
       delta,
       'admin_grant',
       null,
+      trimmedReason,
     );
     return { success: true, balance: newBalance };
   }

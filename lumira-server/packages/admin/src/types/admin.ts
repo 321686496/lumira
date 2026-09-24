@@ -54,6 +54,7 @@ export interface UserPointsDetail {
     delta: number;
     type: string;
     refId: string | null;
+    reason: string | null;
     createdAt: number;
   }>;
 }
