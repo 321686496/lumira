@@ -68,6 +68,8 @@ interface FormState {
   focusY: number;
   focusZoom: number;
   templateId: string;
+  searchKeyword: string;
+  searchScope: string;
   sortOrder: number;
   isActive: boolean;
 }
@@ -87,6 +89,8 @@ const EMPTY_FORM: FormState = {
   focusY: 0.5,
   focusZoom: 1,
   templateId: '',
+  searchKeyword: '',
+  searchScope: 'all',
   sortOrder: 0,
   isActive: true,
 };
@@ -158,6 +162,8 @@ export function BannerManager({
       focusY: b.focusY ?? 0.5,
       focusZoom: b.focusZoom ?? 1,
       templateId: b.templateId || '',
+      searchKeyword: b.searchKeyword || '',
+      searchScope: b.searchScope || 'all',
       sortOrder: b.sortOrder,
       isActive: b.isActive === 1,
     });
@@ -225,6 +231,10 @@ export function BannerManager({
       setError('广告类型请填写外部跳转 URL');
       return;
     }
+    if (form.kind === 'search' && !(form.searchKeyword || '').trim()) {
+      setError('App内搜索类型请填写搜索关键字');
+      return;
+    }
     if (form.route === '/templates/detail' && !form.templateId) {
       setError('选择「指定模板详情」后请在下方面板中选择一个目标模板');
       return;
@@ -239,6 +249,8 @@ export function BannerManager({
       kind: form.kind,
       // 广告外部跳转 URL（kind=ad 时必填）
       externalUrl: (form.externalUrl || '').trim() || null,
+      searchKeyword: (form.searchKeyword || '').trim() || null,
+      searchScope: form.searchScope || 'all',
       // 广告位绝对槽位下标；留空 = 放最后（null）
       position: form.position.trim() === '' ? null : Math.max(0, Math.floor(Number(form.position))),
       // route 为模板详情时下发模板 id，其余清空
@@ -375,6 +387,7 @@ export function BannerManager({
                   <div className="flex flex-wrap items-center gap-1">
                     <Badge variant="outline">{b.tag}</Badge>
                     {b.kind === 'ad' && <Badge variant="secondary">广告</Badge>}
+                    {b.kind === 'search' && <Badge variant="secondary">搜索</Badge>}
                   </div>
                 </TableCell>
                   <TableCell className="max-w-[200px]">
@@ -577,6 +590,7 @@ export function BannerManager({
                   <SelectContent>
                     <SelectItem value="operation">运营位</SelectItem>
                     <SelectItem value="ad">广告</SelectItem>
+                    <SelectItem value="search">App内搜索</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -608,6 +622,39 @@ export function BannerManager({
                 <p className="text-xs text-muted-foreground">
                   点击该广告后会在 App 内调起系统浏览器打开此链接（不跳 App 内路由）；仅启用中的广告会在首页展示。
                 </p>
+              </div>
+            )}
+
+            {form.kind === 'search' && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="bnr-search-kw">搜索关键字 *</Label>
+                  <Input
+                    id="bnr-search-kw"
+                    value={form.searchKeyword}
+                    onChange={(e) => setForm({ ...form, searchKeyword: e.target.value })}
+                    placeholder="如：电影感人像 侧拍"
+                    maxLength={128}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    点击该 Banner 后会在 App 内跳转全局搜索页，并按此关键字自动搜索。
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>搜索范围</Label>
+                  <Select
+                    value={form.searchScope}
+                    onValueChange={(v) => setForm({ ...form, searchScope: v })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部</SelectItem>
+                      <SelectItem value="template">模板</SelectItem>
+                      <SelectItem value="scene">场景</SelectItem>
+                      <SelectItem value="academy">美学院</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             )}
 
