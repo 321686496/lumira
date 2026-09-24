@@ -308,4 +308,77 @@ void main() {
       isNull,
     );
   });
+
+  group('operationBannerFromJson · kind=search', () {
+    test('合法 search 条目（带 keyword/scope）解析成功', () {
+      final b = operationBannerFromJson({
+        'id': 'op_search_director',
+        'title': '电影感人像 · 一键搜',
+        'subtitle': '按你喜欢的风格直接搜',
+        'tag': '搜索',
+        'route': '/search',
+        'kind': 'search',
+        'searchKeyword': '电影感人像 侧拍',
+        'searchScope': 'template',
+        'position': 2,
+      });
+      expect(b, isNotNull);
+      expect(b!.kind, OperationBannerKind.search);
+      expect(b.searchKeyword, '电影感人像 侧拍');
+      expect(b.searchScope, 'template');
+      expect(b.position, 2);
+      expect(b.externalUrl, isNull);
+    });
+
+    test('缺 searchKeyword 或为空 → fail-safe 丢弃', () {
+      expect(
+          operationBannerFromJson({
+            'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
+            'route': '/search', 'kind': 'search',
+          }),
+          isNull);
+      expect(
+          operationBannerFromJson({
+            'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
+            'route': '/search', 'kind': 'search', 'searchKeyword': '',
+          }),
+          isNull);
+    });
+
+    test('searchScope 非法/缺失 → 兜底 all（不丢弃）', () {
+      final b = operationBannerFromJson({
+        'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
+        'route': '/search', 'kind': 'search',
+        'searchKeyword': '复古', 'searchScope': 'whatever',
+      });
+      expect(b, isNotNull);
+      expect(b!.searchScope, 'all');
+    });
+
+    test('误填 externalUrl 时以 kind=search 为准忽略 externalUrl', () {
+      final b = operationBannerFromJson({
+        'id': 'x', 'title': 't', 'subtitle': 's', 'tag': 'tag',
+        'route': '/search', 'kind': 'search',
+        'searchKeyword': '窗光', 'externalUrl': 'https://example.com',
+      });
+      expect(b, isNotNull);
+      expect(b!.externalUrl, isNull);
+    });
+  });
+
+  group('operationBannerToItem · kind=search', () {
+    test('拼出 /search?scope=X&keyword=Y 跳转路由（不含 externalUrl）', () {
+      const banner = OperationBanner(
+        id: 'op_s', title: 't', subtitle: 's', tag: 'se',
+        route: '/search', condition: OperationCondition.hasLockedTemplate,
+        kind: OperationBannerKind.search,
+        searchKeyword: '电影感人像 侧拍',
+        searchScope: 'template',
+      );
+      final item = operationBannerToItem(banner);
+      expect(item.type, BannerType.operation);
+      expect(item.route, '/search?scope=template&keyword=%E7%94%B5%E5%BD%B1%E6%84%9F%E4%BA%BA%E5%83%8F%20%E4%BE%A7%E6%8B%8D');
+      expect(item.externalUrl, isNull);
+    });
+  });
 }

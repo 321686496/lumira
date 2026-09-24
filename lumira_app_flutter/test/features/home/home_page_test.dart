@@ -18,6 +18,7 @@ Widget _wrapWithRouter({
   ThemeKey theme = ThemeKey.warmWhite,
   UIStyle? style,
   List<RecentShot>? recents,
+  List<HomeBannerItem>? banners,
 }) {
   final router = GoRouter(
     initialLocation: RouteNames.home,
@@ -80,6 +81,17 @@ Widget _wrapWithRouter({
         builder: (context, state) =>
             const Scaffold(body: Center(child: Text('SCENE_MANAGE'))),
       ),
+      GoRoute(
+        path: RouteNames.search,
+        name: 'search',
+        builder: (context, state) => Scaffold(
+          body: Center(
+            child: Text(
+              'SEARCH:${state.queryParams[RouteNames.paramKeyword]}',
+            ),
+          ),
+        ),
+      ),
     ],
   );
 
@@ -89,7 +101,7 @@ Widget _wrapWithRouter({
       uiStyleProvider.overrideWith((ref) => style ?? UIStyle.neumorphic),
       unreadCountProvider.overrideWith((ref) async => 0),
       bannerRecommendationProvider.overrideWith(
-        (ref) async => HomeMockData.banners,
+        (ref) async => banners ?? HomeMockData.banners,
       ),
       // 连续打卡 7 天（StreakCard 数据来自挑战历史 DAO，测试无 DB 时提供固定数据）
       homeStreakProvider.overrideWith((ref) async => const HomeStreakStatus(
@@ -352,5 +364,33 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('GALLERY_DETAIL:photo-1'), findsOneWidget);
+  });
+
+  testWidgets('HomePage 点击 search banner 跳转全局搜索页并带 scope+keyword',
+      (tester) async {
+    tester.binding.window.physicalSizeTestValue = const Size(800, 5500);
+    tester.binding.window.devicePixelRatioTestValue = 1.0;
+    addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+    addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
+
+    // 仅覆盖单条 kind=search 的首页 Banner：type=operation、route 拼好的
+    // 全局搜索路由（scope=template, keyword=x），点击后应 push 该搜索页。
+    const searchBanner = HomeBannerItem(
+      id: 'banner_search',
+      title: '搜索模板',
+      subtitle: '搜点什么',
+      imageSeed: 'banner-search',
+      tag: '搜索',
+      route: '/search?scope=template&keyword=x',
+      type: BannerType.operation,
+    );
+    await tester.pumpWidget(_wrapWithRouter(banners: const [searchBanner]));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('搜索模板').first);
+    await tester.pumpAndSettle();
+
+    // 全局搜索页 builder 渲染 SEARCH:${paramKeyword}，此处关键字为 x
+    expect(find.text('SEARCH:x'), findsOneWidget);
   });
 }

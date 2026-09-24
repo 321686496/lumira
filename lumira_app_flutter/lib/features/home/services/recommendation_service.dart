@@ -137,12 +137,14 @@ class RecommendationService {
 
     final isNewUser = totalPhotos < _kNewUserThreshold;
 
-    // 拆分广告与运营位：广告按 position 归位展示（不参与 slot 0 条件匹配）
-    final ads = operationBanners
-        .where((b) => b.kind == OperationBannerKind.ad)
+    // 拆分「条件触达运营位」与「无条件归位条目（广告+App内搜索）」：
+    // ad 与 search 都按 position 归位插入，不参与 slot 0 条件匹配；
+    // ops 仅保留 kind==operation（不能再用「非 ad」，否则 search 会误入条件匹配）。
+    final fixed = operationBanners
+        .where((b) => b.kind != OperationBannerKind.operation)
         .toList();
     final ops = operationBanners
-        .where((b) => b.kind != OperationBannerKind.ad)
+        .where((b) => b.kind == OperationBannerKind.operation)
         .toList();
 
     final List<HomeBannerItem> banners = [];
@@ -379,14 +381,14 @@ class RecommendationService {
       );
     }
 
-    // === 活动/广告位：按各自 position 归位插入（缺省/越界放最后） ===
-    for (final ad in ads) {
-      final insertAt = (ad.position != null &&
-              ad.position! >= 0 &&
-              ad.position! < banners.length)
-          ? ad.position!
+    // === 广告/搜索位：按各自 position 归位插入（缺省/越界放最后） ===
+    for (final fixedItem in fixed) {
+      final insertAt = (fixedItem.position != null &&
+              fixedItem.position! >= 0 &&
+              fixedItem.position! < banners.length)
+          ? fixedItem.position!
           : banners.length;
-      banners.insert(insertAt, operationBannerToItem(ad));
+      banners.insert(insertAt, operationBannerToItem(fixedItem));
     }
 
     return banners;

@@ -273,7 +273,7 @@ void main() {
       }
     });
 
-    test('运营位 slot 0：老用户未绑定邀请 → 邀请运营位占位且不补探索', () async {
+    test('运营位 slot 0：老用户未绑定邀请 → 邀请运营位占位且不补探索，search 按 position 归位', () async {
       await _seedTemplate(db, id: 'tpl_p1', name: '人像基础', category: 'portrait', isRecommended: true, description: '人像模板');
       await _seedTemplate(db, id: 'tpl_l1', name: '风光基础', category: 'landscape', isRecommended: true, description: '风光模板');
       await _seedTemplate(db, id: 'tpl_f1', name: '美食模板', category: 'food', isRecommended: true, description: '美食模板');
@@ -286,12 +286,28 @@ void main() {
       await db.update(Tables.userProgress, {Tables.colTotalPhotos: 5},
           where: '${Tables.colId} = ?', whereArgs: [1]);
 
+      // 追加一条 kind=search 的 App 内搜索条目（position=2），验证其按 position 归位
+      // 插入、不参与 slot 0 条件匹配、并拼出带 scope+keyword 的全局搜索路由。
+      const searchBanner = OperationBanner(
+        id: 'op_search',
+        title: '搜',
+        subtitle: 's',
+        tag: '搜索',
+        route: '/search',
+        condition: OperationCondition.hasLockedTemplate,
+        kind: OperationBannerKind.search,
+        searchKeyword: '复古',
+        searchScope: 'template',
+        position: 2,
+      );
       final banners = await service.buildBanners(
         operationInputs: const OperationUserInputs(hasBoundInviter: false),
+        operationBanners: [...kOperationBanners, searchBanner],
       );
 
-      expect(banners.length, 4);
-      // slot 0：运营位
+      // op_invite + slot1 常拍 + slot2 收藏 fallback + slot3 探索 + pos2 归位的 search = 5 条
+      expect(banners.length, 5);
+      // slot 0：运营位（search 不参与 slot 0 条件匹配，仍为 op_invite）
       expect(banners.first.id, 'op_invite');
       expect(banners.first.type, BannerType.operation);
       expect(banners.first.bannerId, 'op_invite');
@@ -301,9 +317,14 @@ void main() {
       final exploration =
           banners.where((b) => b.id.startsWith('banner_exploration')).toList();
       expect(exploration.length, 1);
-      // 其余槽位仍是个性化
+      // 其余个性化槽位
       expect(banners[1].id, 'banner_recent_category');
-      expect(banners[2].id, 'banner_favorite_scene_fallback');
+      // search 按 position=2 归位：落在索引 2
+      expect(banners[2].id, 'op_search');
+      expect(banners[2].type, BannerType.operation);
+      expect(banners[2].route, '/search?scope=template&keyword=%E5%A4%8D%E5%8F%A4');
+      // 索引 2 被 search 占用后，收藏 fallback 后移到 3
+      expect(banners[3].id, 'banner_favorite_scene_fallback');
     });
 
     test('运营位 slot 0：已绑定邀请但有积分 → 积分运营位', () async {

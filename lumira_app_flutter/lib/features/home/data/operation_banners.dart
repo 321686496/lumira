@@ -1,3 +1,5 @@
+import 'package:lumira_app_flutter/shared/searchengine/search_scope.dart';
+
 import 'home_mock_data.dart';
 
 /// 运营位展示条件
@@ -40,6 +42,9 @@ enum OperationBannerKind {
 
   /// 活动/广告曝光（按 position 归位展示，点击跳浏览器外部 URL）
   ad,
+
+  /// App 内搜索（按 position 归位展示，点击跳全局搜索页并预填关键字）
+  search,
 }
 
 /// 首页运营 Banner 条目：指向真实功能，条件满足才参与 slot 0；
@@ -61,6 +66,8 @@ class OperationBanner {
     this.focusY = 0.5,
     this.focusZoom = 1.0,
     this.templateId,
+    this.searchKeyword,
+    this.searchScope,
   });
 
   final String id;
@@ -101,6 +108,12 @@ class OperationBanner {
 
   /// 目标模板 id（仅 route=/templates/detail 时有值）：用于拼模板详情页跳转
   final String? templateId;
+
+  /// App 内搜索关键字（kind=search 时非空）
+  final String? searchKeyword;
+
+  /// 搜索范围（all/template/scene/academy；kind=search 时有效，空回退 all）
+  final String? searchScope;
 }
 
 /// 运营条目目录（顺序即优先级，满足者最多取 1 条置于 slot 0）
@@ -176,9 +189,12 @@ OperationBanner? operationBannerFromJson(Map<String, dynamic> json) {
       route is! String) {
     return null;
   }
-  final kind = json['kind'] == 'ad'
+  final rawKind = json['kind'];
+  final kind = rawKind == 'ad'
       ? OperationBannerKind.ad
-      : OperationBannerKind.operation;
+      : rawKind == 'search'
+          ? OperationBannerKind.search
+          : OperationBannerKind.operation;
   OperationCondition? condition;
   if (kind == OperationBannerKind.operation) {
     if (!kOperationBannerRoutes.contains(route)) return null;
@@ -192,6 +208,8 @@ OperationBanner? operationBannerFromJson(Map<String, dynamic> json) {
     final rawExternal = json['externalUrl'];
     if (rawExternal is! String || rawExternal.isEmpty) return null;
   }
+  final rawPosition = json['position'];
+  final position = rawPosition is num ? rawPosition.toInt() : null;
   final rawImage = json['imageUrl'];
   final imageUrl = rawImage is String && rawImage.isNotEmpty ? rawImage : null;
   // 目标模板 id：route=/templates/detail 时必须携带非空值，否则 fail-safe 丢弃
@@ -203,10 +221,34 @@ OperationBanner? operationBannerFromJson(Map<String, dynamic> json) {
   final focusX = _clampDouble(json['focusX'], 0, 1, 0.5);
   final focusY = _clampDouble(json['focusY'], 0, 1, 0.5);
   final focusZoom = _clampDouble(json['focusZoom'], 1, 3, 1.0);
-  final rawPosition = json['position'];
-  final position = rawPosition is num ? rawPosition.toInt() : null;
   final externalUrl =
       _clampExternalUrl(json['externalUrl']);
+  if (kind == OperationBannerKind.search) {
+    // 搜索：searchKeyword 必填，缺失/为空整条丢弃（fail-safe）；
+    // searchScope 非法回退 all；不解析 externalUrl（忽略误填）
+    final rawKeyword = json['searchKeyword'];
+    if (rawKeyword is! String || rawKeyword.isEmpty) return null;
+    final rawScope = json['searchScope'];
+    final scope = SearchScopeExt.fromName(rawScope is String ? rawScope : null);
+    return OperationBanner(
+      id: id,
+      title: title,
+      subtitle: subtitle,
+      tag: tag,
+      route: route,
+      condition: OperationCondition.hasLockedTemplate,
+      kind: kind,
+      position: position,
+      externalUrl: null,
+      imageUrl: imageUrl,
+      focusX: _clampDouble(json['focusX'], 0, 1, 0.5),
+      focusY: _clampDouble(json['focusY'], 0, 1, 0.5),
+      focusZoom: _clampDouble(json['focusZoom'], 1, 3, 1.0),
+      templateId: null,
+      searchKeyword: rawKeyword,
+      searchScope: scope.name,
+    );
+  }
   return OperationBanner(
     id: id,
     title: title,
@@ -250,6 +292,26 @@ OperationBanner? matchOperationBanner({
 /// 运营条目转首页 Banner 项（type=operation）。配图经 [HomeBannerItem.cover]
 /// 传递：非空时卡片右侧 40% 区域 contain 完整显示，空时品牌渐变背景。
 HomeBannerItem operationBannerToItem(OperationBanner banner) {
+  // kind=search：拼全局搜索页路由（scope + URL 编码关键字），不写 externalUrl
+  if (banner.kind == OperationBannerKind.search) {
+    final scope = banner.searchScope ?? 'all';
+    final encoded = Uri.encodeComponent(banner.searchKeyword ?? '');
+    return HomeBannerItem(
+      id: banner.id,
+      title: banner.title,
+      subtitle: banner.subtitle,
+      imageSeed: 'banner-op-${banner.id}',
+      tag: banner.tag,
+      route: '/search?scope=$scope&keyword=$encoded',
+      externalUrl: null,
+      cover: banner.imageUrl,
+      focusX: banner.focusX,
+      focusY: banner.focusY,
+      focusZoom: banner.focusZoom,
+      type: BannerType.operation,
+      bannerId: banner.id,
+    );
+  }
   // route=/templates/detail 且携带目标模板 id 时，拼出模板详情页完整跳转路由
   final route =
       (banner.route == '/templates/detail' && banner.templateId != null)
