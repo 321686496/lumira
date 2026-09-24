@@ -717,3 +717,61 @@
 - **背景/动机**：前两轮误判「OHOS raw=真实方向」曾把该偏差标为已知问题；第三轮根因重查后确认 OHOS asset 镜像，遂按平台收敛。
 - **目标状态**：规则改为 `facing == 'front' && (isOhos || jpegIsLandscape)`，OHOS 恒补翻、iOS/Android 维持原规则；两处调用点已同步收敛，待真机回归。
 - **状态**：✅ 已实现（2026-09-23 第三轮：`_applyColorMatrixOnGpu` 与 `_alignOrientation` 均已平台收敛；`dart_photo_pipeline.dart` 为死代码仅纠注释，未改规则）
+
+---
+
+## 场景管理封面加载优化（2026-09-24）
+
+### P2 · 收藏场景数据源仍用 mock 预设（与 ScenePresetsData 重复定义）
+
+- **模块**：场景管理页「我的收藏」（Flutter `scene_manage_providers.dart` + `capture_scene_mock_data.dart`）
+- **优化点**：`favoriteScenesProvider` 用 `CaptureSceneMockData.presetScenes`（6 条 mock）建 `presetById` 来补齐内置场景的名称/氛围/描述，而全量 18 条真源在 `ScenePresetsData.allScenePresets`，两者同 id 记录当前字段一致，属重复定义。
+- **背景/动机**：本轮只修封面取源（`sceneCoverUrl` 改为「自定义封面 → 本地打包封面 → 示例图首图」），已实测两侧同 id 数据完全一致，切换数据源是无功能收益的重构且带回归风险，故本轮不做；但双份定义后续改文案时易只改一处导致漂移。
+- **目标状态**：`favoriteScenesProvider` 直接用 `ScenePresetsData.getScenePreset(id)` 取内置场景，删除 mock `presetScenes` 中与真源重复的记录。
+- **状态**：⏳ 待优化
+
+---
+
+## 照片分享海报 · 9:16 重设计（2026-09-24）
+
+三方向九款：净版 `n1`-`n3` / 画刊 `m1`-`m3` / 画卷 `j1`-`j3`（画布统一 300×533.33，文字全部落在暖白实底或白卡上）。已废弃旧 9:16 三款 `d1`/`dN`/`dL`。
+
+### P2 · 二维码副文案「打开如画 · 保存原图」暂并入主提示两行
+
+- **模块**：照片分享海报（Flutter：`poster_styles_shared.dart` 的 `posterQrMiniLinesOf` / `PosterQrMini`）
+- **优化点**：9:16 画布高度由 ≈691 收紧到 300×16/9≈533.33 后，二维码迷你卡仅展示主提示拆分两行（「长按识别 / 查看高清原图」），副文案「打开如画 · 保存原图」未单独展示。
+- **背景/动机**：画布高度收紧 + 信息带/浮卡垂直空间有限，副文案入卡会挤压标题/作者行或导致溢出；HTML 设计稿基准（`docs/preview/poster-9-16-preview-v10.html`）同样只保留两行。
+- **目标状态**：后续若重新分配画布信息区空间（或将副文案与主提示合并为一句完整文案），在 QR 迷你卡中恢复「主提示 + 副提示」完整语义。
+- **状态**：⏳ 待优化
+
+### P2 · QR 迷你卡提示来源不统一（hint 取数据字段、sub 走派生函数）
+
+- **模块**：照片分享海报（Flutter：`poster_styles_shared.dart` `posterQrMiniLinesOf`）
+- **优化点**：回退路径中第一行取 `data.qrHint`（非空优先），第二行取 `posterQrSubOf(d)`——而后者只按 `authorName` 派生、忽略 `data.qrSub`。当两者与派生值不一致时（如 `authorName` 为空的模板海报），迷你卡与全尺寸 QR 卡（`poster_styles_shared.dart` / `photo_poster_styles.dart` / `template_poster_styles.dart` 共 11 处，均忽略数据字段）会显示不同文案。
+- **背景/动机**：`posterQrHintOf`/`posterQrSubOf` 的派生语义被既有 11 处调用依赖，本轮统一会扩大影响面，故只在迷你卡内做了最小修正（`d.qrHint` 优先、否则回退派生）。
+- **目标状态**：让 `posterQrHintOf`/`posterQrSubOf` 本身优先取 `data.qrHint`/`data.qrSub`，消去派生与数据的双轨来源。
+- **状态**：⏳ 待优化
+
+### P2 · 超长标题在固定高度区溢出（`PosterTitle` 无 maxLines）
+
+- **模块**：照片分享海报（Flutter：`poster_common.dart` `PosterTitle` + `photo_poster_styles.dart` n1/n2/m3 布局）
+- **优化点**：`PosterTitle` 未设 `maxLines`。九款中 n1 信息带高 160px（内容区 134px）、n2 画布内高 493.33px、m3 左轨 44px 竖排轨（约 9-10 字预算），标题达 3 行（约 20+ 字）时会溢出。
+- **背景/动机**：九款尺寸均按 HTML 选型稿逐条对齐，正常标题（≤2 行）经渲染守护测试验证无溢出；病态超长标题属数据侧边界，本轮未加截断以保持设计稿效果。
+- **目标状态**：给 `PosterTitle` 增加 `maxLines`（配合 `TextOverflow.ellipsis`）或按区高度自适应字号；m3 竖排轨可考虑 `FittedBox`。
+- **状态**：⏳ 待优化
+
+### P3 · `_FramedPhoto.borderRadius` 预留参数未被消费
+
+- **模块**：照片分享海报（Flutter：`photo_poster_styles.dart` `_FramedPhoto`）
+- **优化点**：`_FramedPhoto` 的 `borderRadius` 可选参数在九款（n2/m1/m2/m3/j1/j2/j3 共用）中无一传入，产生 1 条 `unused_element` info（`photo_poster_styles.dart:167`）。
+- **背景/动机**：该参数为计划内跨任务复用预留；九款全部落地后确认无人消费，但仓库既有 483 条同类 info、且删除需回归九款渲染守护测试，故本轮保留待一并清理。
+- **目标状态**：确认无后续消费场景后删除该参数与对应字段。
+- **状态**：⏳ 待优化
+
+### P3 · 九款缺少渲染级视觉回归测试
+
+- **模块**：照片分享海报（Flutter：`test/shared/widgets/poster/`）
+- **优化点**：现有 `photo_poster_styles_test.dart` 只做「九款均能渲染且无异常」的守护，未固化为 golden 图，字号/间距/金线位置等视觉细节无回归网。
+- **背景/动机**：`test/goldens/` 当前仅有 probe/btn 类资产，既有 `poster_diag_render_test` 等 golden 用例在本机即因缺资产失败，本轮未新增 golden 依赖。
+- **目标状态**：补齐 golden 资产后，为九款各生成一张 9:16 golden，纳入 CI 视觉回归。
+- **状态**：⏳ 待优化
