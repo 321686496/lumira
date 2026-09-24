@@ -13,7 +13,7 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/lumira/lumira.dart'
-    show ButtonVariant, LumiraButton, LumiraProgress, LumiraTextField;
+    show ButtonVariant, LumiraButton, LumiraProgress, LumiraTextField, LumiraToast;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/academy_content.dart';
 import '../data/academy_models.dart';
@@ -130,9 +130,7 @@ class _AcademyAssignmentPageState extends ConsumerState<AcademyAssignmentPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('选择照片失败: $e'), duration: const Duration(milliseconds: 1500)),
-        );
+        LumiraToast.show(context, '选择照片失败: $e', duration: const Duration(milliseconds: 1500));
       }
     }
   }

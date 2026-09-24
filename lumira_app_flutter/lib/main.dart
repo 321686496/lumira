@@ -353,9 +353,7 @@ void _handleTemplateLink(ProviderContainer container, String link) {
     final context = rootNavigatorKey.currentContext;
     // ignore: use_build_context_synchronously
     if (context == null || !context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(result.ok ? result.message : '导入失败：${result.error}'),
-    ));
+    LumiraToast.show(context, result.ok ? result.message : '导入失败：${result.error}');
     if (result.ok) {
       GoRouter.of(context).go(RouteNames.profileMyTemplates);
     }

@@ -34,9 +34,7 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
   void _markComplete() {
     if (widget.academyId == null) return;
     ref.read(academyActionsProvider.notifier).markCompleted(widget.academyId!);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已标记为已学完'), duration: Duration(milliseconds: 1000)),
-    );
+    LumiraToast.show(context, '已标记为已学完', duration: const Duration(milliseconds: 1000));
   }
 
   void _goAssignment() {
@@ -97,12 +95,8 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
               ref
                   .read(academyActionsProvider.notifier)
                   .toggleCourseFavorite(academyId);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(isFav ? '已取消收藏' : '已收藏'),
-                  duration: const Duration(milliseconds: 1000),
-                ),
-              );
+              LumiraToast.show(context, isFav ? '已取消收藏' : '已收藏',
+                  duration: const Duration(milliseconds: 1000));
             },
             behavior: HitTestBehavior.opaque,
             child: Padding(

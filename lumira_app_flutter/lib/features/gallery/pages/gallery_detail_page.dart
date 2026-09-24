@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/images/fullscreen_image_gallery.dart';
@@ -22,10 +24,13 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/time_format.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../profile/providers/collection_providers.dart';
+import '../../templates/widgets/adaptive_cover_image.dart';
 import '../../watermark/data/watermark_providers.dart';
+import '../../capture/data/scene_presets_data.dart';
 import '../../capture/data/template_registry.dart';
 import '../../capture/data/capture_preview_mock_data.dart';
 
@@ -230,13 +235,14 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
   Future<void> _onChangeCategory() async {
     final photo = _photo;
     if (photo == null) return;
-    final tokens = ref.read(themeTokensProvider);
+    final appTheme = ref.read(appThemeProvider);
 
     final result = await showLumiraBottomSheet<String?>(
       context: context,
       isScrollControlled: true,
       builder: (ctx) => _CategoryPickerSheet(
-        tokens: tokens,
+        tokens: appTheme.tokens,
+        style: appTheme.style,
         scenes: _allScenes,
         currentSceneId: photo.sceneId,
       ),
@@ -1639,16 +1645,39 @@ class _MoodPickerSheet extends StatelessWidget {
 }
 
 /// 分类选择底部 Sheet
-class _CategoryPickerSheet extends StatelessWidget {
+///
+/// 提供两种可切换的选择模式（头部右上角分段开关）：
+/// - 卡片模式（默认）：单行横向滑动卡片，快速浏览与选择
+/// - 瀑布流模式：上下滑动的双栏错落卡片，场景较多时更易扫视
+///
+/// 卡片表面与选中态严格跟随当前 UI 风格（4 风格 × 8+1 主题，禁止硬编码颜色）：
+/// - neumorphic：未选中 = surface + 微凸起双向外阴影；选中 = 凹陷内影渐变
+/// - flat：surface + divider 细边；选中 = brandSubtle + brand 边
+/// - glass：glassFill + glassBorder；选中 = brandSubtle + brand 边
+/// - female：surface + 细边 + 柔和品牌投影；选中 = brandSubtle→surface 渐变 + brand 边
+class _CategoryPickerSheet extends StatefulWidget {
   const _CategoryPickerSheet({
     required this.tokens,
+    required this.style,
     required this.scenes,
     required this.currentSceneId,
   });
 
   final ThemeTokens tokens;
+  final UIStyle style;
   final List<SceneRecord> scenes;
   final String? currentSceneId;
+
+  @override
+  State<_CategoryPickerSheet> createState() => _CategoryPickerSheetState();
+}
+
+class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
+  /// true = 单行横滑卡片；false = 双栏瀑布流
+  bool _cardMode = true;
+
+  ThemeTokens get _tokens => widget.tokens;
+  UIStyle get _style => widget.style;
 
   @override
   Widget build(BuildContext context) {
@@ -1658,66 +1687,43 @@ class _CategoryPickerSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 顶部标题栏
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '选择场景',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => Navigator.of(context).pop(),
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(Icons.close, size: 20, color: tokens.textSecondary),
-                  ),
-                ),
-              ],
+          _buildHeader(),
+          Divider(height: 1, color: _tokens.divider),
+          Flexible(
+            child: _cardMode ? _buildCardStrip() : _buildMasonry(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+      child: Row(
+        children: [
+          Text(
+            '选择场景',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: _tokens.textPrimary,
             ),
           ),
-          Divider(height: 1, color: tokens.divider),
-          // 场景列表
-          Flexible(
-            child: ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              children: [
-                // 移除分类选项
-                if (currentSceneId != null)
-                  _CategoryOption(
-                    tokens: tokens,
-                    icon: Icons.label_off_outlined,
-                    label: '移除场景',
-                    selected: false,
-                    isRemove: true,
-                    onTap: () => Navigator.of(context).pop('__none__'),
-                  ),
-                // 所有场景
-                ...scenes.map((scene) => _CategoryOption(
-                      tokens: tokens,
-                      icon: _iconForScene(scene.icon),
-                      label: scene.name.isEmpty ? '(未命名场景)' : scene.name,
-                      selected: scene.id == currentSceneId,
-                      onTap: () => Navigator.of(context).pop(scene.id),
-                    )),
-                if (scenes.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      '暂无可用场景',
-                      style: TextStyle(fontSize: 13, color: tokens.textTertiary),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-              ],
+          const Spacer(),
+          _ScenePickerModeSwitch(
+            tokens: _tokens,
+            style: _style,
+            cardMode: _cardMode,
+            onChanged: (cardMode) => setState(() => _cardMode = cardMode),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(Icons.close, size: 20, color: _tokens.textSecondary),
             ),
           ),
         ],
@@ -1725,6 +1731,117 @@ class _CategoryPickerSheet extends StatelessWidget {
     );
   }
 
+  /// 卡片模式：单行横向滑动卡片
+  Widget _buildCardStrip() {
+    final hasRemove = widget.currentSceneId != null;
+    if (widget.scenes.isEmpty && !hasRemove) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(
+          '暂无可用场景',
+          style: TextStyle(fontSize: 13, color: _tokens.textTertiary),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+    return SizedBox(
+      height: 128,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemCount: widget.scenes.length + (hasRemove ? 1 : 0),
+        itemBuilder: (ctx, i) {
+          if (hasRemove && i == 0) {
+            return _SceneRemoveCard(
+              tokens: _tokens,
+              dense: true,
+              onTap: () => Navigator.of(ctx).pop('__none__'),
+            );
+          }
+          final scene = widget.scenes[hasRemove ? i - 1 : i];
+          return _SceneStripCard(
+            tokens: _tokens,
+            style: _style,
+            icon: _iconForScene(scene.icon),
+            cover: _sceneCoverOf(scene),
+            label: scene.name.isEmpty ? '(未命名场景)' : scene.name,
+            selected: scene.id == widget.currentSceneId,
+            onTap: () => Navigator.of(ctx).pop(scene.id),
+          );
+        },
+      ),
+    );
+  }
+
+  /// 瀑布流模式：上下滑动的双栏 Masonry（懒加载）。
+  ///
+  /// - 懒加载：`MasonryGridView.builder` 底层是 `SliverChildBuilderDelegate`，
+  ///   只构建视口 + cacheExtent 内的卡片（含封面图），滑到哪才加载到哪，
+  ///   不会一次性把全部场景的封面图解码/下载排队（避免「先灌满第一列」的观感）。
+  /// - 封面高度自适应：由 `AdaptiveCoverImage` 按图片真实宽高比决定卡片高度，
+  ///   双栏按最短列排布，天然错落；无封面的场景回退固定高度图标卡。
+  /// - 两栏间距：crossAxisSpacing 10；行间距：mainAxisSpacing 10。
+  /// - 移除场景：顶部通栏动作卡（虚线描边），滚动时保持可见。
+  Widget _buildMasonry() {
+    final hasRemove = widget.currentSceneId != null;
+    if (widget.scenes.isEmpty && !hasRemove) {
+      return _buildMasonryEmpty();
+    }
+    return Column(
+      children: [
+        if (hasRemove)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            child: _SceneRemoveCard(
+              tokens: _tokens,
+              onTap: () => Navigator.of(context).pop('__none__'),
+            ),
+          ),
+        Expanded(
+          child: widget.scenes.isEmpty
+              ? _buildMasonryEmpty()
+              : MasonryGridView.builder(
+                  gridDelegate:
+                      const SliverSimpleGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                  ),
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  padding: EdgeInsets.fromLTRB(20, hasRemove ? 10 : 12, 20, 20),
+                  itemCount: widget.scenes.length,
+                  itemBuilder: (ctx, i) {
+                    final s = widget.scenes[i];
+                    return _SceneTile(
+                      tokens: _tokens,
+                      style: _style,
+                      icon: _iconForScene(s.icon),
+                      cover: _sceneCoverOf(s),
+                      label: s.name.isEmpty ? '(未命名场景)' : s.name,
+                      selected: s.id == widget.currentSceneId,
+                      result: s.id,
+                      tall: i.isOdd,
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMasonryEmpty() {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Text(
+        '暂无可用场景',
+        style: TextStyle(fontSize: 13, color: _tokens.textTertiary),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  /// 场景图标：兼容早期以风格键（'cafe'/'street'/...）存储的值，
+  /// 其余按 phosphor 图标名（'ph-xxx'，见 ScenePresetsData）映射到 Material 图标。
   IconData _iconForScene(String icon) {
     switch (icon) {
       case 'cafe':
@@ -1742,10 +1859,639 @@ class _CategoryPickerSheet extends StatelessWidget {
         return Icons.home_outlined;
       case 'travel':
         return Icons.flight_outlined;
-      default:
-        return Icons.place_outlined;
+    }
+    return _sceneIcons[icon] ?? Icons.place_outlined;
+  }
+
+  /// 场景封面来源解析：自定义场景封面 → 内置场景本地资产封面 → 示例图首图；
+  /// 均拿不到时返回 null，卡片回退到「图标 + 名称」设计。
+  String? _sceneCoverOf(SceneRecord scene) {
+    if (scene.coverUrl.isNotEmpty) return scene.coverUrl;
+    final local = ScenePresetsData.localCoverOf(scene.id);
+    if (local.isNotEmpty) return local;
+    if (scene.exampleImages.isNotEmpty) return scene.exampleImages.first;
+    return null;
+  }
+}
+
+/// 场景 phosphor 图标名（'ph-xxx'）→ Material 图标（覆盖全部内置预设场景）
+const Map<String, IconData> _sceneIcons = {
+  'ph-coffee': Icons.local_cafe_outlined,
+  'ph-books': Icons.menu_book_outlined,
+  'ph-house': Icons.home_outlined,
+  'ph-sunset': Icons.wb_twilight_outlined,
+  'ph-sun-horizon': Icons.wb_twilight_outlined,
+  'ph-road-horizon': Icons.wb_twilight_outlined,
+  'ph-moon-stars': Icons.nightlight_outlined,
+  'ph-candle': Icons.nightlight_outlined,
+  'ph-martini': Icons.local_bar_outlined,
+  'ph-storefront': Icons.storefront_outlined,
+  'ph-waves': Icons.waves_outlined,
+  'ph-mountains': Icons.landscape_outlined,
+  'ph-tree': Icons.park_outlined,
+  'ph-leaf': Icons.eco_outlined,
+  'ph-building': Icons.location_city_outlined,
+  'ph-buildings': Icons.location_city_outlined,
+  'ph-fountain': Icons.location_city_outlined,
+  'ph-train': Icons.train_outlined,
+  'ph-bed': Icons.bed_outlined,
+  'ph-cooking-pot': Icons.restaurant_outlined,
+  'ph-bowl-food': Icons.dinner_dining_outlined,
+  'ph-tray': Icons.fastfood_outlined,
+  'ph-carrot': Icons.shopping_basket_outlined,
+  'ph-drop': Icons.water_drop_outlined,
+  'ph-umbrella': Icons.umbrella_outlined,
+  'ph-palette': Icons.palette_outlined,
+  'ph-shopping-bag': Icons.shopping_bag_outlined,
+  'ph-dumbbell': Icons.fitness_center_outlined,
+  'ph-footprints': Icons.directions_walk_outlined,
+  'ph-plant': Icons.local_florist_outlined,
+  'ph-flower': Icons.local_florist_outlined,
+  'ph-scissors': Icons.content_cut_outlined,
+  'ph-cloud-sun': Icons.wb_cloudy_outlined,
+  'ph-hoodie': Icons.checkroom_outlined,
+  'ph-graduation-cap': Icons.school_outlined,
+  'ph-chalkboard-teacher': Icons.school_outlined,
+  'ph-window': Icons.window_outlined,
+  'ph-sofa': Icons.weekend_outlined,
+  'ph-laptop': Icons.laptop_outlined,
+  'ph-basketball': Icons.sports_basketball_outlined,
+  'ph-bus': Icons.directions_bus_outlined,
+};
+
+/// 选择模式分段开关（卡片 / 瀑布流）
+///
+/// 视觉与相册页 ViewToggle 同构：新拟态凹槽轨道 + 选中段凸起；
+/// 其余风格 surfaceAlt 轨道 + canvas 选中段。
+class _ScenePickerModeSwitch extends StatelessWidget {
+  const _ScenePickerModeSwitch({
+    required this.tokens,
+    required this.style,
+    required this.cardMode,
+    required this.onChanged,
+  });
+
+  final ThemeTokens tokens;
+  final UIStyle style;
+  final bool cardMode;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final isNeu = style == UIStyle.neumorphic;
+    return Container(
+      decoration: BoxDecoration(
+        color: isNeu ? null : tokens.surfaceAlt,
+        gradient:
+            isNeu ? ThemeTokens.recessedGradient(tokens, depth: 0.18) : null,
+        borderRadius: BorderRadius.circular(1000),
+      ),
+      padding: const EdgeInsets.all(3),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _segment('卡片', cardMode, () => onChanged(true)),
+          _segment('瀑布流', !cardMode, () => onChanged(false)),
+        ],
+      ),
+    );
+  }
+
+  Widget _segment(String label, bool active, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: active ? tokens.canvas : Colors.transparent,
+          borderRadius: BorderRadius.circular(1000),
+          boxShadow: active ? tokens.shadowConvexSubtle : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+            color: active ? tokens.textPrimary : tokens.textTertiary,
+            height: 1.2,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 场景卡片表面：4 风格自适应（颜色/描边/阴影全部派生自当前主题 token）
+class _SceneCardSurface extends StatelessWidget {
+  const _SceneCardSurface({
+    required this.tokens,
+    required this.style,
+    required this.selected,
+    required this.child,
+  });
+
+  final ThemeTokens tokens;
+  final UIStyle style;
+  final bool selected;
+  final Widget child;
+
+  /// 卡片圆角（与主题卡片圆角语言一致的固定值，封面裁剪共用）
+  static const double radius = 16;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = tokens.brand;
+    switch (style) {
+      case UIStyle.neumorphic:
+        // 选中 = 凹陷（内影渐变，模拟按下拟态）；未选中 = surface + 微凸起双向外阴影
+        return Container(
+          decoration: BoxDecoration(
+            color: tokens.surface,
+            borderRadius: BorderRadius.circular(radius),
+            gradient: selected
+                ? ThemeTokens.recessedGradient(tokens, depth: 0.5)
+                : null,
+            boxShadow: selected ? null : tokens.shadowConvexSubtle,
+          ),
+          child: child,
+        );
+      case UIStyle.flat:
+        return Container(
+          decoration: BoxDecoration(
+            color: selected ? tokens.brandSubtle : tokens.surface,
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(
+              color: selected ? accent : tokens.divider,
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: child,
+        );
+      case UIStyle.glass:
+        return Container(
+          decoration: BoxDecoration(
+            color: selected ? tokens.brandSubtle : ThemeTokens.glassFill(tokens),
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(
+              color: selected ? accent : ThemeTokens.glassBorder(tokens),
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: child,
+        );
+      case UIStyle.female:
+        return Container(
+          decoration: BoxDecoration(
+            color: tokens.surface,
+            gradient: selected
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [tokens.brandSubtle, tokens.surface],
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(
+              color: selected ? accent.withOpacity(0.5) : tokens.divider,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: tokens.brand.withOpacity(selected ? 0.18 : 0.08),
+                offset: const Offset(0, 6),
+                blurRadius: 16,
+              ),
+            ],
+          ),
+          child: child,
+        );
     }
   }
+}
+
+/// 选中角标（品牌色实心圆 + 对勾）
+class _SceneSelectedBadge extends StatelessWidget {
+  const _SceneSelectedBadge({required this.tokens});
+
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 16,
+      height: 16,
+      decoration: BoxDecoration(color: tokens.brand, shape: BoxShape.circle),
+      child: Icon(Icons.check, size: 11, color: tokens.textInverse),
+    );
+  }
+}
+
+/// 卡片模式：单行横滑卡片。
+///
+/// 有场景封面时以封面为主视觉（BoxFit.cover 铺满 + 底部黑色渐变遮罩 +
+/// 白色名称，叠图遮罩为跨风格通用叠加视觉）；无封面时回退「图标圆底 + 名称」。
+/// 固定 84×108。
+class _SceneStripCard extends StatelessWidget {
+  const _SceneStripCard({
+    required this.tokens,
+    required this.style,
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.cover,
+  });
+
+  final ThemeTokens tokens;
+  final UIStyle style;
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  /// 场景封面来源（asset / data: / http / 本地文件路径），null 走图标回退
+  final String? cover;
+
+  @override
+  Widget build(BuildContext context) {
+    final cover = this.cover;
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 84,
+        height: 108,
+        child: _SceneCardSurface(
+          tokens: tokens,
+          style: style,
+          selected: selected,
+          child: cover != null && cover.isNotEmpty
+              ? _buildCoverBody(cover)
+              : _buildIconBody(),
+        ),
+      ),
+    );
+  }
+
+  /// 无封面回退：图标圆底 + 名称（画布态，跟随主题 token）
+  Widget _buildIconBody() {
+    final iconColor = selected ? tokens.brandText : tokens.textSecondary;
+    final nameColor = selected ? tokens.brandText : tokens.textPrimary;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 14, 8, 10),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: selected ? tokens.brandSubtle : tokens.surfaceAlt,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 20, color: iconColor),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.25,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  color: nameColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (selected)
+          Positioned(
+            top: 6,
+            right: 6,
+            child: _SceneSelectedBadge(tokens: tokens),
+          ),
+      ],
+    );
+  }
+
+  /// 封面态：封面铺满卡片，底部黑色渐变遮罩 + 白色名称（叠图通用叠加视觉）
+  Widget _buildCoverBody(String src) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(_SceneCardSurface.radius),
+          child: LumiraImage(
+            src,
+            fit: BoxFit.cover,
+            errorWidget: Container(color: tokens.surfaceAlt),
+          ),
+        ),
+        const _CoverScrim(),
+        _CoverName(label: label, selected: selected, centered: true),
+        if (selected)
+          Positioned(
+            top: 6,
+            right: 6,
+            child: _SceneSelectedBadge(tokens: tokens),
+          ),
+      ],
+    );
+  }
+}
+
+/// 瀑布流模式：双栏 Masonry 中的单张场景卡片。
+///
+/// 有场景封面时高度由 [AdaptiveCoverImage] 按图片真实宽高比自适应
+/// （9:16 长图 / 超宽图比例钳制，避免双栏高度失衡），底部黑色渐变遮罩 +
+/// 白色名称；无封面回退「图标圆底 + 名称横排」固定高度（[tall] 错落）。
+class _SceneTile extends StatelessWidget {
+  const _SceneTile({
+    required this.tokens,
+    required this.style,
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.result,
+    this.cover,
+    this.tall = false,
+  });
+
+  final ThemeTokens tokens;
+  final UIStyle style;
+  final IconData icon;
+  final String label;
+  final bool selected;
+
+  /// 点击结果：sceneId
+  final String result;
+
+  /// 场景封面来源（asset / data: / http / 本地文件路径），null 走图标回退
+  final String? cover;
+
+  /// 无封面兜底高度：true = 116；false = 100（相邻条目错落）
+  final bool tall;
+
+  @override
+  Widget build(BuildContext context) {
+    final cover = this.cover;
+
+    return GestureDetector(
+      onTap: () => Navigator.of(context).pop(result),
+      behavior: HitTestBehavior.opaque,
+      child: cover != null && cover.isNotEmpty
+          // 封面态：高度由 AdaptiveCoverImage 按图片真实宽高比决定
+          // （ResizeImage 64px 探测 + 比例钳制），与模板瀑布流一致
+          ? _SceneCardSurface(
+              tokens: tokens,
+              style: style,
+              selected: selected,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(_SceneCardSurface.radius),
+                child: AdaptiveCoverImage(
+                  cover: cover,
+                  fit: BoxFit.cover,
+                  errorFallback: Container(color: tokens.surfaceAlt),
+                  overlay: [
+                    const _CoverScrim(),
+                    _CoverName(label: label, selected: selected),
+                    if (selected)
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: _SceneSelectedBadge(tokens: tokens),
+                      ),
+                  ],
+                ),
+              ),
+            )
+          : SizedBox(
+              height: tall ? 116 : 100,
+              child: _SceneCardSurface(
+                tokens: tokens,
+                style: style,
+                selected: selected,
+                child: _buildIconBody(),
+              ),
+            ),
+    );
+  }
+
+  /// 无封面回退：图标圆底 + 名称横排（画布态，跟随主题 token）
+  Widget _buildIconBody() {
+    final iconColor = selected ? tokens.brandText : tokens.textSecondary;
+    final nameColor = selected ? tokens.brandText : tokens.textPrimary;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: selected ? tokens.brandSubtle : tokens.surfaceAlt,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 18, color: iconColor),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.3,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                color: nameColor,
+              ),
+            ),
+          ),
+          if (selected) ...[
+            const SizedBox(width: 6),
+            _SceneSelectedBadge(tokens: tokens),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// 封面底部黑色渐变遮罩（叠图通用叠加视觉，不随主题/风格变化）
+class _CoverScrim extends StatelessWidget {
+  const _CoverScrim();
+
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0x00000000), Color(0x00000000), Color(0x99000000)],
+          stops: [0, 0.45, 1],
+        ),
+      ),
+    );
+  }
+}
+
+/// 封面底部场景名称（白色，叠图通用叠加视觉）
+class _CoverName extends StatelessWidget {
+  const _CoverName({
+    required this.label,
+    required this.selected,
+    this.centered = false,
+  });
+
+  final String label;
+  final bool selected;
+
+  /// 横滑卡片（84 宽）居中对齐；瀑布流卡左对齐
+  final bool centered;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        centered ? 6 : 12,
+        8,
+        centered ? 6 : 12,
+        centered ? 7 : 9,
+      ),
+      child: Align(
+        alignment: centered ? Alignment.bottomCenter : Alignment.bottomLeft,
+        child: Text(
+          label,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: centered ? TextAlign.center : null,
+          style: TextStyle(
+            fontSize: centered ? 11 : 12,
+            height: 1.3,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 「移除场景」动作卡：虚线描边 + danger 色调（画布态，跟随主题 token）。
+///
+/// - 瀑布流模式：通栏横排（图标 + 文字），滚动时保持可见；
+/// - 卡片横滑模式（[dense]）：84×108 竖排小卡，与场景封面卡同尺寸。
+class _SceneRemoveCard extends StatelessWidget {
+  const _SceneRemoveCard({
+    required this.tokens,
+    required this.onTap,
+    this.dense = false,
+  });
+
+  final ThemeTokens tokens;
+  final VoidCallback onTap;
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = Icon(
+      Icons.label_off_outlined,
+      size: dense ? 20 : 18,
+      color: tokens.danger,
+    );
+    final text = Text(
+      '移除场景',
+      style: TextStyle(
+        fontSize: dense ? 11 : 13,
+        height: 1.3,
+        fontWeight: FontWeight.w500,
+        color: tokens.danger,
+      ),
+    );
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: CustomPaint(
+        painter: _DashedRRectPainter(
+          color: tokens.danger.withOpacity(0.45),
+          radius: _SceneCardSurface.radius,
+        ),
+        child: Container(
+          width: dense ? 84 : null,
+          height: dense ? 108 : 52,
+          alignment: Alignment.center,
+          padding: dense ? null : const EdgeInsets.symmetric(horizontal: 14),
+          child: dense
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    icon,
+                    const SizedBox(height: 6),
+                    text,
+                  ],
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    icon,
+                    const SizedBox(width: 8),
+                    text,
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 虚线圆角矩形描边 painter（移除场景卡用）
+class _DashedRRectPainter extends CustomPainter {
+  const _DashedRRectPainter({required this.color, required this.radius});
+
+  final Color color;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    final path = Path()
+      ..addRRect(RRect.fromRectAndRadius(
+        Offset.zero & size,
+        Radius.circular(radius),
+      ));
+
+    const dash = 5.0;
+    const gap = 4.0;
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final end = math.min(distance + dash, metric.length);
+        canvas.drawPath(metric.extractPath(distance, end), paint);
+        distance = end + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedRRectPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.radius != radius;
 }
 
 class _CategoryOption extends StatelessWidget {

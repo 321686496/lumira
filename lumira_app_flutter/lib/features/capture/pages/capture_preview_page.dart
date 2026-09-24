@@ -781,17 +781,6 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       builder: (ctx) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 非编辑态才显示：编辑态顶栏已有「保存」pill，功能重复
-          if (!_isEdited)
-            _ShareOption(
-              icon: Icons.save_alt_outlined,
-              text: '保存到相册',
-              tokens: tokens,
-              onTap: () {
-                Navigator.of(ctx).pop();
-                _onSave();
-              },
-            ),
           _ShareOption(
             icon: Icons.save_alt,
             text: '保存到系统相册',
@@ -1687,6 +1676,9 @@ class _PreviewNav extends StatelessWidget {
       child: LumiraNav(
         title: '照片预览',
         transparent: true,
+        // 沉浸式取景（黑画布）时标题用白字，保证黑底可读；
+        // 跟随主题时用主题文字色。
+        titleColor: isThemed ? tokens.textPrimary : tokens.textInverse,
         // 沉浸式预览：即使玻璃拟态风格也强制真透明——
         // 玻璃默认的 50% 白毛玻璃叠在深色照片上会显示为灰色矩形，
         // iOS 上 BackdropFilter 还可能造成右侧缺口（宽度不满）。

@@ -1,0 +1,1430 @@
+Ôr@Ÿªassertions¤code´customTransformCache¬dependencies¢id¤meta±moduleSideEffects¬originalCode±originalSourcemap«resolvedIds®sourcemapChainµsyntheticNamedExportsµtransformDependencies®transformFiles¨cacheAstÔrAÚc+if (!("finalizeConstruction" in ViewPU.prototype)) {
+    Reflect.set(ViewPU.prototype, "finalizeConstruction", () => { });
+}
+/*
+ * Copyright (C) 2024 Huawei Device Co., Ltd.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+import EventHub from './libs/EventHub';
+import camera from "@ohos.multimedia.camera";
+import abilityAccessCtrl from "@ohos.abilityAccessCtrl";
+import { PermissionsUtil } from './libs/PermissionsUtil';
+import { CameraService } from './libs/CameraService';
+import display from "@ohos.display";
+import window from "@ohos.window";
+import { ChannelMethods } from './libs/ChannelMethods';
+const TAG = '[OhosView]: ';
+export class OhosView extends ViewPU {
+    constructor(parent, params, __localStorage, elmtId = -1, paramsLambda = undefined, extraInfo) {
+        super(parent, __localStorage, elmtId, extraInfo);
+        if (typeof paramsLambda === "function") {
+            this.paramsGenerator_ = paramsLambda;
+        }
+        this.__params = new SynchedPropertyObjectOneWayPU(params.params, this, "params");
+        this.__channel = new SynchedPropertyObjectOneWayPU(params.channel, this, "channel");
+        this.__isFlashlight = new ObservedPropertySimplePU(false, this, "isFlashlight");
+        this.__isSensorLight = new ObservedPropertySimplePU(false, this, "isSensorLight");
+        this.__isScanned = new ObservedPropertySimplePU(false, this, "isScanned");
+        this.__cameraHeight = new ObservedPropertySimplePU(300, this, "cameraHeight");
+        this.__cameraWidth = new ObservedPropertySimplePU(300, this, "cameraWidth");
+        this.__userGrant = new ObservedPropertySimplePU(false, this, "userGrant");
+        this.__surfaceId = new ObservedPropertySimplePU('', this, "surfaceId");
+        this.__cameraScreenOffsetX = new ObservedPropertySimplePU(0, this, "cameraScreenOffsetX");
+        this.__cameraScreenOffsetY = new ObservedPropertySimplePU(0, this, "cameraScreenOffsetY");
+        this.__isStop = new ObservedPropertySimplePU(false, this, "isStop");
+        this.__isOpen = new ObservedPropertySimplePU(false, this, "isOpen");
+        this.__isFront = new ObservedPropertySimplePU(false, this, "isFront");
+        this.__result = new ObservedPropertyObjectPU([], this, "result");
+        this.__data = new ObservedPropertyObjectPU([], this, "data");
+        this.__isVertical = new ObservedPropertySimplePU(true, this, "isVertical");
+        this.__scanAreaWidth = new ObservedPropertySimplePU(150, this, "scanAreaWidth");
+        this.__scanAreaHeight = new ObservedPropertySimplePU(150, this, "scanAreaHeight");
+        this.__cutOutBottomOffset = new ObservedPropertySimplePU(0, this, "cutOutBottomOffset");
+        this.mXComponentController = new XComponentController();
+        this.context = getContext(this);
+        this.cameraService = new CameraService(this.context);
+        this.windowClass = null;
+        this.barcodeFormats = [];
+        this.timerId = -1;
+        this.FLASH_TIME_OUT = 200;
+        this.setInitiallyProvidedValue(params);
+        this.finalizeConstruction();
+    }
+    setInitiallyProvidedValue(params) {
+        if (params.channel === undefined) {
+            this.__channel.set(null);
+        }
+        if (params.isFlashlight !== undefined) {
+            this.isFlashlight = params.isFlashlight;
+        }
+        if (params.isSensorLight !== undefined) {
+            this.isSensorLight = params.isSensorLight;
+        }
+        if (params.isScanned !== undefined) {
+            this.isScanned = params.isScanned;
+        }
+        if (params.cameraHeight !== undefined) {
+            this.cameraHeight = params.cameraHeight;
+        }
+        if (params.cameraWidth !== undefined) {
+            this.cameraWidth = params.cameraWidth;
+        }
+        if (params.userGrant !== undefined) {
+            this.userGrant = params.userGrant;
+        }
+        if (params.surfaceId !== undefined) {
+            this.surfaceId = params.surfaceId;
+        }
+        if (params.cameraScreenOffsetX !== undefined) {
+            this.cameraScreenOffsetX = params.cameraScreenOffsetX;
+        }
+        if (params.cameraScreenOffsetY !== undefined) {
+            this.cameraScreenOffsetY = params.cameraScreenOffsetY;
+        }
+        if (params.isStop !== undefined) {
+            this.isStop = params.isStop;
+        }
+        if (params.isOpen !== undefined) {
+            this.isOpen = params.isOpen;
+        }
+        if (params.isFront !== undefined) {
+            this.isFront = params.isFront;
+        }
+        if (params.result !== undefined) {
+            this.result = params.result;
+        }
+        if (params.data !== undefined) {
+            this.data = params.data;
+        }
+        if (params.isVertical !== undefined) {
+            this.isVertical = params.isVertical;
+        }
+        if (params.scanAreaWidth !== undefined) {
+            this.scanAreaWidth = params.scanAreaWidth;
+        }
+        if (params.scanAreaHeight !== undefined) {
+            this.scanAreaHeight = params.scanAreaHeight;
+        }
+        if (params.cutOutBottomOffset !== undefined) {
+            this.cutOutBottomOffset = params.cutOutBottomOffset;
+        }
+        if (params.mXComponentController !== undefined) {
+            this.mXComponentController = params.mXComponentController;
+        }
+        if (params.context !== undefined) {
+            this.context = params.context;
+        }
+        if (params.cameraService !== undefined) {
+            this.cameraService = params.cameraService;
+        }
+        if (params.windowClass !== undefined) {
+            this.windowClass = params.windowClass;
+        }
+        if (params.barcodeFormats !== undefined) {
+            this.barcodeFormats = params.barcodeFormats;
+        }
+        if (params.timerId !== undefined) {
+            this.timerId = params.timerId;
+        }
+        if (params.FLASH_TIME_OUT !== undefined) {
+            this.FLASH_TIME_OUT = params.FLASH_TIME_OUT;
+        }
+    }
+    updateStateVars(params) {
+        this.__params.reset(params.params);
+        this.__channel.reset(params.channel);
+    }
+    purgeVariableDependenciesOnElmtId(rmElmtId) {
+        this.__params.purgeDependencyOnElmtId(rmElmtId);
+        this.__channel.purgeDependencyOnElmtId(rmElmtId);
+        this.__isFlashlight.purgeDependencyOnElmtId(rmElmtId);
+        this.__isSensorLight.purgeDependencyOnElmtId(rmElmtId);
+        this.__isScanned.purgeDependencyOnElmtId(rmElmtId);
+        this.__cameraHeight.purgeDependencyOnElmtId(rmElmtId);
+        this.__cameraWidth.purgeDependencyOnElmtId(rmElmtId);
+        this.__userGrant.purgeDependencyOnElmtId(rmElmtId);
+        this.__surfaceId.purgeDependencyOnElmtId(rmElmtId);
+        this.__cameraScreenOffsetX.purgeDependencyOnElmtId(rmElmtId);
+        this.__cameraScreenOffsetY.purgeDependencyOnElmtId(rmElmtId);
+        this.__isStop.purgeDependencyOnElmtId(rmElmtId);
+        this.__isOpen.purgeDependencyOnElmtId(rmElmtId);
+        this.__isFront.purgeDependencyOnElmtId(rmElmtId);
+        this.__result.purgeDependencyOnElmtId(rmElmtId);
+        this.__data.purgeDependencyOnElmtId(rmElmtId);
+        this.__isVertical.purgeDependencyOnElmtId(rmElmtId);
+        this.__scanAreaWidth.purgeDependencyOnElmtId(rmElmtId);
+        this.__scanAreaHeight.purgeDependencyOnElmtId(rmElmtId);
+        this.__cutOutBottomOffset.purgeDependencyOnElmtId(rmElmtId);
+    }
+    aboutToBeDeleted() {
+        this.__params.aboutToBeDeleted();
+        this.__channel.aboutToBeDeleted();
+        this.__isFlashlight.aboutToBeDeleted();
+        this.__isSensorLight.aboutToBeDeleted();
+        this.__isScanned.aboutToBeDeleted();
+        this.__cameraHeight.aboutToBeDeleted();
+        this.__cameraWidth.aboutToBeDeleted();
+        this.__userGrant.aboutToBeDeleted();
+        this.__surfaceId.aboutToBeDeleted();
+        this.__cameraScreenOffsetX.aboutToBeDeleted();
+        this.__cameraScreenOffsetY.aboutToBeDeleted();
+        this.__isStop.aboutToBeDeleted();
+        this.__isOpen.aboutToBeDeleted();
+        this.__isFront.aboutToBeDeleted();
+        this.__result.aboutToBeDeleted();
+        this.__data.aboutToBeDeleted();
+        this.__isVertical.aboutToBeDeleted();
+        this.__scanAreaWidth.aboutToBeDeleted();
+        this.__scanAreaHeight.aboutToBeDeleted();
+        this.__cutOutBottomOffset.aboutToBeDeleted();
+        SubscriberManager.Get().delete(this.id__());
+        this.aboutToBeDeletedInternal();
+    }
+    get params() {
+        return this.__params.get();
+    }
+    set params(newValue) {
+        this.__params.set(newValue);
+    }
+    get channel() {
+        return this.__channel.get();
+    }
+    set channel(newValue) {
+        this.__channel.set(newValue);
+    }
+    get isFlashlight() {
+        return this.__isFlashlight.get();
+    }
+    set isFlashlight(newValue) {
+        this.__isFlashlight.set(newValue);
+    }
+    get isSensorLight() {
+        return this.__isSensorLight.get();
+    }
+    set isSensorLight(newValue) {
+        this.__isSensorLight.set(newValue);
+    }
+    get isScanned() {
+        return this.__isScanned.get();
+    }
+    set isScanned(newValue) {
+        this.__isScanned.set(newValue);
+    }
+    get cameraHeight() {
+        return this.__cameraHeight.get();
+    }
+    set cameraHeight(newValue) {
+        this.__cameraHeight.set(newValue);
+    }
+    get cameraWidth() {
+        return this.__cameraWidth.get();
+    }
+    set cameraWidth(newValue) {
+        this.__cameraWidth.set(newValue);
+    }
+    get userGrant() {
+        return this.__userGrant.get();
+    }
+    set userGrant(newValue) {
+        this.__userGrant.set(newValue);
+    }
+    get surfaceId() {
+        return this.__surfaceId.get();
+    }
+    set surfaceId(newValue) {
+        this.__surfaceId.set(newValue);
+    }
+    get cameraScreenOffsetX() {
+        return this.__cameraScreenOffsetX.get();
+    }
+    set cameraScreenOffsetX(newValue) {
+        this.__cameraScreenOffsetX.set(newValue);
+    }
+    get cameraScreenOffsetY() {
+        return this.__cameraScreenOffsetY.get();
+    }
+    set cameraScreenOffsetY(newValue) {
+        this.__cameraScreenOffsetY.set(newValue);
+    }
+    get isStop() {
+        return this.__isStop.get();
+    }
+    set isStop(newValue) {
+        this.__isStop.set(newValue);
+    }
+    get isOpen() {
+        return this.__isOpen.get();
+    }
+    set isOpen(newValue) {
+        this.__isOpen.set(newValue);
+    }
+    get isFront() {
+        return this.__isFront.get();
+    }
+    set isFront(newValue) {
+        this.__isFront.set(newValue);
+    }
+    get result() {
+        return this.__result.get();
+    }
+    set result(newValue) {
+        this.__result.set(newValue);
+    }
+    get data() {
+        return this.__data.get();
+    }
+    set data(newValue) {
+        this.__data.set(newValue);
+    }
+    get isVertical() {
+        return this.__isVertical.get();
+    }
+    set isVertical(newValue) {
+        this.__isVertical.set(newValue);
+    }
+    get scanAreaWidth() {
+        return this.__scanAreaWidth.get();
+    }
+    set scanAreaWidth(newValue) {
+        this.__scanAreaWidth.set(newValue);
+    }
+    get scanAreaHeight() {
+        return this.__scanAreaHeight.get();
+    }
+    set scanAreaHeight(newValue) {
+        this.__scanAreaHeight.set(newValue);
+    }
+    get cutOutBottomOffset() {
+        return this.__cutOutBottomOffset.get();
+    }
+    set cutOutBottomOffset(newValue) {
+        this.__cutOutBottomOffset.set(newValue);
+    }
+    async aboutToAppear() {
+        this.isScanned = false;
+        this.isStop = false;
+        this.onEmitEvents();
+        this.setDisplay();
+        this.init();
+        window.getLastWindow(this.context).then((windowClass) => {
+            this.windowClass = windowClass;
+            windowClass.on('windowEvent', (data) => {
+                if (data === window.WindowEventType.WINDOW_SHOWN) {
+                    this.onPageShow();
+                }
+                if (data === window.WindowEventType.WINDOW_HIDDEN) {
+                    this.onPageHide();
+                }
+            });
+        });
+        this.cameraService.onImageArrival(this.cameraService.imageReceiver, this.channel, this.barcodeFormats);
+    }
+    aboutToDisappear() {
+        this.cameraService?.releaseCamera();
+        EventHub.offAll(this.context);
+        if (this.timerId !== -1) {
+            clearTimeout(this.timerId);
+        }
+        this.windowClass?.off('windowEvent');
+    }
+    onPageShow() {
+        // é¦–æ¬¡æ‰“å¼€æ—¶ï¼Œç³»ç»Ÿç›¸æœºæƒé™å¼¹çª—ä¼šæ‰“æ–­é¡µé¢ç”Ÿå‘½å‘¨æœŸï¼šè¿”å›å‰å°è§¦å‘æœ¬å›è°ƒæ—¶ï¼Œ
+        // XComponent å¯èƒ½å°šæœª onLoadï¼ˆuserGrant åœ¨æˆæƒåæ‰ç½®ä½ï¼‰ï¼Œæ­¤æ—¶ surfaceId ä»ä¸º
+        // ç©ºã€‚è‹¥ç”¨ç©º surfaceId å» initCameraï¼Œä¼šæŠ¢å ç›¸æœºè®¾å¤‡å´ç»‘ä¸åˆ°æœ‰æ•ˆé¢„è§ˆ surfaceï¼Œ
+        // å¯¼è‡´éšå onLoadâ†’scan() çš„çœŸæ­£åˆå§‹åŒ–å¤±è´¥ï¼Œç”»é¢é»‘å±ã€‚surfaceId å°±ç»ªå‰ç›´æ¥è·³è¿‡ï¼Œ
+        // ç›¸æœºç»Ÿä¸€ç”± onLoadâ†’scan() åœ¨ surfaceId å°±ç»ªåå¯åŠ¨ã€‚
+        if (!this.surfaceId) {
+            console.info(TAG + 'onPageShow skip: surfaceId not ready');
+            return;
+        }
+        this.cameraService.initCamera(this.surfaceId, this.isFront);
+        if (!this.isFront) {
+            this.timerId = setTimeout(() => {
+                this.cameraService?.setFlashMode(this.isOpen);
+            }, this.FLASH_TIME_OUT);
+        }
+    }
+    onPageHide() {
+        this.cameraService.preFrontRelease(this.isStop);
+        if (this.timerId !== -1) {
+            clearTimeout(this.timerId);
+        }
+    }
+    onEmitEvents() {
+        // æ³¨å†Œç›‘å¬äº‹ä»¶
+        const context = getContext(this);
+        // å¼€å§‹æ‰«æ
+        EventHub.onStartScan(context, async (args) => {
+            this.channel = args.channel;
+            this.barcodeFormats = args.barcodeFormats || [];
+        });
+        // æš‚åœæ‰«æ
+        EventHub.onPauseCamera(context, async (result) => {
+            if (this.isStop) {
+                return;
+            }
+            // æš‚åœé—ªå…‰ç¯
+            this.cameraService?.setFlashMode(false);
+            this.cameraService?.stopCamera().then(() => {
+                this.isStop = true;
+                result.success(null);
+            });
+        });
+        // åˆ‡æ¢æ‘„åƒå¤´
+        EventHub.onFlipCamera(context, async (result) => {
+            console.info(TAG + 'onFlipCamera success');
+            this.isFront = !this.isFront;
+            this.cameraService?.preFrontRelease(this.isStop).then(() => {
+                this.cameraService?.initCamera(this.surfaceId, this.isFront).then(() => {
+                    this.cameraService?.setFlashMode(this.isOpen); // åˆ‡æ¢åˆ°åç½®æ‘„åƒå¤´åé‡åˆ¶é—ªå…‰ç¯çŠ¶æ€
+                });
+            });
+        });
+        // åˆ‡æ¢æ‘„åƒå¤´
+        EventHub.onToggleFlash(context, (result) => {
+            this.setTorchMode(result);
+        });
+        // é‡æ–°æ‰«æ
+        EventHub.onResum(context, (result) => {
+            this.restartCustomScan(result);
+        });
+        // è·å–é—ªå…‰ç¯çŠ¶æ€
+        EventHub.onGetFlashInfo(context, (result) => {
+            if (this.isStop) {
+                result.success(this.isOpen);
+                return;
+            }
+            result.success(this.isOpen);
+        });
+        // è·å–ç›¸æœºæ”¯æŒåŠŸèƒ½
+        EventHub.onGetSystemFeatures(context, async (result) => {
+            const fatures = new Map();
+            const hasFrontCamera = this.cameraService?.hasCamera('front');
+            const hasBackCamera = this.cameraService?.hasCamera();
+            const hasFlash = this.cameraService?.hasFlashCamera();
+            const activeCamera = this.cameraService?.activeCamera();
+            fatures.set('hasFrontCamera', hasFrontCamera);
+            fatures.set('hasBackCamera', hasBackCamera);
+            fatures.set('hasFlash', hasFlash);
+            fatures.set('activeCamera', activeCamera);
+            result.success(fatures);
+        });
+        // è·å–é¢„è§ˆåŒºåŸŸ
+        EventHub.onChangeScanArea(context, (res) => {
+            console.info(TAG + 'onChangeScanArea enter success' + JSON.stringify(res));
+            this.scanAreaWidth = res.scanAreaWidth;
+            this.scanAreaHeight = res.scanAreaHeight;
+        });
+        // è®¾ç½®å›¾åƒå€’ç½®
+        EventHub.onInvertScan(context, (res) => {
+            console.info(TAG + 'onInvertScan enter success' + JSON.stringify(res));
+        });
+    }
+    // æ£€æŸ¥æƒé™ åˆå§‹åŒ–ç›¸æœº å¼€å§‹æ‰«æ
+    async init() {
+        const permissions = ['ohos.permission.CAMERA'];
+        let grantStatus = await PermissionsUtil.checkAccessToken(permissions[0]);
+        if (grantStatus === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
+            this.userGrant = true;
+        }
+        else {
+            this.requestCameraPermission();
+        }
+    }
+    // ç”³è¯·æƒé™
+    async requestCameraPermission() {
+        let grantStatus = await PermissionsUtil.reqPermissionsFromUser(this.context);
+        let length = grantStatus.length;
+        for (let i = 0; i < length; i++) {
+            if (grantStatus[i] === 0) {
+                this.userGrant = true;
+            }
+            else {
+                console.error(TAG + 'no CameraPermission');
+                this.userGrant = false;
+            }
+        }
+        if (!this.userGrant) {
+            // é¦–æ¬¡æ‰“å¼€æ—¶ onStartScanï¼ˆä¸‹å‘ channelï¼‰ä¸æˆæƒå¼¹çª—çš„æ—¶åºä¸å›ºå®šï¼Œchannel å¯èƒ½
+            // å°šæœªå°±ç»ªï¼Œåšç©ºåˆ¤å…œåº•ï¼Œé¿å…æˆæƒç»“æœå›è°ƒæ—¶å´©æºƒã€‚
+            this.channel?.invokeMethod(ChannelMethods.CHANNEL_METHOD_ON_PERMISSION_SET, this.userGrant);
+        }
+    }
+    // æ‰«ä¸€æ‰«åˆå§‹åŒ–
+    scan() {
+        const cameraManager = camera.getCameraManager(this.context);
+        this.cameraService.createCamera(cameraManager);
+        // é¦–æ¬¡åˆå§‹åŒ–ç›¸æœºå¹¶è¦æ±‚ä¼šè¯å·²å¯åŠ¨ï¼›è‹¥å¶å‘å¤±è´¥ï¼ˆè®¾å¤‡å¿™ / onLoad ä¸ onPageShow
+        // æ—¶åºç«äº‰ï¼‰ï¼Œåšä¸€æ¬¡å»¶æ—¶å…œåº•é‡è¯•ï¼Œé¿å…é¦–æ¬¡æ‰“å¼€å¶å‘é»‘å±åæ— æ¢å¤ã€‚é‡è¯•ç”±
+        // initCamera å†…éƒ¨çš„ä¸²è¡ŒåŒ– / å»é‡ / teardown é€»è¾‘å…œåº•ï¼Œå¹‚ç­‰å®‰å…¨ã€‚
+        this.cameraService.initCamera(this.surfaceId).then(() => {
+            if (!this.cameraService.isCameraRunning()) {
+                console.info(TAG + 'initCamera not running, retry once');
+                setTimeout(() => {
+                    this.cameraService.initCamera(this.surfaceId);
+                }, 300);
+            }
+        }).catch(() => {
+            console.error(TAG + 'initCamera failed, retry once');
+            setTimeout(() => {
+                this.cameraService.initCamera(this.surfaceId);
+            }, 300);
+        });
+    }
+    setDisplay() {
+        // é»˜è®¤ç«–å±
+        let displayClass = display.getDefaultDisplaySync();
+        const displayHeight = px2vp(displayClass.height);
+        const displayWidth = px2vp(displayClass.width);
+        let maxLen = Math.max(displayWidth, displayHeight);
+        let minLen = Math.min(displayWidth, displayHeight);
+        const RATIO = 16 / 9;
+        this.cameraHeight = maxLen;
+        this.cameraWidth = maxLen / RATIO;
+    }
+    // æ£€æŸ¥æƒé™ æ²¡æœ‰çš„è¯ç”³è¯·æƒé™
+    async checkPermission(result) {
+        const permissions = ['ohos.permission.CAMERA'];
+        let grantStatus = await PermissionsUtil.checkAccessToken(permissions[0]);
+        if (grantStatus === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
+            this.userGrant = true;
+        }
+        else {
+            this.requestCameraPermission();
+        }
+    }
+    // é‡æ–°æ‰«æ
+    restartCustomScan(result) {
+        if (this.isStop) {
+            this.initCamera(result);
+        }
+        else {
+            // å¦‚æœæœ¬æ¥å°±ä¸æ˜¯æš‚åœçŠ¶æ€å°±ä¸éœ€è¦é¢å¤–çš„å¤„ç†é€»è¾‘
+            // this.cameraService?.stopCamera().then(() => {
+            //   this.initCamera(result);
+            // })
+        }
+    }
+    // è®¾ç½®æ‰‹ç”µç­’å¼€å…³ N
+    // è®¾ç½®é—ªå…‰ç¯å¼€å…³ Y
+    setTorchMode(result) {
+        if (!this.cameraService?.hasFlash()) {
+            result.success(null);
+            return;
+        }
+        this.isOpen = !this.isOpen;
+        // å‰ç«¯çš„æ‰‹ç”µç­’å…¶å®æ—¶åç«¯çš„é—ªå…‰ç¯
+        this.cameraService?.setFlashMode(this.isOpen);
+        result.success(null);
+    }
+    // åˆå§‹åŒ–ç›¸æœº
+    initCamera(result) {
+        this.cameraService?.initCamera(this.surfaceId, this.isFront)
+            .then(() => {
+            this.isStop = false;
+            this.torchModeOn(result, 'initCamera');
+            result.success(true);
+        });
+    }
+    // å¦‚æœçŠ¶æ€å¼€, åˆ™æ‰“å¼€
+    torchModeOn(result, type = '') {
+        if (this.isOpen) {
+            setTimeout(() => {
+                this.cameraService?.setFlashMode(this.isOpen);
+            }, this.FLASH_TIME_OUT);
+        }
+    }
+    barCodeViewNotSet(result) {
+        result.error(ChannelMethods.ERROR_CODE_NOT_SET, ChannelMethods.ERROR_MESSAGE_NOT_SET, null);
+    }
+    initialRender() {
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Stack.create();
+            Stack.width('100%');
+            Stack.height('100%');
+            Stack.backgroundColor(this.userGrant ? Color.Transparent : Color.Black);
+        }, Stack);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            If.create();
+            if (this.userGrant) {
+                this.ifElseBranchUpdateFunction(0, () => {
+                    this.observeComponentCreation2((elmtId, isInitialRender) => {
+                        Column.create();
+                        Column.height('100%');
+                        Column.width('100%');
+                        Column.position({ x: 0, y: 0 });
+                    }, Column);
+                    this.observeComponentCreation2((elmtId, isInitialRender) => {
+                        XComponent.create({
+                            id: 'componentId',
+                            type: XComponentType.SURFACE,
+                            controller: this.mXComponentController
+                        }, "com.rh.lumira/qr_code_scanner");
+                        XComponent.onLoad(() => {
+                            this.surfaceId = this.mXComponentController.getXComponentSurfaceId();
+                            this.scan();
+                        });
+                        XComponent.width(this.cameraWidth);
+                        XComponent.height(this.cameraHeight);
+                    }, XComponent);
+                    Column.pop();
+                });
+            }
+            else {
+                this.ifElseBranchUpdateFunction(1, () => {
+                });
+            }
+        }, If);
+        If.pop();
+        Stack.pop();
+    }
+    rerender() {
+        this.updateDirtyElements();
+    }
+    static getEntryName() {
+        return "OhosView";
+    }
+}
+export function buildOhosView(params, parent = null) {
+    const __params__ = params;
+    {
+        (parent ? parent : this).observeComponentCreation2((elmtId, isInitialRender, params = __params__) => {
+            if (isInitialRender) {
+                let componentCall = new OhosView(parent ? parent : this, {
+                    params: params,
+                    channel: params.platformView.getChannel()
+                }, undefined, elmtId, () => { }, { page: "../packages/qr_code_scanner/ohos/src/main/ets/components/plugin/OhosQrCodeView.ets", line: 350, col: 3 });
+                ViewPU.create(componentCall);
+                let paramsLambda = () => {
+                    return {
+                        params: params,
+                        channel: params.platformView.getChannel()
+                    };
+                };
+                componentCall.paramsGenerator_ = paramsLambda;
+            }
+            else {
+                (parent ? parent : this).updateStateVarsOfChildByElmtId(elmtId, {
+                    params: params,
+                    channel: params.platformView.getChannel()
+                });
+            }
+        }, { name: "OhosView" });
+    }
+}
+registerNamedRoute(() => new OhosView(undefined, {}), "", { bundleName: "com.rh.lumira", moduleName: "qr_code_scanner", pagePath: "__harDefaultPagePath__", pageFullPath: "", integratedHsp: "__harDefaultIntegratedHspType__", moduleType: "closedSourceHar" });
+//# sourceMappingURL=OhosQrCodeView.js.mapÂ˜Ù|D:\app\projects\photo_post\lumira_app_flutter\packages\qr_code_scanner\ohos\src\main\ets\components\plugin\libs\EventHub.etsÙm hvigor_ignore_D:_app_DevEcoStudio_DevEco Studio_sdk_default_openharmony_ets_api_@ohos.multimedia.camera.d.tsÙm hvigor_ignore_D:_app_DevEcoStudio_DevEco Studio_sdk_default_openharmony_ets_api_@ohos.abilityAccessCtrl.d.tsÙƒD:\app\projects\photo_post\lumira_app_flutter\packages\qr_code_scanner\ohos\src\main\ets\components\plugin\libs\PermissionsUtil.etsÙD:\app\projects\photo_post\lumira_app_flutter\packages\qr_code_scanner\ohos\src\main\ets\components\plugin\libs\CameraService.etsÙc hvigor_ignore_D:_app_DevEcoStudio_DevEco Studio_sdk_default_openharmony_ets_api_@ohos.display.d.tsÙb hvigor_ignore_D:_app_DevEcoStudio_DevEco Studio_sdk_default_openharmony_ets_api_@ohos.window.d.tsÙ‚D:\app\projects\photo_post\lumira_app_flutter\packages\qr_code_scanner\ohos\src\main\ets\components\plugin\libs\ChannelMethods.etsÙ}D:\app\projects\photo_post\lumira_app_flutter\packages\qr_code_scanner\ohos\src\main\ets\components\plugin\OhosQrCodeView.etsÔrB›ªmoduleName±isLocalDependency¯isNodeEntryFile§pkgPath±belongProjectPath§pkgNameªpkgVersion±dependencyPkgInfo°belongModulePath¬shouldEmitJs¯hostModulesInfo¯qr_code_scannerÃÂÙKD:\app\projects\photo_post\lumira_app_flutter\packages\qr_code_scanner\ohosÙFD:\app\projects\photo_post\lumira_app_flutter\packages\qr_code_scanner´qr_code_scanner_ohos¥1.0.0Ô  ÙKD:\app\projects\photo_post\lumira_app_flutter\packages\qr_code_scanner\ohosÃ‘ÔrC’²hostDependencyName®hostModuleName°./OhosQrCodeView¯qr_code_scannerÃÚ1®/*
+ * Copyright (C) 2024 Huawei Device Co., Ltd.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import EventHub from './libs/EventHub';
+import QrCaptureView from './QrCaptureView';
+import { camera } from '@kit.CameraKit';
+import { scanBarcode, customScan } from '@kit.ScanKit';
+import { common, abilityAccessCtrl, Permissions } from '@kit.AbilityKit';
+import { Params } from '@ohos/flutter_ohos/src/main/ets/plugin/platform/PlatformView';
+import { Any, MethodChannel, MethodResult } from '@ohos/flutter_ohos';
+import { PermissionsUtil } from './libs/PermissionsUtil';
+import { CameraService } from './libs/CameraService'
+import { display, window } from '@kit.ArkUI';
+import { ChannelMethods } from './libs/ChannelMethods';
+
+const TAG: string = '[OhosView]: '
+
+@Entry
+@Component
+export struct OhosView {
+  @Prop params: Params;
+  @Prop channel: MethodChannel | null = null;
+  @State isFlashlight: boolean = false; // Whether the flashlight is turned on.
+  @State isSensorLight: boolean = false; // Record the current environment brightness status.
+  @State isScanned: boolean = false;
+  @State cameraHeight: number = 300; // Sets the XComponent height. The default unit is vp.
+  @State cameraWidth: number = 300; // Sets the XComponent width. The default unit is vp.
+  @State userGrant: boolean = false;
+  @State surfaceId: string = '';
+  @State cameraScreenOffsetX: number = 0;
+  @State cameraScreenOffsetY: number = 0;
+  @State isStop: boolean = false;
+  @State isOpen: boolean = false;
+  @State isFront: boolean = false;
+  @State result: Array<scanBarcode.ScanResult> = [];
+  @State data: Array<string> = [];
+  @State isVertical: boolean = true;
+  @State scanAreaWidth: number = 150;
+  @State scanAreaHeight: number = 150;
+  @State cutOutBottomOffset: number = 0;
+  private mXComponentController: XComponentController = new XComponentController();
+  private context: Context = getContext(this);
+  private cameraService: CameraService | null = new CameraService(this.context);
+  private windowClass: window.Window | null = null;
+  private barcodeFormats: Array<number> = [];
+  private timerId: number = -1;
+  private FLASH_TIME_OUT: number = 200; // é—ªå…‰ç¯å»¶æ—¶è§¦å‘ï¼Œè‹¥ä¸å»¶æ—¶ä¼šè¢«è®¤ä¸ºè¿˜åœ¨å…¶ä»–åº”ç”¨ç•Œé¢ï¼Œä¸æ”¯æŒé—ªå…‰ç¯æ¨¡å¼
+
+  async aboutToAppear() {
+    this.isScanned = false;
+    this.isStop = false;
+    this.onEmitEvents();
+    this.setDisplay();
+    this.init();
+    window.getLastWindow(this.context).then((windowClass) => {
+      this.windowClass = windowClass;
+      windowClass.on('windowEvent', (data) => {
+        if (data === window.WindowEventType.WINDOW_SHOWN) {
+          this.onPageShow();
+        }
+        if (data === window.WindowEventType.WINDOW_HIDDEN) {
+          this.onPageHide();
+        }
+      });
+    })
+    this.cameraService!.onImageArrival(this.cameraService!.imageReceiver, this.channel, this.barcodeFormats);
+  }
+
+  aboutToDisappear() {
+    this.cameraService?.releaseCamera()
+    EventHub.offAll(this.context);
+    if (this.timerId !== -1) {
+      clearTimeout(this.timerId);
+    }
+    this.windowClass?.off('windowEvent');
+  }
+
+  onPageShow(): void {
+    // é¦–æ¬¡æ‰“å¼€æ—¶ï¼Œç³»ç»Ÿç›¸æœºæƒé™å¼¹çª—ä¼šæ‰“æ–­é¡µé¢ç”Ÿå‘½å‘¨æœŸï¼šè¿”å›å‰å°è§¦å‘æœ¬å›è°ƒæ—¶ï¼Œ
+    // XComponent å¯èƒ½å°šæœª onLoadï¼ˆuserGrant åœ¨æˆæƒåæ‰ç½®ä½ï¼‰ï¼Œæ­¤æ—¶ surfaceId ä»ä¸º
+    // ç©ºã€‚è‹¥ç”¨ç©º surfaceId å» initCameraï¼Œä¼šæŠ¢å ç›¸æœºè®¾å¤‡å´ç»‘ä¸åˆ°æœ‰æ•ˆé¢„è§ˆ surfaceï¼Œ
+    // å¯¼è‡´éšå onLoadâ†’scan() çš„çœŸæ­£åˆå§‹åŒ–å¤±è´¥ï¼Œç”»é¢é»‘å±ã€‚surfaceId å°±ç»ªå‰ç›´æ¥è·³è¿‡ï¼Œ
+    // ç›¸æœºç»Ÿä¸€ç”± onLoadâ†’scan() åœ¨ surfaceId å°±ç»ªåå¯åŠ¨ã€‚
+    if (!this.surfaceId) {
+      console.info(TAG + 'onPageShow skip: surfaceId not ready');
+      return;
+    }
+    this.cameraService!.initCamera(this.surfaceId, this.isFront)
+    if (!this.isFront) {
+      this.timerId = setTimeout(() => {
+        this.cameraService?.setFlashMode(this.isOpen)
+      }, this.FLASH_TIME_OUT)
+    }
+  }
+
+  onPageHide(): void {
+    this.cameraService!.preFrontRelease(this.isStop);
+    if (this.timerId !== -1) {
+      clearTimeout(this.timerId);
+    }
+  }
+
+  onEmitEvents() {
+    // æ³¨å†Œç›‘å¬äº‹ä»¶
+    const context = getContext(this) as common.UIAbilityContext;
+    // å¼€å§‹æ‰«æ
+    EventHub.onStartScan(context, async (args: Any) => {
+      this.channel = args.channel;
+      this.barcodeFormats = args.barcodeFormats || [];
+    });
+
+    // æš‚åœæ‰«æ
+    EventHub.onPauseCamera(context, async (result: MethodResult) => {
+      if (this.isStop) {
+        return;
+      }
+      // æš‚åœé—ªå…‰ç¯
+      this.cameraService?.setFlashMode(false);
+      this.cameraService?.stopCamera().then(() => {
+        this.isStop = true;
+        result.success(null)
+      })
+    });
+
+    // åˆ‡æ¢æ‘„åƒå¤´
+    EventHub.onFlipCamera(context, async (result: MethodResult) => {
+      console.info(TAG + 'onFlipCamera success');
+      this.isFront = !this.isFront;
+      this.cameraService?.preFrontRelease(this.isStop).then(() => {
+        this.cameraService?.initCamera(this.surfaceId, this.isFront).then(() => {
+          this.cameraService?.setFlashMode(this.isOpen); // åˆ‡æ¢åˆ°åç½®æ‘„åƒå¤´åé‡åˆ¶é—ªå…‰ç¯çŠ¶æ€
+        })
+      })
+    });
+
+    // åˆ‡æ¢æ‘„åƒå¤´
+    EventHub.onToggleFlash(context, (result: MethodResult) => {
+      this.setTorchMode(result);
+    });
+
+    // é‡æ–°æ‰«æ
+    EventHub.onResum(context, (result: MethodResult) => {
+      this.restartCustomScan(result);
+    });
+
+    // è·å–é—ªå…‰ç¯çŠ¶æ€
+    EventHub.onGetFlashInfo(context, (result: MethodResult) => {
+      if (this.isStop) {
+        result.success(this.isOpen);
+        return;
+      }
+      result.success(this.isOpen);
+    });
+
+    // è·å–ç›¸æœºæ”¯æŒåŠŸèƒ½
+    EventHub.onGetSystemFeatures(context, async (result: MethodResult) => {
+      const fatures = new Map<string, boolean | string | undefined>();
+      const hasFrontCamera = this.cameraService?.hasCamera('front');
+      const hasBackCamera = this.cameraService?.hasCamera();
+      const hasFlash = this.cameraService?.hasFlashCamera();
+      const activeCamera = this.cameraService?.activeCamera();
+      fatures.set('hasFrontCamera', hasFrontCamera);
+      fatures.set('hasBackCamera', hasBackCamera);
+      fatures.set('hasFlash', hasFlash);
+      fatures.set('activeCamera', activeCamera);
+      result.success(fatures);
+    });
+
+    // è·å–é¢„è§ˆåŒºåŸŸ
+    EventHub.onChangeScanArea(context, (res: Any) => {
+      console.info(TAG + 'onChangeScanArea enter success' + JSON.stringify(res));
+      this.scanAreaWidth = res.scanAreaWidth;
+      this.scanAreaHeight = res.scanAreaHeight;
+    });
+
+    // è®¾ç½®å›¾åƒå€’ç½®
+    EventHub.onInvertScan(context, (res: Any) => {
+      console.info(TAG + 'onInvertScan enter success' + JSON.stringify(res));
+    });
+  }
+
+  // æ£€æŸ¥æƒé™ åˆå§‹åŒ–ç›¸æœº å¼€å§‹æ‰«æ
+  async init() {
+    const permissions: Array<Permissions> = ['ohos.permission.CAMERA'];
+    let grantStatus = await PermissionsUtil.checkAccessToken(permissions[0]);
+    if (grantStatus === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
+      this.userGrant = true;
+    } else {
+      this.requestCameraPermission();
+    }
+  }
+
+  // ç”³è¯·æƒé™
+  async requestCameraPermission() {
+    let grantStatus = await PermissionsUtil.reqPermissionsFromUser(this.context);
+    let length: number = grantStatus.length;
+    for (let i = 0; i < length; i++) {
+      if (grantStatus[i] === 0) {
+        this.userGrant = true;
+      } else {
+        console.error(TAG + 'no CameraPermission');
+        this.userGrant = false;
+      }
+    }
+    if (!this.userGrant) {
+      // é¦–æ¬¡æ‰“å¼€æ—¶ onStartScanï¼ˆä¸‹å‘ channelï¼‰ä¸æˆæƒå¼¹çª—çš„æ—¶åºä¸å›ºå®šï¼Œchannel å¯èƒ½
+      // å°šæœªå°±ç»ªï¼Œåšç©ºåˆ¤å…œåº•ï¼Œé¿å…æˆæƒç»“æœå›è°ƒæ—¶å´©æºƒã€‚
+      this.channel?.invokeMethod(ChannelMethods.CHANNEL_METHOD_ON_PERMISSION_SET, this.userGrant);
+    }
+  }
+
+  // æ‰«ä¸€æ‰«åˆå§‹åŒ–
+  scan() {
+    const cameraManager = camera.getCameraManager(this.context);
+    this.cameraService!.createCamera(cameraManager);
+    // é¦–æ¬¡åˆå§‹åŒ–ç›¸æœºå¹¶è¦æ±‚ä¼šè¯å·²å¯åŠ¨ï¼›è‹¥å¶å‘å¤±è´¥ï¼ˆè®¾å¤‡å¿™ / onLoad ä¸ onPageShow
+    // æ—¶åºç«äº‰ï¼‰ï¼Œåšä¸€æ¬¡å»¶æ—¶å…œåº•é‡è¯•ï¼Œé¿å…é¦–æ¬¡æ‰“å¼€å¶å‘é»‘å±åæ— æ¢å¤ã€‚é‡è¯•ç”±
+    // initCamera å†…éƒ¨çš„ä¸²è¡ŒåŒ– / å»é‡ / teardown é€»è¾‘å…œåº•ï¼Œå¹‚ç­‰å®‰å…¨ã€‚
+    this.cameraService!.initCamera(this.surfaceId).then(() => {
+      if (!this.cameraService!.isCameraRunning()) {
+        console.info(TAG + 'initCamera not running, retry once');
+        setTimeout(() => {
+          this.cameraService!.initCamera(this.surfaceId);
+        }, 300);
+      }
+    }).catch(() => {
+      console.error(TAG + 'initCamera failed, retry once');
+      setTimeout(() => {
+        this.cameraService!.initCamera(this.surfaceId);
+      }, 300);
+    });
+  }
+
+  setDisplay() {
+    // é»˜è®¤ç«–å±
+    let displayClass = display.getDefaultDisplaySync();
+    const displayHeight = px2vp(displayClass.height);
+    const displayWidth = px2vp(displayClass.width);
+    let maxLen: number = Math.max(displayWidth, displayHeight);
+    let minLen: number = Math.min(displayWidth, displayHeight);
+    const RATIO: number = 16 / 9;
+    this.cameraHeight = maxLen;
+    this.cameraWidth = maxLen / RATIO;
+  }
+
+  // æ£€æŸ¥æƒé™ æ²¡æœ‰çš„è¯ç”³è¯·æƒé™
+  async checkPermission(result: MethodResult) {
+    const permissions: Array<Permissions> = ['ohos.permission.CAMERA'];
+    let grantStatus = await PermissionsUtil.checkAccessToken(permissions[0]);
+    if (grantStatus === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
+      this.userGrant = true;
+    } else {
+      this.requestCameraPermission();
+    }
+  }
+
+  // é‡æ–°æ‰«æ
+  restartCustomScan(result: MethodResult) {
+    if (this.isStop) {
+      this.initCamera(result);
+    } else {
+      // å¦‚æœæœ¬æ¥å°±ä¸æ˜¯æš‚åœçŠ¶æ€å°±ä¸éœ€è¦é¢å¤–çš„å¤„ç†é€»è¾‘
+      // this.cameraService?.stopCamera().then(() => {
+      //   this.initCamera(result);
+      // })
+    }
+  }
+
+  // è®¾ç½®æ‰‹ç”µç­’å¼€å…³ N
+  // è®¾ç½®é—ªå…‰ç¯å¼€å…³ Y
+  setTorchMode(result: MethodResult) {
+    if (!this.cameraService?.hasFlash()) {
+      result.success(null)
+      return;
+    }
+    this.isOpen = !this.isOpen;
+    // å‰ç«¯çš„æ‰‹ç”µç­’å…¶å®æ—¶åç«¯çš„é—ªå…‰ç¯
+    this.cameraService?.setFlashMode(this.isOpen);
+    result.success(null)
+  }
+
+  // åˆå§‹åŒ–ç›¸æœº
+  initCamera(result: MethodResult) {
+    this.cameraService?.initCamera(this.surfaceId, this.isFront)
+      .then(() => {
+        this.isStop = false;
+        this.torchModeOn(result, 'initCamera');
+        result.success(true);
+      })
+  }
+
+  // å¦‚æœçŠ¶æ€å¼€, åˆ™æ‰“å¼€
+  torchModeOn(result: MethodResult, type: string = '') {
+    if (this.isOpen) {
+      setTimeout(() => {
+        this.cameraService?.setFlashMode(this.isOpen);
+      }, this.FLASH_TIME_OUT);
+    }
+  }
+
+  barCodeViewNotSet(result: MethodResult) {
+    result.error(
+      ChannelMethods.ERROR_CODE_NOT_SET,
+      ChannelMethods.ERROR_MESSAGE_NOT_SET,
+      null
+    )
+  }
+
+  build() {
+    Stack() {
+      if (this.userGrant) {
+        Column() {
+          XComponent({
+            id: 'componentId',
+            type: XComponentType.SURFACE,
+            controller: this.mXComponentController
+          })
+            .onLoad(() => {
+              this.surfaceId = this.mXComponentController.getXComponentSurfaceId();
+              this.scan()
+            })
+            .width(this.cameraWidth)
+            .height(this.cameraHeight)
+        }
+        .height('100%')
+        .width('100%')
+        .position({ x: 0, y: 0 })
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.userGrant ? Color.Transparent : Color.Black)
+  }
+}
+
+@Builder
+export function buildOhosView(params: Params) {
+  OhosView({
+    params: params,
+    channel: (params.platformView as QrCaptureView).getChannel()
+  })
+}ÔrD•§version¨mappings¥names§sources®sourcesContentÜr‘”    ‘”  ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”  48‘”  60‘”  9‘”  "‘”  <‘”  =‘”  >‘”  ÌB‘”  ÌC‘”  ÌE‘”  ÌG	‘”  ÌH‘”  ÌJ	‘”  ÌK‘”  ÌL‘”  ÌM‘”  ÌQ‘”  ÌR‘”  ÌS‘”  ÌT‘”  ÌU‘”  ÌV‘”  Ì_‘”  Ì`‘”  Ìb‘”  Ìc‘”  Ìd‘”  Ìe‘”  Ìg‘”  Ìh‘”  Ìm‘”  Ìn‘”  Ìo‘”  Ìt‘”  Ìw‘”  Ìy‘”  Ì‘”  Ì‘”  Ìƒ‘”  Ì„‘”  Ì…‘”  Ì†‘”  ÌŠ‘”  Ì‹‘”  ÌŒ‘”  Ì‘”  Ì‘”  Ì‘”  Ì‘‘”  Ì•‘”  Ì–‘”  Ìš‘”  Ì›‘”  Ì ‘”  Ì¢‘”  Ì£‘”  Ì¤‘”  Ì¨‘”  Ì­‘”  Ì®‘”  Ì¯‘”  Ì°‘”  Ì±‘”  Ì²‘”  Ì¶‘”  Ì·‘”  Ì¸‘”  Ì¹‘”  Ì½‘”  Ì¾‘”  ÌÂ‘”  ÌÃ‘”  ÌÄ‘”  ÌÅ‘”  ÌÆ‘”  ÌÇ‘”  ÌÇ‘”  ÌÉ‘”  ÌÍ‘”  ÌÏ‘”  ÌÑ‘”  ÌÒ‘”  ÌÓ‘”  ÌÓ‘”  ÌÔ‘”  ÌÕ‘”  ÌÖ‘”  Ì×‘”  ÌØ‘”  ÌÛ‘”  ÌÜ‘”  Ìâ‘”  Ìæ‘”  Ìç‘”  Ìè‘”  Ìì‘”  Ìí‘”  Ìî‘”  Ìò‘”  Ì÷‘”  Ìü‘”  Ìı‘”  Ìş‘”  Í‘”  Í‘”  Í‘”  Í‘”  Í‘”  Í‘”  Í	‘”  Í‘”  Í‘”  Í‘”  Í‘”  Í‘”  Í‘”  Í‘”  Í‘”  Í‘”  Í‘”  Í"‘”  Í&‘”  Í'‘”  Í)‘”  Í*‘”  Í+‘”  Í,‘”  Í0‘”  Í4‘”  Í5‘”  Í8‘”  Í9‘”  Í@‘”  ÍA‘”  ÍD
+‘”  ÍE‘”  ÍH‘”  ÍD
+‘”  ÍD
+‘”  ÍD
+‘”  ÍS‘”  ÍS‘”  ÍX‘”  Í\ ‘”  Í\‘”  Í\‘”  Í]‘”  Í^‘”  Í_‘”  Í`‘”  Í^‘”  Í_‘”  Í^‘”  Í_‘”  Ía‘Ù}D:\app\projects\photo_post\lumira_app_flutter\packages\qr_code_scanner\ohos\src\main\ets\components\plugin\OhosQrCodeView.ets‘Ú1®/*
+ * Copyright (C) 2024 Huawei Device Co., Ltd.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import EventHub from './libs/EventHub';
+import QrCaptureView from './QrCaptureView';
+import { camera } from '@kit.CameraKit';
+import { scanBarcode, customScan } from '@kit.ScanKit';
+import { common, abilityAccessCtrl, Permissions } from '@kit.AbilityKit';
+import { Params } from '@ohos/flutter_ohos/src/main/ets/plugin/platform/PlatformView';
+import { Any, MethodChannel, MethodResult } from '@ohos/flutter_ohos';
+import { PermissionsUtil } from './libs/PermissionsUtil';
+import { CameraService } from './libs/CameraService'
+import { display, window } from '@kit.ArkUI';
+import { ChannelMethods } from './libs/ChannelMethods';
+
+const TAG: string = '[OhosView]: '
+
+@Entry
+@Component
+export struct OhosView {
+  @Prop params: Params;
+  @Prop channel: MethodChannel | null = null;
+  @State isFlashlight: boolean = false; // Whether the flashlight is turned on.
+  @State isSensorLight: boolean = false; // Record the current environment brightness status.
+  @State isScanned: boolean = false;
+  @State cameraHeight: number = 300; // Sets the XComponent height. The default unit is vp.
+  @State cameraWidth: number = 300; // Sets the XComponent width. The default unit is vp.
+  @State userGrant: boolean = false;
+  @State surfaceId: string = '';
+  @State cameraScreenOffsetX: number = 0;
+  @State cameraScreenOffsetY: number = 0;
+  @State isStop: boolean = false;
+  @State isOpen: boolean = false;
+  @State isFront: boolean = false;
+  @State result: Array<scanBarcode.ScanResult> = [];
+  @State data: Array<string> = [];
+  @State isVertical: boolean = true;
+  @State scanAreaWidth: number = 150;
+  @State scanAreaHeight: number = 150;
+  @State cutOutBottomOffset: number = 0;
+  private mXComponentController: XComponentController = new XComponentController();
+  private context: Context = getContext(this);
+  private cameraService: CameraService | null = new CameraService(this.context);
+  private windowClass: window.Window | null = null;
+  private barcodeFormats: Array<number> = [];
+  private timerId: number = -1;
+  private FLASH_TIME_OUT: number = 200; // é—ªå…‰ç¯å»¶æ—¶è§¦å‘ï¼Œè‹¥ä¸å»¶æ—¶ä¼šè¢«è®¤ä¸ºè¿˜åœ¨å…¶ä»–åº”ç”¨ç•Œé¢ï¼Œä¸æ”¯æŒé—ªå…‰ç¯æ¨¡å¼
+
+  async aboutToAppear() {
+    this.isScanned = false;
+    this.isStop = false;
+    this.onEmitEvents();
+    this.setDisplay();
+    this.init();
+    window.getLastWindow(this.context).then((windowClass) => {
+      this.windowClass = windowClass;
+      windowClass.on('windowEvent', (data) => {
+        if (data === window.WindowEventType.WINDOW_SHOWN) {
+          this.onPageShow();
+        }
+        if (data === window.WindowEventType.WINDOW_HIDDEN) {
+          this.onPageHide();
+        }
+      });
+    })
+    this.cameraService!.onImageArrival(this.cameraService!.imageReceiver, this.channel, this.barcodeFormats);
+  }
+
+  aboutToDisappear() {
+    this.cameraService?.releaseCamera()
+    EventHub.offAll(this.context);
+    if (this.timerId !== -1) {
+      clearTimeout(this.timerId);
+    }
+    this.windowClass?.off('windowEvent');
+  }
+
+  onPageShow(): void {
+    // é¦–æ¬¡æ‰“å¼€æ—¶ï¼Œç³»ç»Ÿç›¸æœºæƒé™å¼¹çª—ä¼šæ‰“æ–­é¡µé¢ç”Ÿå‘½å‘¨æœŸï¼šè¿”å›å‰å°è§¦å‘æœ¬å›è°ƒæ—¶ï¼Œ
+    // XComponent å¯èƒ½å°šæœª onLoadï¼ˆuserGrant åœ¨æˆæƒåæ‰ç½®ä½ï¼‰ï¼Œæ­¤æ—¶ surfaceId ä»ä¸º
+    // ç©ºã€‚è‹¥ç”¨ç©º surfaceId å» initCameraï¼Œä¼šæŠ¢å ç›¸æœºè®¾å¤‡å´ç»‘ä¸åˆ°æœ‰æ•ˆé¢„è§ˆ surfaceï¼Œ
+    // å¯¼è‡´éšå onLoadâ†’scan() çš„çœŸæ­£åˆå§‹åŒ–å¤±è´¥ï¼Œç”»é¢é»‘å±ã€‚surfaceId å°±ç»ªå‰ç›´æ¥è·³è¿‡ï¼Œ
+    // ç›¸æœºç»Ÿä¸€ç”± onLoadâ†’scan() åœ¨ surfaceId å°±ç»ªåå¯åŠ¨ã€‚
+    if (!this.surfaceId) {
+      console.info(TAG + 'onPageShow skip: surfaceId not ready');
+      return;
+    }
+    this.cameraService!.initCamera(this.surfaceId, this.isFront)
+    if (!this.isFront) {
+      this.timerId = setTimeout(() => {
+        this.cameraService?.setFlashMode(this.isOpen)
+      }, this.FLASH_TIME_OUT)
+    }
+  }
+
+  onPageHide(): void {
+    this.cameraService!.preFrontRelease(this.isStop);
+    if (this.timerId !== -1) {
+      clearTimeout(this.timerId);
+    }
+  }
+
+  onEmitEvents() {
+    // æ³¨å†Œç›‘å¬äº‹ä»¶
+    const context = getContext(this) as common.UIAbilityContext;
+    // å¼€å§‹æ‰«æ
+    EventHub.onStartScan(context, async (args: Any) => {
+      this.channel = args.channel;
+      this.barcodeFormats = args.barcodeFormats || [];
+    });
+
+    // æš‚åœæ‰«æ
+    EventHub.onPauseCamera(context, async (result: MethodResult) => {
+      if (this.isStop) {
+        return;
+      }
+      // æš‚åœé—ªå…‰ç¯
+      this.cameraService?.setFlashMode(false);
+      this.cameraService?.stopCamera().then(() => {
+        this.isStop = true;
+        result.success(null)
+      })
+    });
+
+    // åˆ‡æ¢æ‘„åƒå¤´
+    EventHub.onFlipCamera(context, async (result: MethodResult) => {
+      console.info(TAG + 'onFlipCamera success');
+      this.isFront = !this.isFront;
+      this.cameraService?.preFrontRelease(this.isStop).then(() => {
+        this.cameraService?.initCamera(this.surfaceId, this.isFront).then(() => {
+          this.cameraService?.setFlashMode(this.isOpen); // åˆ‡æ¢åˆ°åç½®æ‘„åƒå¤´åé‡åˆ¶é—ªå…‰ç¯çŠ¶æ€
+        })
+      })
+    });
+
+    // åˆ‡æ¢æ‘„åƒå¤´
+    EventHub.onToggleFlash(context, (result: MethodResult) => {
+      this.setTorchMode(result);
+    });
+
+    // é‡æ–°æ‰«æ
+    EventHub.onResum(context, (result: MethodResult) => {
+      this.restartCustomScan(result);
+    });
+
+    // è·å–é—ªå…‰ç¯çŠ¶æ€
+    EventHub.onGetFlashInfo(context, (result: MethodResult) => {
+      if (this.isStop) {
+        result.success(this.isOpen);
+        return;
+      }
+      result.success(this.isOpen);
+    });
+
+    // è·å–ç›¸æœºæ”¯æŒåŠŸèƒ½
+    EventHub.onGetSystemFeatures(context, async (result: MethodResult) => {
+      const fatures = new Map<string, boolean | string | undefined>();
+      const hasFrontCamera = this.cameraService?.hasCamera('front');
+      const hasBackCamera = this.cameraService?.hasCamera();
+      const hasFlash = this.cameraService?.hasFlashCamera();
+      const activeCamera = this.cameraService?.activeCamera();
+      fatures.set('hasFrontCamera', hasFrontCamera);
+      fatures.set('hasBackCamera', hasBackCamera);
+      fatures.set('hasFlash', hasFlash);
+      fatures.set('activeCamera', activeCamera);
+      result.success(fatures);
+    });
+
+    // è·å–é¢„è§ˆåŒºåŸŸ
+    EventHub.onChangeScanArea(context, (res: Any) => {
+      console.info(TAG + 'onChangeScanArea enter success' + JSON.stringify(res));
+      this.scanAreaWidth = res.scanAreaWidth;
+      this.scanAreaHeight = res.scanAreaHeight;
+    });
+
+    // è®¾ç½®å›¾åƒå€’ç½®
+    EventHub.onInvertScan(context, (res: Any) => {
+      console.info(TAG + 'onInvertScan enter success' + JSON.stringify(res));
+    });
+  }
+
+  // æ£€æŸ¥æƒé™ åˆå§‹åŒ–ç›¸æœº å¼€å§‹æ‰«æ
+  async init() {
+    const permissions: Array<Permissions> = ['ohos.permission.CAMERA'];
+    let grantStatus = await PermissionsUtil.checkAccessToken(permissions[0]);
+    if (grantStatus === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
+      this.userGrant = true;
+    } else {
+      this.requestCameraPermission();
+    }
+  }
+
+  // ç”³è¯·æƒé™
+  async requestCameraPermission() {
+    let grantStatus = await PermissionsUtil.reqPermissionsFromUser(this.context);
+    let length: number = grantStatus.length;
+    for (let i = 0; i < length; i++) {
+      if (grantStatus[i] === 0) {
+        this.userGrant = true;
+      } else {
+        console.error(TAG + 'no CameraPermission');
+        this.userGrant = false;
+      }
+    }
+    if (!this.userGrant) {
+      // é¦–æ¬¡æ‰“å¼€æ—¶ onStartScanï¼ˆä¸‹å‘ channelï¼‰ä¸æˆæƒå¼¹çª—çš„æ—¶åºä¸å›ºå®šï¼Œchannel å¯èƒ½
+      // å°šæœªå°±ç»ªï¼Œåšç©ºåˆ¤å…œåº•ï¼Œé¿å…æˆæƒç»“æœå›è°ƒæ—¶å´©æºƒã€‚
+      this.channel?.invokeMethod(ChannelMethods.CHANNEL_METHOD_ON_PERMISSION_SET, this.userGrant);
+    }
+  }
+
+  // æ‰«ä¸€æ‰«åˆå§‹åŒ–
+  scan() {
+    const cameraManager = camera.getCameraManager(this.context);
+    this.cameraService!.createCamera(cameraManager);
+    // é¦–æ¬¡åˆå§‹åŒ–ç›¸æœºå¹¶è¦æ±‚ä¼šè¯å·²å¯åŠ¨ï¼›è‹¥å¶å‘å¤±è´¥ï¼ˆè®¾å¤‡å¿™ / onLoad ä¸ onPageShow
+    // æ—¶åºç«äº‰ï¼‰ï¼Œåšä¸€æ¬¡å»¶æ—¶å…œåº•é‡è¯•ï¼Œé¿å…é¦–æ¬¡æ‰“å¼€å¶å‘é»‘å±åæ— æ¢å¤ã€‚é‡è¯•ç”±
+    // initCamera å†…éƒ¨çš„ä¸²è¡ŒåŒ– / å»é‡ / teardown é€»è¾‘å…œåº•ï¼Œå¹‚ç­‰å®‰å…¨ã€‚
+    this.cameraService!.initCamera(this.surfaceId).then(() => {
+      if (!this.cameraService!.isCameraRunning()) {
+        console.info(TAG + 'initCamera not running, retry once');
+        setTimeout(() => {
+          this.cameraService!.initCamera(this.surfaceId);
+        }, 300);
+      }
+    }).catch(() => {
+      console.error(TAG + 'initCamera failed, retry once');
+      setTimeout(() => {
+        this.cameraService!.initCamera(this.surfaceId);
+      }, 300);
+    });
+  }
+
+  setDisplay() {
+    // é»˜è®¤ç«–å±
+    let displayClass = display.getDefaultDisplaySync();
+    const displayHeight = px2vp(displayClass.height);
+    const displayWidth = px2vp(displayClass.width);
+    let maxLen: number = Math.max(displayWidth, displayHeight);
+    let minLen: number = Math.min(displayWidth, displayHeight);
+    const RATIO: number = 16 / 9;
+    this.cameraHeight = maxLen;
+    this.cameraWidth = maxLen / RATIO;
+  }
+
+  // æ£€æŸ¥æƒé™ æ²¡æœ‰çš„è¯ç”³è¯·æƒé™
+  async checkPermission(result: MethodResult) {
+    const permissions: Array<Permissions> = ['ohos.permission.CAMERA'];
+    let grantStatus = await PermissionsUtil.checkAccessToken(permissions[0]);
+    if (grantStatus === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
+      this.userGrant = true;
+    } else {
+      this.requestCameraPermission();
+    }
+  }
+
+  // é‡æ–°æ‰«æ
+  restartCustomScan(result: MethodResult) {
+    if (this.isStop) {
+      this.initCamera(result);
+    } else {
+      // å¦‚æœæœ¬æ¥å°±ä¸æ˜¯æš‚åœçŠ¶æ€å°±ä¸éœ€è¦é¢å¤–çš„å¤„ç†é€»è¾‘
+      // this.cameraService?.stopCamera().then(() => {
+      //   this.initCamera(result);
+      // })
+    }
+  }
+
+  // è®¾ç½®æ‰‹ç”µç­’å¼€å…³ N
+  // è®¾ç½®é—ªå…‰ç¯å¼€å…³ Y
+  setTorchMode(result: MethodResult) {
+    if (!this.cameraService?.hasFlash()) {
+      result.success(null)
+      return;
+    }
+    this.isOpen = !this.isOpen;
+    // å‰ç«¯çš„æ‰‹ç”µç­’å…¶å®æ—¶åç«¯çš„é—ªå…‰ç¯
+    this.cameraService?.setFlashMode(this.isOpen);
+    result.success(null)
+  }
+
+  // åˆå§‹åŒ–ç›¸æœº
+  initCamera(result: MethodResult) {
+    this.cameraService?.initCamera(this.surfaceId, this.isFront)
+      .then(() => {
+        this.isStop = false;
+        this.torchModeOn(result, 'initCamera');
+        result.success(true);
+      })
+  }
+
+  // å¦‚æœçŠ¶æ€å¼€, åˆ™æ‰“å¼€
+  torchModeOn(result: MethodResult, type: string = '') {
+    if (this.isOpen) {
+      setTimeout(() => {
+        this.cameraService?.setFlashMode(this.isOpen);
+      }, this.FLASH_TIME_OUT);
+    }
+  }
+
+  barCodeViewNotSet(result: MethodResult) {
+    result.error(
+      ChannelMethods.ERROR_CODE_NOT_SET,
+      ChannelMethods.ERROR_MESSAGE_NOT_SET,
+      null
+    )
+  }
+
+  build() {
+    Stack() {
+      if (this.userGrant) {
+        Column() {
+          XComponent({
+            id: 'componentId',
+            type: XComponentType.SURFACE,
+            controller: this.mXComponentController
+          })
+            .onLoad(() => {
+              this.surfaceId = this.mXComponentController.getXComponentSurfaceId();
+              this.scan()
+            })
+            .width(this.cameraWidth)
+            .height(this.cameraHeight)
+        }
+        .height('100%')
+        .width('100%')
+        .position({ x: 0, y: 0 })
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.userGrant ? Color.Transparent : Color.Black)
+  }
+}
+
+@Builder
+export function buildOhosView(params: Params) {
+  OhosView({
+    params: params,
+    channel: (params.platformView as QrCaptureView).getChannel()
+  })
+}ÔrE˜·@ohos.multimedia.camera·@ohos.abilityAccessCtrl­@ohos.display¬@ohos.window¯./libs/EventHub¶./libs/PermissionsUtil´./libs/CameraServiceµ./libs/ChannelMethodsÔrF—ªassertions¨external¢id¤meta±moduleSideEffectsªresolvedByµsyntheticNamedExportsAÃÙm hvigor_ignore_D:_app_DevEcoStudio_DevEco Studio_sdk_default_openharmony_ets_api_@ohos.multimedia.camera.d.tsÔrG‘¯hostModulesInfo‘C·@ohos.multimedia.camera¯qr_code_scannerÃªoh-resolveÂFAÃÙm hvigor_ignore_D:_app_DevEcoStudio_DevEco Studio_sdk_default_openharmony_ets_api_@ohos.abilityAccessCtrl.d.tsG‘C·@ohos.abilityAccessCtrl¯qr_code_scannerÃªoh-resolveÂFAÃÙc hvigor_ignore_D:_app_DevEcoStudio_DevEco Studio_sdk_default_openharmony_ets_api_@ohos.display.d.tsG‘C­@ohos.display¯qr_code_scannerÃªoh-resolveÂFAÃÙb hvigor_ignore_D:_app_DevEcoStudio_DevEco Studio_sdk_default_openharmony_ets_api_@ohos.window.d.tsG‘C¬@ohos.window¯qr_code_scannerÃªoh-resolveÂFAÂÙ|D:\app\projects\photo_post\lumira_app_flutter\packages\qr_code_scanner\ohos\src\main\ets\components\plugin\libs\EventHub.etsAÃªoh-resolveÂFAÂÙƒD:\app\projects\photo_post\lumira_app_flutter\packages\qr_code_scanner\ohos\src\main\ets\components\plugin\libs\PermissionsUtil.etsAÃªoh-resolveÂFAÂÙD:\app\projects\photo_post\lumira_app_flutter\packages\qr_code_scanner\ohos\src\main\ets\components\plugin\libs\CameraService.etsAÃªoh-resolveÂFAÂÙ‚D:\app\projects\photo_post\lumira_app_flutter\packages\qr_code_scanner\ohos\src\main\ets\components\plugin\libs\ChannelMethods.etsAÃªoh-resolveÂ‘ÔrH’§missing¦pluginÃ¦genAbcÂÔ  ÔrI”²dynamicImportCache¹exportAllDeclarationCache»exportNamedDeclarationCache«importCache’ÔrJ–¤type¥start£end«declarationªspecifiers¦source¶ExportNamedDeclarationÍ’ÍYéÔrK–¤type¥start£end¢idªsuperClass¤body°ClassDeclarationÍ™ÍYéÔrL”¤type¥start£end¤nameªIdentifierÍŸÍ§¨OhosViewLªIdentifierÍ°Í¶¦ViewPUÔrM”¤type¥start£end¤body©ClassBodyÍ·ÍYéÜ ?ÔrN˜¤type¥start£end¦static¨computed£key¤kind¥value°MethodDefinitionÍ¾Í ÂÂLªIdentifierÍ¾ÍÉ«constructor«constructorÔrO™¤type¥start£end¢idªexpression©generator¥async¦params¤body²FunctionExpressionÍÉÍ ÀÂÂÂ–LªIdentifierÍÊÍĞ¦parentLªIdentifierÍÒÍØ¦paramsLªIdentifierÍÚÍè®__localStorageÔrP•¤type¥start£end¤left¥right±AssignmentPatternÍêÍõLªIdentifierÍêÍğ¦elmtIdÔrQ–¤type¥start£end¨operator¦prefix¨argument¯UnaryExpressionÍóÍõ¡-ÃÔrR•¤type¥start£end¥value£raw§LiteralÍôÍõ¡1P±AssignmentPatternÍ÷ÍLªIdentifierÍ÷Í¬paramsLambdaLªIdentifierÍÍ©undefinedLªIdentifierÍÍ©extraInfoM®BlockStatementÍÍ Ü ÔrS”¤type¥start£endªexpression³ExpressionStatementÍ'ÍXÔrT–¤type¥start£end¦callee©arguments¨optional®CallExpressionÍ'ÍWÔrU“¤type¥start£end¥SuperÍ'Í,”LªIdentifierÍ-Í3¦parentLªIdentifierÍ5ÍC®__localStorageLªIdentifierÍEÍK¦elmtIdLªIdentifierÍMÍV©extraInfoÂÔrV–¤type¥start£end¤testªconsequent©alternate«IfStatementÍbÍÉÔrW–¤type¥start£end¤left¨operator¥right°BinaryExpressionÍfÍˆQ¯UnaryExpressionÍfÍy¦typeofÃLªIdentifierÍmÍy¬paramsLambda£===R§LiteralÍ~Íˆ¨functionª"function"M®BlockStatementÍŠÍÉ‘S³ExpressionStatementÍ™Í¾ÔrX–¤type¥start£end¨operator¤left¥right´AssignmentExpressionÍ™Í½¡=ÔrY—¤type¥start£end¦object¨property¨computed¨optional°MemberExpressionÍ™Í®U®ThisExpressionÍ™ÍLªIdentifierÍÍ®°paramsGenerator_ÂÂLªIdentifierÍ±Í½¬paramsLambdaÀS³ExpressionStatementÍÓÍ$X´AssignmentExpressionÍÓÍ#¡=Y°MemberExpressionÍÓÍàU®ThisExpressionÍÓÍ×LªIdentifierÍØÍà¨__paramsÂÂÔrZ•¤type¥start£end¦callee©arguments­NewExpressionÍãÍ#LªIdentifierÍçÍ½SynchedPropertyObjectOneWayPU“Y°MemberExpressionÍÍLªIdentifierÍÍ¦paramsLªIdentifierÍÍ¦paramsÂÂU®ThisExpressionÍÍR§LiteralÍÍ"¦params¨"params"S³ExpressionStatementÍ.Í‚X´AssignmentExpressionÍ.Í¡=Y°MemberExpressionÍ.Í<U®ThisExpressionÍ.Í2LªIdentifierÍ3Í<©__channelÂÂZ­NewExpressionÍ?ÍLªIdentifierÍCÍ`½SynchedPropertyObjectOneWayPU“Y°MemberExpressionÍaÍoLªIdentifierÍaÍg¦paramsLªIdentifierÍhÍo§channelÂÂU®ThisExpressionÍqÍuR§LiteralÍwÍ€§channel©"channel"S³ExpressionStatementÍŒÍÜX´AssignmentExpressionÍŒÍÛ¡=Y°MemberExpressionÍŒÍŸU®ThisExpressionÍŒÍLªIdentifierÍ‘ÍŸ®__isFlashlightÂÂZ­NewExpressionÍ¢ÍÛLªIdentifierÍ¦Í¾¸ObservedPropertySimplePU“R§LiteralÍ¿ÍÄÂ¥falseU®ThisExpressionÍÆÍÊR§LiteralÍÌÍÚ¬isFlashlight®"isFlashlight"S³ExpressionStatementÍæÍ8X´AssignmentExpressionÍæÍ7¡=Y°MemberExpressionÍæÍúU®ThisExpressionÍæÍêLªIdentifierÍëÍú¯__isSensorLightÂÂZ­NewExpressionÍıÍ7LªIdentifierÍÍ¸ObservedPropertySimplePU“R§LiteralÍÍÂ¥falseU®ThisExpressionÍ!Í%R§LiteralÍ'Í6­isSensorLight¯"isSensorLight"S³ExpressionStatementÍBÍŒX´AssignmentExpressionÍBÍ‹¡=Y°MemberExpressionÍBÍRU®ThisExpressionÍBÍFLªIdentifierÍGÍR«__isScannedÂÂZ­NewExpressionÍUÍ‹LªIdentifierÍYÍq¸ObservedPropertySimplePU“R§LiteralÍrÍwÂ¥falseU®ThisExpressionÍyÍ}R§LiteralÍÍŠ©isScanned«"isScanned"S³ExpressionStatementÍ–ÍäX´AssignmentExpressionÍ–Íã¡=Y°MemberExpressionÍ–Í©U®ThisExpressionÍ–ÍšLªIdentifierÍ›Í©®__cameraHeightÂÂZ­NewExpressionÍ¬ÍãLªIdentifierÍ°ÍÈ¸ObservedPropertySimplePU“R§LiteralÍÉÍÌÍ,£300U®ThisExpressionÍÎÍÒR§LiteralÍÔÍâ¬cameraHeight®"cameraHeight"S³ExpressionStatementÍîÍ:X´AssignmentExpressionÍîÍ9¡=Y°MemberExpressionÍîÍ U®ThisExpressionÍîÍòLªIdentifierÍóÍ ­__cameraWidthÂÂZ­NewExpressionÍÍ9LªIdentifierÍÍ¸ObservedPropertySimplePU“R§LiteralÍ Í#Í,£300U®ThisExpressionÍ%Í)R§LiteralÍ+Í8«cameraWidth­"cameraWidth"S³ExpressionStatementÍDÍX´AssignmentExpressionÍDÍ¡=Y°MemberExpressionÍDÍTU®ThisExpressionÍDÍHLªIdentifierÍIÍT«__userGrantÂÂZ­NewExpressionÍWÍLªIdentifierÍ[Ís¸ObservedPropertySimplePU“R§LiteralÍtÍyÂ¥falseU®ThisExpressionÍ{ÍR§LiteralÍÍŒ©userGrant«"userGrant"S³ExpressionStatementÍ˜ÍßX´AssignmentExpressionÍ˜ÍŞ¡=Y°MemberExpressionÍ˜Í¨U®ThisExpressionÍ˜ÍœLªIdentifierÍÍ¨«__surfaceIdÂÂZ­NewExpressionÍ«ÍŞLªIdentifierÍ¯ÍÇ¸ObservedPropertySimplePU“R§LiteralÍÈÍÊ ¢''U®ThisExpressionÍÌÍĞR§LiteralÍÒÍİ©surfaceId«"surfaceId"S³ExpressionStatementÍéÍ	CX´AssignmentExpressionÍéÍ	B¡=Y°MemberExpressionÍéÍ	U®ThisExpressionÍéÍíLªIdentifierÍîÍ	µ__cameraScreenOffsetXÂÂZ­NewExpressionÍ	Í	BLªIdentifierÍ	
+Í	"¸ObservedPropertySimplePU“R§LiteralÍ	#Í	$ ¡0U®ThisExpressionÍ	&Í	*R§LiteralÍ	,Í	A³cameraScreenOffsetXµ"cameraScreenOffsetX"S³ExpressionStatementÍ	MÍ	§X´AssignmentExpressionÍ	MÍ	¦¡=Y°MemberExpressionÍ	MÍ	gU®ThisExpressionÍ	MÍ	QLªIdentifierÍ	RÍ	gµ__cameraScreenOffsetYÂÂZ­NewExpressionÍ	jÍ	¦LªIdentifierÍ	nÍ	†¸ObservedPropertySimplePU“R§LiteralÍ	‡Í	ˆ ¡0U®ThisExpressionÍ	ŠÍ	R§LiteralÍ	Í	¥³cameraScreenOffsetYµ"cameraScreenOffsetY"S³ExpressionStatementÍ	±Í	õX´AssignmentExpressionÍ	±Í	ô¡=Y°MemberExpressionÍ	±Í	¾U®ThisExpressionÍ	±Í	µLªIdentifierÍ	¶Í	¾¨__isStopÂÂZ­NewExpressionÍ	ÁÍ	ôLªIdentifierÍ	ÅÍ	İ¸ObservedPropertySimplePU“R§LiteralÍ	ŞÍ	ãÂ¥falseU®ThisExpressionÍ	åÍ	éR§LiteralÍ	ëÍ	ó¦isStop¨"isStop"S³ExpressionStatementÍ	ÿÍ
+CX´AssignmentExpressionÍ	ÿÍ
+B¡=Y°MemberExpressionÍ	ÿÍ
+U®ThisExpressionÍ	ÿÍ
+LªIdentifierÍ
+Í
+¨__isOpenÂÂZ­NewExpressionÍ
+Í
+BLªIdentifierÍ
+Í
++¸ObservedPropertySimplePU“R§LiteralÍ
+,Í
+1Â¥falseU®ThisExpressionÍ
+3Í
+7R§LiteralÍ
+9Í
+A¦isOpen¨"isOpen"S³ExpressionStatementÍ
+MÍ
+“X´AssignmentExpressionÍ
+MÍ
+’¡=Y°MemberExpressionÍ
+MÍ
+[U®ThisExpressionÍ
+MÍ
+QLªIdentifierÍ
+RÍ
+[©__isFrontÂÂZ­NewExpressionÍ
+^Í
+’LªIdentifierÍ
+bÍ
+z¸ObservedPropertySimplePU“R§LiteralÍ
+{Í
+€Â¥falseU®ThisExpressionÍ
+‚Í
+†R§LiteralÍ
+ˆÍ
+‘§isFront©"isFront"S³ExpressionStatementÍ
+Í
+ŞX´AssignmentExpressionÍ
+Í
+İ¡=Y°MemberExpressionÍ
+Í
+ªU®ThisExpressionÍ
+Í
+¡LªIdentifierÍ
+¢Í
+ª¨__resultÂÂZ­NewExpressionÍ
+­Í
+İLªIdentifierÍ
+±Í
+É¸ObservedPropertyObjectPU“Ôr[”¤type¥start£end¨elements¯ArrayExpressionÍ
+ÊÍ
+ÌU®ThisExpressionÍ
+ÎÍ
+ÒR§LiteralÍ
+ÔÍ
+Ü¦result¨"result"S³ExpressionStatementÍ
+èÍ%X´AssignmentExpressionÍ
+èÍ$¡=Y°MemberExpressionÍ
+èÍ
+óU®ThisExpressionÍ
+èÍ
+ìLªIdentifierÍ
+íÍ
+ó¦__dataÂÂZ­NewExpressionÍ
+öÍ$LªIdentifierÍ
+úÍ¸ObservedPropertyObjectPU“[¯ArrayExpressionÍÍU®ThisExpressionÍÍR§LiteralÍÍ#¤data¦"data"S³ExpressionStatementÍ/ÍzX´AssignmentExpressionÍ/Íy¡=Y°MemberExpressionÍ/Í@U®ThisExpressionÍ/Í3LªIdentifierÍ4Í@¬__isVerticalÂÂZ­NewExpressionÍCÍyLªIdentifierÍGÍ_¸ObservedPropertySimplePU“R§LiteralÍ`ÍdÃ¤trueU®ThisExpressionÍfÍjR§LiteralÍlÍxªisVertical¬"isVertical"S³ExpressionStatementÍ„ÍÔX´AssignmentExpressionÍ„ÍÓ¡=Y°MemberExpressionÍ„Í˜U®ThisExpressionÍ„ÍˆLªIdentifierÍ‰Í˜¯__scanAreaWidthÂÂZ­NewExpressionÍ›ÍÓLªIdentifierÍŸÍ·¸ObservedPropertySimplePU“R§LiteralÍ¸Í»Ì–£150U®ThisExpressionÍ½ÍÁR§LiteralÍÃÍÒ­scanAreaWidth¯"scanAreaWidth"S³ExpressionStatementÍŞÍ0X´AssignmentExpressionÍŞÍ/¡=Y°MemberExpressionÍŞÍóU®ThisExpressionÍŞÍâLªIdentifierÍãÍó°__scanAreaHeightÂÂZ­NewExpressionÍöÍ/LªIdentifierÍúÍ¸ObservedPropertySimplePU“R§LiteralÍÍÌ–£150U®ThisExpressionÍÍR§LiteralÍÍ.®scanAreaHeight°"scanAreaHeight"S³ExpressionStatementÍ:Í’X´AssignmentExpressionÍ:Í‘¡=Y°MemberExpressionÍ:ÍSU®ThisExpressionÍ:Í>LªIdentifierÍ?ÍS´__cutOutBottomOffsetÂÂZ­NewExpressionÍVÍ‘LªIdentifierÍZÍr¸ObservedPropertySimplePU“R§LiteralÍsÍt ¡0U®ThisExpressionÍvÍzR§LiteralÍ|Í²cutOutBottomOffset´"cutOutBottomOffset"S³ExpressionStatementÍœÍÔX´AssignmentExpressionÍœÍÓ¡=Y°MemberExpressionÍœÍ¶U®ThisExpressionÍœÍ LªIdentifierÍ¡Í¶µmXComponentControllerÂÂZ­NewExpressionÍ¹ÍÓLªIdentifierÍ½ÍÑ´XComponentControllerS³ExpressionStatementÍŞÍşX´AssignmentExpressionÍŞÍı¡=Y°MemberExpressionÍŞÍêU®ThisExpressionÍŞÍâLªIdentifierÍãÍê§contextÂÂT®CallExpressionÍíÍıLªIdentifierÍíÍ÷ªgetContext‘U®ThisExpressionÍøÍüÂS³ExpressionStatementÍÍ=X´AssignmentExpressionÍÍ<¡=Y°MemberExpressionÍÍU®ThisExpressionÍÍLªIdentifierÍÍ­cameraServiceÂÂZ­NewExpressionÍÍ<LªIdentifierÍ!Í.­CameraService‘Y°MemberExpressionÍ/Í;U®ThisExpressionÍ/Í3LªIdentifierÍ4Í;§contextÂÂS³ExpressionStatementÍGÍ_X´AssignmentExpressionÍGÍ^¡=Y°MemberExpressionÍGÍWU®ThisExpressionÍGÍKLªIdentifierÍLÍW«windowClassÂÂR§LiteralÍZÍ^À¤nullS³ExpressionStatementÍiÍ‚X´AssignmentExpressionÍiÍ¡=Y°MemberExpressionÍiÍ|U®ThisExpressionÍiÍmLªIdentifierÍnÍ|®barcodeFormatsÂÂ[¯ArrayExpressionÍÍS³ExpressionStatementÍŒÍX´AssignmentExpressionÍŒÍ¡=Y°MemberExpressionÍŒÍ˜U®ThisExpressionÍŒÍLªIdentifierÍ‘Í˜§timerIdÂÂQ¯UnaryExpressionÍ›Í¡-ÃR§LiteralÍœÍ¡1S³ExpressionStatementÍ¨ÍÂX´AssignmentExpressionÍ¨ÍÁ¡=Y°MemberExpressionÍ¨Í»U®ThisExpressionÍ¨Í¬LªIdentifierÍ­Í»®FLASH_TIME_OUTÂÂR§LiteralÍ¾ÍÁÌÈ£200S³ExpressionStatementÍÌÍóT®CallExpressionÍÌÍòY°MemberExpressionÍÌÍêU®ThisExpressionÍÌÍĞLªIdentifierÍÑÍê¹setInitiallyProvidedValueÂÂ‘LªIdentifierÍëÍñ¦paramsÂS³ExpressionStatementÍıÍT®CallExpressionÍıÍY°MemberExpressionÍıÍU®ThisExpressionÍıÍLªIdentifierÍÍ´finalizeConstructionÂÂÂN°MethodDefinitionÍ&ÍºÂÂLªIdentifierÍ&Í?¹setInitiallyProvidedValue¦methodO²FunctionExpressionÍ?ÍºÀÂÂÂ‘LªIdentifierÍ@ÍF¦paramsM®BlockStatementÍHÍºÜ V«IfStatementÍSÍ¨W°BinaryExpressionÍWÍsY°MemberExpressionÍWÍeLªIdentifierÍWÍ]¦paramsLªIdentifierÍ^Íe§channelÂÂ£===LªIdentifierÍjÍs©undefinedM®BlockStatementÍuÍ¨‘S³ExpressionStatementÍ„ÍT®CallExpressionÍ„ÍœY°MemberExpressionÍ„Í–Y°MemberExpressionÍ„Í’U®ThisExpressionÍ„ÍˆLªIdentifierÍ‰Í’©__channelÂÂLªIdentifierÍ“Í–£setÂÂ‘R§LiteralÍ—Í›À¤nullÂÀV«IfStatementÍ²ÍW°BinaryExpressionÍ¶Í×Y°MemberExpressionÍ¶ÍÉLªIdentifierÍ¶Í¼¦paramsLªIdentifierÍ½ÍÉ¬isFlashlightÂÂ£!==LªIdentifierÍÎÍ×©undefinedM®BlockStatementÍÙÍ‘S³ExpressionStatementÍèÍX´AssignmentExpressionÍèÍ¡=Y°MemberExpressionÍèÍùU®ThisExpressionÍèÍìLªIdentifierÍíÍù¬isFlashlightÂÂY°MemberExpressionÍüÍLªIdentifierÍüÍ¦paramsLªIdentifierÍÍ¬isFlashlightÂÂÀV«IfStatementÍ%Í‘W°BinaryExpressionÍ)ÍKY°MemberExpressionÍ)Í=LªIdentifierÍ)Í/¦paramsLªIdentifierÍ0Í=­isSensorLightÂÂ£!==LªIdentifierÍBÍK©undefinedM®BlockStatementÍMÍ‘‘S³ExpressionStatementÍ\Í†X´AssignmentExpressionÍ\Í…¡=Y°MemberExpressionÍ\ÍnU®ThisExpressionÍ\Í`LªIdentifierÍaÍn­isSensorLightÂÂY°MemberExpressionÍqÍ…LªIdentifierÍqÍw¦paramsLªIdentifierÍxÍ…­isSensorLightÂÂÀV«IfStatementÍ›ÍûW°BinaryExpressionÍŸÍ½Y°MemberExpressionÍŸÍ¯LªIdentifierÍŸÍ¥¦paramsLªIdentifierÍ¦Í¯©isScannedÂÂ£!==LªIdentifierÍ´Í½©undefinedM®BlockStatementÍ¿Íû‘S³ExpressionStatementÍÎÍğX´AssignmentExpressionÍÎÍï¡=Y°MemberExpressionÍÎÍÜU®ThisExpressionÍÎÍÒLªIdentifierÍÓÍÜ©isScannedÂÂY°MemberExpressionÍßÍïLªIdentifierÍßÍå¦paramsLªIdentifierÍæÍï©isScannedÂÂÀV«IfStatementÍÍnW°BinaryExpressionÍ	Í*Y°MemberExpressionÍ	ÍLªIdentifierÍ	Í¦paramsLªIdentifierÍÍ¬cameraHeightÂÂ£!==LªIdentifierÍ!Í*©undefinedM®BlockStatementÍ,Ín‘S³ExpressionStatementÍ;ÍcX´AssignmentExpressionÍ;Íb¡=Y°MemberExpressionÍ;ÍLU®ThisExpressionÍ;Í?LªIdentifierÍ@ÍL¬cameraHeightÂÂY°MemberExpressionÍOÍbLªIdentifierÍOÍU¦paramsLªIdentifierÍVÍb¬cameraHeightÂÂÀV«IfStatementÍxÍŞW°BinaryExpressionÍ|ÍœY°MemberExpressionÍ|ÍLªIdentifierÍ|Í‚¦paramsLªIdentifierÍƒÍ«cameraWidthÂÂ£!==LªIdentifierÍ“Íœ©undefinedM®BlockStatementÍÍŞ‘S³ExpressionStatementÍ­ÍÓX´AssignmentExpressionÍ­ÍÒ¡=Y°MemberExpressionÍ­Í½U®ThisExpressionÍ­Í±LªIdentifierÍ²Í½«cameraWidthÂÂY°MemberExpressionÍÀÍÒLªIdentifierÍÀÍÆ¦paramsLªIdentifierÍÇÍÒ«cameraWidthÂÂÀV«IfStatementÍèÍHW°BinaryExpressionÍìÍ
+Y°MemberExpressionÍìÍüLªIdentifierÍìÍò¦paramsLªIdentifierÍóÍü©userGrantÂÂ£!==LªIdentifierÍÍ
+©undefinedM®BlockStatementÍÍH‘S³ExpressionStatementÍÍ=X´AssignmentExpressionÍÍ<¡=Y°MemberExpressionÍÍ)U®ThisExpressionÍÍLªIdentifierÍ Í)©userGrantÂÂY°MemberExpressionÍ,Í<LªIdentifierÍ,Í2¦paramsLªIdentifierÍ3Í<©userGrantÂÂÀV«IfStatementÍRÍ²W°BinaryExpressionÍVÍtY°MemberExpressionÍVÍfLªIdentifierÍVÍ\¦paramsLªIdentifierÍ]Íf©surfaceIdÂÂ£!==LªIdentifierÍkÍt©undefinedM®BlockStatementÍvÍ²‘S³ExpressionStatementÍ…Í§X´AssignmentExpressionÍ…Í¦¡=Y°MemberExpressionÍ…Í“U®ThisExpressionÍ…Í‰LªIdentifierÍŠÍ“©surfaceIdÂÂY°MemberExpressionÍ–Í¦LªIdentifierÍ–Íœ¦paramsLªIdentifierÍÍ¦©surfaceIdÂÂÀV«IfStatementÍ¼Í:W°BinaryExpressionÍÀÍèY°MemberExpressionÍÀÍÚLªIdentifierÍÀÍÆ¦paramsLªIdentifierÍÇÍÚ³cameraScreenOffsetXÂÂ£!==LªIdentifierÍßÍè©undefinedM®BlockStatementÍêÍ:‘S³ExpressionStatementÍùÍ/X´AssignmentExpressionÍùÍ.¡=Y°MemberExpressionÍùÍU®ThisExpressionÍùÍıLªIdentifierÍşÍ³cameraScreenOffsetXÂÂY°MemberExpressionÍÍ.LªIdentifierÍÍ¦paramsLªIdentifierÍÍ.³cameraScreenOffsetXÂÂÀV«IfStatementÍDÍÂW°BinaryExpressionÍHÍpY°MemberExpressionÍHÍbLªIdentifierÍHÍN¦paramsLªIdentifierÍOÍb³cameraScreenOffsetYÂÂ£!==LªIdentifierÍgÍp©undefinedM®BlockStatementÍrÍÂ‘S³ExpressionStatementÍÍ·X´AssignmentExpressionÍÍ¶¡=Y°MemberExpressionÍÍ™U®ThisExpressionÍÍ…LªIdentifierÍ†Í™³cameraScreenOffsetYÂÂY°MemberExpressionÍœÍ¶LªIdentifierÍœÍ¢¦paramsLªIdentifierÍ£Í¶³cameraScreenOffsetYÂÂÀV«IfStatementÍÌÍ#W°BinaryExpressionÍĞÍëY°MemberExpressionÍĞÍİLªIdentifierÍĞÍÖ¦paramsLªIdentifierÍ×Íİ¦isStopÂÂ£!==LªIdentifierÍâÍë©undefinedM®BlockStatementÍíÍ#‘S³ExpressionStatementÍüÍX´AssignmentExpressionÍüÍ¡=Y°MemberExpressionÍüÍU®ThisExpressionÍüÍ LªIdentifierÍÍ¦isStopÂÂY°MemberExpressionÍ
+ÍLªIdentifierÍ
+Í¦paramsLªIdentifierÍÍ¦isStopÂÂÀV«IfStatementÍ-Í„W°BinaryExpressionÍ1ÍLY°MemberExpressionÍ1Í>LªIdentifierÍ1Í7¦paramsLªIdentifierÍ8Í>¦isOpenÂÂ£!==LªIdentifierÍCÍL©undefinedM®BlockStatementÍNÍ„‘S³ExpressionStatementÍ]ÍyX´AssignmentExpressionÍ]Íx¡=Y°MemberExpressionÍ]ÍhU®ThisExpressionÍ]ÍaLªIdentifierÍbÍh¦isOpenÂÂY°MemberExpressionÍkÍxLªIdentifierÍkÍq¦paramsLªIdentifierÍrÍx¦isOpenÂÂÀV«IfStatementÍÍèW°BinaryExpressionÍ’Í®Y°MemberExpressionÍ’Í LªIdentifierÍ’Í˜¦paramsLªIdentifierÍ™Í §isFrontÂÂ£!==LªIdentifierÍ¥Í®©undefinedM®BlockStatementÍ°Íè‘S³ExpressionStatementÍ¿ÍİX´AssignmentExpressionÍ¿ÍÜ¡=Y°MemberExpressionÍ¿ÍËU®ThisExpressionÍ¿ÍÃLªIdentifierÍÄÍË§isFrontÂÂY°MemberExpressionÍÎÍÜLªIdentifierÍÎÍÔ¦paramsLªIdentifierÍÕÍÜ§isFrontÂÂÀV«IfStatementÍòÍIW°BinaryExpressionÍöÍY°MemberExpressionÍöÍLªIdentifierÍöÍü¦paramsLªIdentifierÍıÍ¦resultÂÂ£!==LªIdentifierÍÍ©undefinedM®BlockStatementÍÍI‘S³ExpressionStatementÍ"Í>X´AssignmentExpressionÍ"Í=¡=Y°MemberExpressionÍ"Í-U®ThisExpressionÍ"Í&LªIdentifierÍ'Í-¦resultÂÂY°MemberExpressionÍ0Í=LªIdentifierÍ0Í6¦paramsLªIdentifierÍ7Í=¦resultÂÂÀV«IfStatementÍSÍ¤W°BinaryExpressionÍWÍpY°MemberExpressionÍWÍbLªIdentifierÍWÍ]¦paramsLªIdentifierÍ^Íb¤dataÂÂ£!==LªIdentifierÍgÍp©undefinedM®BlockStatementÍrÍ¤‘S³ExpressionStatementÍÍ™X´AssignmentExpressionÍÍ˜¡=Y°MemberExpressionÍÍŠU®ThisExpressionÍÍ…LªIdentifierÍ†ÍŠ¤dataÂÂY°MemberExpressionÍÍ˜LªIdentifierÍÍ“¦paramsLªIdentifierÍ”Í˜¤dataÂÂÀV«IfStatementÍ®ÍW°BinaryExpressionÍ²ÍÑY°MemberExpressionÍ²ÍÃLªIdentifierÍ²Í¸¦paramsLªIdentifierÍ¹ÍÃªisVerticalÂÂ£!==LªIdentifierÍÈÍÑ©undefinedM®BlockStatementÍÓÍ‘S³ExpressionStatementÍâÍX´AssignmentExpressionÍâÍ¡=Y°MemberExpressionÍâÍñU®ThisExpressionÍâÍæLªIdentifierÍçÍñªisVerticalÂÂY°MemberExpressionÍôÍLªIdentifierÍôÍú¦paramsLªIdentifierÍûÍªisVerticalÂÂÀV«IfStatementÍÍ‡W°BinaryExpressionÍÍAY°MemberExpressionÍÍ3LªIdentifierÍÍ%¦paramsLªIdentifierÍ&Í3­scanAreaWidthÂÂ£!==LªIdentifierÍ8ÍA©undefinedM®BlockStatementÍCÍ‡‘S³ExpressionStatementÍRÍ|X´AssignmentExpressionÍRÍ{¡=Y°MemberExpressionÍRÍdU®ThisExpressionÍRÍVLªIdentifierÍWÍd­scanAreaWidthÂÂY°MemberExpressionÍgÍ{LªIdentifierÍgÍm¦paramsLªIdentifierÍnÍ{­scanAreaWidthÂÂÀV«IfStatementÍ‘Í W°BinaryExpressionÍ•Í¸Y°MemberExpressionÍ•ÍªLªIdentifierÍ•Í›¦paramsLªIdentifierÍœÍª®scanAreaHeightÂÂ£!==LªIdentifierÍ¯Í¸©undefinedM®BlockStatementÍºÍ ‘S³ExpressionStatementÍÉÍõX´AssignmentExpressionÍÉÍô¡=Y°MemberExpressionÍÉÍÜU®ThisExpressionÍÉÍÍLªIdentifierÍÎÍÜ®scanAreaHeightÂÂY°MemberExpressionÍßÍôLªIdentifierÍßÍå¦paramsLªIdentifierÍæÍô®scanAreaHeightÂÂÀV«IfStatementÍ
+Í…W°BinaryExpressionÍÍ5Y°MemberExpressionÍÍ'LªIdentifierÍÍ¦paramsLªIdentifierÍÍ'²cutOutBottomOffsetÂÂ£!==LªIdentifierÍ,Í5©undefinedM®BlockStatementÍ7Í…‘S³ExpressionStatementÍFÍzX´AssignmentExpressionÍFÍy¡=Y°MemberExpressionÍFÍ]U®ThisExpressionÍFÍJLªIdentifierÍKÍ]²cutOutBottomOffsetÂÂY°MemberExpressionÍ`ÍyLªIdentifierÍ`Íf¦paramsLªIdentifierÍgÍy²cutOutBottomOffsetÂÂÀV«IfStatementÍÍW°BinaryExpressionÍ“Í½Y°MemberExpressionÍ“Í¯LªIdentifierÍ“Í™¦paramsLªIdentifierÍšÍ¯µmXComponentControllerÂÂ£!==LªIdentifierÍ´Í½©undefinedM®BlockStatementÍ¿Í‘S³ExpressionStatementÍÎÍX´AssignmentExpressionÍÎÍ¡=Y°MemberExpressionÍÎÍèU®ThisExpressionÍÎÍÒLªIdentifierÍÓÍèµmXComponentControllerÂÂY°MemberExpressionÍëÍLªIdentifierÍëÍñ¦paramsLªIdentifierÍòÍµmXComponentControllerÂÂÀV«IfStatementÍÍwW°BinaryExpressionÍ!Í=Y°MemberExpressionÍ!Í/LªIdentifierÍ!Í'¦paramsLªIdentifierÍ(Í/§contextÂÂ£!==LªIdentifierÍ4Í=©undefinedM®BlockStatementÍ?Íw‘S³ExpressionStatementÍNÍlX´AssignmentExpressionÍNÍk¡=Y°MemberExpressionÍNÍZU®ThisExpressionÍNÍRLªIdentifierÍSÍZ§contextÂÂY°MemberExpressionÍ]ÍkLªIdentifierÍ]Íc¦paramsLªIdentifierÍdÍk§contextÂÂÀV«IfStatementÍÍíW°BinaryExpressionÍ…Í§Y°MemberExpressionÍ…Í™LªIdentifierÍ…Í‹¦paramsLªIdentifierÍŒÍ™­cameraServiceÂÂ£!==LªIdentifierÍÍ§©undefinedM®BlockStatementÍ©Íí‘S³ExpressionStatementÍ¸ÍâX´AssignmentExpressionÍ¸Íá¡=Y°MemberExpressionÍ¸ÍÊU®ThisExpressionÍ¸Í¼LªIdentifierÍ½ÍÊ­cameraServiceÂÂY°MemberExpressionÍÍÍáLªIdentifierÍÍÍÓ¦paramsLªIdentifierÍÔÍá­cameraServiceÂÂÀV«IfStatementÍ÷Í]W°BinaryExpressionÍûÍY°MemberExpressionÍûÍLªIdentifierÍûÍ¦paramsLªIdentifierÍÍ«windowClassÂÂ£!==LªIdentifierÍÍ©undefinedM®BlockStatementÍÍ]‘S³ExpressionStatementÍ,ÍRX´AssignmentExpressionÍ,ÍQ¡=Y°MemberExpressionÍ,Í<U®ThisExpressionÍ,Í0LªIdentifierÍ1Í<«windowClassÂÂY°MemberExpressionÍ?ÍQLªIdentifierÍ?ÍE¦paramsLªIdentifierÍFÍQ«windowClassÂÂÀV«IfStatementÍgÍÖW°BinaryExpressionÍkÍY°MemberExpressionÍkÍ€LªIdentifierÍkÍq¦paramsLªIdentifierÍrÍ€®barcodeFormatsÂÂ£!==LªIdentifierÍ…Í©undefinedM®BlockStatementÍÍÖ‘S³ExpressionStatementÍŸÍËX´AssignmentExpressionÍŸÍÊ¡=Y°MemberExpressionÍŸÍ²U®ThisExpressionÍŸÍ£LªIdentifierÍ¤Í²®barcodeFormatsÂÂY°MemberExpressionÍµÍÊLªIdentifierÍµÍ»¦paramsLªIdentifierÍ¼ÍÊ®barcodeFormatsÂÂÀV«IfStatementÍàÍ:W°BinaryExpressionÍäÍ Y°MemberExpressionÍäÍòLªIdentifierÍäÍê¦paramsLªIdentifierÍëÍò§timerIdÂÂ£!==LªIdentifierÍ÷Í ©undefinedM®BlockStatementÍÍ:‘S³ExpressionStatementÍÍ/X´AssignmentExpressionÍÍ.¡=Y°MemberExpressionÍÍU®ThisExpressionÍÍLªIdentifierÍÍ§timerIdÂÂY°MemberExpressionÍ Í.LªIdentifierÍ Í&¦paramsLªIdentifierÍ'Í.§timerIdÂÂÀV«IfStatementÍDÍ³W°BinaryExpressionÍHÍkY°MemberExpressionÍHÍ]LªIdentifierÍHÍN¦paramsLªIdentifierÍOÍ]®FLASH_TIME_OUTÂÂ£!==LªIdentifierÍbÍk©undefinedM®BlockStatementÍmÍ³‘S³ExpressionStatementÍ|Í¨X´AssignmentExpressionÍ|Í§¡=Y°MemberExpressionÍ|ÍU®ThisExpressionÍ|Í€LªIdentifierÍÍ®FLASH_TIME_OUTÂÂY°MemberExpressionÍ’Í§LªIdentifierÍ’Í˜¦paramsLªIdentifierÍ™Í§®FLASH_TIME_OUTÂÂÀN°MethodDefinitionÍÀÍ<ÂÂLªIdentifierÍÀÍÏ¯updateStateVars¦methodO²FunctionExpressionÍÏÍ<ÀÂÂÂ‘LªIdentifierÍĞÍÖ¦paramsM®BlockStatementÍØÍ<’S³ExpressionStatementÍãÍT®CallExpressionÍãÍY°MemberExpressionÍãÍöY°MemberExpressionÍãÍğU®ThisExpressionÍãÍçLªIdentifierÍèÍğ¨__paramsÂÂLªIdentifierÍñÍö¥resetÂÂ‘Y°MemberExpressionÍ÷ÍLªIdentifierÍ÷Íı¦paramsLªIdentifierÍşÍ¦paramsÂÂÂS³ExpressionStatementÍÍ5T®CallExpressionÍÍ4Y°MemberExpressionÍÍ$Y°MemberExpressionÍÍU®ThisExpressionÍÍLªIdentifierÍÍ©__channelÂÂLªIdentifierÍÍ$¥resetÂÂ‘Y°MemberExpressionÍ%Í3LªIdentifierÍ%Í+¦paramsLªIdentifierÍ,Í3§channelÂÂÂN°MethodDefinitionÍBÍXÂÂLªIdentifierÍBÍcÙ!purgeVariableDependenciesOnElmtId¦methodO²FunctionExpressionÍcÍXÀÂÂÂ‘LªIdentifierÍdÍl¨rmElmtIdM®BlockStatementÍnÍXÜ S³ExpressionStatementÍyÍ©T®CallExpressionÍyÍ¨Y°MemberExpressionÍyÍY°MemberExpressionÍyÍ†U®ThisExpressionÍyÍ}LªIdentifierÍ~Í†¨__paramsÂÂLªIdentifierÍ‡Í·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍŸÍ§¨rmElmtIdÂS³ExpressionStatementÍ³ÍäT®CallExpressionÍ³ÍãY°MemberExpressionÍ³ÍÙY°MemberExpressionÍ³ÍÁU®ThisExpressionÍ³Í·LªIdentifierÍ¸ÍÁ©__channelÂÂLªIdentifierÍÂÍÙ·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍÚÍâ¨rmElmtIdÂS³ExpressionStatementÍîÍ$T®CallExpressionÍîÍ#Y°MemberExpressionÍîÍY°MemberExpressionÍîÍU®ThisExpressionÍîÍòLªIdentifierÍóÍ®__isFlashlightÂÂLªIdentifierÍÍ·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍÍ"¨rmElmtIdÂS³ExpressionStatementÍ.ÍeT®CallExpressionÍ.ÍdY°MemberExpressionÍ.ÍZY°MemberExpressionÍ.ÍBU®ThisExpressionÍ.Í2LªIdentifierÍ3ÍB¯__isSensorLightÂÂLªIdentifierÍCÍZ·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍ[Íc¨rmElmtIdÂS³ExpressionStatementÍoÍ¢T®CallExpressionÍoÍ¡Y°MemberExpressionÍoÍ—Y°MemberExpressionÍoÍU®ThisExpressionÍoÍsLªIdentifierÍtÍ«__isScannedÂÂLªIdentifierÍ€Í—·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍ˜Í ¨rmElmtIdÂS³ExpressionStatementÍ¬ÍâT®CallExpressionÍ¬ÍáY°MemberExpressionÍ¬Í×Y°MemberExpressionÍ¬Í¿U®ThisExpressionÍ¬Í°LªIdentifierÍ±Í¿®__cameraHeightÂÂLªIdentifierÍÀÍ×·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍØÍà¨rmElmtIdÂS³ExpressionStatementÍìÍ!T®CallExpressionÍìÍ Y°MemberExpressionÍìÍY°MemberExpressionÍìÍşU®ThisExpressionÍìÍğLªIdentifierÍñÍş­__cameraWidthÂÂLªIdentifierÍÿÍ·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍÍ¨rmElmtIdÂS³ExpressionStatementÍ+Í^T®CallExpressionÍ+Í]Y°MemberExpressionÍ+ÍSY°MemberExpressionÍ+Í;U®ThisExpressionÍ+Í/LªIdentifierÍ0Í;«__userGrantÂÂLªIdentifierÍ<ÍS·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍTÍ\¨rmElmtIdÂS³ExpressionStatementÍhÍ›T®CallExpressionÍhÍšY°MemberExpressionÍhÍY°MemberExpressionÍhÍxU®ThisExpressionÍhÍlLªIdentifierÍmÍx«__surfaceIdÂÂLªIdentifierÍyÍ·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍ‘Í™¨rmElmtIdÂS³ExpressionStatementÍ¥ÍâT®CallExpressionÍ¥ÍáY°MemberExpressionÍ¥Í×Y°MemberExpressionÍ¥Í¿U®ThisExpressionÍ¥Í©LªIdentifierÍªÍ¿µ__cameraScreenOffsetXÂÂLªIdentifierÍÀÍ×·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍØÍà¨rmElmtIdÂS³ExpressionStatementÍìÍ)T®CallExpressionÍìÍ(Y°MemberExpressionÍìÍY°MemberExpressionÍìÍU®ThisExpressionÍìÍğLªIdentifierÍñÍµ__cameraScreenOffsetYÂÂLªIdentifierÍÍ·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍÍ'¨rmElmtIdÂS³ExpressionStatementÍ3ÍcT®CallExpressionÍ3ÍbY°MemberExpressionÍ3ÍXY°MemberExpressionÍ3Í@U®ThisExpressionÍ3Í7LªIdentifierÍ8Í@¨__isStopÂÂLªIdentifierÍAÍX·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍYÍa¨rmElmtIdÂS³ExpressionStatementÍmÍT®CallExpressionÍmÍœY°MemberExpressionÍmÍ’Y°MemberExpressionÍmÍzU®ThisExpressionÍmÍqLªIdentifierÍrÍz¨__isOpenÂÂLªIdentifierÍ{Í’·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍ“Í›¨rmElmtIdÂS³ExpressionStatementÍ§ÍØT®CallExpressionÍ§Í×Y°MemberExpressionÍ§ÍÍY°MemberExpressionÍ§ÍµU®ThisExpressionÍ§Í«LªIdentifierÍ¬Íµ©__isFrontÂÂLªIdentifierÍ¶ÍÍ·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍÎÍÖ¨rmElmtIdÂS³ExpressionStatementÍâÍT®CallExpressionÍâÍY°MemberExpressionÍâÍY°MemberExpressionÍâÍïU®ThisExpressionÍâÍæLªIdentifierÍçÍï¨__resultÂÂLªIdentifierÍğÍ·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍÍ¨rmElmtIdÂS³ExpressionStatementÍÍJT®CallExpressionÍÍIY°MemberExpressionÍÍ?Y°MemberExpressionÍÍ'U®ThisExpressionÍÍ LªIdentifierÍ!Í'¦__dataÂÂLªIdentifierÍ(Í?·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍ@ÍH¨rmElmtIdÂS³ExpressionStatementÍTÍˆT®CallExpressionÍTÍ‡Y°MemberExpressionÍTÍ}Y°MemberExpressionÍTÍeU®ThisExpressionÍTÍXLªIdentifierÍYÍe¬__isVerticalÂÂLªIdentifierÍfÍ}·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍ~Í†¨rmElmtIdÂS³ExpressionStatementÍ’ÍÉT®CallExpressionÍ’ÍÈY°MemberExpressionÍ’Í¾Y°MemberExpressionÍ’Í¦U®ThisExpressionÍ’Í–LªIdentifierÍ—Í¦¯__scanAreaWidthÂÂLªIdentifierÍ§Í¾·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍ¿ÍÇ¨rmElmtIdÂS³ExpressionStatementÍÓÍT®CallExpressionÍÓÍ
+Y°MemberExpressionÍÓÍ Y°MemberExpressionÍÓÍèU®ThisExpressionÍÓÍ×LªIdentifierÍØÍè°__scanAreaHeightÂÂLªIdentifierÍéÍ ·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍÍ	¨rmElmtIdÂS³ExpressionStatementÍÍQT®CallExpressionÍÍPY°MemberExpressionÍÍFY°MemberExpressionÍÍ.U®ThisExpressionÍÍLªIdentifierÍÍ.´__cutOutBottomOffsetÂÂLªIdentifierÍ/ÍF·purgeDependencyOnElmtIdÂÂ‘LªIdentifierÍGÍO¨rmElmtIdÂN°MethodDefinitionÍ^Í#ÂÂLªIdentifierÍ^Ín°aboutToBeDeleted¦methodO²FunctionExpressionÍnÍ#ÀÂÂÂM®BlockStatementÍqÍ#Ü S³ExpressionStatementÍ|ÍT®CallExpressionÍ|ÍœY°MemberExpressionÍ|ÍšY°MemberExpressionÍ|Í‰U®ThisExpressionÍ|Í€LªIdentifierÍÍ‰¨__paramsÂÂLªIdentifierÍŠÍš°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ§ÍÉT®CallExpressionÍ§ÍÈY°MemberExpressionÍ§ÍÆY°MemberExpressionÍ§ÍµU®ThisExpressionÍ§Í«LªIdentifierÍ¬Íµ©__channelÂÂLªIdentifierÍ¶ÍÆ°aboutToBeDeletedÂÂÂS³ExpressionStatementÍÓÍúT®CallExpressionÍÓÍùY°MemberExpressionÍÓÍ÷Y°MemberExpressionÍÓÍæU®ThisExpressionÍÓÍ×LªIdentifierÍØÍæ®__isFlashlightÂÂLªIdentifierÍçÍ÷°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ Í ,T®CallExpressionÍ Í +Y°MemberExpressionÍ Í )Y°MemberExpressionÍ Í U®ThisExpressionÍ Í LªIdentifierÍ 	Í ¯__isSensorLightÂÂLªIdentifierÍ Í )°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ 6Í ZT®CallExpressionÍ 6Í YY°MemberExpressionÍ 6Í WY°MemberExpressionÍ 6Í FU®ThisExpressionÍ 6Í :LªIdentifierÍ ;Í F«__isScannedÂÂLªIdentifierÍ GÍ W°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ dÍ ‹T®CallExpressionÍ dÍ ŠY°MemberExpressionÍ dÍ ˆY°MemberExpressionÍ dÍ wU®ThisExpressionÍ dÍ hLªIdentifierÍ iÍ w®__cameraHeightÂÂLªIdentifierÍ xÍ ˆ°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ •Í »T®CallExpressionÍ •Í ºY°MemberExpressionÍ •Í ¸Y°MemberExpressionÍ •Í §U®ThisExpressionÍ •Í ™LªIdentifierÍ šÍ §­__cameraWidthÂÂLªIdentifierÍ ¨Í ¸°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ ÅÍ éT®CallExpressionÍ ÅÍ èY°MemberExpressionÍ ÅÍ æY°MemberExpressionÍ ÅÍ ÕU®ThisExpressionÍ ÅÍ ÉLªIdentifierÍ ÊÍ Õ«__userGrantÂÂLªIdentifierÍ ÖÍ æ°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ óÍ!T®CallExpressionÍ óÍ!Y°MemberExpressionÍ óÍ!Y°MemberExpressionÍ óÍ!U®ThisExpressionÍ óÍ ÷LªIdentifierÍ øÍ!«__surfaceIdÂÂLªIdentifierÍ!Í!°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ!!Í!OT®CallExpressionÍ!!Í!NY°MemberExpressionÍ!!Í!LY°MemberExpressionÍ!!Í!;U®ThisExpressionÍ!!Í!%LªIdentifierÍ!&Í!;µ__cameraScreenOffsetXÂÂLªIdentifierÍ!<Í!L°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ!YÍ!‡T®CallExpressionÍ!YÍ!†Y°MemberExpressionÍ!YÍ!„Y°MemberExpressionÍ!YÍ!sU®ThisExpressionÍ!YÍ!]LªIdentifierÍ!^Í!sµ__cameraScreenOffsetYÂÂLªIdentifierÍ!tÍ!„°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ!‘Í!²T®CallExpressionÍ!‘Í!±Y°MemberExpressionÍ!‘Í!¯Y°MemberExpressionÍ!‘Í!U®ThisExpressionÍ!‘Í!•LªIdentifierÍ!–Í!¨__isStopÂÂLªIdentifierÍ!ŸÍ!¯°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ!¼Í!İT®CallExpressionÍ!¼Í!ÜY°MemberExpressionÍ!¼Í!ÚY°MemberExpressionÍ!¼Í!ÉU®ThisExpressionÍ!¼Í!ÀLªIdentifierÍ!ÁÍ!É¨__isOpenÂÂLªIdentifierÍ!ÊÍ!Ú°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ!çÍ"	T®CallExpressionÍ!çÍ"Y°MemberExpressionÍ!çÍ"Y°MemberExpressionÍ!çÍ!õU®ThisExpressionÍ!çÍ!ëLªIdentifierÍ!ìÍ!õ©__isFrontÂÂLªIdentifierÍ!öÍ"°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ"Í"4T®CallExpressionÍ"Í"3Y°MemberExpressionÍ"Í"1Y°MemberExpressionÍ"Í" U®ThisExpressionÍ"Í"LªIdentifierÍ"Í" ¨__resultÂÂLªIdentifierÍ"!Í"1°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ">Í"]T®CallExpressionÍ">Í"\Y°MemberExpressionÍ">Í"ZY°MemberExpressionÍ">Í"IU®ThisExpressionÍ">Í"BLªIdentifierÍ"CÍ"I¦__dataÂÂLªIdentifierÍ"JÍ"Z°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ"gÍ"ŒT®CallExpressionÍ"gÍ"‹Y°MemberExpressionÍ"gÍ"‰Y°MemberExpressionÍ"gÍ"xU®ThisExpressionÍ"gÍ"kLªIdentifierÍ"lÍ"x¬__isVerticalÂÂLªIdentifierÍ"yÍ"‰°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ"–Í"¾T®CallExpressionÍ"–Í"½Y°MemberExpressionÍ"–Í"»Y°MemberExpressionÍ"–Í"ªU®ThisExpressionÍ"–Í"šLªIdentifierÍ"›Í"ª¯__scanAreaWidthÂÂLªIdentifierÍ"«Í"»°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ"ÈÍ"ñT®CallExpressionÍ"ÈÍ"ğY°MemberExpressionÍ"ÈÍ"îY°MemberExpressionÍ"ÈÍ"İU®ThisExpressionÍ"ÈÍ"ÌLªIdentifierÍ"ÍÍ"İ°__scanAreaHeightÂÂLªIdentifierÍ"ŞÍ"î°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ"ûÍ#(T®CallExpressionÍ"ûÍ#'Y°MemberExpressionÍ"ûÍ#%Y°MemberExpressionÍ"ûÍ#U®ThisExpressionÍ"ûÍ"ÿLªIdentifierÍ# Í#´__cutOutBottomOffsetÂÂLªIdentifierÍ#Í#%°aboutToBeDeletedÂÂÂS³ExpressionStatementÍ#2Í#^T®CallExpressionÍ#2Í#]Y°MemberExpressionÍ#2Í#PT®CallExpressionÍ#2Í#IY°MemberExpressionÍ#2Í#GLªIdentifierÍ#2Í#C±SubscriberManagerLªIdentifierÍ#DÍ#G£GetÂÂÂLªIdentifierÍ#JÍ#P¦deleteÂÂ‘T®CallExpressionÍ#QÍ#\Y°MemberExpressionÍ#QÍ#ZU®ThisExpressionÍ#QÍ#ULªIdentifierÍ#VÍ#Z¤id__ÂÂÂÂS³ExpressionStatementÍ#hÍ#ˆT®CallExpressionÍ#hÍ#‡Y°MemberExpressionÍ#hÍ#…U®ThisExpressionÍ#hÍ#lLªIdentifierÍ#mÍ#…¸aboutToBeDeletedInternalÂÂÂN°MethodDefinitionÍ#•Í#ÏÂÂLªIdentifierÍ#™Í#Ÿ¦params£getO²FunctionExpressionÍ#ŸÍ#ÏÀÂÂÂM®BlockStatementÍ#¢Í#Ï‘Ôr\”¤type¥start£end¨argument¯ReturnStatementÍ#­Í#ÈT®CallExpressionÍ#´Í#ÇY°MemberExpressionÍ#´Í#ÅY°MemberExpressionÍ#´Í#ÁU®ThisExpressionÍ#´Í#¸LªIdentifierÍ#¹Í#Á¨__paramsÂÂLªIdentifierÍ#ÂÍ#Å£getÂÂÂN°MethodDefinitionÍ#ÕÍ$ÂÂLªIdentifierÍ#ÙÍ#ß¦params£setO²FunctionExpressionÍ#ßÍ$ÀÂÂÂ‘LªIdentifierÍ#àÍ#è¨newValueM®BlockStatementÍ#êÍ$‘S³ExpressionStatementÍ#õÍ$T®CallExpressionÍ#õÍ$Y°MemberExpressionÍ#õÍ$Y°MemberExpressionÍ#õÍ$U®ThisExpressionÍ#õÍ#ùLªIdentifierÍ#úÍ$¨__paramsÂÂLªIdentifierÍ$Í$£setÂÂ‘LªIdentifierÍ$Í$¨newValueÂN°MethodDefinitionÍ$Í$ZÂÂLªIdentifierÍ$"Í$)§channel£getO²FunctionExpressionÍ$)Í$ZÀÂÂÂM®BlockStatementÍ$,Í$Z‘\¯ReturnStatementÍ$7Í$ST®CallExpressionÍ$>Í$RY°MemberExpressionÍ$>Í$PY°MemberExpressionÍ$>Í$LU®ThisExpressionÍ$>Í$BLªIdentifierÍ$CÍ$L©__channelÂÂLªIdentifierÍ$MÍ$P£getÂÂÂN°MethodDefinitionÍ$`Í$¥ÂÂLªIdentifierÍ$dÍ$k§channel£setO²FunctionExpressionÍ$kÍ$¥ÀÂÂÂ‘LªIdentifierÍ$lÍ$t¨newValueM®BlockStatementÍ$vÍ$¥‘S³ExpressionStatementÍ$Í$T®CallExpressionÍ$Í$Y°MemberExpressionÍ$Í$“Y°MemberExpressionÍ$Í$U®ThisExpressionÍ$Í$…LªIdentifierÍ$†Í$©__channelÂÂLªIdentifierÍ$Í$“£setÂÂ‘LªIdentifierÍ$”Í$œ¨newValueÂN°MethodDefinitionÍ$«Í$ñÂÂLªIdentifierÍ$¯Í$»¬isFlashlight£getO²FunctionExpressionÍ$»Í$ñÀÂÂÂM®BlockStatementÍ$¾Í$ñ‘\¯ReturnStatementÍ$ÉÍ$êT®CallExpressionÍ$ĞÍ$éY°MemberExpressionÍ$ĞÍ$çY°MemberExpressionÍ$ĞÍ$ãU®ThisExpressionÍ$ĞÍ$ÔLªIdentifierÍ$ÕÍ$ã®__isFlashlightÂÂLªIdentifierÍ$äÍ$ç£getÂÂÂN°MethodDefinitionÍ$÷Í%FÂÂLªIdentifierÍ$ûÍ%¬isFlashlight£setO²FunctionExpressionÍ%Í%FÀÂÂÂ‘LªIdentifierÍ%Í%¨newValueM®BlockStatementÍ%Í%F‘S³ExpressionStatementÍ%Í%?T®CallExpressionÍ%Í%>Y°MemberExpressionÍ%Í%4Y°MemberExpressionÍ%Í%0U®ThisExpressionÍ%Í%!LªIdentifierÍ%"Í%0®__isFlashlightÂÂLªIdentifierÍ%1Í%4£setÂÂ‘LªIdentifierÍ%5Í%=¨newValueÂN°MethodDefinitionÍ%LÍ%”ÂÂLªIdentifierÍ%PÍ%]­isSensorLight£getO²FunctionExpressionÍ%]Í%”ÀÂÂÂM®BlockStatementÍ%`Í%”‘\¯ReturnStatementÍ%kÍ%T®CallExpressionÍ%rÍ%ŒY°MemberExpressionÍ%rÍ%ŠY°MemberExpressionÍ%rÍ%†U®ThisExpressionÍ%rÍ%vLªIdentifierÍ%wÍ%†¯__isSensorLightÂÂLªIdentifierÍ%‡Í%Š£getÂÂÂN°MethodDefinitionÍ%šÍ%ëÂÂLªIdentifierÍ%Í%«­isSensorLight£setO²FunctionExpressionÍ%«Í%ëÀÂÂÂ‘LªIdentifierÍ%¬Í%´¨newValueM®BlockStatementÍ%¶Í%ë‘S³ExpressionStatementÍ%ÁÍ%äT®CallExpressionÍ%ÁÍ%ãY°MemberExpressionÍ%ÁÍ%ÙY°MemberExpressionÍ%ÁÍ%ÕU®ThisExpressionÍ%ÁÍ%ÅLªIdentifierÍ%ÆÍ%Õ¯__isSensorLightÂÂLªIdentifierÍ%ÖÍ%Ù£setÂÂ‘LªIdentifierÍ%ÚÍ%â¨newValueÂN°MethodDefinitionÍ%ñÍ&1ÂÂLªIdentifierÍ%õÍ%ş©isScanned£getO²FunctionExpressionÍ%şÍ&1ÀÂÂÂM®BlockStatementÍ&Í&1‘\¯ReturnStatementÍ&Í&*T®CallExpressionÍ&Í&)Y°MemberExpressionÍ&Í&'Y°MemberExpressionÍ&Í&#U®ThisExpressionÍ&Í&LªIdentifierÍ&Í&#«__isScannedÂÂLªIdentifierÍ&$Í&'£getÂÂÂN°MethodDefinitionÍ&7Í&€ÂÂLªIdentifierÍ&;Í&D©isScanned£setO²FunctionExpressionÍ&DÍ&€ÀÂÂÂ‘LªIdentifierÍ&EÍ&M¨newValueM®BlockStatementÍ&OÍ&€‘S³ExpressionStatementÍ&ZÍ&yT®CallExpressionÍ&ZÍ&xY°MemberExpressionÍ&ZÍ&nY°MemberExpressionÍ&ZÍ&jU®ThisExpressionÍ&ZÍ&^LªIdentifierÍ&_Í&j«__isScannedÂÂLªIdentifierÍ&kÍ&n£setÂÂ‘LªIdentifierÍ&oÍ&w¨newValueÂN°MethodDefinitionÍ&†Í&ÌÂÂLªIdentifierÍ&ŠÍ&–¬cameraHeight£getO²FunctionExpressionÍ&–Í&ÌÀÂÂÂM®BlockStatementÍ&™Í&Ì‘\¯ReturnStatementÍ&¤Í&ÅT®CallExpressionÍ&«Í&ÄY°MemberExpressionÍ&«Í&ÂY°MemberExpressionÍ&«Í&¾U®ThisExpressionÍ&«Í&¯LªIdentifierÍ&°Í&¾®__cameraHeightÂÂLªIdentifierÍ&¿Í&Â£getÂÂÂN°MethodDefinitionÍ&ÒÍ'!ÂÂLªIdentifierÍ&ÖÍ&â¬cameraHeight£setO²FunctionExpressionÍ&âÍ'!ÀÂÂÂ‘LªIdentifierÍ&ãÍ&ë¨newValueM®BlockStatementÍ&íÍ'!‘S³ExpressionStatementÍ&øÍ'T®CallExpressionÍ&øÍ'Y°MemberExpressionÍ&øÍ'Y°MemberExpressionÍ&øÍ'U®ThisExpressionÍ&øÍ&üLªIdentifierÍ&ıÍ'®__cameraHeightÂÂLªIdentifierÍ'Í'£setÂÂ‘LªIdentifierÍ'Í'¨newValueÂN°MethodDefinitionÍ''Í'kÂÂLªIdentifierÍ'+Í'6«cameraWidth£getO²FunctionExpressionÍ'6Í'kÀÂÂÂM®BlockStatementÍ'9Í'k‘\¯ReturnStatementÍ'DÍ'dT®CallExpressionÍ'KÍ'cY°MemberExpressionÍ'KÍ'aY°MemberExpressionÍ'KÍ']U®ThisExpressionÍ'KÍ'OLªIdentifierÍ'PÍ']­__cameraWidthÂÂLªIdentifierÍ'^Í'a£getÂÂÂN°MethodDefinitionÍ'qÍ'¾ÂÂLªIdentifierÍ'uÍ'€«cameraWidth£setO²FunctionExpressionÍ'€Í'¾ÀÂÂÂ‘LªIdentifierÍ'Í'‰¨newValueM®BlockStatementÍ'‹Í'¾‘S³ExpressionStatementÍ'–Í'·T®CallExpressionÍ'–Í'¶Y°MemberExpressionÍ'–Í'¬Y°MemberExpressionÍ'–Í'¨U®ThisExpressionÍ'–Í'šLªIdentifierÍ'›Í'¨­__cameraWidthÂÂLªIdentifierÍ'©Í'¬£setÂÂ‘LªIdentifierÍ'­Í'µ¨newValueÂN°MethodDefinitionÍ'ÄÍ(ÂÂLªIdentifierÍ'ÈÍ'Ñ©userGrant£getO²FunctionExpressionÍ'ÑÍ(ÀÂÂÂM®BlockStatementÍ'ÔÍ(‘\¯ReturnStatementÍ'ßÍ'ıT®CallExpressionÍ'æÍ'üY°MemberExpressionÍ'æÍ'úY°MemberExpressionÍ'æÍ'öU®ThisExpressionÍ'æÍ'êLªIdentifierÍ'ëÍ'ö«__userGrantÂÂLªIdentifierÍ'÷Í'ú£getÂÂÂN°MethodDefinitionÍ(
+Í(SÂÂLªIdentifierÍ(Í(©userGrant£setO²FunctionExpressionÍ(Í(SÀÂÂÂ‘LªIdentifierÍ(Í( ¨newValueM®BlockStatementÍ("Í(S‘S³ExpressionStatementÍ(-Í(LT®CallExpressionÍ(-Í(KY°MemberExpressionÍ(-Í(AY°MemberExpressionÍ(-Í(=U®ThisExpressionÍ(-Í(1LªIdentifierÍ(2Í(=«__userGrantÂÂLªIdentifierÍ(>Í(A£setÂÂ‘LªIdentifierÍ(BÍ(J¨newValueÂN°MethodDefinitionÍ(YÍ(™ÂÂLªIdentifierÍ(]Í(f©surfaceId£getO²FunctionExpressionÍ(fÍ(™ÀÂÂÂM®BlockStatementÍ(iÍ(™‘\¯ReturnStatementÍ(tÍ(’T®CallExpressionÍ({Í(‘Y°MemberExpressionÍ({Í(Y°MemberExpressionÍ({Í(‹U®ThisExpressionÍ({Í(LªIdentifierÍ(€Í(‹«__surfaceIdÂÂLªIdentifierÍ(ŒÍ(£getÂÂÂN°MethodDefinitionÍ(ŸÍ(èÂÂLªIdentifierÍ(£Í(¬©surfaceId£setO²FunctionExpressionÍ(¬Í(èÀÂÂÂ‘LªIdentifierÍ(­Í(µ¨newValueM®BlockStatementÍ(·Í(è‘S³ExpressionStatementÍ(ÂÍ(áT®CallExpressionÍ(ÂÍ(àY°MemberExpressionÍ(ÂÍ(ÖY°MemberExpressionÍ(ÂÍ(ÒU®ThisExpressionÍ(ÂÍ(ÆLªIdentifierÍ(ÇÍ(Ò«__surfaceIdÂÂLªIdentifierÍ(ÓÍ(Ö£setÂÂ‘LªIdentifierÍ(×Í(ß¨newValueÂN°MethodDefinitionÍ(îÍ)BÂÂLªIdentifierÍ(òÍ)³cameraScreenOffsetX£getO²FunctionExpressionÍ)Í)BÀÂÂÂM®BlockStatementÍ)Í)B‘\¯ReturnStatementÍ)Í);T®CallExpressionÍ)Í):Y°MemberExpressionÍ)Í)8Y°MemberExpressionÍ)Í)4U®ThisExpressionÍ)Í)LªIdentifierÍ)Í)4µ__cameraScreenOffsetXÂÂLªIdentifierÍ)5Í)8£getÂÂÂN°MethodDefinitionÍ)HÍ)¥ÂÂLªIdentifierÍ)LÍ)_³cameraScreenOffsetX£setO²FunctionExpressionÍ)_Í)¥ÀÂÂÂ‘LªIdentifierÍ)`Í)h¨newValueM®BlockStatementÍ)jÍ)¥‘S³ExpressionStatementÍ)uÍ)T®CallExpressionÍ)uÍ)Y°MemberExpressionÍ)uÍ)“Y°MemberExpressionÍ)uÍ)U®ThisExpressionÍ)uÍ)yLªIdentifierÍ)zÍ)µ__cameraScreenOffsetXÂÂLªIdentifierÍ)Í)“£setÂÂ‘LªIdentifierÍ)”Í)œ¨newValueÂN°MethodDefinitionÍ)«Í)ÿÂÂLªIdentifierÍ)¯Í)Â³cameraScreenOffsetY£getO²FunctionExpressionÍ)ÂÍ)ÿÀÂÂÂM®BlockStatementÍ)ÅÍ)ÿ‘\¯ReturnStatementÍ)ĞÍ)øT®CallExpressionÍ)×Í)÷Y°MemberExpressionÍ)×Í)õY°MemberExpressionÍ)×Í)ñU®ThisExpressionÍ)×Í)ÛLªIdentifierÍ)ÜÍ)ñµ__cameraScreenOffsetYÂÂLªIdentifierÍ)òÍ)õ£getÂÂÂN°MethodDefinitionÍ*Í*bÂÂLªIdentifierÍ*	Í*³cameraScreenOffsetY£setO²FunctionExpressionÍ*Í*bÀÂÂÂ‘LªIdentifierÍ*Í*%¨newValueM®BlockStatementÍ*'Í*b‘S³ExpressionStatementÍ*2Í*[T®CallExpressionÍ*2Í*ZY°MemberExpressionÍ*2Í*PY°MemberExpressionÍ*2Í*LU®ThisExpressionÍ*2Í*6LªIdentifierÍ*7Í*Lµ__cameraScreenOffsetYÂÂLªIdentifierÍ*MÍ*P£setÂÂ‘LªIdentifierÍ*QÍ*Y¨newValueÂN°MethodDefinitionÍ*hÍ*¢ÂÂLªIdentifierÍ*lÍ*r¦isStop£getO²FunctionExpressionÍ*rÍ*¢ÀÂÂÂM®BlockStatementÍ*uÍ*¢‘\¯ReturnStatementÍ*€Í*›T®CallExpressionÍ*‡Í*šY°MemberExpressionÍ*‡Í*˜Y°MemberExpressionÍ*‡Í*”U®ThisExpressionÍ*‡Í*‹LªIdentifierÍ*ŒÍ*”¨__isStopÂÂLªIdentifierÍ*•Í*˜£getÂÂÂN°MethodDefinitionÍ*¨Í*ëÂÂLªIdentifierÍ*¬Í*²¦isStop£setO²FunctionExpressionÍ*²Í*ëÀÂÂÂ‘LªIdentifierÍ*³Í*»¨newValueM®BlockStatementÍ*½Í*ë‘S³ExpressionStatementÍ*ÈÍ*äT®CallExpressionÍ*ÈÍ*ãY°MemberExpressionÍ*ÈÍ*ÙY°MemberExpressionÍ*ÈÍ*ÕU®ThisExpressionÍ*ÈÍ*ÌLªIdentifierÍ*ÍÍ*Õ¨__isStopÂÂLªIdentifierÍ*ÖÍ*Ù£setÂÂ‘LªIdentifierÍ*ÚÍ*â¨newValueÂN°MethodDefinitionÍ*ñÍ++ÂÂLªIdentifierÍ*õÍ*û¦isOpen£getO²FunctionExpressionÍ*ûÍ++ÀÂÂÂM®BlockStatementÍ*şÍ++‘\¯ReturnStatementÍ+	Í+$T®CallExpressionÍ+Í+#Y°MemberExpressionÍ+Í+!Y°MemberExpressionÍ+Í+U®ThisExpressionÍ+Í+LªIdentifierÍ+Í+¨__isOpenÂÂLªIdentifierÍ+Í+!£getÂÂÂN°MethodDefinitionÍ+1Í+tÂÂLªIdentifierÍ+5Í+;¦isOpen£setO²FunctionExpressionÍ+;Í+tÀÂÂÂ‘LªIdentifierÍ+<Í+D¨newValueM®BlockStatementÍ+FÍ+t‘S³ExpressionStatementÍ+QÍ+mT®CallExpressionÍ+QÍ+lY°MemberExpressionÍ+QÍ+bY°MemberExpressionÍ+QÍ+^U®ThisExpressionÍ+QÍ+ULªIdentifierÍ+VÍ+^¨__isOpenÂÂLªIdentifierÍ+_Í+b£setÂÂ‘LªIdentifierÍ+cÍ+k¨newValueÂN°MethodDefinitionÍ+zÍ+¶ÂÂLªIdentifierÍ+~Í+…§isFront£getO²FunctionExpressionÍ+…Í+¶ÀÂÂÂM®BlockStatementÍ+ˆÍ+¶‘\¯ReturnStatementÍ+“Í+¯T®CallExpressionÍ+šÍ+®Y°MemberExpressionÍ+šÍ+¬Y°MemberExpressionÍ+šÍ+¨U®ThisExpressionÍ+šÍ+LªIdentifierÍ+ŸÍ+¨©__isFrontÂÂLªIdentifierÍ+©Í+¬£getÂÂÂN°MethodDefinitionÍ+¼Í,ÂÂLªIdentifierÍ+ÀÍ+Ç§isFront£setO²FunctionExpressionÍ+ÇÍ,ÀÂÂÂ‘LªIdentifierÍ+ÈÍ+Ğ¨newValueM®BlockStatementÍ+ÒÍ,‘S³ExpressionStatementÍ+İÍ+úT®CallExpressionÍ+İÍ+ùY°MemberExpressionÍ+İÍ+ïY°MemberExpressionÍ+İÍ+ëU®ThisExpressionÍ+İÍ+áLªIdentifierÍ+âÍ+ë©__isFrontÂÂLªIdentifierÍ+ìÍ+ï£setÂÂ‘LªIdentifierÍ+ğÍ+ø¨newValueÂN°MethodDefinitionÍ,Í,AÂÂLªIdentifierÍ,Í,¦result£getO²FunctionExpressionÍ,Í,AÀÂÂÂM®BlockStatementÍ,Í,A‘\¯ReturnStatementÍ,Í,:T®CallExpressionÍ,&Í,9Y°MemberExpressionÍ,&Í,7Y°MemberExpressionÍ,&Í,3U®ThisExpressionÍ,&Í,*LªIdentifierÍ,+Í,3¨__resultÂÂLªIdentifierÍ,4Í,7£getÂÂÂN°MethodDefinitionÍ,GÍ,ŠÂÂLªIdentifierÍ,KÍ,Q¦result£setO²FunctionExpressionÍ,QÍ,ŠÀÂÂÂ‘LªIdentifierÍ,RÍ,Z¨newValueM®BlockStatementÍ,\Í,Š‘S³ExpressionStatementÍ,gÍ,ƒT®CallExpressionÍ,gÍ,‚Y°MemberExpressionÍ,gÍ,xY°MemberExpressionÍ,gÍ,tU®ThisExpressionÍ,gÍ,kLªIdentifierÍ,lÍ,t¨__resultÂÂLªIdentifierÍ,uÍ,x£setÂÂ‘LªIdentifierÍ,yÍ,¨newValueÂN°MethodDefinitionÍ,Í,ÆÂÂLªIdentifierÍ,”Í,˜¤data£getO²FunctionExpressionÍ,˜Í,ÆÀÂÂÂM®BlockStatementÍ,›Í,Æ‘\¯ReturnStatementÍ,¦Í,¿T®CallExpressionÍ,­Í,¾Y°MemberExpressionÍ,­Í,¼Y°MemberExpressionÍ,­Í,¸U®ThisExpressionÍ,­Í,±LªIdentifierÍ,²Í,¸¦__dataÂÂLªIdentifierÍ,¹Í,¼£getÂÂÂN°MethodDefinitionÍ,ÌÍ-ÂÂLªIdentifierÍ,ĞÍ,Ô¤data£setO²FunctionExpressionÍ,ÔÍ-ÀÂÂÂ‘LªIdentifierÍ,ÕÍ,İ¨newValueM®BlockStatementÍ,ßÍ-‘S³ExpressionStatementÍ,êÍ-T®CallExpressionÍ,êÍ-Y°MemberExpressionÍ,êÍ,ùY°MemberExpressionÍ,êÍ,õU®ThisExpressionÍ,êÍ,îLªIdentifierÍ,ïÍ,õ¦__dataÂÂLªIdentifierÍ,öÍ,ù£setÂÂ‘LªIdentifierÍ,úÍ-¨newValueÂN°MethodDefinitionÍ-Í-SÂÂLªIdentifierÍ-Í-ªisVertical£getO²FunctionExpressionÍ-Í-SÀÂÂÂM®BlockStatementÍ-"Í-S‘\¯ReturnStatementÍ--Í-LT®CallExpressionÍ-4Í-KY°MemberExpressionÍ-4Í-IY°MemberExpressionÍ-4Í-EU®ThisExpressionÍ-4Í-8LªIdentifierÍ-9Í-E¬__isVerticalÂÂLªIdentifierÍ-FÍ-I£getÂÂÂN°MethodDefinitionÍ-YÍ-¤ÂÂLªIdentifierÍ-]Í-gªisVertical£setO²FunctionExpressionÍ-gÍ-¤ÀÂÂÂ‘LªIdentifierÍ-hÍ-p¨newValueM®BlockStatementÍ-rÍ-¤‘S³ExpressionStatementÍ-}Í-T®CallExpressionÍ-}Í-œY°MemberExpressionÍ-}Í-’Y°MemberExpressionÍ-}Í-U®ThisExpressionÍ-}Í-LªIdentifierÍ-‚Í-¬__isVerticalÂÂLªIdentifierÍ-Í-’£setÂÂ‘LªIdentifierÍ-“Í-›¨newValueÂN°MethodDefinitionÍ-ªÍ-òÂÂLªIdentifierÍ-®Í-»­scanAreaWidth£getO²FunctionExpressionÍ-»Í-òÀÂÂÂM®BlockStatementÍ-¾Í-ò‘\¯ReturnStatementÍ-ÉÍ-ëT®CallExpressionÍ-ĞÍ-êY°MemberExpressionÍ-ĞÍ-èY°MemberExpressionÍ-ĞÍ-äU®ThisExpressionÍ-ĞÍ-ÔLªIdentifierÍ-ÕÍ-ä¯__scanAreaWidthÂÂLªIdentifierÍ-åÍ-è£getÂÂÂN°MethodDefinitionÍ-øÍ.IÂÂLªIdentifierÍ-üÍ.	­scanAreaWidth£setO²FunctionExpressionÍ.	Í.IÀÂÂÂ‘LªIdentifierÍ.
+Í.¨newValueM®BlockStatementÍ.Í.I‘S³ExpressionStatementÍ.Í.BT®CallExpressionÍ.Í.AY°MemberExpressionÍ.Í.7Y°MemberExpressionÍ.Í.3U®ThisExpressionÍ.Í.#LªIdentifierÍ.$Í.3¯__scanAreaWidthÂÂLªIdentifierÍ.4Í.7£setÂÂ‘LªIdentifierÍ.8Í.@¨newValueÂN°MethodDefinitionÍ.OÍ.™ÂÂLªIdentifierÍ.SÍ.a®scanAreaHeight£getO²FunctionExpressionÍ.aÍ.™ÀÂÂÂM®BlockStatementÍ.dÍ.™‘\¯ReturnStatementÍ.oÍ.’T®CallExpressionÍ.vÍ.‘Y°MemberExpressionÍ.vÍ.Y°MemberExpressionÍ.vÍ.‹U®ThisExpressionÍ.vÍ.zLªIdentifierÍ.{Í.‹°__scanAreaHeightÂÂLªIdentifierÍ.ŒÍ.£getÂÂÂN°MethodDefinitionÍ.ŸÍ.òÂÂLªIdentifierÍ.£Í.±®scanAreaHeight£setO²FunctionExpressionÍ.±Í.òÀÂÂÂ‘LªIdentifierÍ.²Í.º¨newValueM®BlockStatementÍ.¼Í.ò‘S³ExpressionStatementÍ.ÇÍ.ëT®CallExpressionÍ.ÇÍ.êY°MemberExpressionÍ.ÇÍ.àY°MemberExpressionÍ.ÇÍ.ÜU®ThisExpressionÍ.ÇÍ.ËLªIdentifierÍ.ÌÍ.Ü°__scanAreaHeightÂÂLªIdentifierÍ.İÍ.à£setÂÂ‘LªIdentifierÍ.áÍ.é¨newValueÂN°MethodDefinitionÍ.øÍ/JÂÂLªIdentifierÍ.üÍ/²cutOutBottomOffset£getO²FunctionExpressionÍ/Í/JÀÂÂÂM®BlockStatementÍ/Í/J‘\¯ReturnStatementÍ/Í/CT®CallExpressionÍ/#Í/BY°MemberExpressionÍ/#Í/@Y°MemberExpressionÍ/#Í/<U®ThisExpressionÍ/#Í/'LªIdentifierÍ/(Í/<´__cutOutBottomOffsetÂÂLªIdentifierÍ/=Í/@£getÂÂÂN°MethodDefinitionÍ/PÍ/«ÂÂLªIdentifierÍ/TÍ/f²cutOutBottomOffset£setO²FunctionExpressionÍ/fÍ/«ÀÂÂÂ‘LªIdentifierÍ/gÍ/o¨newValueM®BlockStatementÍ/qÍ/«‘S³ExpressionStatementÍ/|Í/¤T®CallExpressionÍ/|Í/£Y°MemberExpressionÍ/|Í/™Y°MemberExpressionÍ/|Í/•U®ThisExpressionÍ/|Í/€LªIdentifierÍ/Í/•´__cutOutBottomOffsetÂÂLªIdentifierÍ/–Í/™£setÂÂ‘LªIdentifierÍ/šÍ/¢¨newValueÂN°MethodDefinitionÍ/±Í2–ÂÂLªIdentifierÍ/·Í/Ä­aboutToAppear¦methodO²FunctionExpressionÍ/ÄÍ2–ÀÂÂÃM®BlockStatementÍ/ÇÍ2–—S³ExpressionStatementÍ/ÒÍ/éX´AssignmentExpressionÍ/ÒÍ/è¡=Y°MemberExpressionÍ/ÒÍ/àU®ThisExpressionÍ/ÒÍ/ÖLªIdentifierÍ/×Í/à©isScannedÂÂR§LiteralÍ/ãÍ/èÂ¥falseS³ExpressionStatementÍ/óÍ0X´AssignmentExpressionÍ/óÍ0¡=Y°MemberExpressionÍ/óÍ/şU®ThisExpressionÍ/óÍ/÷LªIdentifierÍ/øÍ/ş¦isStopÂÂR§LiteralÍ0Í0Â¥falseS³ExpressionStatementÍ0Í0%T®CallExpressionÍ0Í0$Y°MemberExpressionÍ0Í0"U®ThisExpressionÍ0Í0LªIdentifierÍ0Í0"¬onEmitEventsÂÂÂS³ExpressionStatementÍ0/Í0AT®CallExpressionÍ0/Í0@Y°MemberExpressionÍ0/Í0>U®ThisExpressionÍ0/Í03LªIdentifierÍ04Í0>ªsetDisplayÂÂÂS³ExpressionStatementÍ0KÍ0WT®CallExpressionÍ0KÍ0VY°MemberExpressionÍ0KÍ0TU®ThisExpressionÍ0KÍ0OLªIdentifierÍ0PÍ0T¤initÂÂÂS³ExpressionStatementÍ0aÍ2T®CallExpressionÍ0aÍ2Y°MemberExpressionÍ0aÍ0ˆT®CallExpressionÍ0aÍ0ƒY°MemberExpressionÍ0aÍ0uLªIdentifierÍ0aÍ0g¦windowLªIdentifierÍ0hÍ0u­getLastWindowÂÂ‘Y°MemberExpressionÍ0vÍ0‚U®ThisExpressionÍ0vÍ0zLªIdentifierÍ0{Í0‚§contextÂÂÂLªIdentifierÍ0„Í0ˆ¤thenÂÂ‘O·ArrowFunctionExpressionÍ0‰Í2ÀÂÂÂ‘LªIdentifierÍ0ŠÍ0•«windowClassM®BlockStatementÍ0šÍ2’S³ExpressionStatementÍ0©Í0ÈX´AssignmentExpressionÍ0©Í0Ç¡=Y°MemberExpressionÍ0©Í0¹U®ThisExpressionÍ0©Í0­LªIdentifierÍ0®Í0¹«windowClassÂÂLªIdentifierÍ0¼Í0Ç«windowClassS³ExpressionStatementÍ0ÖÍ2T®CallExpressionÍ0ÖÍ2Y°MemberExpressionÍ0ÖÍ0äLªIdentifierÍ0ÖÍ0á«windowClassLªIdentifierÍ0âÍ0ä¢onÂÂ’R§LiteralÍ0åÍ0ò«windowEvent­'windowEvent'O·ArrowFunctionExpressionÍ0ôÍ2ÀÂÂÂ‘LªIdentifierÍ0õÍ0ù¤dataM®BlockStatementÍ0şÍ2’V«IfStatementÍ1Í1W°BinaryExpressionÍ1Í1ALªIdentifierÍ1Í1¤data£===Y°MemberExpressionÍ1Í1AY°MemberExpressionÍ1Í14LªIdentifierÍ1Í1$¦windowLªIdentifierÍ1%Í14¯WindowEventTypeÂÂLªIdentifierÍ15Í1A¬WINDOW_SHOWNÂÂM®BlockStatementÍ1CÍ1‘S³ExpressionStatementÍ1ZÍ1lT®CallExpressionÍ1ZÍ1kY°MemberExpressionÍ1ZÍ1iU®ThisExpressionÍ1ZÍ1^LªIdentifierÍ1_Í1iªonPageShowÂÂÂÀV«IfStatementÍ1‘Í2 W°BinaryExpressionÍ1•Í1ÂLªIdentifierÍ1•Í1™¤data£===Y°MemberExpressionÍ1Í1ÂY°MemberExpressionÍ1Í1´LªIdentifierÍ1Í1¤¦windowLªIdentifierÍ1¥Í1´¯WindowEventTypeÂÂLªIdentifierÍ1µÍ1Â­WINDOW_HIDDENÂÂM®BlockStatementÍ1ÄÍ2 ‘S³ExpressionStatementÍ1ÛÍ1íT®CallExpressionÍ1ÛÍ1ìY°MemberExpressionÍ1ÛÍ1êU®ThisExpressionÍ1ÛÍ1ßLªIdentifierÍ1àÍ1êªonPageHideÂÂÂÀÂÂS³ExpressionStatementÍ2(Í2T®CallExpressionÍ2(Í2Y°MemberExpressionÍ2(Í2IY°MemberExpressionÍ2(Í2:U®ThisExpressionÍ2(Í2,LªIdentifierÍ2-Í2:­cameraServiceÂÂLªIdentifierÍ2;Í2I®onImageArrivalÂÂ“Y°MemberExpressionÍ2JÍ2jY°MemberExpressionÍ2JÍ2\U®ThisExpressionÍ2JÍ2NLªIdentifierÍ2OÍ2\­cameraServiceÂÂLªIdentifierÍ2]Í2j­imageReceiverÂÂY°MemberExpressionÍ2lÍ2xU®ThisExpressionÍ2lÍ2pLªIdentifierÍ2qÍ2x§channelÂÂY°MemberExpressionÍ2zÍ2U®ThisExpressionÍ2zÍ2~LªIdentifierÍ2Í2®barcodeFormatsÂÂÂN°MethodDefinitionÍ2œÍ3”ÂÂLªIdentifierÍ2œÍ2¬°aboutToDisappear¦methodO²FunctionExpressionÍ2¬Í3”ÀÂÂÂM®BlockStatementÍ2¯Í3””S³ExpressionStatementÍ2ºÍ2ŞS¯ChainExpressionÍ2ºÍ2İT®CallExpressionÍ2ºÍ2İY°MemberExpressionÍ2ºÍ2ÛY°MemberExpressionÍ2ºÍ2ÌU®ThisExpressionÍ2ºÍ2¾LªIdentifierÍ2¿Í2Ì­cameraServiceÂÂLªIdentifierÍ2ÎÍ2Û­releaseCameraÂÃÂS³ExpressionStatementÍ2èÍ3T®CallExpressionÍ2èÍ3Y°MemberExpressionÍ2èÍ2÷LªIdentifierÍ2èÍ2ğ¨EventHubLªIdentifierÍ2ñÍ2÷¦offAllÂÂ‘Y°MemberExpressionÍ2øÍ3U®ThisExpressionÍ2øÍ2üLªIdentifierÍ2ıÍ3§contextÂÂÂV«IfStatementÍ3Í3^W°BinaryExpressionÍ3Í3'Y°MemberExpressionÍ3Í3 U®ThisExpressionÍ3Í3LªIdentifierÍ3Í3 §timerIdÂÂ£!==Q¯UnaryExpressionÍ3%Í3'¡-ÃR§LiteralÍ3&Í3'¡1M®BlockStatementÍ3)Í3^‘S³ExpressionStatementÍ38Í3ST®CallExpressionÍ38Í3RLªIdentifierÍ38Í3D¬clearTimeout‘Y°MemberExpressionÍ3EÍ3QU®ThisExpressionÍ3EÍ3ILªIdentifierÍ3JÍ3Q§timerIdÂÂÂÀS³ExpressionStatementÍ3hÍ3S¯ChainExpressionÍ3hÍ3ŒT®CallExpressionÍ3hÍ3ŒY°MemberExpressionÍ3hÍ3}Y°MemberExpressionÍ3hÍ3xU®ThisExpressionÍ3hÍ3lLªIdentifierÍ3mÍ3x«windowClassÂÂLªIdentifierÍ3zÍ3}£offÂÃ‘R§LiteralÍ3~Í3‹«windowEvent­'windowEvent'ÂN°MethodDefinitionÍ3šÍ6gÂÂLªIdentifierÍ3šÍ3¤ªonPageShow¦methodO²FunctionExpressionÍ3¤Í6gÀÂÂÂM®BlockStatementÍ3§Í6g“V«IfStatementÍ4İÍ5\Q¯UnaryExpressionÍ4áÍ4ğ¡!ÃY°MemberExpressionÍ4âÍ4ğU®ThisExpressionÍ4âÍ4æLªIdentifierÍ4çÍ4ğ©surfaceIdÂÂM®BlockStatementÍ4òÍ5\’S³ExpressionStatementÍ5Í5<T®CallExpressionÍ5Í5;Y°MemberExpressionÍ5Í5LªIdentifierÍ5Í5§consoleLªIdentifierÍ5	Í5¤infoÂÂ‘W°BinaryExpressionÍ5Í5:LªIdentifierÍ5Í5£TAG¡+R§LiteralÍ5Í5:Ù$onPageShow skip: surfaceId not readyÙ&'onPageShow skip: surfaceId not ready'Â\¯ReturnStatementÍ5JÍ5QÀÀS³ExpressionStatementÍ5fÍ5¢T®CallExpressionÍ5fÍ5¡Y°MemberExpressionÍ5fÍ5ƒY°MemberExpressionÍ5fÍ5xU®ThisExpressionÍ5fÍ5jLªIdentifierÍ5kÍ5x­cameraServiceÂÂLªIdentifierÍ5yÍ5ƒªinitCameraÂÂ’Y°MemberExpressionÍ5„Í5’U®ThisExpressionÍ5„Í5ˆLªIdentifierÍ5‰Í5’©surfaceIdÂÂY°MemberExpressionÍ5”Í5 U®ThisExpressionÍ5”Í5˜LªIdentifierÍ5™Í5 §isFrontÂÂÂV«IfStatementÍ5¬Í6`Q¯UnaryExpressionÍ5°Í5½¡!ÃY°MemberExpressionÍ5±Í5½U®ThisExpressionÍ5±Í5µLªIdentifierÍ5¶Í5½§isFrontÂÂM®BlockStatementÍ5¿Í6`‘S³ExpressionStatementÍ5ÎÍ6UX´AssignmentExpressionÍ5ÎÍ6T¡=Y°MemberExpressionÍ5ÎÍ5ÚU®ThisExpressionÍ5ÎÍ5ÒLªIdentifierÍ5ÓÍ5Ú§timerIdÂÂT®CallExpressionÍ5İÍ6TLªIdentifierÍ5İÍ5çªsetTimeout’O·ArrowFunctionExpressionÍ5èÍ6>ÀÂÂÂM®BlockStatementÍ5îÍ6>‘S³ExpressionStatementÍ6Í6/S¯ChainExpressionÍ6Í6.T®CallExpressionÍ6Í6.Y°MemberExpressionÍ6Í6!Y°MemberExpressionÍ6Í6U®ThisExpressionÍ6Í6LªIdentifierÍ6Í6­cameraServiceÂÂLªIdentifierÍ6Í6!¬setFlashModeÂÃ‘Y°MemberExpressionÍ6"Í6-U®ThisExpressionÍ6"Í6&LªIdentifierÍ6'Í6-¦isOpenÂÂÂY°MemberExpressionÍ6@Í6SU®ThisExpressionÍ6@Í6DLªIdentifierÍ6EÍ6S®FLASH_TIME_OUTÂÂÂÀN°MethodDefinitionÍ6mÍ7ÂÂLªIdentifierÍ6mÍ6wªonPageHide¦methodO²FunctionExpressionÍ6wÍ7ÀÂÂÂM®BlockStatementÍ6zÍ7’S³ExpressionStatementÍ6…Í6µT®CallExpressionÍ6…Í6´Y°MemberExpressionÍ6…Í6§Y°MemberExpressionÍ6…Í6—U®ThisExpressionÍ6…Í6‰LªIdentifierÍ6ŠÍ6—­cameraServiceÂÂLªIdentifierÍ6˜Í6§¯preFrontReleaseÂÂ‘Y°MemberExpressionÍ6¨Í6³U®ThisExpressionÍ6¨Í6¬LªIdentifierÍ6­Í6³¦isStopÂÂÂV«IfStatementÍ6¿Í7W°BinaryExpressionÍ6ÃÍ6ÖY°MemberExpressionÍ6ÃÍ6ÏU®ThisExpressionÍ6ÃÍ6ÇLªIdentifierÍ6ÈÍ6Ï§timerIdÂÂ£!==Q¯UnaryExpressionÍ6ÔÍ6Ö¡-ÃR§LiteralÍ6ÕÍ6Ö¡1M®BlockStatementÍ6ØÍ7‘S³ExpressionStatementÍ6çÍ7T®CallExpressionÍ6çÍ7LªIdentifierÍ6çÍ6ó¬clearTimeout‘Y°MemberExpressionÍ6ôÍ7 U®ThisExpressionÍ6ôÍ6øLªIdentifierÍ6ùÍ7 §timerIdÂÂÂÀN°MethodDefinitionÍ7ÍAúÂÂLªIdentifierÍ7Í7&¬onEmitEvents¦methodO²FunctionExpressionÍ7&ÍAúÀÂÂÂM®BlockStatementÍ7)ÍAúšÔr]•¤type¥start£end¬declarations¤kind³VariableDeclarationÍ7GÍ7h‘Ôr^•¤type¥start£end¢id¤init²VariableDeclaratorÍ7MÍ7gLªIdentifierÍ7MÍ7T§contextT®CallExpressionÍ7WÍ7gLªIdentifierÍ7WÍ7aªgetContext‘U®ThisExpressionÍ7bÍ7fÂ¥constS³ExpressionStatementÍ7ƒÍ8'T®CallExpressionÍ7ƒÍ8&Y°MemberExpressionÍ7ƒÍ7—LªIdentifierÍ7ƒÍ7‹¨EventHubLªIdentifierÍ7ŒÍ7—«onStartScanÂÂ’LªIdentifierÍ7˜Í7Ÿ§contextO·ArrowFunctionExpressionÍ7¡Í8%ÀÂÂÃ‘LªIdentifierÍ7¨Í7¬¤argsM®BlockStatementÍ7±Í8%’S³ExpressionStatementÍ7ÀÍ7ÜX´AssignmentExpressionÍ7ÀÍ7Û¡=Y°MemberExpressionÍ7ÀÍ7ÌU®ThisExpressionÍ7ÀÍ7ÄLªIdentifierÍ7ÅÍ7Ì§channelÂÂY°MemberExpressionÍ7ÏÍ7ÛLªIdentifierÍ7ÏÍ7Ó¤argsLªIdentifierÍ7ÔÍ7Û§channelÂÂS³ExpressionStatementÍ7êÍ8X´AssignmentExpressionÍ7êÍ8¡=Y°MemberExpressionÍ7êÍ7ıU®ThisExpressionÍ7êÍ7îLªIdentifierÍ7ïÍ7ı®barcodeFormatsÂÂW±LogicalExpressionÍ8 Í8Y°MemberExpressionÍ8 Í8LªIdentifierÍ8 Í8¤argsLªIdentifierÍ8Í8®barcodeFormatsÂÂ¢||[¯ArrayExpressionÍ8Í8ÂS³ExpressionStatementÍ8BÍ9®T®CallExpressionÍ8BÍ9­Y°MemberExpressionÍ8BÍ8XLªIdentifierÍ8BÍ8J¨EventHubLªIdentifierÍ8KÍ8X­onPauseCameraÂÂ’LªIdentifierÍ8YÍ8`§contextO·ArrowFunctionExpressionÍ8bÍ9¬ÀÂÂÃ‘LªIdentifierÍ8iÍ8o¦resultM®BlockStatementÍ8tÍ9¬“V«IfStatementÍ8ƒÍ8½Y°MemberExpressionÍ8‡Í8’U®ThisExpressionÍ8‡Í8‹LªIdentifierÍ8ŒÍ8’¦isStopÂÂM®BlockStatementÍ8”Í8½‘\¯ReturnStatementÍ8§Í8®ÀÀS³ExpressionStatementÍ8áÍ9	S¯ChainExpressionÍ8áÍ9T®CallExpressionÍ8áÍ9Y°MemberExpressionÍ8áÍ9Y°MemberExpressionÍ8áÍ8óU®ThisExpressionÍ8áÍ8åLªIdentifierÍ8æÍ8ó­cameraServiceÂÂLªIdentifierÍ8õÍ9¬setFlashModeÂÃ‘R§LiteralÍ9Í9Â¥falseÂS³ExpressionStatementÍ9Í9¡S¯ChainExpressionÍ9Í9 T®CallExpressionÍ9Í9 Y°MemberExpressionÍ9Í9<T®CallExpressionÍ9Í97Y°MemberExpressionÍ9Í95Y°MemberExpressionÍ9Í9)U®ThisExpressionÍ9Í9LªIdentifierÍ9Í9)­cameraServiceÂÂLªIdentifierÍ9+Í95ªstopCameraÂÃÂLªIdentifierÍ98Í9<¤thenÂÂ‘O·ArrowFunctionExpressionÍ9=Í9ŸÀÂÂÂM®BlockStatementÍ9CÍ9Ÿ’S³ExpressionStatementÍ9VÍ9iX´AssignmentExpressionÍ9VÍ9h¡=Y°MemberExpressionÍ9VÍ9aU®ThisExpressionÍ9VÍ9ZLªIdentifierÍ9[Í9a¦isStopÂÂR§LiteralÍ9dÍ9hÃ¤trueS³ExpressionStatementÍ9{Í9T®CallExpressionÍ9{Í9Y°MemberExpressionÍ9{Í9‰LªIdentifierÍ9{Í9¦resultLªIdentifierÍ9‚Í9‰§successÂÂ‘R§LiteralÍ9ŠÍ9À¤nullÂÂÂS³ExpressionStatementÍ9ÊÍ;‘T®CallExpressionÍ9ÊÍ;Y°MemberExpressionÍ9ÊÍ9ßLªIdentifierÍ9ÊÍ9Ò¨EventHubLªIdentifierÍ9ÓÍ9ß¬onFlipCameraÂÂ’LªIdentifierÍ9àÍ9ç§contextO·ArrowFunctionExpressionÍ9éÍ;ÀÂÂÃ‘LªIdentifierÍ9ğÍ9ö¦resultM®BlockStatementÍ9ûÍ;“S³ExpressionStatementÍ:
+Í:5T®CallExpressionÍ:
+Í:4Y°MemberExpressionÍ:
+Í:LªIdentifierÍ:
+Í:§consoleLªIdentifierÍ:Í:¤infoÂÂ‘W°BinaryExpressionÍ:Í:3LªIdentifierÍ:Í:£TAG¡+R§LiteralÍ:Í:3´onFlipCamera success¶'onFlipCamera success'ÂS³ExpressionStatementÍ:CÍ:`X´AssignmentExpressionÍ:CÍ:_¡=Y°MemberExpressionÍ:CÍ:OU®ThisExpressionÍ:CÍ:GLªIdentifierÍ:HÍ:O§isFrontÂÂQ¯UnaryExpressionÍ:RÍ:_¡!ÃY°MemberExpressionÍ:SÍ:_U®ThisExpressionÍ:SÍ:WLªIdentifierÍ:XÍ:_§isFrontÂÂS³ExpressionStatementÍ:nÍ;„S¯ChainExpressionÍ:nÍ;ƒT®CallExpressionÍ:nÍ;ƒY°MemberExpressionÍ:nÍ:£T®CallExpressionÍ:nÍ:Y°MemberExpressionÍ:nÍ:‘Y°MemberExpressionÍ:nÍ:€U®ThisExpressionÍ:nÍ:rLªIdentifierÍ:sÍ:€­cameraServiceÂÂLªIdentifierÍ:‚Í:‘¯preFrontReleaseÂÃ‘Y°MemberExpressionÍ:’Í:U®ThisExpressionÍ:’Í:–LªIdentifierÍ:—Í:¦isStopÂÂÂLªIdentifierÍ:ŸÍ:£¤thenÂÂ‘O·ArrowFunctionExpressionÍ:¤Í;‚ÀÂÂÂM®BlockStatementÍ:ªÍ;‚‘S³ExpressionStatementÍ:½Í;sS¯ChainExpressionÍ:½Í;rT®CallExpressionÍ:½Í;rY°MemberExpressionÍ:½Í:şT®CallExpressionÍ:½Í:ùY°MemberExpressionÍ:½Í:ÛY°MemberExpressionÍ:½Í:ÏU®ThisExpressionÍ:½Í:ÁLªIdentifierÍ:ÂÍ:Ï­cameraServiceÂÂLªIdentifierÍ:ÑÍ:ÛªinitCameraÂÃ’Y°MemberExpressionÍ:ÜÍ:êU®ThisExpressionÍ:ÜÍ:àLªIdentifierÍ:áÍ:ê©surfaceIdÂÂY°MemberExpressionÍ:ìÍ:øU®ThisExpressionÍ:ìÍ:ğLªIdentifierÍ:ñÍ:ø§isFrontÂÂÂLªIdentifierÍ:úÍ:ş¤thenÂÂ‘O·ArrowFunctionExpressionÍ:ÿÍ;qÀÂÂÂM®BlockStatementÍ;Í;q‘S³ExpressionStatementÍ;Í;JS¯ChainExpressionÍ;Í;IT®CallExpressionÍ;Í;IY°MemberExpressionÍ;Í;<Y°MemberExpressionÍ;Í;.U®ThisExpressionÍ;Í; LªIdentifierÍ;!Í;.­cameraServiceÂÂLªIdentifierÍ;0Í;<¬setFlashModeÂÃ‘Y°MemberExpressionÍ;=Í;HU®ThisExpressionÍ;=Í;ALªIdentifierÍ;BÍ;H¦isOpenÂÂÂÂÂÂS³ExpressionStatementÍ;­Í<T®CallExpressionÍ;­Í<Y°MemberExpressionÍ;­Í;ÃLªIdentifierÍ;­Í;µ¨EventHubLªIdentifierÍ;¶Í;Ã­onToggleFlashÂÂ’LªIdentifierÍ;ÄÍ;Ë§contextO·ArrowFunctionExpressionÍ;ÍÍ<ÀÂÂÂ‘LªIdentifierÍ;ÎÍ;Ô¦resultM®BlockStatementÍ;ÙÍ<‘S³ExpressionStatementÍ;èÍ<T®CallExpressionÍ;èÍ<Y°MemberExpressionÍ;èÍ;ùU®ThisExpressionÍ;èÍ;ìLªIdentifierÍ;íÍ;ù¬setTorchModeÂÂ‘LªIdentifierÍ;úÍ< ¦resultÂÂS³ExpressionStatementÍ<*Í<‹T®CallExpressionÍ<*Í<ŠY°MemberExpressionÍ<*Í<:LªIdentifierÍ<*Í<2¨EventHubLªIdentifierÍ<3Í<:§onResumÂÂ’LªIdentifierÍ<;Í<B§contextO·ArrowFunctionExpressionÍ<DÍ<‰ÀÂÂÂ‘LªIdentifierÍ<EÍ<K¦resultM®BlockStatementÍ<PÍ<‰‘S³ExpressionStatementÍ<_Í<~T®CallExpressionÍ<_Í<}Y°MemberExpressionÍ<_Í<uU®ThisExpressionÍ<_Í<cLªIdentifierÍ<dÍ<u±restartCustomScanÂÂ‘LªIdentifierÍ<vÍ<|¦resultÂÂS³ExpressionStatementÍ<©Í=„T®CallExpressionÍ<©Í=ƒY°MemberExpressionÍ<©Í<ÀLªIdentifierÍ<©Í<±¨EventHubLªIdentifierÍ<²Í<À®onGetFlashInfoÂÂ’LªIdentifierÍ<ÁÍ<È§contextO·ArrowFunctionExpressionÍ<ÊÍ=‚ÀÂÂÂ‘LªIdentifierÍ<ËÍ<Ñ¦resultM®BlockStatementÍ<ÖÍ=‚’V«IfStatementÍ<åÍ=MY°MemberExpressionÍ<éÍ<ôU®ThisExpressionÍ<éÍ<íLªIdentifierÍ<îÍ<ô¦isStopÂÂM®BlockStatementÍ<öÍ=M’S³ExpressionStatementÍ=	Í=%T®CallExpressionÍ=	Í=$Y°MemberExpressionÍ=	Í=LªIdentifierÍ=	Í=¦resultLªIdentifierÍ=Í=§successÂÂ‘Y°MemberExpressionÍ=Í=#U®ThisExpressionÍ=Í=LªIdentifierÍ=Í=#¦isOpenÂÂÂ\¯ReturnStatementÍ=7Í=>ÀÀS³ExpressionStatementÍ=[Í=wT®CallExpressionÍ=[Í=vY°MemberExpressionÍ=[Í=iLªIdentifierÍ=[Í=a¦resultLªIdentifierÍ=bÍ=i§successÂÂ‘Y°MemberExpressionÍ=jÍ=uU®ThisExpressionÍ=jÍ=nLªIdentifierÍ=oÍ=u¦isOpenÂÂÂÂS³ExpressionStatementÍ=£Í@/T®CallExpressionÍ=£Í@.Y°MemberExpressionÍ=£Í=¿LªIdentifierÍ=£Í=«¨EventHubLªIdentifierÍ=¬Í=¿³onGetSystemFeaturesÂÂ’LªIdentifierÍ=ÀÍ=Ç§contextO·ArrowFunctionExpressionÍ=ÉÍ@-ÀÂÂÃ‘LªIdentifierÍ=ĞÍ=Ö¦resultM®BlockStatementÍ=ÛÍ@-š]³VariableDeclarationÍ=êÍ>‘^²VariableDeclaratorÍ=ğÍ>LªIdentifierÍ=ğÍ=÷§faturesZ­NewExpressionÍ=úÍ>LªIdentifierÍ=şÍ>£Map¥const]³VariableDeclarationÍ>Í>P‘^²VariableDeclaratorÍ>Í>OLªIdentifierÍ>Í>&®hasFrontCameraS¯ChainExpressionÍ>)Í>OT®CallExpressionÍ>)Í>OY°MemberExpressionÍ>)Í>FY°MemberExpressionÍ>)Í>;U®ThisExpressionÍ>)Í>-LªIdentifierÍ>.Í>;­cameraServiceÂÂLªIdentifierÍ>=Í>F©hasCameraÂÃ‘R§LiteralÍ>GÍ>N¥front§'front'Â¥const]³VariableDeclarationÍ>^Í>”‘^²VariableDeclaratorÍ>dÍ>“LªIdentifierÍ>dÍ>q­hasBackCameraS¯ChainExpressionÍ>tÍ>“T®CallExpressionÍ>tÍ>“Y°MemberExpressionÍ>tÍ>‘Y°MemberExpressionÍ>tÍ>†U®ThisExpressionÍ>tÍ>xLªIdentifierÍ>yÍ>†­cameraServiceÂÂLªIdentifierÍ>ˆÍ>‘©hasCameraÂÃÂ¥const]³VariableDeclarationÍ>¢Í>Ø‘^²VariableDeclaratorÍ>¨Í>×LªIdentifierÍ>¨Í>°¨hasFlashS¯ChainExpressionÍ>³Í>×T®CallExpressionÍ>³Í>×Y°MemberExpressionÍ>³Í>ÕY°MemberExpressionÍ>³Í>ÅU®ThisExpressionÍ>³Í>·LªIdentifierÍ>¸Í>Å­cameraServiceÂÂLªIdentifierÍ>ÇÍ>Õ®hasFlashCameraÂÃÂ¥const]³VariableDeclarationÍ>æÍ?‘^²VariableDeclaratorÍ>ìÍ?LªIdentifierÍ>ìÍ>ø¬activeCameraS¯ChainExpressionÍ>ûÍ?T®CallExpressionÍ>ûÍ?Y°MemberExpressionÍ>ûÍ?Y°MemberExpressionÍ>ûÍ?U®ThisExpressionÍ>ûÍ>ÿLªIdentifierÍ? Í?­cameraServiceÂÂLªIdentifierÍ?Í?¬activeCameraÂÃÂ¥constS³ExpressionStatementÍ?,Í?ZT®CallExpressionÍ?,Í?YY°MemberExpressionÍ?,Í?7LªIdentifierÍ?,Í?3§faturesLªIdentifierÍ?4Í?7£setÂÂ’R§LiteralÍ?8Í?H®hasFrontCamera°'hasFrontCamera'LªIdentifierÍ?JÍ?X®hasFrontCameraÂS³ExpressionStatementÍ?hÍ?”T®CallExpressionÍ?hÍ?“Y°MemberExpressionÍ?hÍ?sLªIdentifierÍ?hÍ?o§faturesLªIdentifierÍ?pÍ?s£setÂÂ’R§LiteralÍ?tÍ?ƒ­hasBackCamera¯'hasBackCamera'LªIdentifierÍ?…Í?’­hasBackCameraÂS³ExpressionStatementÍ?¢Í?ÄT®CallExpressionÍ?¢Í?ÃY°MemberExpressionÍ?¢Í?­LªIdentifierÍ?¢Í?©§faturesLªIdentifierÍ?ªÍ?­£setÂÂ’R§LiteralÍ?®Í?¸¨hasFlashª'hasFlash'LªIdentifierÍ?ºÍ?Â¨hasFlashÂS³ExpressionStatementÍ?ÒÍ?üT®CallExpressionÍ?ÒÍ?ûY°MemberExpressionÍ?ÒÍ?İLªIdentifierÍ?ÒÍ?Ù§faturesLªIdentifierÍ?ÚÍ?İ£setÂÂ’R§LiteralÍ?ŞÍ?ì¬activeCamera®'activeCamera'LªIdentifierÍ?îÍ?ú¬activeCameraÂS³ExpressionStatementÍ@
+Í@"T®CallExpressionÍ@
+Í@!Y°MemberExpressionÍ@
+Í@LªIdentifierÍ@
+Í@¦resultLªIdentifierÍ@Í@§successÂÂ‘LªIdentifierÍ@Í@ §faturesÂÂS³ExpressionStatementÍ@LÍAKT®CallExpressionÍ@LÍAJY°MemberExpressionÍ@LÍ@eLªIdentifierÍ@LÍ@T¨EventHubLªIdentifierÍ@UÍ@e°onChangeScanAreaÂÂ’LªIdentifierÍ@fÍ@m§contextO·ArrowFunctionExpressionÍ@oÍAIÀÂÂÂ‘LªIdentifierÍ@pÍ@s£resM®BlockStatementÍ@xÍAI“S³ExpressionStatementÍ@‡Í@ÒT®CallExpressionÍ@‡Í@ÑY°MemberExpressionÍ@‡Í@“LªIdentifierÍ@‡Í@§consoleLªIdentifierÍ@Í@“¤infoÂÂ‘W°BinaryExpressionÍ@”Í@ĞW°BinaryExpressionÍ@”Í@ºLªIdentifierÍ@”Í@—£TAG¡+R§LiteralÍ@šÍ@º¾onChangeScanArea enter successÙ 'onChangeScanArea enter success'¡+T®CallExpressionÍ@½Í@ĞY°MemberExpressionÍ@½Í@ËLªIdentifierÍ@½Í@Á¤JSONLªIdentifierÍ@ÂÍ@Ë©stringifyÂÂ‘LªIdentifierÍ@ÌÍ@Ï£resÂÂS³ExpressionStatementÍ@àÍAX´AssignmentExpressionÍ@àÍA¡=Y°MemberExpressionÍ@àÍ@òU®ThisExpressionÍ@àÍ@äLªIdentifierÍ@åÍ@ò­scanAreaWidthÂÂY°MemberExpressionÍ@õÍALªIdentifierÍ@õÍ@ø£resLªIdentifierÍ@ùÍA­scanAreaWidthÂÂS³ExpressionStatementÍAÍA>X´AssignmentExpressionÍAÍA=¡=Y°MemberExpressionÍAÍA(U®ThisExpressionÍAÍALªIdentifierÍAÍA(®scanAreaHeightÂÂY°MemberExpressionÍA+ÍA=LªIdentifierÍA+ÍA.£resLªIdentifierÍA/ÍA=®scanAreaHeightÂÂÂS³ExpressionStatementÍAhÍAóT®CallExpressionÍAhÍAòY°MemberExpressionÍAhÍA}LªIdentifierÍAhÍAp¨EventHubLªIdentifierÍAqÍA}¬onInvertScanÂÂ’LªIdentifierÍA~ÍA…§contextO·ArrowFunctionExpressionÍA‡ÍAñÀÂÂÂ‘LªIdentifierÍAˆÍA‹£resM®BlockStatementÍAÍAñ‘S³ExpressionStatementÍAŸÍAæT®CallExpressionÍAŸÍAåY°MemberExpressionÍAŸÍA«LªIdentifierÍAŸÍA¦§consoleLªIdentifierÍA§ÍA«¤infoÂÂ‘W°BinaryExpressionÍA¬ÍAäW°BinaryExpressionÍA¬ÍAÎLªIdentifierÍA¬ÍA¯£TAG¡+R§LiteralÍA²ÍAÎºonInvertScan enter success¼'onInvertScan enter success'¡+T®CallExpressionÍAÑÍAäY°MemberExpressionÍAÑÍAßLªIdentifierÍAÑÍAÕ¤JSONLªIdentifierÍAÖÍAß©stringifyÂÂ‘LªIdentifierÍAàÍAã£resÂÂÂN°MethodDefinitionÍBÍCÂÂLªIdentifierÍBÍB"¤init¦methodO²FunctionExpressionÍB"ÍCÀÂÂÃM®BlockStatementÍB%ÍC“]³VariableDeclarationÍB0ÍB_‘^²VariableDeclaratorÍB6ÍB^LªIdentifierÍB6ÍBA«permissions[¯ArrayExpressionÍBDÍB^‘R§LiteralÍBEÍB]¶ohos.permission.CAMERA¸'ohos.permission.CAMERA'¥const]³VariableDeclarationÍBiÍB²‘^²VariableDeclaratorÍBmÍB±LªIdentifierÍBmÍBx«grantStatus\¯AwaitExpressionÍB{ÍB±T®CallExpressionÍBÍB±Y°MemberExpressionÍBÍB¡LªIdentifierÍBÍB¯PermissionsUtilLªIdentifierÍB‘ÍB¡°checkAccessTokenÂÂ‘Y°MemberExpressionÍB¢ÍB°LªIdentifierÍB¢ÍB­«permissionsR§LiteralÍB®ÍB¯ ¡0ÃÂÂ£letV«IfStatementÍB¼ÍCzW°BinaryExpressionÍBÀÍC LªIdentifierÍBÀÍBË«grantStatus£===Y°MemberExpressionÍBĞÍC Y°MemberExpressionÍBĞÍBíLªIdentifierÍBĞÍBá±abilityAccessCtrlLªIdentifierÍBâÍBí«GrantStatusÂÂLªIdentifierÍBîÍC ²PERMISSION_GRANTEDÂÂM®BlockStatementÍCÍC2‘S³ExpressionStatementÍCÍC'X´AssignmentExpressionÍCÍC&¡=Y°MemberExpressionÍCÍCU®ThisExpressionÍCÍCLªIdentifierÍCÍC©userGrantÂÂR§LiteralÍC"ÍC&Ã¤trueM®BlockStatementÍCAÍCz‘S³ExpressionStatementÍCPÍCoT®CallExpressionÍCPÍCnY°MemberExpressionÍCPÍClU®ThisExpressionÍCPÍCTLªIdentifierÍCUÍCl·requestCameraPermissionÂÂÂN°MethodDefinitionÍC”ÍF^ÂÂLªIdentifierÍCšÍC±·requestCameraPermission¦methodO²FunctionExpressionÍC±ÍF^ÀÂÂÃM®BlockStatementÍC´ÍF^”]³VariableDeclarationÍC¿ÍD‘^²VariableDeclaratorÍCÃÍDLªIdentifierÍCÃÍCÎ«grantStatus\¯AwaitExpressionÍCÑÍDT®CallExpressionÍC×ÍDY°MemberExpressionÍC×ÍCıLªIdentifierÍC×ÍCæ¯PermissionsUtilLªIdentifierÍCçÍCı¶reqPermissionsFromUserÂÂ‘Y°MemberExpressionÍCşÍD
+U®ThisExpressionÍCşÍDLªIdentifierÍDÍD
+§contextÂÂÂ£let]³VariableDeclarationÍDÍD6‘^²VariableDeclaratorÍDÍD5LªIdentifierÍDÍD ¦lengthY°MemberExpressionÍD#ÍD5LªIdentifierÍD#ÍD.«grantStatusLªIdentifierÍD/ÍD5¦lengthÂÂ£letÔr_—¤type¥start£end¤init¤test¦update¤body¬ForStatementÍD@ÍEV]³VariableDeclarationÍDEÍDN‘^²VariableDeclaratorÍDIÍDNLªIdentifierÍDIÍDJ¡iR§LiteralÍDMÍDN ¡0£letW°BinaryExpressionÍDPÍDZLªIdentifierÍDPÍDQ¡i¡<LªIdentifierÍDTÍDZ¦lengthQ°UpdateExpressionÍD\ÍD_¢++ÂLªIdentifierÍD\ÍD]¡iM®BlockStatementÍDaÍEV‘V«IfStatementÍDpÍEKW°BinaryExpressionÍDtÍDˆY°MemberExpressionÍDtÍD‚LªIdentifierÍDtÍD«grantStatusLªIdentifierÍD€ÍD¡iÃÂ£===R§LiteralÍD‡ÍDˆ ¡0M®BlockStatementÍDŠÍDÂ‘S³ExpressionStatementÍDÍD³X´AssignmentExpressionÍDÍD²¡=Y°MemberExpressionÍDÍD«U®ThisExpressionÍDÍD¡LªIdentifierÍD¢ÍD«©userGrantÂÂR§LiteralÍD®ÍD²Ã¤trueM®BlockStatementÍDÕÍEK’S³ExpressionStatementÍDèÍET®CallExpressionÍDèÍEY°MemberExpressionÍDèÍDõLªIdentifierÍDèÍDï§consoleLªIdentifierÍDğÍDõ¥errorÂÂ‘W°BinaryExpressionÍDöÍELªIdentifierÍDöÍDù£TAG¡+R§LiteralÍDüÍE³no CameraPermissionµ'no CameraPermission'ÂS³ExpressionStatementÍE%ÍE<X´AssignmentExpressionÍE%ÍE;¡=Y°MemberExpressionÍE%ÍE3U®ThisExpressionÍE%ÍE)LªIdentifierÍE*ÍE3©userGrantÂÂR§LiteralÍE6ÍE;Â¥falseV«IfStatementÍE`ÍFWQ¯UnaryExpressionÍEdÍEs¡!ÃY°MemberExpressionÍEeÍEsU®ThisExpressionÍEeÍEiLªIdentifierÍEjÍEs©userGrantÂÂM®BlockStatementÍEuÍFW‘S³ExpressionStatementÍEğÍFLS¯ChainExpressionÍEğÍFKT®CallExpressionÍEğÍFKY°MemberExpressionÍEğÍF
+Y°MemberExpressionÍEğÍEüU®ThisExpressionÍEğÍEôLªIdentifierÍEõÍEü§channelÂÂLªIdentifierÍEşÍF
+¬invokeMethodÂÃ’Y°MemberExpressionÍFÍF:LªIdentifierÍFÍF®ChannelMethodsLªIdentifierÍFÍF:Ù CHANNEL_METHOD_ON_PERMISSION_SETÂÂY°MemberExpressionÍF<ÍFJU®ThisExpressionÍF<ÍF@LªIdentifierÍFAÍFJ©userGrantÂÂÂÀN°MethodDefinitionÍFsÍIßÂÂLªIdentifierÍFsÍFw¤scan¦methodO²FunctionExpressionÍFwÍIßÀÂÂÂM®BlockStatementÍFzÍIß“]³VariableDeclarationÍF…ÍFÁ‘^²VariableDeclaratorÍF‹ÍFÀLªIdentifierÍF‹ÍF˜­cameraManagerT®CallExpressionÍF›ÍFÀY°MemberExpressionÍF›ÍF²LªIdentifierÍF›ÍF¡¦cameraLªIdentifierÍF¢ÍF²°getCameraManagerÂÂ‘Y°MemberExpressionÍF³ÍF¿U®ThisExpressionÍF³ÍF·LªIdentifierÍF¸ÍF¿§contextÂÂÂ¥constS³ExpressionStatementÍFËÍFúT®CallExpressionÍFËÍFùY°MemberExpressionÍFËÍFêY°MemberExpressionÍFËÍFİU®ThisExpressionÍFËÍFÏLªIdentifierÍFĞÍFİ­cameraServiceÂÂLªIdentifierÍFŞÍFê¬createCameraÂÂ‘LªIdentifierÍFëÍFø­cameraManagerÂS³ExpressionStatementÍG¨ÍIØT®CallExpressionÍG¨ÍI×Y°MemberExpressionÍG¨ÍI
+T®CallExpressionÍG¨ÍIY°MemberExpressionÍG¨ÍGÚT®CallExpressionÍG¨ÍGÕY°MemberExpressionÍG¨ÍGÅY°MemberExpressionÍG¨ÍGºU®ThisExpressionÍG¨ÍG¬LªIdentifierÍG­ÍGº­cameraServiceÂÂLªIdentifierÍG»ÍGÅªinitCameraÂÂ‘Y°MemberExpressionÍGÆÍGÔU®ThisExpressionÍGÆÍGÊLªIdentifierÍGËÍGÔ©surfaceIdÂÂÂLªIdentifierÍGÖÍGÚ¤thenÂÂ‘O·ArrowFunctionExpressionÍGÛÍIÀÂÂÂM®BlockStatementÍGáÍI‘V«IfStatementÍGğÍHøQ¯UnaryExpressionÍGôÍH¡!ÃT®CallExpressionÍGõÍHY°MemberExpressionÍGõÍHY°MemberExpressionÍGõÍHU®ThisExpressionÍGõÍGùLªIdentifierÍGúÍH­cameraServiceÂÂLªIdentifierÍHÍH¯isCameraRunningÂÂÂM®BlockStatementÍHÍHø’S³ExpressionStatementÍH.ÍHgT®CallExpressionÍH.ÍHfY°MemberExpressionÍH.ÍH:LªIdentifierÍH.ÍH5§consoleLªIdentifierÍH6ÍH:¤infoÂÂ‘W°BinaryExpressionÍH;ÍHeLªIdentifierÍH;ÍH>£TAG¡+R§LiteralÍHAÍHeÙ"initCamera not running, retry onceÙ$'initCamera not running, retry once'ÂS³ExpressionStatementÍHyÍHéT®CallExpressionÍHyÍHèLªIdentifierÍHyÍHƒªsetTimeout’O·ArrowFunctionExpressionÍH„ÍHâÀÂÂÂM®BlockStatementÍHŠÍHâ‘S³ExpressionStatementÍH¡ÍHÏT®CallExpressionÍH¡ÍHÎY°MemberExpressionÍH¡ÍH¾Y°MemberExpressionÍH¡ÍH³U®ThisExpressionÍH¡ÍH¥LªIdentifierÍH¦ÍH³­cameraServiceÂÂLªIdentifierÍH´ÍH¾ªinitCameraÂÂ‘Y°MemberExpressionÍH¿ÍHÍU®ThisExpressionÍH¿ÍHÃLªIdentifierÍHÄÍHÍ©surfaceIdÂÂÂR§LiteralÍHäÍHçÍ,£300ÂÀÂLªIdentifierÍIÍI
+¥catchÂÂ‘O·ArrowFunctionExpressionÍIÍIÖÀÂÂÂM®BlockStatementÍIÍIÖ’S³ExpressionStatementÍI ÍIUT®CallExpressionÍI ÍITY°MemberExpressionÍI ÍI-LªIdentifierÍI ÍI'§consoleLªIdentifierÍI(ÍI-¥errorÂÂ‘W°BinaryExpressionÍI.ÍISLªIdentifierÍI.ÍI1£TAG¡+R§LiteralÍI4ÍIS½initCamera failed, retry once¿'initCamera failed, retry once'ÂS³ExpressionStatementÍIcÍIËT®CallExpressionÍIcÍIÊLªIdentifierÍIcÍImªsetTimeout’O·ArrowFunctionExpressionÍInÍIÄÀÂÂÂM®BlockStatementÍItÍIÄ‘S³ExpressionStatementÍI‡ÍIµT®CallExpressionÍI‡ÍI´Y°MemberExpressionÍI‡ÍI¤Y°MemberExpressionÍI‡ÍI™U®ThisExpressionÍI‡ÍI‹LªIdentifierÍIŒÍI™­cameraServiceÂÂLªIdentifierÍIšÍI¤ªinitCameraÂÂ‘Y°MemberExpressionÍI¥ÍI³U®ThisExpressionÍI¥ÍI©LªIdentifierÍIªÍI³©surfaceIdÂÂÂR§LiteralÍIÆÍIÉÍ,£300ÂÂN°MethodDefinitionÍIåÍK¦ÂÂLªIdentifierÍIåÍIïªsetDisplay¦methodO²FunctionExpressionÍIïÍK¦ÀÂÂÂM®BlockStatementÍIòÍK¦˜]³VariableDeclarationÍJÍJA‘^²VariableDeclaratorÍJÍJ@LªIdentifierÍJÍJ¬displayClassT®CallExpressionÍJ!ÍJ@Y°MemberExpressionÍJ!ÍJ>LªIdentifierÍJ!ÍJ(§displayLªIdentifierÍJ)ÍJ>µgetDefaultDisplaySyncÂÂÂ£let]³VariableDeclarationÍJKÍJ|‘^²VariableDeclaratorÍJQÍJ{LªIdentifierÍJQÍJ^­displayHeightT®CallExpressionÍJaÍJ{LªIdentifierÍJaÍJf¥px2vp‘Y°MemberExpressionÍJgÍJzLªIdentifierÍJgÍJs¬displayClassLªIdentifierÍJtÍJz¦heightÂÂÂ¥const]³VariableDeclarationÍJ†ÍJµ‘^²VariableDeclaratorÍJŒÍJ´LªIdentifierÍJŒÍJ˜¬displayWidthT®CallExpressionÍJ›ÍJ´LªIdentifierÍJ›ÍJ ¥px2vp‘Y°MemberExpressionÍJ¡ÍJ³LªIdentifierÍJ¡ÍJ­¬displayClassLªIdentifierÍJ®ÍJ³¥widthÂÂÂ¥const]³VariableDeclarationÍJ¿ÍJò‘^²VariableDeclaratorÍJÃÍJñLªIdentifierÍJÃÍJÉ¦maxLenT®CallExpressionÍJÌÍJñY°MemberExpressionÍJÌÍJÔLªIdentifierÍJÌÍJĞ¤MathLªIdentifierÍJÑÍJÔ£maxÂÂ’LªIdentifierÍJÕÍJá¬displayWidthLªIdentifierÍJãÍJğ­displayHeightÂ£let]³VariableDeclarationÍJüÍK/‘^²VariableDeclaratorÍK ÍK.LªIdentifierÍK ÍK¦minLenT®CallExpressionÍK	ÍK.Y°MemberExpressionÍK	ÍKLªIdentifierÍK	ÍK¤MathLªIdentifierÍKÍK£minÂÂ’LªIdentifierÍKÍK¬displayWidthLªIdentifierÍK ÍK-­displayHeightÂ£let]³VariableDeclarationÍK9ÍKN‘^²VariableDeclaratorÍK?ÍKMLªIdentifierÍK?ÍKD¥RATIOW°BinaryExpressionÍKGÍKMR§LiteralÍKGÍKI¢16¡/R§LiteralÍKLÍKM	¡9¥constS³ExpressionStatementÍKXÍKsX´AssignmentExpressionÍKXÍKr¡=Y°MemberExpressionÍKXÍKiU®ThisExpressionÍKXÍK\LªIdentifierÍK]ÍKi¬cameraHeightÂÂLªIdentifierÍKlÍKr¦maxLenS³ExpressionStatementÍK}ÍKŸX´AssignmentExpressionÍK}ÍK¡=Y°MemberExpressionÍK}ÍKU®ThisExpressionÍK}ÍKLªIdentifierÍK‚ÍK«cameraWidthÂÂW°BinaryExpressionÍKÍKLªIdentifierÍKÍK–¦maxLen¡/LªIdentifierÍK™ÍK¥RATION°MethodDefinitionÍKÂÍM<ÂÂLªIdentifierÍKÈÍK×¯checkPermission¦methodO²FunctionExpressionÍK×ÍM<ÀÂÂÃ‘LªIdentifierÍKØÍKŞ¦resultM®BlockStatementÍKàÍM<“]³VariableDeclarationÍKëÍL‘^²VariableDeclaratorÍKñÍLLªIdentifierÍKñÍKü«permissions[¯ArrayExpressionÍKÿÍL‘R§LiteralÍL ÍL¶ohos.permission.CAMERA¸'ohos.permission.CAMERA'¥const]³VariableDeclarationÍL$ÍLm‘^²VariableDeclaratorÍL(ÍLlLªIdentifierÍL(ÍL3«grantStatus\¯AwaitExpressionÍL6ÍLlT®CallExpressionÍL<ÍLlY°MemberExpressionÍL<ÍL\LªIdentifierÍL<ÍLK¯PermissionsUtilLªIdentifierÍLLÍL\°checkAccessTokenÂÂ‘Y°MemberExpressionÍL]ÍLkLªIdentifierÍL]ÍLh«permissionsR§LiteralÍLiÍLj ¡0ÃÂÂ£letV«IfStatementÍLwÍM5W°BinaryExpressionÍL{ÍL»LªIdentifierÍL{ÍL†«grantStatus£===Y°MemberExpressionÍL‹ÍL»Y°MemberExpressionÍL‹ÍL¨LªIdentifierÍL‹ÍLœ±abilityAccessCtrlLªIdentifierÍLÍL¨«GrantStatusÂÂLªIdentifierÍL©ÍL»²PERMISSION_GRANTEDÂÂM®BlockStatementÍL½ÍLí‘S³ExpressionStatementÍLÌÍLâX´AssignmentExpressionÍLÌÍLá¡=Y°MemberExpressionÍLÌÍLÚU®ThisExpressionÍLÌÍLĞLªIdentifierÍLÑÍLÚ©userGrantÂÂR§LiteralÍLİÍLáÃ¤trueM®BlockStatementÍLüÍM5‘S³ExpressionStatementÍMÍM*T®CallExpressionÍMÍM)Y°MemberExpressionÍMÍM'U®ThisExpressionÍMÍMLªIdentifierÍMÍM'·requestCameraPermissionÂÂÂN°MethodDefinitionÍMOÍN|ÂÂLªIdentifierÍMOÍM`±restartCustomScan¦methodO²FunctionExpressionÍM`ÍN|ÀÂÂÂ‘LªIdentifierÍMaÍMg¦resultM®BlockStatementÍMiÍN|‘V«IfStatementÍMtÍNuY°MemberExpressionÍMxÍMƒU®ThisExpressionÍMxÍM|LªIdentifierÍM}ÍMƒ¦isStopÂÂM®BlockStatementÍM…ÍM·‘S³ExpressionStatementÍM”ÍM¬T®CallExpressionÍM”ÍM«Y°MemberExpressionÍM”ÍM£U®ThisExpressionÍM”ÍM˜LªIdentifierÍM™ÍM£ªinitCameraÂÂ‘LªIdentifierÍM¤ÍMª¦resultÂM®BlockStatementÍMÆÍNuN°MethodDefinitionÍN¦ÍOÎÂÂLªIdentifierÍN¦ÍN²¬setTorchMode¦methodO²FunctionExpressionÍN²ÍOÎÀÂÂÂ‘LªIdentifierÍN³ÍN¹¦resultM®BlockStatementÍN»ÍOÎ”V«IfStatementÍNÆÍO/Q¯UnaryExpressionÍNÊÍNé¡!ÃS¯ChainExpressionÍNËÍNéT®CallExpressionÍNËÍNéY°MemberExpressionÍNËÍNçY°MemberExpressionÍNËÍNİU®ThisExpressionÍNËÍNÏLªIdentifierÍNĞÍNİ­cameraServiceÂÂLªIdentifierÍNßÍNç¨hasFlashÂÃÂM®BlockStatementÍNëÍO/’S³ExpressionStatementÍNúÍOT®CallExpressionÍNúÍOY°MemberExpressionÍNúÍOLªIdentifierÍNúÍO ¦resultLªIdentifierÍOÍO§successÂÂ‘R§LiteralÍO	ÍOÀ¤nullÂ\¯ReturnStatementÍOÍO$ÀÀS³ExpressionStatementÍO9ÍOTX´AssignmentExpressionÍO9ÍOS¡=Y°MemberExpressionÍO9ÍODU®ThisExpressionÍO9ÍO=LªIdentifierÍO>ÍOD¦isOpenÂÂQ¯UnaryExpressionÍOGÍOS¡!ÃY°MemberExpressionÍOHÍOSU®ThisExpressionÍOHÍOLLªIdentifierÍOMÍOS¦isOpenÂÂS³ExpressionStatementÍOzÍO¨S¯ChainExpressionÍOzÍO§T®CallExpressionÍOzÍO§Y°MemberExpressionÍOzÍOšY°MemberExpressionÍOzÍOŒU®ThisExpressionÍOzÍO~LªIdentifierÍOÍOŒ­cameraServiceÂÂLªIdentifierÍOÍOš¬setFlashModeÂÃ‘Y°MemberExpressionÍO›ÍO¦U®ThisExpressionÍO›ÍOŸLªIdentifierÍO ÍO¦¦isOpenÂÂÂS³ExpressionStatementÍO²ÍOÇT®CallExpressionÍO²ÍOÆY°MemberExpressionÍO²ÍOÀLªIdentifierÍO²ÍO¸¦resultLªIdentifierÍO¹ÍOÀ§successÂÂ‘R§LiteralÍOÁÍOÅÀ¤nullÂN°MethodDefinitionÍOâÍPåÂÂLªIdentifierÍOâÍOìªinitCamera¦methodO²FunctionExpressionÍOìÍPåÀÂÂÂ‘LªIdentifierÍOíÍOó¦resultM®BlockStatementÍOõÍPå‘S³ExpressionStatementÍP ÍPŞS¯ChainExpressionÍP ÍPİT®CallExpressionÍP ÍPİY°MemberExpressionÍP ÍPOT®CallExpressionÍP ÍP<Y°MemberExpressionÍP ÍPY°MemberExpressionÍP ÍPU®ThisExpressionÍP ÍPLªIdentifierÍPÍP­cameraServiceÂÂLªIdentifierÍPÍPªinitCameraÂÃ’Y°MemberExpressionÍPÍP-U®ThisExpressionÍPÍP#LªIdentifierÍP$ÍP-©surfaceIdÂÂY°MemberExpressionÍP/ÍP;U®ThisExpressionÍP/ÍP3LªIdentifierÍP4ÍP;§isFrontÂÂÂLªIdentifierÍPKÍPO¤thenÂÂ‘O·ArrowFunctionExpressionÍPPÍPÜÀÂÂÂM®BlockStatementÍPVÍPÜ“S³ExpressionStatementÍPeÍPyX´AssignmentExpressionÍPeÍPx¡=Y°MemberExpressionÍPeÍPpU®ThisExpressionÍPeÍPiLªIdentifierÍPjÍPp¦isStopÂÂR§LiteralÍPsÍPxÂ¥falseS³ExpressionStatementÍP‡ÍP®T®CallExpressionÍP‡ÍP­Y°MemberExpressionÍP‡ÍP—U®ThisExpressionÍP‡ÍP‹LªIdentifierÍPŒÍP—«torchModeOnÂÂ’LªIdentifierÍP˜ÍP¦resultR§LiteralÍP ÍP¬ªinitCamera¬'initCamera'ÂS³ExpressionStatementÍP¼ÍPÑT®CallExpressionÍP¼ÍPĞY°MemberExpressionÍP¼ÍPÊLªIdentifierÍP¼ÍPÂ¦resultLªIdentifierÍPÃÍPÊ§successÂÂ‘R§LiteralÍPËÍPÏÃ¤trueÂÂN°MethodDefinitionÍPşÍQÒÂÂLªIdentifierÍPşÍQ	«torchModeOn¦methodO²FunctionExpressionÍQ	ÍQÒÀÂÂÂ’LªIdentifierÍQ
+ÍQ¦resultP±AssignmentPatternÍQÍQLªIdentifierÍQÍQ¤typeR§LiteralÍQÍQ ¢''M®BlockStatementÍQÍQÒ‘V«IfStatementÍQ(ÍQËY°MemberExpressionÍQ,ÍQ7U®ThisExpressionÍQ,ÍQ0LªIdentifierÍQ1ÍQ7¦isOpenÂÂM®BlockStatementÍQ9ÍQË‘S³ExpressionStatementÍQHÍQÀT®CallExpressionÍQHÍQ¿LªIdentifierÍQHÍQRªsetTimeout’O·ArrowFunctionExpressionÍQSÍQ©ÀÂÂÂM®BlockStatementÍQYÍQ©‘S³ExpressionStatementÍQlÍQšS¯ChainExpressionÍQlÍQ™T®CallExpressionÍQlÍQ™Y°MemberExpressionÍQlÍQŒY°MemberExpressionÍQlÍQ~U®ThisExpressionÍQlÍQpLªIdentifierÍQqÍQ~­cameraServiceÂÂLªIdentifierÍQ€ÍQŒ¬setFlashModeÂÃ‘Y°MemberExpressionÍQÍQ˜U®ThisExpressionÍQÍQ‘LªIdentifierÍQ’ÍQ˜¦isOpenÂÂÂY°MemberExpressionÍQ«ÍQ¾U®ThisExpressionÍQ«ÍQ¯LªIdentifierÍQ°ÍQ¾®FLASH_TIME_OUTÂÂÂÀN°MethodDefinitionÍQØÍR`ÂÂLªIdentifierÍQØÍQé±barCodeViewNotSet¦methodO²FunctionExpressionÍQéÍR`ÀÂÂÂ‘LªIdentifierÍQêÍQğ¦resultM®BlockStatementÍQòÍR`‘S³ExpressionStatementÍQıÍRYT®CallExpressionÍQıÍRXY°MemberExpressionÍQıÍR	LªIdentifierÍQıÍR¦resultLªIdentifierÍRÍR	¥errorÂÂ“Y°MemberExpressionÍR
+ÍR+LªIdentifierÍR
+ÍR®ChannelMethodsLªIdentifierÍRÍR+²ERROR_CODE_NOT_SETÂÂY°MemberExpressionÍR-ÍRQLªIdentifierÍR-ÍR;®ChannelMethodsLªIdentifierÍR<ÍRQµERROR_MESSAGE_NOT_SETÂÂR§LiteralÍRSÍRWÀ¤nullÂN°MethodDefinitionÍRfÍYhÂÂLªIdentifierÍRfÍRs­initialRender¦methodO²FunctionExpressionÍRsÍYhÀÂÂÂM®BlockStatementÍRvÍYh”S³ExpressionStatementÍRÍSŠT®CallExpressionÍRÍS‰Y°MemberExpressionÍRÍRŸU®ThisExpressionÍRÍR…LªIdentifierÍR†ÍRŸ¹observeComponentCreation2ÂÂ’O·ArrowFunctionExpressionÍR ÍSÀÂÂÂ’LªIdentifierÍR¡ÍR§¦elmtIdLªIdentifierÍR©ÍR¸¯isInitialRenderM®BlockStatementÍR½ÍS”S³ExpressionStatementÍRÌÍRÛT®CallExpressionÍRÌÍRÚY°MemberExpressionÍRÌÍRØLªIdentifierÍRÌÍRÑ¥StackLªIdentifierÍRÒÍRØ¦createÂÂÂS³ExpressionStatementÍRéÍRıT®CallExpressionÍRéÍRüY°MemberExpressionÍRéÍRôLªIdentifierÍRéÍRî¥StackLªIdentifierÍRïÍRô¥widthÂÂ‘R§LiteralÍRõÍRû¤100%¦'100%'ÂS³ExpressionStatementÍSÍS T®CallExpressionÍSÍSY°MemberExpressionÍSÍSLªIdentifierÍSÍS¥StackLªIdentifierÍSÍS¦heightÂÂ‘R§LiteralÍSÍS¤100%¦'100%'ÂS³ExpressionStatementÍS.ÍSvT®CallExpressionÍS.ÍSuY°MemberExpressionÍS.ÍSCLªIdentifierÍS.ÍS3¥StackLªIdentifierÍS4ÍSC¯backgroundColorÂÂ‘VµConditionalExpressionÍSDÍStY°MemberExpressionÍSDÍSRU®ThisExpressionÍSDÍSHLªIdentifierÍSIÍSR©userGrantÂÂY°MemberExpressionÍSUÍSfLªIdentifierÍSUÍSZ¥ColorLªIdentifierÍS[ÍSf«TransparentÂÂY°MemberExpressionÍSiÍStLªIdentifierÍSiÍSn¥ColorLªIdentifierÍSoÍSt¥BlackÂÂÂLªIdentifierÍSƒÍSˆ¥StackÂS³ExpressionStatementÍS”ÍY8T®CallExpressionÍS”ÍY7Y°MemberExpressionÍS”ÍS²U®ThisExpressionÍS”ÍS˜LªIdentifierÍS™ÍS²¹observeComponentCreation2ÂÂ’O·ArrowFunctionExpressionÍS³ÍY2ÀÂÂÂ’LªIdentifierÍS´ÍSº¦elmtIdLªIdentifierÍS¼ÍSË¯isInitialRenderM®BlockStatementÍSĞÍY2’S³ExpressionStatementÍSßÍSëT®CallExpressionÍSßÍSêY°MemberExpressionÍSßÍSèLªIdentifierÍSßÍSá¢IfLªIdentifierÍSâÍSè¦createÂÂÂV«IfStatementÍSùÍY'Y°MemberExpressionÍSıÍTU®ThisExpressionÍSıÍTLªIdentifierÍTÍT©userGrantÂÂM®BlockStatementÍTÍX³‘S³ExpressionStatementÍT ÍX¤T®CallExpressionÍT ÍX£Y°MemberExpressionÍT ÍT?U®ThisExpressionÍT ÍT$LªIdentifierÍT%ÍT?ºifElseBranchUpdateFunctionÂÂ’R§LiteralÍT@ÍTA ¡0O·ArrowFunctionExpressionÍTCÍX¢ÀÂÂÂM®BlockStatementÍTIÍX¢“S³ExpressionStatementÍT`ÍUT®CallExpressionÍT`ÍU€Y°MemberExpressionÍT`ÍT~U®ThisExpressionÍT`ÍTdLªIdentifierÍTeÍT~¹observeComponentCreation2ÂÂ’O·ArrowFunctionExpressionÍTÍUwÀÂÂÂ’LªIdentifierÍT€ÍT†¦elmtIdLªIdentifierÍTˆÍT—¯isInitialRenderM®BlockStatementÍTœÍUw”S³ExpressionStatementÍT·ÍTÇT®CallExpressionÍT·ÍTÆY°MemberExpressionÍT·ÍTÄLªIdentifierÍT·ÍT½¦ColumnLªIdentifierÍT¾ÍTÄ¦createÂÂÂS³ExpressionStatementÍTáÍT÷T®CallExpressionÍTáÍTöY°MemberExpressionÍTáÍTîLªIdentifierÍTáÍTç¦ColumnLªIdentifierÍTèÍTî¦heightÂÂ‘R§LiteralÍTïÍTõ¤100%¦'100%'ÂS³ExpressionStatementÍUÍU&T®CallExpressionÍUÍU%Y°MemberExpressionÍUÍULªIdentifierÍUÍU¦ColumnLªIdentifierÍUÍU¥widthÂÂ‘R§LiteralÍUÍU$¤100%¦'100%'ÂS³ExpressionStatementÍU@ÍU`T®CallExpressionÍU@ÍU_Y°MemberExpressionÍU@ÍUOLªIdentifierÍU@ÍUF¦ColumnLªIdentifierÍUGÍUO¨positionÂÂ‘Ôr`”¤type¥start£endªproperties°ObjectExpressionÍUPÍU^’Ôra™¤type¥start£end¦method©shorthand¨computed£key¥value¤kind¨PropertyÍURÍUVÂÂÂLªIdentifierÍURÍUS¡xR§LiteralÍUUÍUV ¡0¤inita¨PropertyÍUXÍU\ÂÂÂLªIdentifierÍUXÍUY¡yR§LiteralÍU[ÍU\ ¡0¤initÂLªIdentifierÍUyÍU¦ColumnÂS³ExpressionStatementÍU—ÍXlT®CallExpressionÍU—ÍXkY°MemberExpressionÍU—ÍUµU®ThisExpressionÍU—ÍU›LªIdentifierÍUœÍUµ¹observeComponentCreation2ÂÂ’O·ArrowFunctionExpressionÍU¶ÍX^ÀÂÂÂ’LªIdentifierÍU·ÍU½¦elmtIdLªIdentifierÍU¿ÍUÎ¯isInitialRenderM®BlockStatementÍUÓÍX^”S³ExpressionStatementÍUîÍVîT®CallExpressionÍUîÍVíY°MemberExpressionÍUîÍUÿLªIdentifierÍUîÍUøªXComponentLªIdentifierÍUùÍUÿ¦createÂÂ’`°ObjectExpressionÍV ÍVË“a¨PropertyÍVÍV0ÂÂÂLªIdentifierÍVÍV!¢idR§LiteralÍV#ÍV0«componentId­'componentId'¤inita¨PropertyÍVOÍVkÂÂÂLªIdentifierÍVOÍVS¤typeY°MemberExpressionÍVUÍVkLªIdentifierÍVUÍVc®XComponentTypeLªIdentifierÍVdÍVk§SURFACEÂÂ¤inita¨PropertyÍVŠÍV°ÂÂÂLªIdentifierÍVŠÍV”ªcontrollerY°MemberExpressionÍV–ÍV°U®ThisExpressionÍV–ÍVšLªIdentifierÍV›ÍV°µmXComponentControllerÂÂ¤initR§LiteralÍVÍÍVì½com.rh.lumira/qr_code_scanner¿"com.rh.lumira/qr_code_scanner"ÂS³ExpressionStatementÍWÍWËT®CallExpressionÍWÍWÊY°MemberExpressionÍWÍWLªIdentifierÍWÍWªXComponentLªIdentifierÍWÍW¦onLoadÂÂ‘O·ArrowFunctionExpressionÍWÍWÉÀÂÂÂM®BlockStatementÍW ÍWÉ’S³ExpressionStatementÍW?ÍW„X´AssignmentExpressionÍW?ÍWƒ¡=Y°MemberExpressionÍW?ÍWMU®ThisExpressionÍW?ÍWCLªIdentifierÍWDÍWM©surfaceIdÂÂT®CallExpressionÍWPÍWƒY°MemberExpressionÍWPÍWY°MemberExpressionÍWPÍWjU®ThisExpressionÍWPÍWTLªIdentifierÍWUÍWjµmXComponentControllerÂÂLªIdentifierÍWkÍW¶getXComponentSurfaceIdÂÂÂS³ExpressionStatementÍW¢ÍW®T®CallExpressionÍW¢ÍW­Y°MemberExpressionÍW¢ÍW«U®ThisExpressionÍW¢ÍW¦LªIdentifierÍW§ÍW«¤scanÂÂÂÂS³ExpressionStatementÍWåÍXT®CallExpressionÍWåÍXY°MemberExpressionÍWåÍWõLªIdentifierÍWåÍWïªXComponentLªIdentifierÍWğÍWõ¥widthÂÂ‘Y°MemberExpressionÍWöÍXU®ThisExpressionÍWöÍWúLªIdentifierÍWûÍX«cameraWidthÂÂÂS³ExpressionStatementÍX"ÍXGT®CallExpressionÍX"ÍXFY°MemberExpressionÍX"ÍX3LªIdentifierÍX"ÍX,ªXComponentLªIdentifierÍX-ÍX3¦heightÂÂ‘Y°MemberExpressionÍX4ÍXEU®ThisExpressionÍX4ÍX8LªIdentifierÍX9ÍXE¬cameraHeightÂÂÂLªIdentifierÍX`ÍXjªXComponentÂS³ExpressionStatementÍX‚ÍXT®CallExpressionÍX‚ÍXY°MemberExpressionÍX‚ÍXŒLªIdentifierÍX‚ÍXˆ¦ColumnLªIdentifierÍX‰ÍXŒ£popÂÂÂÂM®BlockStatementÍXÆÍY'‘S³ExpressionStatementÍXÙÍYT®CallExpressionÍXÙÍYY°MemberExpressionÍXÙÍXøU®ThisExpressionÍXÙÍXİLªIdentifierÍXŞÍXøºifElseBranchUpdateFunctionÂÂ’R§LiteralÍXùÍXú¡1O·ArrowFunctionExpressionÍXüÍYÀÂÂÂM®BlockStatementÍYÍYÂLªIdentifierÍY4ÍY6¢IfÂS³ExpressionStatementÍYBÍYKT®CallExpressionÍYBÍYJY°MemberExpressionÍYBÍYHLªIdentifierÍYBÍYD¢IfLªIdentifierÍYEÍYH£popÂÂÂS³ExpressionStatementÍYUÍYaT®CallExpressionÍYUÍY`Y°MemberExpressionÍYUÍY^LªIdentifierÍYUÍYZ¥StackLªIdentifierÍY[ÍY^£popÂÂÂN°MethodDefinitionÍYnÍY¦ÂÂLªIdentifierÍYnÍYv¨rerender¦methodO²FunctionExpressionÍYvÍY¦ÀÂÂÂM®BlockStatementÍYyÍY¦‘S³ExpressionStatementÍY„ÍYŸT®CallExpressionÍY„ÍYY°MemberExpressionÍY„ÍYœU®ThisExpressionÍY„ÍYˆLªIdentifierÍY‰ÍYœ³updateDirtyElementsÂÂÂN°MethodDefinitionÍY¬ÍYæÃÂLªIdentifierÍY³ÍY¿¬getEntryName¦methodO²FunctionExpressionÍY¿ÍYæÀÂÂÂM®BlockStatementÍYÂÍYæ‘\¯ReturnStatementÍYÍÍYßR§LiteralÍYÔÍYŞ¨OhosViewª"OhosView"ÀJ¶ExportNamedDeclarationÍYëÍ^®O³FunctionDeclarationÍYòÍ^®LªIdentifierÍYûÍZ­buildOhosViewÂÂÂ’LªIdentifierÍZ	ÍZ¦paramsP±AssignmentPatternÍZÍZLªIdentifierÍZÍZ¦parentR§LiteralÍZÍZÀ¤nullM®BlockStatementÍZ Í^®’]³VariableDeclarationÍZ'ÍZA‘^²VariableDeclaratorÍZ-ÍZ@LªIdentifierÍZ-ÍZ7ª__params__LªIdentifierÍZ:ÍZ@¦params¥constM®BlockStatementÍZGÍ^«‘S³ExpressionStatementÍZRÍ^¤T®CallExpressionÍZRÍ^£Y°MemberExpressionÍZRÍZ„VµConditionalExpressionÍZSÍZiLªIdentifierÍZSÍZY¦parentLªIdentifierÍZ\ÍZb¦parentU®ThisExpressionÍZeÍZiLªIdentifierÍZkÍZ„¹observeComponentCreation2ÂÂ’O·ArrowFunctionExpressionÍZ…Í^ŒÀÂÂÂ“LªIdentifierÍZ†ÍZŒ¦elmtIdLªIdentifierÍZÍZ¯isInitialRenderP±AssignmentPatternÍZŸÍZ²LªIdentifierÍZŸÍZ¥¦paramsLªIdentifierÍZ¨ÍZ²ª__params__M®BlockStatementÍZ·Í^Œ‘V«IfStatementÍZÆÍ^LªIdentifierÍZÊÍZÙ¯isInitialRenderM®BlockStatementÍZÛÍ]’”]³VariableDeclarationÍZîÍ\2‘^²VariableDeclaratorÍZòÍ\1LªIdentifierÍZòÍZÿ­componentCallZ­NewExpressionÍ[Í\1LªIdentifierÍ[Í[¨OhosView–VµConditionalExpressionÍ[Í[%LªIdentifierÍ[Í[¦parentLªIdentifierÍ[Í[¦parentU®ThisExpressionÍ[!Í[%`°ObjectExpressionÍ['Í[Ÿ’a¨PropertyÍ[>Í[LÂÂÂLªIdentifierÍ[>Í[D¦paramsLªIdentifierÍ[FÍ[L¦params¤inita¨PropertyÍ[cÍ[ŒÂÂÂLªIdentifierÍ[cÍ[j§channelT®CallExpressionÍ[lÍ[ŒY°MemberExpressionÍ[lÍ[ŠY°MemberExpressionÍ[lÍ[LªIdentifierÍ[lÍ[r¦paramsLªIdentifierÍ[sÍ[¬platformViewÂÂLªIdentifierÍ[€Í[ŠªgetChannelÂÂÂ¤initLªIdentifierÍ[¡Í[ª©undefinedLªIdentifierÍ[¬Í[²¦elmtIdO·ArrowFunctionExpressionÍ[´Í[½ÀÂÂÂM®BlockStatementÍ[ºÍ[½`°ObjectExpressionÍ[¿Í\0“a¨PropertyÍ[ÁÍ\ÂÂÂLªIdentifierÍ[ÁÍ[Å¤pageR§LiteralÍ[ÇÍ\ÙR../packages/qr_code_scanner/ohos/src/main/ets/components/plugin/OhosQrCodeView.etsÙT"../packages/qr_code_scanner/ohos/src/main/ets/components/plugin/OhosQrCodeView.ets"¤inita¨PropertyÍ\Í\&ÂÂÂLªIdentifierÍ\Í\!¤lineR§LiteralÍ\#Í\&Í^£350¤inita¨PropertyÍ\(Í\.ÂÂÂLªIdentifierÍ\(Í\+£colR§LiteralÍ\-Í\.¡3¤init£letS³ExpressionStatementÍ\DÍ\aT®CallExpressionÍ\DÍ\`Y°MemberExpressionÍ\DÍ\QLªIdentifierÍ\DÍ\J¦ViewPULªIdentifierÍ\KÍ\Q¦createÂÂ‘LªIdentifierÍ\RÍ\_­componentCallÂ]³VariableDeclarationÍ\sÍ]C‘^²VariableDeclaratorÍ\wÍ]BLªIdentifierÍ\wÍ\ƒ¬paramsLambdaO·ArrowFunctionExpressionÍ\†Í]BÀÂÂÂM®BlockStatementÍ\ŒÍ]B‘\¯ReturnStatementÍ\£Í]/`°ObjectExpressionÍ\ªÍ].’a¨PropertyÍ\ÅÍ\ÓÂÂÂLªIdentifierÍ\ÅÍ\Ë¦paramsLªIdentifierÍ\ÍÍ\Ó¦params¤inita¨PropertyÍ\îÍ]ÂÂÂLªIdentifierÍ\îÍ\õ§channelT®CallExpressionÍ\÷Í]Y°MemberExpressionÍ\÷Í]Y°MemberExpressionÍ\÷Í]
+LªIdentifierÍ\÷Í\ı¦paramsLªIdentifierÍ\şÍ]
+¬platformViewÂÂLªIdentifierÍ]Í]ªgetChannelÂÂÂ¤init£letS³ExpressionStatementÍ]UÍ]ƒX´AssignmentExpressionÍ]UÍ]‚¡=Y°MemberExpressionÍ]UÍ]sLªIdentifierÍ]UÍ]b­componentCallLªIdentifierÍ]cÍ]s°paramsGenerator_ÂÂLªIdentifierÍ]vÍ]‚¬paramsLambdaM®BlockStatementÍ]¥Í^‘S³ExpressionStatementÍ]¸Í^rT®CallExpressionÍ]¸Í^qY°MemberExpressionÍ]¸Í]ïVµConditionalExpressionÍ]¹Í]ÏLªIdentifierÍ]¹Í]¿¦parentLªIdentifierÍ]ÂÍ]È¦parentU®ThisExpressionÍ]ËÍ]ÏLªIdentifierÍ]ÑÍ]ï¾updateStateVarsOfChildByElmtIdÂÂ’LªIdentifierÍ]ğÍ]ö¦elmtId`°ObjectExpressionÍ]øÍ^p’a¨PropertyÍ^Í^ÂÂÂLªIdentifierÍ^Í^¦paramsLªIdentifierÍ^Í^¦params¤inita¨PropertyÍ^4Í^]ÂÂÂLªIdentifierÍ^4Í^;§channelT®CallExpressionÍ^=Í^]Y°MemberExpressionÍ^=Í^[Y°MemberExpressionÍ^=Í^PLªIdentifierÍ^=Í^C¦paramsLªIdentifierÍ^DÍ^P¬platformViewÂÂLªIdentifierÍ^QÍ^[ªgetChannelÂÂÂ¤initÂ`°ObjectExpressionÍ^Í^¢‘a¨PropertyÍ^Í^ ÂÂÂLªIdentifierÍ^Í^”¤nameR§LiteralÍ^–Í^ ¨OhosViewª"OhosView"¤initÂÀ˜Ôrb•¤type¥start£endªspecifiers¦source±ImportDeclarationÍîÍ‘Ôrc”¤type¥start£end¥local¶ImportDefaultSpecifierÍõÍıLªIdentifierÍõÍı¨EventHubR§LiteralÍÍ¯./libs/EventHub±'./libs/EventHub'b±ImportDeclarationÍÍD‘c¶ImportDefaultSpecifierÍÍ$LªIdentifierÍÍ$¦cameraR§LiteralÍ*ÍC·@ohos.multimedia.camera¹"@ohos.multimedia.camera"b±ImportDeclarationÍFÍ~‘c¶ImportDefaultSpecifierÍMÍ^LªIdentifierÍMÍ^±abilityAccessCtrlR§LiteralÍdÍ}·@ohos.abilityAccessCtrl¹"@ohos.abilityAccessCtrl"b±ImportDeclarationÍ€Í¹‘Ôrd•¤type¥start£end¨imported¥local¯ImportSpecifierÍ‰Í˜LªIdentifierÍ‰Í˜¯PermissionsUtilLªIdentifierÍ‰Í˜¯PermissionsUtilR§LiteralÍ Í¸¶./libs/PermissionsUtil¸'./libs/PermissionsUtil'b±ImportDeclarationÍ»Íğ‘d¯ImportSpecifierÍÄÍÑLªIdentifierÍÄÍÑ­CameraServiceLªIdentifierÍÄÍÑ­CameraServiceR§LiteralÍÙÍï´./libs/CameraService¶'./libs/CameraService'b±ImportDeclarationÍòÍ‘c¶ImportDefaultSpecifierÍùÍ LªIdentifierÍùÍ §displayR§LiteralÍÍ­@ohos.display¯"@ohos.display"b±ImportDeclarationÍÍ:‘c¶ImportDefaultSpecifierÍÍ%LªIdentifierÍÍ%¦windowR§LiteralÍ+Í9¬@ohos.window®"@ohos.window"b±ImportDeclarationÍ<Ís‘d¯ImportSpecifierÍEÍSLªIdentifierÍEÍS®ChannelMethodsLªIdentifierÍEÍS®ChannelMethodsR§LiteralÍ[Írµ./libs/ChannelMethods·'./libs/ChannelMethods'

@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>如画 · 9:16 照片分享海报 v11 — 四方向八款（新）</title>
+<style>
+  /* 品牌衬线体：直接引用 App 内置思源宋体（与 Flutter 端同一字体文件） */
+  @font-face{
+    font-family:'Noto Serif SC';
+    src:url('../../lumira_app_flutter/assets/fonts/NotoSerifSC-Regular.otf') format('opentype');
+    font-weight:400;font-style:normal;font-display:swap;
+  }
+  @font-face{
+    font-family:'Noto Serif SC';
+    src:url('../../lumira_app_flutter/assets/fonts/NotoSerifSC-Bold.otf') format('opentype');
+    font-weight:700;font-style:normal;font-display:swap;
+  }
+  :root{
+    --surface:#FDFBF7;--surfaceAlt:#F6F1E8;
+    --gold:#C9A96E;--gold-deep:#B08D4F;--gold-soft:#E8CFA4;
+    --ink:#1A1A1A;--text2:#6B645C;--text3:#8E867B;
+    --line:rgba(201,169,110,.34);
+    --film:#2A2622;
+    --serif:"Noto Serif SC","Source Han Serif SC","Songti SC","STSong",Georgia,serif;
+    --georgia:Georgia,"Times New Roman",serif;
+    --hand:Georgia,"Times New Roman",serif;
+    --mono:"Courier New",ui-monospace,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#EFEAE0;padding:44px 28px 90px;font-family:var(--sans);}
+  header{max-width:1160px;margin:0 auto 36px;}
+  header h1{font-size:21px;font-weight:700;color:#3f382c;letter-spacing:1px;}
+  header p{font-size:12px;color:#7c725f;margin-top:8px;letter-spacing:.5px;line-height:1.8;}
+  header p b{color:var(--gold-deep);}
+  header .note{font-size:11px;color:#8a7f6a;margin-top:6px;}
+
+  .dirlabel{max-width:1160px;margin:0 auto 18px;display:flex;align-items:center;gap:12px;}
+  .dirlabel::before{content:'';width:3px;height:15px;background:var(--gold);flex:none;}
+  .dirlabel .t{font-size:14px;font-weight:700;color:#3f382c;letter-spacing:2px;flex:none;}
+  .dirlabel .t i{font-style:normal;color:var(--gold-deep);}
+  .dirlabel .d{font-size:11px;color:#7c725f;letter-spacing:.5px;line-height:1.6;}
+  .dirlabel.second{margin-top:54px;}
+
+  .field{max-width:1160px;margin:0 auto;display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap;}
+  .card{width:300px;}
+  .card .label{font-size:12px;color:#6a6150;letter-spacing:1px;margin-bottom:13px;font-weight:600;padding-left:2px;line-height:1.6;}
+  .card .label b{color:var(--gold-deep);}
+  .poster{width:300px;height:533.33px;position:relative;overflow:hidden;background:var(--surface);
+    border-radius:20px;border:1px solid var(--line);box-shadow:0 18px 42px -20px rgba(60,48,28,.5);
+    display:flex;flex-direction:column;}
+  .logo{width:14px;height:14px;flex:none;display:block;}
+  .brandrow{display:flex;align-items:center;gap:8px;}
+  .brandrow .en{font-family:var(--georgia);font-size:10px;letter-spacing:4px;font-weight:600;color:var(--gold-deep);}
+  .brandrow .zh{font-size:9px;letter-spacing:2px;color:var(--text3);}
+  .kicker{font-size:9px;letter-spacing:3px;font-weight:600;color:var(--gold-deep);line-height:1.2;}
+  .cat{font-size:9px;letter-spacing:2px;color:var(--text2);line-height:1.2;}
+  .cat i{font-style:normal;color:var(--gold-deep);margin:0 3px;}
+  .author{display:flex;align-items:center;gap:6px;}
+  .avatar{width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#E8CFA4,#8E867B);
+    color:#fff;font-size:8px;font-weight:600;display:flex;align-items:center;justify-content:center;flex:none;}
+  .who{font-size:10px;font-weight:600;color:var(--ink);letter-spacing:1px;}
+  .with{font-size:8px;color:var(--text3);letter-spacing:1px;}
+  .qrcard{background:#fff;border:1px solid var(--line);border-radius:12px;padding:7px;display:flex;align-items:center;gap:6px;flex:none;}
+  .qrcode{position:relative;overflow:hidden;background:#fff;flex:none;}
+  .qrcode .fg{display:grid;grid-template-columns:repeat(21,1fr);grid-template-rows:repeat(21,1fr);width:100%;height:100%;}
+  .qrcode .c.on{background:var(--ink);}
+  .qh{font-size:8px;font-weight:600;color:var(--ink);letter-spacing:1px;line-height:1.3;}
+  .qs{font-size:8px;color:var(--text3);letter-spacing:1px;margin-top:2px;}
+  .rule{background:var(--gold);height:1px;}
+
+  /* 照片区：宽度按款设定，恒 9:16；装饰一律落在照片之外 */
+  .phwrap{display:block;flex:none;}
+  .ph{position:relative;aspect-ratio:9/16;margin:0 auto;overflow:hidden;}
+  .ph img{width:100%;height:100%;object-fit:cover;display:block;}
+
+  /* ========================================================= */
+  /* 方向 A · 胶片日记 */
+  /* ========================================================= */
+
+  /* ==== A1 单格胶片：照片夹在上下齿孔带之间 ==== */
+  .a1{padding:20px 24px 16px;}
+  .a1 .brandrow{margin-bottom:10px;}
+  .a1 .brandrow .slogan{margin-left:auto;font-size:8px;color:var(--text3);letter-spacing:1px;}
+  .a1 .ph{width:216px;overflow:visible;}
+  .a1 .ph img{border-radius:2px;}
+  .a1 .filmband{position:absolute;left:-8px;right:-8px;height:14px;background:var(--film);border-radius:2px;}
+  .a1 .filmband.t{top:-14px;}
+  .a1 .filmband.b{bottom:-14px;}
+  .a1 .sprockets{position:absolute;left:-8px;right:-8px;height:14px;
+    background-image:radial-gradient(ellipse 5px 5px at 16px 7px,#FDFBF7 0 5px,transparent 5px);
+    background-size:32px 14px;background-repeat:repeat-x;}
+  .a1 .sprockets.t{top:-14px;}
+  .a1 .sprockets.b{bottom:-14px;}
+  .a1 .dateline{display:flex;align-items:center;gap:8px;margin:12px 0 0;}
+  .a1 .dateline .date{font-family:var(--mono);font-size:8.5px;letter-spacing:2px;color:var(--text2);}
+  .a1 .dateline .line{flex:1;height:1px;background:var(--line);}
+  .a1 .dateline .note{font-family:var(--hand);font-style:italic;font-size:9px;color:var(--text3);letter-spacing:1px;}
+  .a1 .dateline .note::before{content:'「';}
+  .a1 .dateline .note::after{content:'」';}
+  .a1 .bottomrow{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:10px;}
+
+  /* ==== A2 竖胶片条：两侧竖齿孔 + 复古相机参数 ==== */
+  .a2{background:var(--surfaceAlt);padding:18px 20px 16px;}
+  .a2 .kickerrow{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .a2 .kickerrow .vol{font-family:var(--georgia);font-size:9px;letter-spacing:2px;color:var(--text3);}
+  .a2 .ph{width:206px;overflow:visible;}
+  .a2 .ph img{border-radius:2px;}
+  .a2 .filmstrip{position:absolute;top:-6px;bottom:-6px;width:13px;background:var(--film);border-radius:2px;}
+  .a2 .filmstrip.l{left:-13px;}
+  .a2 .filmstrip.r{right:-13px;}
+  .a2 .holes{position:absolute;top:-6px;bottom:-6px;width:13px;
+    background-image:radial-gradient(ellipse 4px 5px at 6.5px 16px,#F6F1E8 0 4px,transparent 4px);
+    background-size:13px 32px;background-repeat:repeat-y;}
+  .a2 .holes.l{left:-13px;}
+  .a2 .holes.r{right:-13px;}
+  .a2 .params{display:flex;align-items:center;justify-content:center;gap:14px;margin:14px 0 0;
+    font-family:var(--mono);font-size:8px;letter-spacing:1px;color:var(--text2);}
+  .a2 .params i{font-style:normal;color:var(--gold-deep);}
+  .a2 .exif{text-align:center;font-family:var(--hand);font-style:italic;font-size:9px;color:var(--text3);letter-spacing:2px;margin-top:6px;}
+  .a2 .bottomrow{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:12px;}
+
+  /* ========================================================= */
+  /* 方向 B · 明信片邮旅 */
+  /* ========================================================= */
+
+  /* ==== B1 标准明信片：邮票与邮戳都在纸面上，照片零叠压 ==== */
+  .b1{padding:18px 22px 14px;}
+  .b1 .toprow{display:flex;align-items:flex-end;justify-content:space-between;}
+  .b1 .toprow .postcard{font-family:var(--georgia);font-size:9px;letter-spacing:5px;font-weight:600;color:var(--gold-deep);
+    margin-left:8px;padding-bottom:2px;}
+  .b1 .stamp{width:30px;height:38px;background:var(--surface);border:1px solid var(--gold-deep);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transform:rotate(1.5deg);}
+  .b1 .stamp svg{width:17px;height:17px;}
+  .b1 .stamp .face{font-family:var(--georgia);font-size:6px;letter-spacing:2px;color:var(--gold-deep);font-weight:700;}
+  .b1 .phwrap{margin-top:12px;}
+  .b1 .ph{width:166px;border-radius:3px;box-shadow:0 10px 22px -14px rgba(60,48,28,.45);}
+  .b1 .address{display:flex;align-items:center;gap:12px;margin-top:14px;border-top:1px dashed rgba(107,100,92,.5);padding-top:12px;}
+  .b1 .addrcol{flex:1;min-width:0;}
+  .b1 .addrcol .to{font-family:var(--hand);font-style:italic;font-size:11px;color:var(--ink);letter-spacing:1px;}
+  .b1 .addrcol .addrline{margin-top:10px;height:1px;
+    background:repeating-linear-gradient(90deg,rgba(142,134,123,.6) 0 5px,transparent 5px 8px);}
+  .b1 .seal{width:50px;height:50px;flex:none;opacity:.6;transform:rotate(-8deg);}
+  .b1 .bottomrow{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:10px;}
+
+  /* ==== B2 竖版旅行片：大字寄语 + 纸面邮戳 ==== */
+  .b2{padding:18px 24px 14px;}
+  .b2 .toprow{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .b2 .toprow .air{font-family:var(--georgia);font-size:9px;letter-spacing:4px;color:var(--text3);}
+  .b2 .ph{width:170px;border-radius:2px;box-shadow:0 10px 22px -14px rgba(60,48,28,.45);}
+  .b2 .noterow{display:flex;align-items:center;gap:10px;margin-top:14px;}
+  .b2 .note{flex:1;min-width:0;font-family:var(--serif);font-size:18px;font-weight:700;color:var(--ink);
+    letter-spacing:3px;line-height:1.5;}
+  .b2 .note small{display:block;font-family:var(--sans);font-size:8.5px;font-weight:400;color:var(--text3);letter-spacing:2px;margin-top:4px;}
+  .b2 .seal{width:54px;height:54px;flex:none;opacity:.6;transform:rotate(-8deg);}
+  .b2 .bottomrow{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:12px;}
+
+  /* ========================================================= */
+  /* 方向 C · 极简留白 */
+  /* ========================================================= */
+
+  /* ==== C1 极简留白：标题左上，照片居中偏下 ==== */
+  .c1{padding:30px 26px 18px;}
+  .c1 .kicker{letter-spacing:2px;}
+  .c1 .title{font-family:var(--serif);font-size:25px;font-weight:700;color:var(--ink);letter-spacing:3px;line-height:1.3;margin-top:8px;}
+  .c1 .rule{width:34px;margin-top:10px;}
+  .c1 .phwrap{margin-top:18px;}
+  .c1 .ph{width:196px;}
+  .c1 .brandfoot{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:14px;}
+  .c1 .brandfoot .name{font-family:var(--georgia);font-size:8px;letter-spacing:3px;font-weight:600;color:var(--gold-deep);}
+  .c1 .brandfoot .zh{font-size:8px;color:var(--text3);margin-left:3px;}
+  .c1 .qrcode{width:30px;height:30px;}
+
+  /* ==== C2 极简大字：照片置上，下方超大襯线标题 ==== */
+  .c2{padding:16px 26px 18px;}
+  .c2 .ph{width:196px;border-radius:12px;}
+  .c2 .bigtitle{font-family:var(--serif);font-size:30px;font-weight:700;color:var(--ink);letter-spacing:5px;line-height:1.2;margin-top:22px;}
+  .c2 .sub{font-size:9px;letter-spacing:2px;color:var(--text3);margin-top:8px;}
+  .c2 .sub i{font-style:normal;color:var(--gold-deep);margin:0 4px;}
+  .c2 .rule{margin-top:18px;}
+  .c2 .brandfoot{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:12px;}
+  .c2 .brandfoot .name{font-family:var(--georgia);font-size:8px;letter-spacing:3px;font-weight:600;color:var(--gold-deep);}
+  .c2 .brandfoot .zh{font-size:8px;color:var(--text3);margin-left:3px;}
+  .c2 .qrcode{width:30px;height:30px;}
+
+  /* ========================================================= */
+  /* 方向 D · 手账贴纸 */
+  /* ========================================================= */
+
+  /* ==== D1 便签卡：圆角照片 + 胶带 + 便签标题（便签落在照片下方纸面） ==== */
+  .d1{padding:20px 22px 16px;}
+  .d1 .brandrow{margin-bottom:12px;}
+  .d1 .brandrow .slogan{margin-left:auto;font-size:8px;color:var(--text3);letter-spacing:1px;}
+  .d1 .ph{width:190px;border-radius:16px;overflow:visible;}
+  .d1 .ph img{border-radius:16px;box-shadow:0 14px 30px -16px rgba(70,55,30,.4);}
+  .d1 .tape{position:absolute;top:-7px;left:22px;width:52px;height:16px;background:rgba(232,207,164,.62);transform:rotate(-3deg);z-index:2;}
+  .d1 .postit{position:absolute;left:-2px;bottom:-40px;background:var(--surfaceAlt);border:1px solid var(--line);
+    border-radius:6px;padding:7px 10px;z-index:2;box-shadow:0 8px 16px -10px rgba(60,48,28,.35);}
+  .d1 .postit .ptitle{font-family:var(--serif);font-size:13px;font-weight:700;color:var(--ink);letter-spacing:2px;white-space:nowrap;}
+  .d1 .postit .pcat{font-size:8px;color:var(--text3);letter-spacing:1px;margin-top:2px;}
+  .d1 .tags{display:flex;align-items:center;gap:6px;margin-top:48px;}
+  .d1 .tag{font-size:8px;letter-spacing:1px;color:var(--text2);background:var(--surfaceAlt);
+    border:1px solid var(--line);border-radius:5px;padding:3px 7px;}
+  .d1 .tag.hot{color:var(--gold-deep);border-color:var(--gold);}
+  .d1 .bottomrow{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:10px;}
+
+  /* ==== D2 手账页：点阵底 + 手绘双框（在照片外缘）+ 三行便签 ==== */
+  .d2{background:var(--surfaceAlt);padding:20px 22px 16px;
+    background-image:radial-gradient(rgba(107,100,92,.14) 1px,transparent 1px);background-size:16px 16px;}
+  .d2 .kickerrow{display:flex;align-items:center;justify-content:space-between;}
+  .d2 .kickerrow .date2{font-family:var(--mono);font-size:8px;letter-spacing:1px;color:var(--text3);}
+  .d2 .phwrap{margin-top:16px;}
+  .d2 .ph{width:182px;border-radius:12px;overflow:visible;}
+  .d2 .ph img{border-radius:12px;}
+  .d2 .handframe{position:absolute;inset:-7px;border:1px dashed rgba(107,100,92,.5);border-radius:15px;pointer-events:none;}
+  .d2 .list{display:flex;flex-direction:column;gap:8px;margin-top:20px;}
+  .d2 .lirow{display:flex;align-items:center;gap:8px;font-size:9px;letter-spacing:1px;color:var(--text2);}
+  .d2 .lirow b{font-weight:600;color:var(--ink);flex:none;}
+  .d2 .lirow .dot{width:4px;height:4px;border-radius:50%;background:var(--gold);flex:none;}
+  .d2 .lirow .fill{flex:1;height:1px;background:rgba(142,134,123,.35);}
+  .d2 .bottomrow{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:14px;}
+</style>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="beamGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#C9A96E" stop-opacity="0.9"/>
+      <stop offset="35%" stop-color="#C9A96E" stop-opacity="0.5"/>
+      <stop offset="70%" stop-color="#C9A96E" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#C9A96E" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <symbol id="lumiraSymbol" viewBox="0 0 200 200">
+    <path d="M 40 68 L 40 58" fill="none" stroke="#C9A96E" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 58 40 L 68 40" fill="none" stroke="#C9A96E" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 132 40 L 142 40 A 14 14 0 0 1 156 54 L 156 68" fill="none" stroke="#C9A96E" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 156 132 L 156 142" fill="none" stroke="#C9A96E" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 142 156 L 132 156" fill="none" stroke="#C9A96E" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 68 156 L 58 156 A 14 14 0 0 1 44 142 L 44 132" fill="none" stroke="#C9A96E" stroke-width="2.5" stroke-linecap="round"/>
+    <polygon points="24,16 38,16 162,140 148,144" fill="url(#beamGrad)"/>
+    <circle cx="150" cy="150" r="4.5" fill="#C9A96E"/>
+  </symbol>
+  <symbol id="postmark" viewBox="0 0 60 60">
+    <circle cx="30" cy="30" r="27" fill="none" stroke="#2A2622" stroke-width="1.6"/>
+    <circle cx="30" cy="30" r="23.5" fill="none" stroke="#2A2622" stroke-width="1"/>
+    <text x="30" y="26" fill="#2A2622" text-anchor="middle" style="font-family:sans-serif;font-size:6.5px;letter-spacing:1px;">2026.09.24</text>
+    <text x="30" y="36" fill="#2A2622" text-anchor="middle" style="font-family:sans-serif;font-size:7px;letter-spacing:2px;">晴空田园</text>
+    <text x="30" y="44" fill="#2A2622" text-anchor="middle" style="font-family:sans-serif;font-size:5px;letter-spacing:1px;">LUMIRA · 如画</text>
+  </symbol>
+  <symbol id="stampSun" viewBox="0 0 200 200">
+    <circle cx="100" cy="100" r="30" fill="#E8CFA4"/>
+    <g stroke="#B08D4F" stroke-width="5" stroke-linecap="round">
+      <line x1="100" y1="46" x2="100" y2="28"/><line x1="100" y1="172" x2="100" y2="154"/>
+      <line x1="46" y1="100" x2="28" y2="100"/><line x1="172" y1="100" x2="154" y2="100"/>
+      <line x1="61" y1="61" x2="49" y2="49"/><line x1="139" y1="61" x2="151" y2="49"/>
+      <line x1="61" y1="139" x2="49" y2="151"/><line x1="139" y1="139" x2="151" y2="151"/>
+    </g>
+  </symbol>
+</svg>
+
+<header>
+  <h1>如画 · 9:16 照片分享海报 v11 — 四方向八款（新）</h1>
+  <p>同一组照片（picsum id 1027 / 1005 / 1012，原生 9:16）× 同一画布（<b>300 × 533.33，海报与照片同为 9:16</b>）× 同一套品牌语言（暖白纸面 / 金色发丝线 / 思源宋体标题），新增四个方向共八款，与 v10 的净版 / 画刊 / 画卷互为候选。</p>
+  <p class="note">铁律不变：<b>文字不压照片</b>、照片零裁切零变形、一张海报只用一张照片。齿孔 / 相框 / 邮票 / 邮戳 / 便签等装饰一律落在照片之外的纸面上。</p>
+</header>
+
+<!-- ==================== 方向 A · 胶片日记 ==================== -->
+<div class="dirlabel">
+  <span class="t">方向 A · <i>胶片日记</i></span>
+  <span class="d">照片夹进底片齿孔 / 竖胶片条，配手动日期与复古相机参数，像翻旧相册。气质：回忆、纪念、生活日常。</span>
+</div>
+
+<div class="field">
+
+  <!-- A1 单格胶片 -->
+  <div class="card">
+    <div class="label">A1 · <b>单格胶片</b> —— 照片夹在上下齿孔带之间，日期 + 手写旁注</div>
+    <div class="poster a1">
+      <div class="brandrow">
+        <svg class="logo"><use href="#lumiraSymbol"/></svg>
+        <span class="en">LUMIRA</span>
+        <span class="zh">· 如画出品</span>
+        <span class="slogan">如你所见，皆成画卷</span>
+      </div>
+      <div class="phwrap">
+        <div class="ph">
+          <div class="filmband t"></div>
+          <div class="sprockets t"></div>
+          <div class="filmband b"></div>
+          <div class="sprockets b"></div>
+          <img src="https://picsum.photos/id/1027/540/960" alt="photo">
+        </div>
+      </div>
+      <div class="dateline">
+        <span class="date">2026.09.24</span>
+        <span class="line"></span>
+        <span class="note">那天风很轻</span>
+      </div>
+      <div class="bottomrow">
+        <div class="author">
+          <span class="avatar">满</span>
+          <span class="who">@小满</span>
+          <span class="with">· 晴空田园</span>
+        </div>
+        <div class="qrcard">
+          <div class="qrcode" style="width:36px;height:36px;"><div class="fg"></div></div>
+          <div><div class="qh">长按识别</div><div class="qs">查看高清原图</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- A2 竖胶片条 -->
+  <div class="card">
+    <div class="label">A2 · <b>竖胶片条</b> —— 照片做成一张竖胶片，两侧齿孔 + 复古相机参数</div>
+    <div class="poster a2">
+      <div class="kickerrow">
+        <span class="kicker">LUMIRA · 如画</span>
+        <span class="vol">ROLL No. 024</span>
+      </div>
+      <div class="phwrap">
+        <div class="ph">
+          <div class="filmstrip l"></div>
+          <div class="filmstrip r"></div>
+          <div class="holes l"></div>
+          <div class="holes r"></div>
+          <img src="https://picsum.photos/id/1005/540/960" alt="photo">
+        </div>
+      </div>
+      <div class="params">
+        <span>ƒ1.8</span><i>·</i><span>1/125s</span><i>·</i><span>ISO 100</span>
+      </div>
+      <div class="exif">KODAK · 晴空田园 · 2026.09</div>
+      <div class="bottomrow">
+        <div class="author">
+          <span class="avatar">满</span>
+          <span class="who">@小满</span>
+        </div>
+        <div class="qrcard">
+          <div class="qrcode" style="width:36px;height:36px;"><div class="fg"></div></div>
+          <div><div class="qh">长按识别</div><div class="qs">查看高清原图</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 方向 B · 明信片邮旅 ==================== -->
+<div class="dirlabel second">
+  <span class="t">方向 B · <i>明信片邮旅</i></span>
+  <span class="d">邮票 / 邮戳 / 手写地址线，把照片做成一张寄出去的明信片。气质：旅行、异地纪念、远方。</span>
+</div>
+
+<div class="field">
+
+  <!-- B1 标准明信片 -->
+  <div class="card">
+    <div class="label">B1 · <b>标准明信片</b> —— 纸面邮票 + 手写地址区 + 盖销邮戳</div>
+    <div class="poster b1">
+      <div class="toprow">
+        <span class="brandrow">
+          <svg class="logo"><use href="#lumiraSymbol"/></svg>
+          <span class="postcard">POSTCARD</span>
+        </span>
+        <span class="stamp">
+          <svg><use href="#stampSun"/></svg>
+          <span class="face">如画</span>
+        </span>
+      </div>
+      <div class="phwrap">
+        <div class="ph">
+          <img src="https://picsum.photos/id/1012/540/960" alt="photo">
+        </div>
+      </div>
+      <div class="address">
+        <div class="addrcol">
+          <div class="to">致 一起看晴空的人</div>
+          <div class="addrline"></div>
+        </div>
+        <svg class="seal"><use href="#postmark"/></svg>
+      </div>
+      <div class="bottomrow">
+        <div class="author">
+          <span class="avatar">满</span>
+          <span class="who">@小满</span>
+        </div>
+        <div class="qrcard">
+          <div class="qrcode" style="width:36px;height:36px;"><div class="fg"></div></div>
+          <div><div class="qh">长按识别</div><div class="qs">查看高清原图</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B2 竖版旅行片 -->
+  <div class="card">
+    <div class="label">B2 · <b>竖版旅行片</b> —— 大字寄语 + 纸面邮戳，像寄回的一张明信片</div>
+    <div class="poster b2">
+      <div class="toprow">
+        <span class="kicker">LUMIRA · 如画</span>
+        <span class="air">AIR MAIL</span>
+      </div>
+      <div class="phwrap">
+        <div class="ph">
+          <img src="https://picsum.photos/id/1027/540/960" alt="photo">
+        </div>
+      </div>
+      <div class="noterow">
+        <div class="note">
+          此刻的风，想与你分享
+          <small>晴空田园 · 2026.09</small>
+        </div>
+        <svg class="seal"><use href="#postmark"/></svg>
+      </div>
+      <div class="bottomrow">
+        <div class="author">
+          <span class="avatar">满</span>
+          <span class="who">@小满</span>
+        </div>
+        <div class="qrcard">
+          <div class="qrcode" style="width:36px;height:36px;"><div class="fg"></div></div>
+          <div><div class="qh">长按识别</div><div class="qs">查看高清原图</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 方向 C · 极简留白 ==================== -->
+<div class="dirlabel second">
+  <span class="t">方向 C · <i>极简留白</i></span>
+  <span class="d">大片留白 + 金色发丝线 + 一句话，照片是主角、文字退到角落。气质：Stripe / Apple 式克制与呼吸感。</span>
+</div>
+
+<div class="field">
+
+  <!-- C1 极简留白 -->
+  <div class="card">
+    <div class="label">C1 · <b>极简留白</b> —— 标题左上，照片居中偏下，大面积呼吸留白</div>
+    <div class="poster c1">
+      <div class="kicker">LUMIRA · 如画出品</div>
+      <div class="title">晴空田园</div>
+      <div class="rule"></div>
+      <div class="phwrap">
+        <div class="ph">
+          <img src="https://picsum.photos/id/1005/540/960" alt="photo">
+        </div>
+      </div>
+      <div class="brandfoot">
+        <span><span class="name">LUMIRA</span><span class="zh">· 如画</span></span>
+        <div class="qrcode"><div class="fg"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C2 极简大字 -->
+  <div class="card">
+    <div class="label">C2 · <b>极简大字</b> —— 照片置上，下方超大襯线标题</div>
+    <div class="poster c2">
+      <div class="phwrap">
+        <div class="ph">
+          <img src="https://picsum.photos/id/1012/540/960" alt="photo">
+        </div>
+      </div>
+      <div class="bigtitle">如画所见</div>
+      <div class="sub">如你所见<i>·</i>皆成画卷</div>
+      <div class="rule"></div>
+      <div class="brandfoot">
+        <span><span class="name">LUMIRA</span><span class="zh">· 如画</span></span>
+        <div class="qrcode"><div class="fg"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 方向 D · 手账贴纸 ==================== -->
+<div class="dirlabel second">
+  <span class="t">方向 D · <i>手账贴纸</i></span>
+  <span class="d">莫兰迪便签 / 胶带 / 手绘边框 / 标签贴纸，照片像贴进手账的一页。气质：治愈、闺蜜与情侣日常。</span>
+</div>
+
+<div class="field">
+
+  <!-- D1 便签卡 -->
+  <div class="card">
+    <div class="label">D1 · <b>便签卡</b> —— 圆角照片 + 胶带 + 便签标题 + 标签贴纸</div>
+    <div class="poster d1">
+      <div class="brandrow">
+        <svg class="logo"><use href="#lumiraSymbol"/></svg>
+        <span class="en">LUMIRA</span>
+        <span class="zh">· 如画</span>
+        <span class="slogan">如你所见，皆成画卷</span>
+      </div>
+      <div class="phwrap">
+        <div class="ph">
+          <div class="tape"></div>
+          <img src="https://picsum.photos/id/1005/540/960" alt="photo">
+          <div class="postit">
+            <div class="ptitle">晴空田园少女</div>
+            <div class="pcat">自然光 · 清新治愈 · 人像写真</div>
+          </div>
+        </div>
+      </div>
+      <div class="tags">
+        <span class="tag hot">2026.09.24</span>
+        <span class="tag">今日晴</span>
+        <span class="tag">田园</span>
+      </div>
+      <div class="bottomrow">
+        <div class="author">
+          <span class="avatar">满</span>
+          <span class="who">@小满</span>
+        </div>
+        <div class="qrcard">
+          <div class="qrcode" style="width:36px;height:36px;"><div class="fg"></div></div>
+          <div><div class="qh">长按识别</div><div class="qs">查看高清原图</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- D2 手账页 -->
+  <div class="card">
+    <div class="label">D2 · <b>手账页</b> —— 点阵底 + 手绘双框 + 三行便签条目</div>
+    <div class="poster d2">
+      <div class="kickerrow">
+        <span class="kicker">我的手账</span>
+        <span class="date2">09.24 THU</span>
+      </div>
+      <div class="phwrap">
+        <div class="ph">
+          <div class="handframe"></div>
+          <img src="https://picsum.photos/id/1012/540/960" alt="photo">
+        </div>
+      </div>
+      <div class="list">
+        <div class="lirow"><span class="dot"></span><b>地点</b>晴空 · 田园<span class="fill"></span></div>
+        <div class="lirow"><span class="dot"></span><b>心情</b>治愈 · 轻盈<span class="fill"></span></div>
+        <div class="lirow"><span class="dot"></span><b>合影</b>@小满 @阿澄<span class="fill"></span></div>
+      </div>
+      <div class="bottomrow">
+        <div class="author">
+          <span class="avatar">满</span>
+          <span class="who">@小满</span>
+        </div>
+        <div class="qrcard">
+          <div class="qrcode" style="width:36px;height:36px;"><div class="fg"></div></div>
+          <div><div class="qh">长按识别</div><div class="qs">查看高清原图</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 品牌占位二维码：21×21，含三个 finder pattern，其余伪随机（仅占位，非可扫）
+  (function () {
+    function isFinderCell(r, c) {
+      var inA = r <= 6 && c <= 6;
+      var inB = r <= 6 && c >= 14;
+      var inC = r >= 14 && c <= 6;
+      if (!inA && !inB && !inC) return null;
+      var rr = r % 7, cc = c % 7;
+      var edge = rr === 0 || rr === 6 || cc === 0 || cc === 6;
+      var center = rr >= 2 && rr <= 4 && cc >= 2 && cc <= 4;
+      return edge || center;
+    }
+    var fgs = document.querySelectorAll('.qrcode .fg');
+    for (var i = 0; i < fgs.length; i++) {
+      var frag = document.createDocumentFragment();
+      for (var r = 0; r < 21; r++) {
+        for (var c = 0; c < 21; c++) {
+          var finder = isFinderCell(r, c);
+          var on = finder === null ? (Math.random() < 0.42) : finder;
+          var d = document.createElement('div');
+          d.className = 'c' + (on ? ' on' : '');
+          frag.appendChild(d);
+        }
+      }
+      fgs[i].appendChild(frag);
+    }
+  })();
+</script>
+</body>
+</html>

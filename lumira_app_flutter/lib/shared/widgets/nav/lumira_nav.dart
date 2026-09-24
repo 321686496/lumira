@@ -35,9 +35,14 @@ class LumiraNav extends ConsumerStatefulWidget implements PreferredSizeWidget {
     this.actionsSpacing = 0,
     this.onBack,
     this.backFallback,
+    this.titleColor,
   });
 
   final String? title;
+
+  /// 标题文字颜色。默认跟随主题（[ThemeTokens.textPrimary]）；
+  /// 沉浸式取景等黑底场景可传 [ThemeTokens.textInverse]（白字）保证可读。
+  final Color? titleColor;
   final Widget? leading;
   final List<Widget>? actions;
   final bool centerTitle;
@@ -371,7 +376,7 @@ class _LumiraNavState extends ConsumerState<LumiraNav> {
     final titleStyle = TextStyle(
       fontSize: 19, // 38rpx → 19dp
       fontWeight: FontWeight.w600,
-      color: tokens.textPrimary,
+      color: widget.titleColor ?? tokens.textPrimary,
       letterSpacing: 0.04 * 19,
       height: 1.3,
     );

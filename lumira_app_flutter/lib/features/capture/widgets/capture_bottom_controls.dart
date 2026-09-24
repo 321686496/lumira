@@ -25,6 +25,7 @@ import 'capture_button.dart';
 import 'capture_thumbnail.dart';
 import 'filter_picker.dart';
 import 'param_panel.dart';
+import 'scene_drawer_panel.dart';
 import 'scene_preset_strip.dart';
 import 'template_drawer_panel.dart';
 import 'template_strip.dart';
@@ -377,7 +378,11 @@ class AnimatedToolDrawer extends ConsumerWidget {
           },
         );
       case 'scenes':
-        return const ScenePresetStrip();
+        return ScenePresetStrip(
+          onShowMore: () {
+            showSceneDrawerSheet(context);
+          },
+        );
       case 'params':
         // 参数面板与其它工具共用底部抽屉位置，由工具栏把内容顶上去
         return showParamPanel ? const ParamPanel() : const SizedBox.shrink();

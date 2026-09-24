@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,14 +11,15 @@ import '../../../core/router/route_names.dart';
 import '../../../core/services/file_picker_service.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../core/utils/image_cache.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/common/lumira_surface.dart';
 import '../../../shared/widgets/effects/pressable_recess.dart';
 import '../../../shared/widgets/effects/recessed_surface.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_scene_mock_data.dart';
+import '../data/capture_scene_providers.dart';
 import '../data/scene_manage_providers.dart';
 import '../data/scene_record_mapper.dart';
 
@@ -292,6 +292,7 @@ class _CaptureSceneManagePageState
 
   void _invalidateScenes() {
     ref.invalidate(customScenesProvider);
+    ref.invalidate(captureScenePresetsProvider);
     ref.invalidate(favoriteScenesProvider);
   }
 
@@ -743,14 +744,9 @@ class _ScenePresetRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(appThemeProvider).tokens;
-    // 封面优先使用自定义场景的 cover；否则回退到示例图第一张。
-    // 注：scene 是 Widget 字段（非局部变量），Dart 不做字段类型提升，需显式类型判断。
-    String? cover;
-    if (scene is CustomScenePreset && (scene as CustomScenePreset).cover.isNotEmpty) {
-      cover = (scene as CustomScenePreset).cover;
-    } else if (scene.exampleImages.isNotEmpty) {
-      cover = scene.exampleImages.first;
-    }
+    // 封面取源统一走 sceneCoverUrl（自定义封面 → 本地打包封面 → 示例图首图），
+    // 内置场景由此命中打包资产，不必联网等示例图。
+    final cover = sceneCoverUrl(scene);
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -768,7 +764,14 @@ class _ScenePresetRow extends ConsumerWidget {
               SizedBox(
                 width: 80,
                 height: 80,
-                child: cover != null ? _CoverImage(url: cover) : null,
+                child: cover.isEmpty
+                    ? null
+                    : LumiraImage(
+                        cover,
+                        fit: BoxFit.cover,
+                        placeholder: ColoredBox(color: tokens.surfaceAlt),
+                        errorWidget: ColoredBox(color: tokens.surfaceAlt),
+                      ),
               ),
               Expanded(
                 child: Padding(
@@ -1306,7 +1309,12 @@ class _CoverPicker extends ConsumerWidget {
                   ? Stack(
                       fit: StackFit.expand,
                       children: [
-                        _CoverImage(url: cover, fit: BoxFit.cover),
+                        LumiraImage(
+                          cover,
+                          fit: BoxFit.cover,
+                          placeholder: ColoredBox(color: tokens.surfaceAlt),
+                          errorWidget: ColoredBox(color: tokens.surfaceAlt),
+                        ),
                         Positioned(
                           right: 8,
                           bottom: 8,
@@ -1350,45 +1358,6 @@ class _CoverPicker extends ConsumerWidget {
         ],
       ),
     );
-  }
-}
-
-/// 渲染封面图：优先 base64 data URL，其次网络/路径地址。
-/// 黑色半透明遮罩属于跨风格通用「叠加视觉」，符合设计规范。
-class _CoverImage extends ConsumerWidget {
-  const _CoverImage({required this.url, this.fit = BoxFit.cover});
-  final String url;
-  final BoxFit fit;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(appThemeProvider).tokens;
-    if (url.startsWith('data:image/')) {
-      final bytes = _dataUrlBytes(url);
-      if (bytes != null) {
-        return Image.memory(
-          bytes,
-          fit: fit,
-          gaplessPlayback: true,
-          errorBuilder: (_, __, ___) => Container(color: tokens.brand),
-        );
-      }
-    }
-    return CachedNetworkImage(
-      url: url,
-      fit: fit,
-      errorWidget: Container(color: tokens.brand),
-    );
-  }
-
-  static Uint8List? _dataUrlBytes(String url) {
-    final comma = url.indexOf(',');
-    if (comma < 0) return null;
-    try {
-      return base64Decode(url.substring(comma + 1));
-    } catch (_) {
-      return null;
-    }
   }
 }
 

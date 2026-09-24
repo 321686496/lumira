@@ -119,21 +119,15 @@ class _ShootkitEditorPageState extends ConsumerState<ShootkitEditorPage> {
   String get _isoDisplay => _overrides.iso?.toString() ?? 'AUTO';
   void _onSave() {
     if (_kitName.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请填写组合名称')),
-      );
+      LumiraToast.show(context, '请填写组合名称');
       return;
     }
     if (_sceneId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('未绑定场景')),
-      );
+      LumiraToast.show(context, '未绑定场景');
       return;
     }
     if (_selectedTemplateId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请选择模板')),
-      );
+      LumiraToast.show(context, '请选择模板');
       return;
     }
 

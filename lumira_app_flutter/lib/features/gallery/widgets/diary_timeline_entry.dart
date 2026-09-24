@@ -14,8 +14,9 @@ import 'diary_photo_cell.dart';
 /// - 2~4 张：四宫格（2 列，正方形）
 /// - 5~9 张：九宫格（3 列，正方形）
 /// - 超过 9 张：仍显示 9 格，最后一格显示 "+N 查看更多"，点击进入当日照片页
-/// 标签（场景/模板/心情）叠加在所属照片内部（见 [DiaryPhotoCell]），
-/// 不再统一排在网格下方。
+/// 标签（场景/模板/心情）默认叠加在所属照片内部（见 [DiaryPhotoCell]）；
+/// 三列窄格（≥5 张）时可读性差，此时标签移出照片，按天聚合去重后统一排在
+/// 该条时间轴的网格下方（[DiaryTagBadge] 画布态）。
 class DiaryTimelineEntry extends ConsumerWidget {
   const DiaryTimelineEntry({
     super.key,
@@ -107,9 +108,17 @@ class DiaryTimelineEntry extends ConsumerWidget {
               ),
             ),
           ),
-          // 右：照片网格（标签已叠加在照片内部）
+          // 右：照片网格（≥5 张三列时标签移出照片，汇总排在网格下方）
           Expanded(
-            child: _buildGrid(displayPhotos, total, tokens),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildGrid(displayPhotos, total, tokens),
+                // 三列窄格：场景/模板标签不叠在图片上，改排到该条时间轴下方
+                if (displayPhotos.length > 4)
+                  _buildTagsSummary(displayPhotos, tokens),
+              ],
+            ),
           ),
         ],
       ),
@@ -118,11 +127,15 @@ class DiaryTimelineEntry extends ConsumerWidget {
 
   Widget _buildGrid(List<DiaryPhoto> photos, int total, ThemeTokens tokens) {
     final count = photos.length;
+    // 1~4 张（单图 / 两列宽格）：标签继续叠加在照片内部；
+    // ≥5 张三列窄格：关闭照片内叠加，改排在网格下方（见 [_buildTagsSummary]）
+    final showTagsInCell = count <= 4;
     if (count == 1) {
       return DiaryPhotoCell(
         photo: photos[0],
         aspectRatio: 4 / 3,
         tokens: tokens,
+        showTags: showTagsInCell,
         onTap: onPhotoTap == null ? null : () => onPhotoTap!(photos[0].id),
         onLongPress:
             onPhotoLongPress == null ? null : () => onPhotoLongPress!(photos[0].id),
@@ -165,6 +178,7 @@ class DiaryTimelineEntry extends ConsumerWidget {
                           photo: photo,
                           aspectRatio: 1,
                           tokens: tokens,
+                          showTags: showTagsInCell,
                           onTap: onPhotoTap == null
                               ? null
                               : () => onPhotoTap!(photo.id),
@@ -178,6 +192,31 @@ class DiaryTimelineEntry extends ConsumerWidget {
           ),
         );
       }),
+    );
+  }
+
+  /// 三列网格下方的标签汇总：把照片内的场景/模板标签移出来，按天聚合去重后
+  /// 以画布态徽标横排展示，避免窄格内标签挤压图片、可读性差。
+  Widget _buildTagsSummary(List<DiaryPhoto> photos, ThemeTokens tokens) {
+    final seen = <String>{};
+    final tags = <DiaryTag>[];
+    for (final photo in photos) {
+      for (final tag in photo.tags) {
+        // 同一天内同一标签只展示一次（按「颜色 + 名称」去重，保持出现顺序）
+        if (seen.add('${tag.color.name}|${tag.label}')) tags.add(tag);
+      }
+    }
+    if (tags.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          for (final tag in tags)
+            DiaryTagBadge(tag: tag, tokens: tokens, overlay: false),
+        ],
+      ),
     );
   }
 }

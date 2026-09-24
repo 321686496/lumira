@@ -117,10 +117,30 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
     }
   }
 
+  /// 重试加载邀请统计。
+  ///
+  /// 成功时页面会自然刷新；失败时明确提示，避免「点了重试没有任何反应」。
+  Future<void> _retryStats(BuildContext context) async {
+    final toastContext = context;
+    ref.invalidate(inviteStatsProvider);
+    try {
+      await ref.read(inviteStatsProvider.future);
+    } catch (_) {
+      if (!mounted) return;
+      LumiraToast.show(
+        toastContext,
+        '仍然加载失败，请稍后重试',
+        duration: const Duration(milliseconds: 1500),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
     final statsAsync = ref.watch(inviteStatsProvider);
+    // 统计加载失败时，不渲染依赖统计的卡片，避免把「加载失败」静默显示成 0
+    final statsFailed = statsAsync.hasError;
     // 邀请码绑定仅对「新设备首次使用」开放；老设备不展示绑定输入入口。
     final isNewDevice = ref.watch(authControllerProvider).isNewDevice;
 
@@ -149,24 +169,34 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 网络失败回退缓存时显示离线提示
+                // 统计加载失败提示：任何失败都需显式告知，避免静默显示 0 造成误读
                 statsAsync.when(
+                  // 刷新/重试期间也要进入 loading 分支，否则「点了重试没反应」
+                  skipLoadingOnRefresh: false,
                   data: (_) => const SizedBox.shrink(),
-                  loading: () => const SizedBox.shrink(),
+                  loading: () => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Center(child: LumiraProgress.circular()),
+                  ),
                   error: (e, _) {
                     final isOffline = e is ApiException && e.isNetworkError;
-                    if (!isOffline) return const SizedBox.shrink();
                     return ApiErrorBanner(
-                      onRetry: () => ref.invalidate(inviteStatsProvider),
+                      icon: isOffline ? Icons.wifi_off : Icons.error_outline,
+                      message: isOffline
+                          ? '网络连接失败，邀请数据加载失败'
+                          : '邀请数据加载失败，请重试',
+                      onRetry: () => _retryStats(context),
                     );
                   },
                 ),
                 FadeUp(child: _HeroCard(tokens: tokens)),
-                const SizedBox(height: 20),
-                FadeUp(
-                  delay: const Duration(milliseconds: 40),
-                  child: _DailyBenefitCard(tokens: tokens),
-                ),
+                if (!statsFailed) ...[
+                  const SizedBox(height: 20),
+                  FadeUp(
+                    delay: const Duration(milliseconds: 40),
+                    child: _DailyBenefitCard(tokens: tokens),
+                  ),
+                ],
                 const SizedBox(height: 20),
                 FadeUp(
                   delay: const Duration(milliseconds: 60),
@@ -183,16 +213,18 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
                   delay: const Duration(milliseconds: 90),
                   child: _MyBindingCard(tokens: tokens),
                 ),
-                const SizedBox(height: 20),
-                FadeUp(
-                  delay: const Duration(milliseconds: 100),
-                  child: _RewardCard(tokens: tokens),
-                ),
-                const SizedBox(height: 20),
-                FadeUp(
-                  delay: const Duration(milliseconds: 200),
-                  child: _ProgressCard(tokens: tokens),
-                ),
+                if (!statsFailed) ...[
+                  const SizedBox(height: 20),
+                  FadeUp(
+                    delay: const Duration(milliseconds: 100),
+                    child: _RewardCard(tokens: tokens),
+                  ),
+                  const SizedBox(height: 20),
+                  FadeUp(
+                    delay: const Duration(milliseconds: 200),
+                    child: _ProgressCard(tokens: tokens),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 FadeUp(
                   delay: const Duration(milliseconds: 300),
@@ -220,11 +252,13 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
                         )
                       : _BindUnavailableCard(tokens: tokens),
                 ),
-                const SizedBox(height: 20),
-                FadeUp(
-                  delay: const Duration(milliseconds: 500),
-                  child: _RecordCard(tokens: tokens),
-                ),
+                if (!statsFailed) ...[
+                  const SizedBox(height: 20),
+                  FadeUp(
+                    delay: const Duration(milliseconds: 500),
+                    child: _RecordCard(tokens: tokens),
+                  ),
+                ],
                 const SizedBox(height: 16),
               ],
             ),
@@ -594,7 +628,7 @@ class _ProgressCard extends ConsumerWidget {
     final invited = stats?.totalInvites ?? 0;
     final nextRequired = stats?.nextTier?.requiredInvites ?? 0;
     final nextRewardName = stats?.nextTier?.rewards.isNotEmpty == true
-        ? stats!.nextTier!.rewards.map((r) => r.label).join('、')
+        ? stats!.nextTier!.rewards.map((r) => r.displayLabel).join('、')
         : '';
     final remaining = nextRequired > invited ? nextRequired - invited : 0;
     final percent = nextRequired > 0 ? (invited / nextRequired * 100).clamp(0, 100) : 100.0;

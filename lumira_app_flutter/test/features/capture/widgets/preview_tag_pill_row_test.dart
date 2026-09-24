@@ -29,8 +29,7 @@ void main() {
     );
   }
 
-  testWidgets('renders mood pills and scene pills with 不标记',
-      (tester) async {
+  testWidgets('renders mood pills and scene pills with 不标记', (tester) async {
     await tester.pumpWidget(wrap(
       moods: const [
         MoodOption(name: '开心', icon: Icons.sentiment_satisfied),
@@ -77,21 +76,23 @@ void main() {
     expect(got, isNull);
   });
 
-  testWidgets('active scene pill has gradient decoration', (tester) async {
+  testWidgets('active scene tab uses subtle brand background', (tester) async {
     await tester.pumpWidget(wrap(
       moods: const [
         MoodOption(name: '开心', icon: Icons.sentiment_satisfied),
       ],
       selectedSceneId: CapturePreviewMockData.sceneOptions.first.id,
     ));
-    // active pill 的 Container decoration 有 LinearGradient
+    // active scene tab 的 Container decoration 使用品牌弱底，不再用重渐变。
     final container = tester.widget<Container>(
-      find.ancestor(
-        of: find.text(CapturePreviewMockData.sceneOptions.first.name),
-        matching: find.byType(Container),
-      ).first,
+      find
+          .ancestor(
+            of: find.text(CapturePreviewMockData.sceneOptions.first.name),
+            matching: find.byType(Container),
+          )
+          .first,
     );
     final deco = container.decoration as BoxDecoration;
-    expect(deco.gradient, isA<LinearGradient>());
+    expect(deco.color, tokens.brandSubtle);
   });
 }

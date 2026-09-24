@@ -195,8 +195,13 @@ class _LumiraToastViewState extends State<_LumiraToastView> {
       bottom: widget.position == ToastPosition.bottom ? bottomPadding + 24 : null,
       left: 0,
       right: 0,
-      child: IgnorePointer(
-        child: Material(
+      // 注意：不要包 IgnorePointer——它会把 [ToastAction] 行动按钮的点击一起
+      // 吞掉（按钮看得见点不着）。透明 Material + 纯装饰 Container 本身不吸收
+      // 手势，落在卡片空白处的点击会自然穿透到下层 UI，行为与 IgnorePointer 一致。
+      // Material 必须用 MaterialType.transparency：默认 canvas 类型
+      // absorbHitTest=true，会把卡片空白处的点击也吸收掉（见 SDK material.dart）。
+      child: Material(
+          type: MaterialType.transparency,
           color: Colors.transparent,
           child: AnimatedBuilder(
             animation: Listenable.merge([
@@ -217,7 +222,6 @@ class _LumiraToastViewState extends State<_LumiraToastView> {
             },
           ),
         ),
-      ),
     );
   }
 }
@@ -245,55 +249,66 @@ class _ToastCard extends StatelessWidget {
     final Color brandBarColor = tokens.brand;
     final Color brandBorderColor = tokens.brand.withOpacity(0.35);
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
+    // 卡片外壳不能用 Container(decoration:)：RenderDecoratedBox.hitTestSelf 会调用
+    // BoxDecoration.hitTest，矩形 shape 恒返回 true，整个卡片区域的点击都被装饰盒
+    // 吸收（[ToastAction] 按钮能点是因为子节点优先命中，但卡片空白处的点击无法
+    // 穿透到下层 UI）。改用 PhysicalModel（底色+圆角+投影，
+    // RenderPhysicalShape 不吸收手势）+ Material(transparency)（只画 brand
+    // 细边，absorbHitTest=false，见 SDK material.dart）。
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: PhysicalModel(
         color: backgroundColor,
+        elevation: 6,
+        shadowColor: const Color(0x40000000),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          // brand 色装饰边框
-          color: brandBorderColor,
-          width: 0.75,
+        clipBehavior: Clip.antiAlias,
+        child: Material(
+          type: MaterialType.transparency,
+          color: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              // brand 色装饰边框
+              color: brandBorderColor,
+              width: 0.75,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                // 左侧 brand 色装饰条
+                Container(
+                  width: 3,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: brandBarColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // 主消息
+                Expanded(
+                  child: Text(
+                    message,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: textColor,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+                // 可选行动按钮
+                if (action != null) ...[
+                  const SizedBox(width: 12),
+                  _ToastActionButton(action: action!),
+                ],
+              ],
+            ),
+          ),
         ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x40000000),
-            offset: Offset(0, 6),
-            blurRadius: 20,
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // 左侧 brand 色装饰条
-          Container(
-            width: 3,
-            height: 24,
-            decoration: BoxDecoration(
-              color: brandBarColor,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 12),
-          // 主消息
-          Expanded(
-            child: Text(
-              message,
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.4,
-                color: textColor,
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-          ),
-          // 可选行动按钮
-          if (action != null) ...[
-            const SizedBox(width: 12),
-            _ToastActionButton(action: action!),
-          ],
-        ],
       ),
     );
   }

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../shared/widgets/lumira/lumira.dart';
+
 /// 复制邀请码：写入系统剪贴板并 toast 反馈。
 Future<void> showInviteCopyToast(BuildContext context, String code) async {
   await Clipboard.setData(ClipboardData(text: code));
   if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('邀请码已复制：$code'), duration: const Duration(seconds: 1)),
-    );
+    LumiraToast.show(context, '邀请码已复制：$code', duration: const Duration(seconds: 1));
   }
 }
 

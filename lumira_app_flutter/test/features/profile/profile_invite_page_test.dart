@@ -95,14 +95,14 @@ void main() {
     FlutterError.onError = originalErrorHandler;
   });
 
-  Widget wrap(ThemeKey themeKey, UIStyle uiStyle) {
+  Widget wrap(ThemeKey themeKey, UIStyle uiStyle, {NextInviteTier? nextTier}) {
     return ProviderScope(
       overrides: [
         authControllerProvider.overrideWith((ref) => _FakeAuthController()),
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
         inviteRepositoryProvider.overrideWith((ref) async => _FakeInviteRepository()),
-        inviteStatsProvider.overrideWith((ref) async => const InviteStats(
+        inviteStatsProvider.overrideWith((ref) async => InviteStats(
               totalInvites: 3,
               currentTier: 1,
               myInviteCode: 'ABC234',
@@ -129,17 +129,18 @@ void main() {
                   activatedAt: 1700000001,
                 ),
               ],
-              nextTier: NextInviteTier(
-                tier: 2,
-                requiredInvites: 5,
-                rewards: [
-                  RewardItem(
-                    type: RewardType.templatePack,
-                    id: 'atmosphere',
-                    label: '氛围感包',
+              nextTier: nextTier ??
+                  const NextInviteTier(
+                    tier: 2,
+                    requiredInvites: 5,
+                    rewards: [
+                      RewardItem(
+                        type: RewardType.templatePack,
+                        id: 'atmosphere',
+                        label: '氛围感包',
+                      ),
+                    ],
                   ),
-                ],
-              ),
               unlockedRewards: [
                 UnlockedReward(
                   id: 1,
@@ -239,6 +240,28 @@ void main() {
       expect(find.text('日系胶片模板'), findsOneWidget);
       expect(find.text('氛围感包'), findsOneWidget);
       expect(find.text('已达成'), findsOneWidget);
+    });
+
+    testWidgets('ProgressCard next-tier text uses displayLabel for label-less rewards',
+        (tester) async {
+      setLargeViewport(tester);
+      // 复现线上 reward_tiers 数据：points/unlock_count 条目不带 label 字段，
+      // 若直接拼 r.label 会渲染出「再邀请 2 人可解锁「、」」
+      await tester.pumpWidget(wrap(
+        ThemeKey.warmWhite,
+        UIStyle.neumorphic,
+        nextTier: const NextInviteTier(
+          tier: 2,
+          requiredInvites: 5,
+          rewards: [
+            RewardItem(type: RewardType.points, value: 80),
+            RewardItem(type: RewardType.unlockCount, value: 1),
+          ],
+        ),
+      ));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('再邀请 2 人可解锁「+80 积分、免费解锁 ×1」'), findsOneWidget);
     });
 
     testWidgets('renders real invite records from invitees', (tester) async {

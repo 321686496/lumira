@@ -55,4 +55,50 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     expect(find.text('普通页面 Toast'), findsNothing);
   });
+
+  testWidgets('ToastAction 行动按钮可点击（回归：IgnorePointer 曾吞掉全部点击）',
+      (tester) async {
+    await pumpApp(tester);
+    final ctx = tester.element(find.text('home'));
+    var actionTapped = false;
+    LumiraToast.show(
+      ctx,
+      '对比图已生成',
+      action: ToastAction(label: '查看', onTap: () => actionTapped = true),
+    );
+    await tester.pump();
+    expect(find.text('查看'), findsOneWidget);
+    await tester.tap(find.text('查看'));
+    expect(actionTapped, isTrue);
+  });
+
+  testWidgets('Toast 卡片空白处点击穿透到下层 UI（移除 IgnorePointer 不拦手势）',
+      (tester) async {
+    var underTapped = false;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
+          uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topCenter,
+              child: ElevatedButton(
+                onPressed: () => underTapped = true,
+                child: const Text('under'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    final ctx = tester.element(find.text('under'));
+    LumiraToast.show(ctx, '顶层 Toast');
+    await tester.pump();
+    // 点击 Toast 覆盖区内的下层按钮：应穿透命中
+    await tester.tap(find.text('under'));
+    expect(underTapped, isTrue);
+  });
 }

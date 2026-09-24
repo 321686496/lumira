@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/searchengine/search_scope.dart';
-import '../../../shared/widgets/common/lumira_surface.dart';
 import '../../../shared/widgets/effects/pressable_recess.dart';
 import '../../templates/widgets/template_cover_image.dart';
 
@@ -321,15 +320,15 @@ class _RecommendCard extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
         width: 92,
-        // Forced fix: 推荐封面卡改用共享 LumiraSurface，按当前 4 种 UI 风格渲染
-        // （neumorphic/glass/female/…），不再固定 surface + divider 细边。
-        child: LumiraSurface(
-          radius: 16,
-          clip: true,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
+        // 推荐卡去掉卡片底色/描边/阴影（不再包 LumiraSurface）：
+        // 只保留圆角封面 + 下方标签文字，让整栏推荐更轻，
+        // 避免每张卡在画布上形成一块块「色块」。
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: SizedBox(
                 height: 120,
                 child: hasCover
                     ? TemplateCoverImage(
@@ -342,22 +341,22 @@ class _RecommendCard extends StatelessWidget {
                       )
                     : _placeholder(item, tokens),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                child: Text(
-                  item.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+              child: Text(
+                item.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -12,10 +12,14 @@ class ApiErrorBanner extends ConsumerWidget {
   final String? message;
   final VoidCallback? onRetry;
 
+  /// 提示图标。默认离线图标；非网络类失败可传入其他图标（如 error_outline）。
+  final IconData icon;
+
   const ApiErrorBanner({
     super.key,
     this.message,
     this.onRetry,
+    this.icon = Icons.wifi_off,
   });
 
   @override
@@ -32,7 +36,7 @@ class ApiErrorBanner extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.wifi_off, size: 16, color: tokens.danger),
+          Icon(icon, size: 16, color: tokens.danger),
           const SizedBox(width: 8),
           Expanded(
             child: Text(

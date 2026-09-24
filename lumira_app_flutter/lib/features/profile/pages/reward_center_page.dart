@@ -108,31 +108,7 @@ class _RewardCenterPageState extends ConsumerState<RewardCenterPage> {
     String message, {
     bool isSuccess = false,
   }) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              isSuccess ? Icons.check_circle_outline : Icons.info_outline,
-              size: 18,
-              color: isSuccess ? tokens.success : tokens.danger,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: tokens.textPrimary,
-                ),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: tokens.surface,
-        duration: const Duration(milliseconds: 1500),
-      ),
-    );
+    LumiraToast.show(context, message, duration: const Duration(milliseconds: 1500));
   }
 
   void _goRewards() => GoRouter.of(context).push(RouteNames.profileRewards);

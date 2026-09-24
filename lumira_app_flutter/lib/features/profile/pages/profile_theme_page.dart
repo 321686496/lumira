@@ -597,41 +597,46 @@ class _StylePreview extends StatelessWidget {
           ),
         );
       case UIStyle.female:
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            // brand 色光晕
-            Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: tokens.brand.withOpacity(0.30),
-                    blurRadius: 18,
-                    spreadRadius: 3,
-                  ),
-                ],
-              ),
-              width: 50,
-              height: 40,
-            ),
-            Container(
-              width: 50,
-              height: 32,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.white.withOpacity(0.70),
-                    tokens.brandSubtle.withOpacity(0.60),
+        // Center 撑满预览区宽度：否则该 Stack 只有内容宽度（50），
+        // 会把整张卡片挤窄，与其他三张卡宽度不一致
+        return Center(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // brand 色光晕
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: tokens.brand.withOpacity(0.30),
+                      blurRadius: 18,
+                      spreadRadius: 3,
+                    ),
                   ],
                 ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withOpacity(0.6), width: 0.5),
+                width: 50,
+                height: 40,
               ),
-            ),
-          ],
+              Container(
+                width: 50,
+                height: 32,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white.withOpacity(0.70),
+                      tokens.brandSubtle.withOpacity(0.60),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border:
+                      Border.all(color: Colors.white.withOpacity(0.6), width: 0.5),
+                ),
+              ),
+            ],
+          ),
         );
     }
   }

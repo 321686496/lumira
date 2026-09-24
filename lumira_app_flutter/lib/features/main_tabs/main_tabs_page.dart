@@ -267,12 +267,7 @@ class _FirstUseInviteSheetState extends ConsumerState<_FirstUseInviteSheet> {
   void _toast(String message, [BuildContext? override]) {
     final ctx = override ?? context;
     if (!mounted && override == null) return;
-    ScaffoldMessenger.of(ctx).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(milliseconds: 1500),
-      ),
-    );
+    LumiraToast.show(ctx, message, duration: const Duration(milliseconds: 1500));
   }
 
   @override

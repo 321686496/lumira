@@ -9,7 +9,7 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/lumira/lumira.dart'
-    show ButtonVariant, LumiraButton;
+    show ButtonVariant, LumiraButton, LumiraToast;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/invite_repository.dart';
 
@@ -84,28 +84,7 @@ class _InvitePageState extends ConsumerState<InvitePage> {
     String message, {
     bool isSuccess = false,
   }) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              isSuccess ? Icons.check_circle_outline : Icons.info_outline,
-              size: 18,
-              color: isSuccess ? tokens.success : tokens.danger,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(fontSize: 13, color: tokens.textPrimary),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: tokens.surface,
-        duration: const Duration(milliseconds: 1500),
-      ),
-    );
+    LumiraToast.show(context, message, duration: const Duration(milliseconds: 1500));
   }
 
   @override

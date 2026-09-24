@@ -74,6 +74,9 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
   bool _isLoading = true;
   bool _isInitialLoaded = false;
 
+  /// 场景 id → 名称（来自 ScenesDao，含自定义/内置场景），用于筛选 pill 显示真实场景名
+  Map<String, String> _sceneNameById = const {};
+
   /// 派生数据缓存：仅当 `_photos`/`_allPhotos` 真正变化时重算。
   ///
   /// 相册有多选/搜索/过滤，这些操作都会 `setState` 重建 body。若每次重建都重新
@@ -140,6 +143,21 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  /// 预载场景 id → 名称映射（ScenesDao），供筛选 pill 显示真实场景名。
+  Future<void> _loadSceneNames() async {
+    try {
+      final scenesDao = await ref.read(scenesDaoProvider.future);
+      final scenes = await scenesDao.getAll();
+      if (!mounted) return;
+      setState(() {
+        _sceneNameById = {for (final s in scenes) s.id: s.name};
+        _derived = null; // 名称就绪后重算 pills
+      });
+    } catch (e, st) {
+      debugPrint('[gallery] 预载场景名异常: $e\n$st');
     }
   }
 
@@ -478,6 +496,7 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
                 if (!_isInitialLoaded) {
                   _isInitialLoaded = true;
                   _loadPhotos(dao);
+                  _loadSceneNames();
                 }
                 return _buildBody(tokens);
               },
@@ -877,12 +896,12 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
         icon: Icons.folder_open_outlined,
       ));
     }
-    // 其余场景（mock 阶段 sceneId 不是已知 scene，仅显示 sceneId 简短形式）
+    // 其余场景（优先用 DB 真实场景名，未知场景回退 sceneDisplayName → sceneId）
     groups.forEach((sid, cnt) {
       if (sid == 'uncategorized') return;
       result.add(SceneFilterPill(
         key: 'scene_$sid',
-        label: sceneDisplayName(sid),
+        label: _sceneNameById[sid] ?? sceneDisplayName(sid),
         count: cnt,
         icon: Icons.label_outlined,
       ));

@@ -341,6 +341,25 @@ class GalleryDao {
     return result;
   }
 
+  /// 获取最近拍摄照片使用过的场景 ID（按最近一次使用时间倒序去重）。
+  Future<List<String>> getRecentSceneIds({int limit = 50}) async {
+    final rows = await _db.rawQuery('''
+      SELECT ${Tables.colSceneId} AS scene_id,
+             MAX(${Tables.colCreatedAt}) AS latest_at
+      FROM ${Tables.galleryItems}
+      WHERE ${Tables.colSceneId} IS NOT NULL
+        AND ${Tables.colSceneId} != ''
+        AND $_notHidden
+      GROUP BY ${Tables.colSceneId}
+      ORDER BY latest_at DESC
+      LIMIT ?
+    ''', [limit]);
+    return rows
+        .map((row) => row['scene_id'] as String?)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toList();
+  }
   /// 获取最近拍摄的照片（最新在前，limit 控制数量）
   /// 实现：参考 getAll()，强制 DESC 排序与 limit
   Future<List<GalleryItemRecord>> getRecent({int limit = 10}) async {
