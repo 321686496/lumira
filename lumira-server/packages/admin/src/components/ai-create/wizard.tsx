@@ -97,6 +97,10 @@ export function AiCreateWizard({
   const [poseProgress, setPoseProgress] = useState<AiPoseProgress | null>(null);
   /** 生成姿势图逐张实时过程事件（喂给常驻面板「姿势图生成」Tab） */
   const [poseTraceEvents, setPoseTraceEvents] = useState<AiBatchImageTraceEvent[]>([]);
+  /** 手动 Step3 生成姿势图是否进行中（喂给常驻面板「姿势图生成」Tab） */
+  const [poseTraceRunning, setPoseTraceRunning] = useState(false);
+  /** 「AI 生成过程」面板本次是否被手动关闭（仅隐藏展示，不清空已采集过程） */
+  const [progressPanelHidden, setProgressPanelHidden] = useState(false);
   /** Step1 附加输入：创作要求 / 姿势个数（'auto' = AI 自动判断）；主文字描述复用 inputText（同时作为 textDesc 附加输入） */
   const [creationReq, setCreationReq] = useState('');
   const [poseCount, setPoseCount] = useState('auto');
@@ -156,6 +160,8 @@ export function AiCreateWizard({
     setAnalyzeDetail(null);
     setTraceEvents([]);
     setPoseTraceEvents([]);
+    setPoseTraceRunning(false);
+    setProgressPanelHidden(false);
     setDetailDialogOpen(false);
     setCandidates([]);
     setSilhouetteFile(null);
@@ -264,6 +270,9 @@ export function AiCreateWizard({
     setErrorText(null);
     let stage: AutoStage = 'analyzing';
     setTraceEvents([]);
+    setPoseTraceEvents([]);
+    setPoseTraceRunning(false);
+    setProgressPanelHidden(false);
     setAutoState({ running: true, stage });
     try {
       // ① 识别（含 Step1 附加输入：创作要求 / 姿势个数；主文字描述同时作为 textDesc）
@@ -447,6 +456,18 @@ export function AiCreateWizard({
           </p>
         </div>
 
+        {/* 常驻 AI 生成过程面板（步骤栏上方、跨步骤可见；运行中展开/结束后收拢；关闭仅隐藏不清空） */}
+        {!progressPanelHidden && (
+          <GenerateProgressPanel
+            recogEvents={traceEvents}
+            recogRunning={analyzing || (autoState?.running === true && autoState.stage === 'analyzing')}
+            poseEvents={poseTraceEvents}
+            poseRunning={poseTraceRunning || (autoState?.running === true && autoState.stage === 'generating-image')}
+            onOpenDetail={() => setDetailDialogOpen(true)}
+            onClose={() => setProgressPanelHidden(true)}
+          />
+        )}
+
         {/* 顶部 stepper */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           {WIZARD_STEPS.map((s, i) => (
@@ -476,19 +497,6 @@ export function AiCreateWizard({
 
         {/* 非 xl：预览面板置于 stepper 下方 */}
         {!isXl && previewPanel}
-
-        {/* 常驻 AI 生成过程面板（步骤栏上方、跨步骤可见；运行中展开/结束后收拢） */}
-        <GenerateProgressPanel
-          recogEvents={traceEvents}
-          recogRunning={analyzing || (autoState?.running === true && autoState.stage === 'analyzing')}
-          poseEvents={poseTraceEvents}
-          poseRunning={autoState?.running === true && autoState.stage === 'generating-image'}
-          onOpenDetail={() => setDetailDialogOpen(true)}
-          onClose={() => {
-            setTraceEvents([]);
-            setPoseTraceEvents([]);
-          }}
-        />
 
         {/* 全自动进度 / 失败提示 */}
         {autoState?.running && (
@@ -741,6 +749,8 @@ export function AiCreateWizard({
             setCandidates={setCandidates}
             busy={busy}
             onApply={applyCover}
+            onPoseEvents={setPoseTraceEvents}
+            onPoseRunningChange={setPoseTraceRunning}
           />
         )}
 

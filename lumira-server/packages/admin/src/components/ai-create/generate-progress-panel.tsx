@@ -12,7 +12,9 @@ import { cn } from '@/lib/utils';
 import { AnalyzeTraceStream } from './analyze-trace-stream';
 import { PoseTraceStream } from './pose-trace-stream';
 import type { AiTraceEvent, AiBatchImageTraceEvent } from '@/types/admin';
-import { MagicWand, CaretDown, X } from '@phosphor-icons/react';
+import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
+import { CaretDown } from '@phosphor-icons/react/dist/csr/CaretDown';
+import { X } from '@phosphor-icons/react/dist/csr/X';
 
 type TabKey = 'recog' | 'pose';
 
@@ -23,7 +25,7 @@ interface GenerateProgressPanelProps {
   poseRunning: boolean;
   /** 点「识别详情」时触发（打开原有数据分析弹窗） */
   onOpenDetail: () => void;
-  /** 手动关闭整个面板（仅本次隐藏） */
+  /** 手动关闭整个面板（仅隐藏本次展示，不清空已采集过程） */
   onClose: () => void;
 }
 
@@ -53,7 +55,6 @@ export function GenerateProgressPanel({
 
   if (!anyRunning && !anyContent) return null;
 
-  const activeTab: TabKey = anyRunning ? tab : tab;
   const recogCount = recogEvents.filter((e) => e.type === 'step').length;
   const poseCount = poseEvents.length ? new Set(poseEvents.map((e) => e.index)).size : 0;
 
@@ -92,7 +93,7 @@ export function GenerateProgressPanel({
                 onClick={() => setTab(t.key)}
                 className={cn(
                   'rounded px-2.5 py-1 text-xs font-medium transition-colors',
-                  activeTab === t.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+                  tab === t.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
                 )}
               >
                 {t.label}
@@ -101,7 +102,7 @@ export function GenerateProgressPanel({
           </div>
           {/* 内容区 */}
           <div className="p-2">
-            {activeTab === 'recog'
+            {tab === 'recog'
               ? <AnalyzeTraceStream events={recogEvents} running={recogRunning} title={null} bodyClassName="max-h-56" />
               : <PoseTraceStream events={poseEvents} running={poseRunning} title={null} bodyClassName="max-h-56" />}
           </div>

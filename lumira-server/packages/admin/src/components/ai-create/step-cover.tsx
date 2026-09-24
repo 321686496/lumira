@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { generateAiPoseImages, type AiPoseProgress } from '@/lib/ai-task';
-import type { AiResearchRef } from '@/types/admin';
+import type { AiBatchImageTraceEvent, AiResearchRef } from '@/types/admin';
 import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
 import { ImageSquare } from '@phosphor-icons/react/dist/csr/ImageSquare';
 import { ArrowLeft } from '@phosphor-icons/react/dist/csr/ArrowLeft';
@@ -46,6 +46,8 @@ export function StepCover({
   setCandidates,
   busy,
   onApply,
+  onPoseEvents,
+  onPoseRunningChange,
 }: {
   exampleFile: File | null;
   referenceFile: File | null;
@@ -58,6 +60,10 @@ export function StepCover({
   setCandidates: Dispatch<SetStateAction<CoverCandidate[]>>;
   busy: boolean;
   onApply: (files: File[]) => void;
+  /** 生成过程事件回调（喂给常驻「AI 生成过程」面板「姿势图生成」Tab） */
+  onPoseEvents?: (events: AiBatchImageTraceEvent[]) => void;
+  /** 生成进行中状态回调（喂给常驻面板「姿势图生成」Tab） */
+  onPoseRunningChange?: (running: boolean) => void;
 }) {
   const { toast } = useToast();
   const [generating, setGenerating] = useState(false);
@@ -104,6 +110,7 @@ export function StepCover({
     if (!draft) return;
     setGenerating(true);
     setPoseProgress(null);
+    onPoseRunningChange?.(true);
     try {
       const results = await generateAiPoseImages({
         draft,
@@ -111,6 +118,7 @@ export function StepCover({
         extraPrompt,
         research,
         onProgress: setPoseProgress,
+        onEvents: onPoseEvents,
         onResult: (result) => {
           if (!result.file) return;
           const generated: CoverCandidate = {
@@ -157,6 +165,7 @@ export function StepCover({
     } finally {
       setGenerating(false);
       setPoseProgress(null);
+      onPoseRunningChange?.(false);
     }
   };
 

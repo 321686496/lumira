@@ -23,6 +23,12 @@ function formatDuration(ms?: number): string | null {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+function formatTime(ts: number): string {
+  const d = new Date(ts);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
 const STATUS_META: Record<string, { label: string; dot: string; text: string }> = {
   pending: { label: '排队', dot: 'bg-muted-foreground/50', text: 'text-muted-foreground' },
   running: { label: '生成中', dot: 'bg-primary animate-pulse', text: 'text-primary' },
@@ -62,7 +68,6 @@ export function PoseTraceStream({ events, running = false, title = '姿势图生
 function PoseRow({ index, evs }: { index: number; evs: AiBatchImageTraceEvent[] }) {
   const latest = evs[evs.length - 1]!;
   const meta = STATUS_META[latest.status] ?? STATUS_META.pending;
-  const lastRunning = [...evs].reverse().find((e) => e.status === 'running');
   const finished = evs.find((e) => e.status === 'done' || e.status === 'error');
   const prompt = finished?.prompt;
   const model = finished?.model;
@@ -76,7 +81,7 @@ function PoseRow({ index, evs }: { index: number; evs: AiBatchImageTraceEvent[] 
         {model && <span className="font-mono text-[10px] text-muted-foreground">{model}</span>}
         <span className="ml-auto flex shrink-0 items-center gap-2 text-[10px] text-muted-foreground">
           {duration && <span>{duration}</span>}
-          <span>{new Date(latest.ts).toLocaleTimeString()}</span>
+          <span>{formatTime(latest.ts)}</span>
         </span>
       </div>
       {finished?.error && <p className="mt-1 whitespace-pre-wrap break-all text-xs text-destructive">{finished.error}</p>}
