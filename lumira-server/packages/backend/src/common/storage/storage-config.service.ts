@@ -96,19 +96,39 @@ export class StorageConfigService implements OnApplicationBootstrap {
       return { ok: true };
     }
 
-    if (!payload.endpoint || !payload.accessKeyId || !payload.secretAccessKey || !payload.bucket) {
+    // 前端输入框不回显密钥明文（list 只返回 secretMasked），重新保存/激活时
+    // accessKeyId / secretAccessKey 会以空串提交。空/未填则沿用 DB 已有值，
+    // 避免「已配置的存储再次点保存并激活」因密钥被判空而失败。
+    const row = await this.db.getDb()
+      .select({ configJson: storageConfigs.configJson })
+      .from(storageConfigs)
+      .where(eq(storageConfigs.id, id))
+      .limit(1);
+    const existing = row[0] ? parseCfg(row[0].configJson) : {};
+    const keepOld = (next: string | undefined, old: string | undefined) =>
+      next && next.trim() ? next : old;
+    const merged: StorageConfigPayload = {
+      endpoint: keepOld(payload.endpoint, existing.endpoint),
+      accessKeyId: keepOld(payload.accessKeyId, existing.accessKeyId),
+      secretAccessKey: keepOld(payload.secretAccessKey, existing.secretAccessKey),
+      bucket: keepOld(payload.bucket, existing.bucket),
+      region: keepOld(payload.region, existing.region) ?? 'auto',
+      publicUrl: keepOld(payload.publicUrl, existing.publicUrl),
+    };
+
+    if (!merged.endpoint || !merged.accessKeyId || !merged.secretAccessKey || !merged.bucket) {
       throw new BadRequestException(`${id} 需填写 endpoint / accessKeyId / secretAccessKey / bucket`);
     }
-    const adapter = this.buildAdapter(id, payload); // 先校验配置可用再落库
+    const adapter = this.buildAdapter(id, merged); // 先校验配置可用再落库
     try {
       await adapter.listKeys('__probe__');
     } catch (e) {
       throw new BadRequestException(`${id} 配置不可用：${(e as Error).message}`);
     }
 
-    await this.upsert(id, JSON.stringify(payload), active);
+    await this.upsert(id, JSON.stringify(merged), active);
     seedAdapter(id, adapter);
-    if (active) setRuntimeConfig(id, payload.publicUrl || '');
+    if (active) setRuntimeConfig(id, merged.publicUrl || '');
     return { ok: true };
   }
 
