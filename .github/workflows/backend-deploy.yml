@@ -146,8 +146,15 @@ jobs:
           fi
           sudo $COMPOSE_CMD -f docker-compose.prod.yml --env-file .env build
 
-          echo "==> [5/5] 重启容器（--force-recreate 强制重建容器，确保新镜像生效）"
-          sudo $COMPOSE_CMD -f docker-compose.prod.yml --env-file .env up -d --force-recreate
+          echo "==> [5/5] 重建容器（先干净下电再拉起，规避 force-recreate 的容器名竞态）"
+          # 背景：docker compose up --force-recreate 会并行"停旧+建新"；
+          # 当 mysql/searxng 等容器停止超时（Error while Stopping）时会残留临时容器，
+          # 下一次部署试图分配同名时触发 "Error when allocating new name: Conflict" 而失败。
+          # 修复：改为先 down 彻底移除本栈容器（外部网络 lumira-net 与 ./data 数据卷均保留，不影响数据），再 up。
+          sudo $COMPOSE_CMD -f docker-compose.prod.yml --env-file .env down 2>/dev/null || true
+          # 兜底：若 down 因停止超时失败，强制清理同名/临时残留容器（数据在宿主机 bind mount，不受影响）
+          sudo docker ps -aq --filter "name=backend-lumira-" | xargs -r sudo docker rm -f || true
+          sudo $COMPOSE_CMD -f docker-compose.prod.yml --env-file .env up -d
           # 清理不再被容器引用的悬空镜像 + 构建缓存，防止 CI 反复 docker build 撑爆系统盘
           # （此前曾见 /var/lib/docker 构建缓存累积至 23GB，导致 / 100% 满、MySQL InnoDB 写盘失败崩溃）
           sudo docker image prune -f
