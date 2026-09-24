@@ -6,61 +6,24 @@ import 'poster_seal.dart';
 import 'poster_style_types.dart';
 import 'poster_styles_shared.dart';
 
-/// 照片详情分享海报样式。
+/// 照片分享海报样式集合。
 ///
-/// 9:16 为重设计三方向九款（净版 n1-n3 / 画刊 m1-m3 / 画卷 j1-j3，
-/// 设计文档见 docs/superpowers/specs/2026-09-24-photo-poster-9-16-redesign-design.md）：
-/// 画布与照片同为 9:16（300 × 533.33），文字全部落在暖白实底或白卡上。
-/// 统一落款 `@小满`，二维码语义为「查看高清原图」。每个样式按 kind=photo +
-/// 支持的 ratio 注册到 [PosterStyleRegistry]。
+/// 9:16 为最终三款（满版照片 f1 / 竖排刊 m3 / 立轴 j1，
+/// 视觉基准 docs/preview/poster-9-16-preview-v12.html）：画布与照片同为
+/// 9:16（300 × 533.33），文字落在暖白实底/白卡上；唯一例外是 f1 满版照片
+/// （用户点名的 stage2·方向1 历史选型稿），以四段压暗渐变保证压字可读。
 List<PosterStyle> photoPosterStyles() => [
-      // —— 9:16 · 方向一 净版（信息与照片彻底分区，文字落在暖白实底/白卡上）——
+      // —— 9:16 · 满版（唯一压字款，排首位即照片分享默认样式）——
       PosterStyle(
-        id: 'n1',
-        name: '满幅净版',
-        groupName: '净版 · 满幅净版',
-        group: '净版',
+        id: 'f1',
+        name: '满版照片',
+        groupName: '满版 · 满版照片',
+        group: '满版',
         kind: PosterKind.photo,
         ratios: const {PosterRatio.fullScreen},
-        builder: (d) => _N1FullBand(data: d),
+        builder: (d) => _F1FullBleed(data: d),
       ),
-      PosterStyle(
-        id: 'n2',
-        name: '画册相框',
-        groupName: '净版 · 画册相框',
-        group: '净版',
-        kind: PosterKind.photo,
-        ratios: const {PosterRatio.fullScreen},
-        builder: (d) => _N2AlbumFrame(data: d),
-      ),
-      PosterStyle(
-        id: 'n3',
-        name: '浮卡叠影',
-        groupName: '净版 · 浮卡叠影',
-        group: '净版',
-        kind: PosterKind.photo,
-        ratios: const {PosterRatio.fullScreen},
-        builder: (d) => _N3FloatCard(data: d),
-      ),
-      // —— 9:16 · 方向二 画刊（杂志编辑感：刊头 / VOL 期号 / 发丝线 / 竖排标题）——
-      PosterStyle(
-        id: 'm1',
-        name: '刊头装裱',
-        groupName: '画刊 · 刊头装裱',
-        group: '画刊',
-        kind: PosterKind.photo,
-        ratios: const {PosterRatio.fullScreen},
-        builder: (d) => _M1Masthead(data: d),
-      ),
-      PosterStyle(
-        id: 'm2',
-        name: '双轨夹窗',
-        groupName: '画刊 · 双轨夹窗',
-        group: '画刊',
-        kind: PosterKind.photo,
-        ratios: const {PosterRatio.fullScreen},
-        builder: (d) => _M2TwinRails(data: d),
-      ),
+      // —— 9:16 · 画刊（竖排刊）——
       PosterStyle(
         id: 'm3',
         name: '竖排刊',
@@ -70,7 +33,7 @@ List<PosterStyle> photoPosterStyles() => [
         ratios: const {PosterRatio.fullScreen},
         builder: (d) => _M3VerticalColumn(data: d),
       ),
-      // —— 9:16 · 方向三 画卷（装裱语汇：天头/画心/地头/诗塘/题跋/小印）——
+      // —— 9:16 · 画卷（立轴）——
       PosterStyle(
         id: 'j1',
         name: '立轴',
@@ -79,24 +42,6 @@ List<PosterStyle> photoPosterStyles() => [
         kind: PosterKind.photo,
         ratios: const {PosterRatio.fullScreen},
         builder: (d) => _J1HangingScroll(data: d),
-      ),
-      PosterStyle(
-        id: 'j2',
-        name: '诗塘',
-        groupName: '画卷 · 诗塘',
-        group: '画卷',
-        kind: PosterKind.photo,
-        ratios: const {PosterRatio.fullScreen},
-        builder: (d) => _J2PondTop(data: d),
-      ),
-      PosterStyle(
-        id: 'j3',
-        name: '对题',
-        groupName: '画卷 · 对题',
-        group: '画卷',
-        kind: PosterKind.photo,
-        ratios: const {PosterRatio.fullScreen},
-        builder: (d) => _J3FacingTitle(data: d),
       ),
       // —— 3:4 / 1:1 / 横图既有款（不动）——
       PosterStyle(
@@ -156,15 +101,13 @@ List<PosterStyle> photoPosterStyles() => [
 /// 等比缩放系数（选型稿 330 宽 → 当前画布宽）。
 double _k(PosterRatio r) => posterScale(r);
 
-/// 金线装裱照片框：1px 金线外框（可选裱边底色/留白与轻投影），
-/// 内部按 9:16 推导照片尺寸并居中，照片零变形（n2/m1/m2/m3/j1/j2/j3 共用）。
+/// 金线装裱照片框：1px 金线外框（可选裱边底色/留白），
+/// 内部按 9:16 推导照片尺寸并居中，照片零变形（m3/j1 共用）。
 class _FramedPhoto extends StatelessWidget {
   const _FramedPhoto({
     required this.data,
     this.mountColor,
     this.mountPadding = EdgeInsets.zero,
-    this.boxShadow,
-    this.borderRadius = 0,
   });
 
   final PosterStyleData data;
@@ -175,19 +118,12 @@ class _FramedPhoto extends StatelessWidget {
   /// 裱边留白（画心与金线之间的装裱宽度）。
   final EdgeInsets mountPadding;
 
-  /// 轻投影（双轨夹窗照片窗；单层柔和，非双向浮雕）。
-  final List<BoxShadow>? boxShadow;
-
-  final double borderRadius;
-
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: mountColor,
         border: Border.all(color: PosterPalette.line),
-        borderRadius: BorderRadius.circular(borderRadius),
-        boxShadow: boxShadow,
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -238,15 +174,14 @@ class _AuthorQrRow extends StatelessWidget {
   }
 }
 
-/// 金线品牌脚（净版/画刊底行）：LUMIRA · 如画 + 标语，顶部 1px 金线。
+/// 金线品牌脚（画刊底行）：LUMIRA · 如画 + 标语，顶部 1px 金线。
 class _FootBar extends StatelessWidget {
-  const _FootBar({this.paddingTop = 7});
-  final double paddingTop;
+  const _FootBar();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.only(top: paddingTop),
+      padding: const EdgeInsets.only(top: 7),
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: PosterPalette.line)),
       ),
@@ -265,16 +200,27 @@ class _FootBar extends StatelessWidget {
   }
 }
 
-/// 满幅净版（9:16）：照片满幅零叠字 + 底部 160px 暖白实底信息带。
-class _N1FullBand extends StatelessWidget {
-  const _N1FullBand({required this.data});
+/// 满版照片（9:16）：照片满幅出血 + 四段压暗渐变上直接压品牌行/标题/二维码。
+///
+/// 视觉基准 `docs/preview/poster-9-16-preview-v12.html` · 一（源自
+/// `docs/design/poster_mockup_selected.html` stage2·方向1，按 533.33 高画布重标）。
+/// 9:16 系唯一「文字压照片」款（用户点名的历史选型稿，属「文字不压照片」铁律的
+/// 显式例外）；可读性靠 [PosterFullBleedScrim] 与白色二维码块托底。
+class _F1FullBleed extends StatelessWidget {
+  const _F1FullBleed({required this.data});
   final PosterStyleData data;
+
+  static const List<Shadow> _textShadow = [
+    Shadow(color: Color(0x61000000), offset: Offset(0, 1), blurRadius: 6),
+  ];
 
   @override
   Widget build(BuildContext context) {
     final d = data;
     final w = posterCanvasWidth(d.ratio);
     final h = posterFixedHeight(d.ratio);
+    final hint = d.qrHint.isNotEmpty ? d.qrHint : posterQrHintOf(d);
+    final sub = d.qrSub.isNotEmpty ? d.qrSub : posterQrSubOf(d);
     return PosterCanvas(
       width: w,
       height: h,
@@ -284,203 +230,115 @@ class _N1FullBand extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           d.photoBuilder(w, h),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              height: 160,
-              decoration: const BoxDecoration(
-                color: PosterPalette.surface,
-                border: Border(top: BorderSide(color: PosterPalette.line)),
-              ),
-              padding: const EdgeInsets.fromLTRB(24, 14, 24, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+          const PosterFullBleedScrim(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const PosterBrandOnPhoto(scale: 0.9),
+                const Spacer(),
+                PosterKicker(
+                  text: posterKickerOf(d),
+                  color: PosterPalette.goldSoft,
+                  shadows: _textShadow,
+                ),
+                const SizedBox(height: 10),
+                PosterTitle(
+                  text: d.title,
+                  color: Colors.white,
+                  size: 26,
+                  letterSpacing: 2,
+                  height: 1.3,
+                  shadows: _textShadow,
+                ),
+                const SizedBox(height: 8),
+                PosterCatText(
+                  category: d.category,
+                  size: 10,
+                  color: const Color(0xCCFFFFFF),
+                  separatorColor: Colors.white,
+                  letterSpacing: 2,
+                ),
+                const SizedBox(height: 10),
+                PosterAuthorRow(
+                  name: d.authorName,
+                  light: true,
+                  avatarSize: 20,
+                  whoSize: 10,
+                  withSize: 8,
+                  gap: 6,
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  // v12 .qrblock 是 column flex 的 stretch 项 → 白块通栏（260 宽）
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xF0FFFFFF),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
                     children: [
-                      PosterKicker(text: posterKickerOf(d)),
-                      const Spacer(),
-                      Text('如你所见，皆成画卷',
-                          style: posterPlain(8, color: PosterPalette.text3, letterSpacing: 1)),
+                      PosterQr(
+                        data: d.qrData,
+                        size: 52,
+                        padding: 4,
+                        background: Colors.white,
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            hint,
+                            style: posterPlain(11,
+                                color: PosterPalette.ink,
+                                weight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            sub,
+                            style: posterPlain(9,
+                                color: PosterPalette.text3,
+                                letterSpacing: 1),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 5),
-                  PosterTitle(text: d.title, size: 24, letterSpacing: 2, height: 1.25),
-                  const SizedBox(height: 4),
-                  PosterCatText(category: d.category, size: 9, letterSpacing: 2),
-                  const Spacer(),
-                  _AuthorQrRow(data: d),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 画册相框（9:16）：金线相框装裱 9:16 照片的画册内页。
-class _N2AlbumFrame extends StatelessWidget {
-  const _N2AlbumFrame({required this.data});
-  final PosterStyleData data;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = data;
-    return PosterCanvas(
-      width: posterCanvasWidth(d.ratio),
-      height: posterFixedHeight(d.ratio),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const PosterBrandRow(),
-              const Spacer(),
-              Text('VOL.01',
-                  style: posterSerifEn(9, color: PosterPalette.text3, letterSpacing: 2)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Center(
-            child: SizedBox(
-              width: 172,
-              height: 305.78,
-              child: _FramedPhoto(data: d),
-            ),
-          ),
-          const SizedBox(height: 12),
-          PosterKicker(text: posterKickerOf(d)),
-          const SizedBox(height: 3),
-          PosterTitle(text: d.title, size: 22, letterSpacing: 2, height: 1.25),
-          const SizedBox(height: 3),
-          PosterCatText(category: d.category, size: 9, letterSpacing: 2),
-          const SizedBox(height: 7),
-          _AuthorQrRow(data: d),
-          const SizedBox(height: 7),
-          const _FootBar(paddingTop: 8),
-        ],
-      ),
-    );
-  }
-}
-
-/// 浮卡叠影（9:16）：照片满幅 + 白色信息卡悬浮叠底（单层柔和投影）。
-class _N3FloatCard extends StatelessWidget {
-  const _N3FloatCard({required this.data});
-  final PosterStyleData data;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = data;
-    final w = posterCanvasWidth(d.ratio);
-    final h = posterFixedHeight(d.ratio);
-    return PosterCanvas(
-      width: w,
-      height: h,
-      borderRadius: 0,
-      borderColor: Colors.transparent,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          d.photoBuilder(w, h),
-          Positioned(
-            left: 22,
-            right: 22,
-            bottom: 18,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: PosterPalette.line),
-                boxShadow: const [
-                  // 设计稿：0 16px 36px -16px rgba(70,55,30,.45)
-                  BoxShadow(
-                    color: Color(0x7346371E),
-                    offset: Offset(0, 16),
-                    blurRadius: 36,
-                    spreadRadius: -16,
+                ),
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(top: 12),
+                  padding: const EdgeInsets.only(top: 12),
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: Color(0x47FFFFFF)),
+                    ),
                   ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  PosterKicker(text: posterKickerOf(d)),
-                  const SizedBox(height: 5),
-                  PosterTitle(text: d.title, size: 22, letterSpacing: 2, height: 1.25),
-                  const SizedBox(height: 6),
-                  PosterCatText(category: d.category, size: 9, letterSpacing: 2),
-                  const SizedBox(height: 8),
-                  PosterAuthorRow(
-                    name: d.authorName,
-                    avatarSize: 20,
-                    whoSize: 10,
-                    withSize: 8,
-                    gap: 6,
-                  ),
-                  const SizedBox(height: 10),
-                  const PosterDivider(),
-                  const SizedBox(height: 8),
-                  Row(
+                  child: Row(
                     children: [
-                      PosterQrMini(data: d),
-                      const Spacer(),
-                      const PosterFootMini(),
+                      Text(
+                        'LUMIRA · 如画',
+                        style: posterSerifEn(10,
+                            color: PosterPalette.goldSoft, letterSpacing: 3),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '如你所见，皆成画卷',
+                        style: posterPlain(9,
+                            color: const Color(0xB3FFFFFF), letterSpacing: 1),
+                      ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
       ),
-    );
-  }
-}
-
-/// 刊头品牌行（m1 放大版）：logo 16 + LUMIRA 15px 墨色 + 如画。
-class _MastBrand extends StatelessWidget {
-  const _MastBrand();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const PosterLogo(size: 16),
-        const SizedBox(width: 8),
-        Text('LUMIRA',
-            style: posterSerifEn(15, color: PosterPalette.ink, letterSpacing: 4)),
-        const SizedBox(width: 5),
-        Text('如画', style: posterPlain(9, color: PosterPalette.text3, letterSpacing: 2)),
-      ],
-    );
-  }
-}
-
-/// 期号两行（m1 刊头右侧）：VOL.01（金）+ 第 028 期 · 2026 秋。
-class _IssueLines extends StatelessWidget {
-  const _IssueLines();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Text('VOL.01',
-            style: posterSerifEn(9, color: PosterPalette.goldDeep, letterSpacing: 2)),
-        Text('第 028 期 · 2026 秋',
-            style: posterPlain(7.5,
-                color: PosterPalette.text3, letterSpacing: 1, height: 1.5)),
-      ],
     );
   }
 }
@@ -500,136 +358,6 @@ class _VolNoInline extends StatelessWidget {
         Text('第 028 期',
             style: posterPlain(7.5, color: PosterPalette.text3, letterSpacing: 1)),
       ],
-    );
-  }
-}
-
-/// 刊头装裱（9:16）：杂志刊头 + VOL 期号 + 金线装裱照片 + 图注。
-class _M1Masthead extends StatelessWidget {
-  const _M1Masthead({required this.data});
-  final PosterStyleData data;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = data;
-    return PosterCanvas(
-      width: posterCanvasWidth(d.ratio),
-      height: posterFixedHeight(d.ratio),
-      padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: const [
-              _MastBrand(),
-              Spacer(),
-              _IssueLines(),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Container(height: 1, color: PosterPalette.gold),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(0, 10, 0, 8),
-              child: Center(
-                child: AspectRatio(
-                  aspectRatio: 9 / 16,
-                  child: _FramedPhoto(data: d),
-                ),
-              ),
-            ),
-          ),
-          Text('摄于九月晴午 · 光落在草尖上',
-              style: posterPlain(8, color: PosterPalette.text3, letterSpacing: 1)),
-          const SizedBox(height: 7),
-          PosterKicker(text: posterKickerOf(d)),
-          const SizedBox(height: 2),
-          PosterTitle(text: d.title, size: 24, letterSpacing: 2, height: 1.25),
-          const SizedBox(height: 4),
-          PosterCatText(category: d.category, size: 9, letterSpacing: 2),
-          const SizedBox(height: 7),
-          _AuthorQrRow(data: d),
-          const SizedBox(height: 7),
-          const _FootBar(),
-        ],
-      ),
-    );
-  }
-}
-
-/// 双轨夹窗（9:16）：上轨刊头 + 中段照片窗 + 下轨信息，分区最彻底。
-class _M2TwinRails extends StatelessWidget {
-  const _M2TwinRails({required this.data});
-  final PosterStyleData data;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = data;
-    return PosterCanvas(
-      width: posterCanvasWidth(d.ratio),
-      height: posterFixedHeight(d.ratio),
-      child: Column(
-        children: [
-          Container(
-            height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: PosterPalette.line)),
-            ),
-            child: Row(
-              children: [
-                const PosterBrandRow(),
-                const Spacer(),
-                Text('如你所见，皆成画卷',
-                    style: posterPlain(8, color: PosterPalette.text3, letterSpacing: 1)),
-                const SizedBox(width: 12),
-                const _VolNoInline(),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(0, 14, 0, 12),
-              child: Center(
-                child: AspectRatio(
-                  aspectRatio: 9 / 16,
-                  child: _FramedPhoto(
-                    data: d,
-                    boxShadow: const [
-                      // 设计稿：0 12px 26px -16px rgba(70,55,30,.4)
-                      BoxShadow(
-                        color: Color(0x6646371E),
-                        offset: Offset(0, 12),
-                        blurRadius: 26,
-                        spreadRadius: -16,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.fromLTRB(22, 12, 22, 14),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: PosterPalette.line)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                PosterKicker(text: posterKickerOf(d)),
-                const SizedBox(height: 2),
-                PosterTitle(text: d.title, size: 20, letterSpacing: 2, height: 1.25),
-                const SizedBox(height: 3),
-                PosterCatText(category: d.category, size: 9, letterSpacing: 2),
-                const SizedBox(height: 7),
-                _AuthorQrRow(data: d),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -810,182 +538,6 @@ class _J1HangingScroll extends StatelessWidget {
                     const PosterFootMini(),
                   ],
                 ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 诗塘（9:16）：顶部题字面板（诗塘）+ 画心 + 款行尾轨。
-class _J2PondTop extends StatelessWidget {
-  const _J2PondTop({required this.data});
-  final PosterStyleData data;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = data;
-    return PosterCanvas(
-      width: posterCanvasWidth(d.ratio),
-      height: posterFixedHeight(d.ratio),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(22, 14, 22, 13),
-            decoration: const BoxDecoration(
-              color: PosterPalette.surfaceAlt,
-              border: Border(bottom: BorderSide(color: PosterPalette.line)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const PosterBrandRow(),
-                    const Spacer(),
-                    Text('No.028 · 2026 秋',
-                        style: posterSerifEn(8,
-                            color: PosterPalette.goldDeep, letterSpacing: 2)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                PosterKicker(text: posterKickerOf(d)),
-                const SizedBox(height: 3),
-                PosterTitle(text: d.title, size: 24, letterSpacing: 2, height: 1.25),
-                const SizedBox(height: 4),
-                PosterCatText(category: d.category, size: 9, letterSpacing: 2),
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: const [
-                    PosterPara(text: '九月晴午，光落草尖，见之成卷。'),
-                    Spacer(),
-                    PosterSeal(),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Center(
-                child: AspectRatio(
-                  aspectRatio: 9 / 16,
-                  child: _FramedPhoto(data: d),
-                ),
-              ),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.fromLTRB(22, 10, 22, 12),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: PosterPalette.line)),
-            ),
-            child: _AuthorQrRow(data: d),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 对题（9:16）：左题跋栏 + 右画心并置 + 尾轨（分类 + 二维码）。
-class _J3FacingTitle extends StatelessWidget {
-  const _J3FacingTitle({required this.data});
-  final PosterStyleData data;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = data;
-    return PosterCanvas(
-      width: posterCanvasWidth(d.ratio),
-      height: posterFixedHeight(d.ratio),
-      child: Column(
-        children: [
-          Container(
-            height: 34,
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: PosterPalette.line)),
-            ),
-            child: Row(
-              children: [
-                const PosterBrandRow(),
-                const Spacer(),
-                Text('No.028 · 2026 秋',
-                    style: posterSerifEn(8,
-                        color: PosterPalette.goldDeep, letterSpacing: 2)),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  width: 88,
-                  decoration: const BoxDecoration(
-                    border: Border(right: BorderSide(color: PosterPalette.line)),
-                  ),
-                  padding: const EdgeInsets.fromLTRB(12, 16, 12, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      PosterKicker(
-                        text: posterKickerOf(d),
-                        size: 8.5,
-                        letterSpacing: 2,
-                      ),
-                      const SizedBox(height: 8),
-                      PosterTitle(text: d.title, size: 19, letterSpacing: 1, height: 1.3),
-                      const SizedBox(height: 8),
-                      const PosterPara(
-                        text: '九月晴午，光落草尖，见之成卷。',
-                        size: 8.5,
-                        letterSpacing: 1,
-                        height: 1.8,
-                      ),
-                      const Spacer(),
-                      const PosterSeal(),
-                      const SizedBox(height: 8),
-                      PosterAuthorRow(
-                        name: d.authorName,
-                        suffix: '',
-                        avatarSize: 16,
-                        whoSize: 8.5,
-                        gap: 5,
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Center(
-                      child: SizedBox(
-                        width: 184,
-                        height: 327.11,
-                        child: _FramedPhoto(data: d),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.fromLTRB(22, 10, 22, 12),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: PosterPalette.line)),
-            ),
-            child: Row(
-              children: [
-                PosterCatText(category: d.category, size: 9, letterSpacing: 2),
-                const Spacer(),
-                PosterQrMini(data: d),
               ],
             ),
           ),

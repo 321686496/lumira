@@ -54,11 +54,11 @@ Future<void> _loadPosterFonts() async {
 void main() {
   setUpAll(_loadPosterFonts);
 
-  testWidgets('9:16 九款照片海报均正常渲染且无溢出', (tester) async {
+  testWidgets('9:16 三款照片海报均正常渲染且无溢出', (tester) async {
     final styles = photoPosterStyles()
         .where((s) => s.supports(PosterRatio.fullScreen))
         .toList();
-    expect(styles.length, 9);
+    expect(styles.length, 3);
     for (final s in styles) {
       await tester.pumpWidget(
         MaterialApp(
