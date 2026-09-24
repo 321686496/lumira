@@ -14,6 +14,7 @@ import type {
   AiImageStatusResult,
   AiSilhouetteStatusResult,
   AiBatchStatusResult,
+  AiBatchImageTraceEvent,
   AiResearchRef,
   AiTraceEvent,
 } from '@/types/admin';
@@ -58,8 +59,10 @@ export function generateAiPoseImages(options: {
   research?: AiResearchRef[] | null;
   onResult?: (result: AiTaskFileResult) => void;
   onProgress?: (progress: AiPoseProgress) => void;
+  /** 逐张实时过程事件（按 seq 增量累积；用于可溯源的姿势图过程展示） */
+  onEvents?: (events: AiBatchImageTraceEvent[]) => void;
 }): Promise<AiTaskFileResult[]> {
-  const { draft, referenceFile, extraPrompt, research, onResult, onProgress } = options;
+  const { draft, referenceFile, extraPrompt, research, onResult, onProgress, onEvents } = options;
   return (async () => {
     const fd = new FormData();
     fd.set('meta', JSON.stringify({
@@ -76,13 +79,21 @@ export function generateAiPoseImages(options: {
     const batchId = started.batchId;
 
     const onResultFile = new Set<number>();
+    let since = 0;
+    const trace: AiBatchImageTraceEvent[] = [];
     const deadline = Date.now() + DEFAULT_TIMEOUT_MS;
     const emitProgress = (res: AiBatchStatusResult) =>
       onProgress?.({ current: res.current, total: res.total, status: res.status });
 
     while (Date.now() < deadline) {
-      const res = await aiGenerateImageBatchStatusAction(batchId);
+      const res = await aiGenerateImageBatchStatusAction(batchId, since);
       if ('error' in res) throw new AiTaskPollError(res.error || '查询生成任务失败');
+      // 增量吸收实时过程事件（按 seq 去重）
+      if ((res as AiBatchStatusResult).events?.length) {
+        since = (res as AiBatchStatusResult).lastSeq ?? since;
+        trace.push(...(res as AiBatchStatusResult).events!);
+        onEvents?.(trace.slice());
+      }
       emitProgress(res);
 
       // 逐张实时回报已完成的姿势图
