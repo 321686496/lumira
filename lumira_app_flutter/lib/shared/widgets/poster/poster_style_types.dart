@@ -89,7 +89,7 @@ class PosterStyle {
     this.group = '',
   });
 
-  /// 样式 id，如 'pA' / 'dN' / 'pE' / 'ckF'。
+  /// 样式 id，如 'pA' / 'n1' / 'pE' / 'ckF'。
   final String id;
 
   /// 样式名，如「经典面板」。

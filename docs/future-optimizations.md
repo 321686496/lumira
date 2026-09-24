@@ -775,3 +775,11 @@
 - **背景/动机**：`test/goldens/` 当前仅有 probe/btn 类资产，既有 `poster_diag_render_test` 等 golden 用例在本机即因缺资产失败，本轮未新增 golden 依赖。
 - **目标状态**：补齐 golden 资产后，为九款各生成一张 9:16 golden，纳入 CI 视觉回归。
 - **状态**：⏳ 待优化
+
+### P2 · 作者行横向预算紧张（300px 画布下仅约 5px 余量）
+
+- **模块**：照片分享海报（Flutter：`photo_poster_styles.dart` `_AuthorQrRow` + `poster_common.dart` `PosterAuthorRow`）
+- **优化点**：`_AuthorQrRow` 为 `Row(PosterAuthorRow + Spacer + PosterQrMini)`，300px 画布（信息带/浮卡内宽约 256-276px）下作者名 + `with` 文案 + QR 迷你卡合计后横向余量仅约 5px；作者名或分类文案再长一档即可能触发 `RenderFlex overflow`。
+- **背景/动机**：最终评审（opus）判定为 Important，但 `PosterAuthorRow` 为模板海报等 8 处以上共用的共享组件，在其中加 `Flexible`/`ellipsis` 属跨模块收紧，需连带回归模板海报，故本轮只登记不改。
+- **目标状态**：为 `PosterAuthorRow` 的姓名/落款加 `Flexible` + `TextOverflow.ellipsis`，或在 `_AuthorQrRow` 内用 `Expanded` 包裹并让内部文本可截断。
+- **状态**：⏳ 待优化
