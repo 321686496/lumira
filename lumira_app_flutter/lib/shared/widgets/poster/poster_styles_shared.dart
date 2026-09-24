@@ -66,6 +66,37 @@ class PosterScrim extends StatelessWidget {
   }
 }
 
+/// 满幅照片压字用四段压暗渐变（满版照片 f1 专属，对齐 v12 设计稿 .d1 .scrim）。
+///
+/// rgba(20,16,10)：.18@0% / .02@28% / .62@78% / .74@100%——顶部轻压保证品牌行
+/// 可读、中段几乎透明让照片本体透气、底部加重承载标题与二维码信息。
+/// 与通用 [PosterScrim]（三段、stops 不同）互不影响。
+class PosterFullBleedScrim extends StatelessWidget {
+  const PosterFullBleedScrim({super.key});
+
+  static const List<Color> colors = [
+    Color(0x2E14100A),
+    Color(0x0514100A),
+    Color(0x9E14100A),
+    Color(0xBD14100A),
+  ];
+  static const List<double> stops = [0.0, 0.28, 0.78, 1.0];
+
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: colors,
+          stops: stops,
+        ),
+      ),
+    );
+  }
+}
+
 /// 经典面板「照片区」：照片 + 顶部压暗 + 左上品牌浮层。
 class PosterClassicPhoto extends StatelessWidget {
   const PosterClassicPhoto({super.key, required this.data, this.height});

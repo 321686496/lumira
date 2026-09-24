@@ -642,6 +642,7 @@ class PosterKicker extends StatelessWidget {
     this.size = 9,
     this.letterSpacing = 3,
     this.weight = FontWeight.w600,
+    this.shadows,
   });
   final String text;
   final Color color;
@@ -649,11 +650,15 @@ class PosterKicker extends StatelessWidget {
   final double letterSpacing;
   final FontWeight weight;
 
+  /// 文字阴影（压照片款保证可读；浅色底款式不传）。
+  final List<Shadow>? shadows;
+
   @override
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: posterPlain(size, color: color, weight: weight, letterSpacing: letterSpacing),
+      style: posterPlain(size, color: color, weight: weight, letterSpacing: letterSpacing)
+          .copyWith(shadows: shadows),
     );
   }
 }
