@@ -696,3 +696,24 @@
 - **背景/动机**：23.35GB 构建缓存一次性撑满 40G 小盘；单靠人为清理不可持续。
 - **目标状态**：可进一步加「磁盘使用率 >90% 时强制 prune 后再 continue」或定时清理 Cron；并考虑给 CI 构建缓存（GITHUB_ACTIONS 自带）与服务器 builder cache 预设上限。当前已有的 >80% 告警 + 部署后 prune 为起点。
 - **状态**：✅ 已实现（2026-09-22：部署后 `builder prune -f` + 磁盘告警已并入 backend-deploy.yml）
+
+---
+
+## OHOS 前置拍照镜像修复（2026-09-23，第三轮根因重查后定稿）
+
+> 背景：用户真机反馈「前置拍出的照片仍是镜像」，且前两轮修复先后被用户实证推翻（「照片还是有镜像」→「现在一直都是水平翻转了，水印动画、早帧、成片，都是水平翻转了」）。经代码 + 真机日志全面重查，确立方向模型：
+> - **OHOS 拍照模式（非录像）前置取景器 = 真实方向**：`CameraState.enableMirror` 仅录像模式执行（L356-363），`_mirrorFrontCamera` 默认 false 且 app 从未开启，拍照预览表面无任何镜像配置，Flutter 侧取景器也无 Transform。
+> - **OHOS 前置相册 asset / HIGH_QUALITY 增强成片 = 镜像**：takePhoto 虽传 `mirror: false`，设备/相册管线仍对前置照片做镜像（用户实证：早帧 `isFront=false` 上屏即镜像画面）。
+> - 结论：**asset 派生图（fd 早帧 / 增强成片 / 编辑保存的 raw 备份）需翻回真实（`isFront=true`）；取景器派生图（快门帧）不能再翻**。
+>
+> 第三轮已修复：早帧 `isFront: job.isFront`、fastNative 成片 `isFront: params.isFront`、编辑保存 OHOS 原生分支 `isFront: effectiveFacing == 'front'`；快门帧翻转改为 `facing == 'front' && !isOhos`（OHOS 取景器真实不翻，iOS/Android 预览镜像保留翻转）；恢复水印动画 `flipSource` 补翻管线（仅回退源=OHOS 前置 asset 时启用）；`_applyColorMatrixOnGpu` 与 `photo_post_processor._alignOrientation` 的 needMirror 平台收敛为 `facing == 'front' && (isOhos || jpegIsLandscape)`（OHOS asset 镜像，竖屏也补翻；iOS/Android 维持原规则）。
+>
+> 待真机验证：前置竖屏拍摄的早帧 / 快门帧 interim / 水印动画 / 成片 / 预览 / 编辑保存六处方向一致性（应全部真实、无镜像闪变）；另需覆盖前置横屏持机（快路径不走原生、走 Dart GPU 管线）与拉腿/自定义裁剪场景。
+
+### P1 · OHOS 横屏持机前置拍照/编辑保存 needMirror 规则平台收敛
+
+- **模块**：拍摄成片 / 编辑保存（Flutter：`capture_page.dart` `_applyColorMatrixOnGpu`、`photo_post_processor.dart` `_alignOrientation`）
+- **优化点**：原规则 `needMirror = facing == 'front' && jpegIsLandscape` 源于 iOS（竖屏像素已镜像不补、横屏 sensor 帧未镜像才补），对 OHOS 不成立——OHOS 输入恒为相册 asset（设备/相册管线镜像），竖屏像素也需补翻。
+- **背景/动机**：前两轮误判「OHOS raw=真实方向」曾把该偏差标为已知问题；第三轮根因重查后确认 OHOS asset 镜像，遂按平台收敛。
+- **目标状态**：规则改为 `facing == 'front' && (isOhos || jpegIsLandscape)`，OHOS 恒补翻、iOS/Android 维持原规则；两处调用点已同步收敛，待真机回归。
+- **状态**：✅ 已实现（2026-09-23 第三轮：`_applyColorMatrixOnGpu` 与 `_alignOrientation` 均已平台收敛；`dart_photo_pipeline.dart` 为死代码仅纠注释，未改规则）

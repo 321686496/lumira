@@ -152,6 +152,12 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 打开时的 early 早帧路径（升级后 evict 其 FileImage 缓存）。
   String? _interimUrl;
 
+  /// 先快后真舞台形态锁定：以 pendingFinal 早帧打开时当前照片尚未落库，
+  /// 首次加载退化为单张 PhotoView；full-res 落库后若切换为 PhotoViewGallery，
+  /// 组件树类型变化会重建 PhotoView → 用户正在查看的缩放/位移被重置。
+  /// 故锁定单张形态直到本页销毁（重新打开预览恢复完整历史滑动）。
+  bool _singleStageLocked = false;
+
   /// 监听 captureThumbnailProvider 从 interim→final 的升级订阅。
   ProviderSubscription<CaptureThumbnailState>? _upgradeSub;
 
@@ -310,8 +316,17 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       // 定位当前照片在历史列表中的索引
       final idx = allPhotos.indexWhere((p) => p.id == widget.photoId);
       if (idx < 0) {
-        // 当前照片不在 DB 中（可能尚未落库）：退化为单张预览
+        // 当前照片不在 DB 中（可能尚未落库）：退化为单张预览，并锁定舞台
+        // 形态（见 _singleStageLocked 注释）——full-res 落库后再次进入时不再
+        // 切换为 Gallery，保住用户缩放查看中的缩放/位移状态。
+        _singleStageLocked = true;
         _loadOriginalPath();
+        return;
+      }
+      if (_singleStageLocked) {
+        // 已锁定单张形态：仅恢复当前照片落库后的状态（路径/后期参数/变换），
+        // 不重建历史列表（组件树不变化 → PhotoView 缩放状态延续）。
+        _applyPhotoFromHistory(allPhotos[idx]);
         return;
       }
 
@@ -680,7 +695,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     // 早帧→成片（_photoUrl 变化）交叉淡化；后期参数/变换调整 key 不变，
     // 原位更新不触发动画（拖滑块不会连续闪淡）。对比模式上方早退，不参与。
     final Widget baseImage = AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 450),
       switchInCurve: Curves.easeOut,
       switchOutCurve: Curves.easeIn,
       child: SizedBox.expand(

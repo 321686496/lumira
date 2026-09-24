@@ -288,10 +288,16 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 动画源是否已是屏幕空间 WYSIWYG 帧（取景器来源 = true，跳过方向对齐）。
   bool _animationSourceAligned = false;
 
-  /// 动画源是否需要强制水平镜像（回退源=OHOS 相册增强前置成品时 = true：
-  /// 增强成品已镜像而最终成片是真实方向，overlay 需补一翻对齐成片）。
+  /// 动画源是否需要强制水平镜像（回退源=OHOS 前置相册 asset 时 = true：
+  /// asset 派生图已镜像，而最终落库成片（processJpeg isFront）是真实方向，
+  /// overlay 需补一翻对齐成片）。
   bool _animationFlipSource = false;
   VoidCallback? _onAnimationComplete;
+
+  /// 水印动画播放期间用户已手动点缩略图进过预览页：动画结束的自动跳转据此跳过，
+  /// 避免「手动 push 一次 + 动画结束再 push 一次」在路由栈叠出两个拍摄预览页。
+  /// 每次快门开始时复位。
+  bool _previewOpenedDuringAnimation = false;
 
   /// OHOS 分阶段拍照早帧订阅：一阶段低质量帧（~672ms）先于成片到达，
   /// 收到即提前触发水印动画（无需等待成片 capture() ~1.9s 返回）。
@@ -961,6 +967,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // _expectingEarlyFrame 标记本次拍摄期望早帧，防止上一帧残留事件误触发 interim。
     final isOhos = !isIos && !Platform.isAndroid;
     _expectingEarlyFrame = isOhos;
+    _previewOpenedDuringAnimation = false;
     _cleanupEarlyFrameFiles();
     _earlyFrameJob = isOhos ? _buildEarlyFrameInterimJob() : null;
     if (isOhos) {
@@ -987,11 +994,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
                 outputPath: '$path.proc.jpg',
                 targetRatio: job.targetRatio,
                 isPortrait: job.isPortrait,
-                // fd 早帧=sensor 原始文件（真实方向、未镜像），与成片管线输入
-                // （相册增强成品=已镜像、processJpeg isFront 翻回真实）殊途同归。
-                // 此处若传 job.isFront 会把已是真实方向的早帧再翻一次 → 与成片
-                // 左右相反（用户可见「早帧镜像」）。故恒传 false 保持真实方向。
-                isFront: false,
+                // fd 早帧=相册 asset 只读 fd 拷贝的原始文件：OHOS takePhoto 虽传
+                // mirror:false，设备/相册管线对前置照片仍做镜像——asset 是镜像画面，
+                // 与 HIGH_QUALITY 增强成片同源同向。原生 isFront 翻一次还原真实
+                // 方向（与取景器一致，见 _captureShutterViewfinderFrame 注释）。
+                isFront: job.isFront,
                 matrix: job.matrix,
                 sharpen: job.sharpen,
                 clarity: job.clarity,
@@ -1037,12 +1044,16 @@ class _CapturePageState extends ConsumerState<CapturePage>
     }
 
     // iOS/OHOS：快门即冻结已合成取景器帧作水印动画源（RepaintBoundary 截图，
-    // 含色彩矩阵 + 前置镜像 + 裁切，保证动画内容 = 取景器所见）。
+    // 含色彩矩阵 + 比例裁切，保证动画内容 = 取景器所见）。
     // 与成片 capture() 并行执行，不阻塞。
+    // 前置翻转仅 iOS/Android 需要：这两端前置预览是系统默认的镜像画面，快门帧
+    // 翻一次才对齐真实方向。OHOS 拍照模式预览镜像从未配置（CameraState.enableMirror
+    // 仅录像模式执行，_mirrorFrontCamera 默认 false 且 app 从未开启，Flutter 侧
+    // 取景器也无 Transform）→ OHOS 前置取景器即真实方向，再翻会成镜像。
     final shutterFrameFuture =
         shouldAnimateNow && flashMode == CaptureFlashMode.off
             ? _captureShutterViewfinderFrame(
-                flipHorizontal: facing == 'front')
+                flipHorizontal: facing == 'front' && !isOhos)
             : Future<String?>.value(null);
 
     // 快照当前比例参数（避免连拍中切换比例导致参数不一致）
@@ -1149,9 +1160,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
       // 回退：无动画源帧（闪光模式/取景器帧捕捉失败）且动画尚未启动 →
       // 用成片启动（成片是原始照片，需要方向对齐，sourceAligned=false）。
-      // 仅 OHOS 前置需 flipSource 补翻：其成片=相册增强成品（已镜像、与取景器
-      // 一致），而动画终点应与最终落库成片（真实方向）一致。iOS/Android 回退源
-      // 是相机原始照片（未镜像），沿用 overlay 原有 isFront&&横屏像素 规则即可。
+      // 仅 OHOS 前置需 flipSource 补翻：其回退源=相册 asset（设备/相册管线
+      // 镜像），而动画终点应与最终落库成片（真实方向）一致。iOS/Android 回退源
+      // 沿用 overlay 原有 isFront&&横屏像素 规则即可。
       if (shouldAnimateNow && mounted && !_showWatermarkAnimation) {
         _startWatermarkAnimation(
           result.filePath,
@@ -1169,7 +1180,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
       // 正确处理：可见 interim 不被打回转圈，final 就绪后本路径被丢弃）。
       // iOS/Android 处理够快，不做"早帧→成品"：角标保持加载态直到成品就绪，
       // 预览页只展示最终成品，避免首看(raw)/重看(processed)色彩不一致。
-      if (isOhos) {
+      // 守卫：已有可见 interim（早帧初版成片/快门帧）就绪后，不再用未做任何
+      // 方向/色彩处理的原始相册文件顶替——该文件未经色彩矩阵，顶替会让预览页/
+      // 缩略图在成片就绪前（~1.2s-5s 窗口）显示与最终成片色调不一致的原图。
+      // 仍停在 processing（早帧未出图）时正常降级为仅点击预览，保证 preview 可打开。
+      if (isOhos &&
+          ref.read(captureThumbnailProvider).status !=
+              CaptureThumbnailStatus.interim) {
         ref
             .read(captureThumbnailProvider.notifier)
             .setInterimResult(result.filePath, photoId: _currentShutterPhotoId);
@@ -1381,6 +1398,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
           outputPath: params.inputPath,
           targetRatio: params.targetRatio,
           isPortrait: params.isPortrait,
+          // OHOS 前置 asset/增强成片是镜像画面（takePhoto 虽传 mirror:false，
+          // 设备/相册管线仍对前置照片镜像；取景器才是真实方向）——原生 isFront
+          // 翻一次把成片还原为真实方向，与取景器/早帧一致。
           isFront: params.isFront,
           matrix: composePostProcessMatrix(params.postProcess),
           // 拍摄成片锐化严格用用户/模板真实值，禁止代码层强制最小锐化。
@@ -1729,15 +1749,17 @@ class _CapturePageState extends ConsumerState<CapturePage>
   }
 
   /// OHOS 快门冻结取景器帧：快门瞬间对「已合成取景器」toImage，作水印动画源。
-  /// 取景器已含 ColorFiltered 色彩矩阵 + 前置镜像 + 比例裁切（WYSIWYG），
+  /// 取景器已含 ColorFiltered 色彩矩阵 + 比例裁切（WYSIWYG），
   /// 因此动画内容与取景器一致。返回文件路径；失败返回 null（上层回退成片）。
   ///
   /// 仅捕获相机画面本身（filteredCamera），不含构图线/剪影/对焦框等 UI 叠层，
   /// 避免动画源被调试元素污染。
   ///
-  /// [flipHorizontal]：前置时为 true——成片为真实方向（processJpeg 镜像语义与
-  /// 取景器相反），快门帧若保持取景器镜像会导致 interim/动画与成片左右相反
-  /// （用户可见「照片镜像」闪变），故前置时水平翻转对齐成片方向。
+  /// [flipHorizontal]：前置时为 true——iOS/Android 前置预览是系统默认的镜像
+  /// 画面，快门帧翻一次对齐真实方向（与最终成片一致）。OHOS 拍照模式预览镜像
+  /// 从未配置（CameraState 的 enableMirror 仅录像模式执行、_mirrorFrontCamera
+  /// 默认 false，Flutter 侧取景器也无 Transform）→ OHOS 前置取景器即真实
+  /// 方向，不翻；翻了反而与成片左右相反。
   Future<String?> _captureShutterViewfinderFrame(
       {bool flipHorizontal = false}) async {
     final boundary = _filteredPreviewKey.currentContext?.findRenderObject();
@@ -1915,14 +1937,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 后才带上 finalPath 打开预览页（见 [_goToPreviewWhenReady]）。
   ///
   /// - iOS/OHOS：动画源 = 快门冻结取景器帧（RepaintBoundary 截图，
-  ///   含色彩矩阵+前置镜像+裁切，WYSIWYG），闪光模式/截图失败回退用成片。
+  ///   含色彩矩阵+裁切，WYSIWYG；iOS/Android 前置预览镜像已在截图时补翻
+  ///   对齐真实方向，OHOS 取景器即真实方向不翻），闪光模式/截图失败回退用成片。
   ///
   /// [sourceAligned]：动画源是否已是屏幕空间 WYSIWYG 帧（已旋转/已镜像）。
   /// 取景器来源帧为 true（overlay 跳过方向对齐，避免双重镜像/旋转）；
   /// 回退用原始成片时为 false（overlay 按设备方向 + 前置镜像对齐）。
   ///
-  /// [flipSource]：强制对动画源做水平镜像。仅回退源=OHOS 相册增强前置成品时
-  /// 传 true：增强成品「已镜像」（与取景器一致），而最终成片管线
+  /// [flipSource]：强制对动画源做水平镜像。仅回退源=OHOS 前置相册 asset 时
+  /// 传 true：asset 派生图「已镜像」（设备/相册管线行为），而最终成片管线
   /// processJpeg(isFront) 会翻回真实方向，不补翻则动画与成片左右相反。
   void _startWatermarkAnimation(
     String photoPath,
@@ -1956,6 +1979,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
       final state = ref.read(captureThumbnailProvider);
       if ((state.finalPath != null || state.interimPath != null) &&
           state.photoId != null) {
+        // 动画期间用户已手动进过预览页并返回 → 不再自动 push，避免路由栈双实例
+        // （手动一次 + 动画结束再一次）。用户想看可再点缩略图。
+        if (_previewOpenedDuringAnimation) return;
         _onThumbnailTap();
         return;
       }
@@ -2663,7 +2689,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
                 isPortrait: isPortrait,
                 // 取景器来源帧已 WYSIWYG 对齐，跳过 overlay 二次旋转/镜像。
                 sourceAligned: _animationSourceAligned,
-                // 回退源=相册增强前置成品（已镜像）时强制补一翻对齐成片真实方向。
+                // 回退源=OHOS 前置相册 asset（已镜像）时强制补一翻对齐成片真实方向。
                 flipSource: _animationFlipSource,
                 onAnimationComplete: _onAnimationComplete ?? () {},
               ),
@@ -2682,6 +2708,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
     final path = state.finalPath ?? state.interimPath;
     final photoId = state.photoId;
     if (path == null || photoId == null) return;
+    // 水印动画播放期间的手动点击（_onAnimationComplete 已先把 _showWatermarkAnimation
+    // 置 false 才会走自动跳转，故此处为 true 必然是用户手动）：置位，动画结束的
+    // 自动跳转据此跳过，防止路由栈叠出两个拍摄预览页。
+    if (_showWatermarkAnimation) {
+      _previewOpenedDuringAnimation = true;
+    }
     final pendingFinal = state.finalPath == null && state.interimPath != null;
     final aspectRatio = ref.read(CaptureState.aspectRatioProvider);
     if (_returnResult) {
@@ -3413,13 +3445,12 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params,
     final jpegIsLandscape = srcImage.width > srcImage.height;
     final needRotate = (params.isPortrait && jpegIsLandscape) ||
         (!params.isPortrait && !jpegIsLandscape);
-    // 前置镜像仅在「sensor-native 横屏像素」时补做：
-    // - iOS WYSIWYG（video 帧直出，isWysiwyg=true）：连接 videoMirrored=Front
-    //   已镜像、且已物理竖屏（videoOrientation=Portrait）→ 再镜像=双重水平翻转；
-    // - iOS photoOutput 回退 / OHOS photoAvailable 直出：横屏未镜像像素 → 需补镜像。
-    // 竖屏像素（w<=h）的前置 JPEG 只可能来自「已镜像」管线，横屏像素只可能未镜像，
-    // 故按像素方向即可区分，无需依赖 isWysiwyg 标志（还能覆盖原生回退路径）。
-    final needMirror = params.isFront && jpegIsLandscape;
+    // 前置镜像规则（按平台收敛）：
+    // - iOS：竖屏像素的前置 JPEG（WYSIWYG video 帧直出）已镜像，再镜像=双重
+    //   水平翻转，故不补；横屏 sensor 原始帧（photoOutput 回退）未镜像才补。
+    // - OHOS：输入=相册 asset，设备/相册管线对前置照片镜像（取景器才是真实
+    //   方向），无论竖屏横屏像素都要补一翻还原真实方向。
+    final needMirror = params.isFront && (isOhos || jpegIsLandscape);
     final alignRotation = needRotate ? (params.isPortrait ? 90 : 270) : 0;
 
     // 计算输出尺寸（基于 targetRatio，限制最大边为默认分辨率档位的 maxDim）

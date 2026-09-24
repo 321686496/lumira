@@ -54,8 +54,10 @@ class DartPhotoPipeline implements PhotoPipeline {
       final needRotate = (isPortrait && jpegIsLandscape) ||
           (!isPortrait && !jpegIsLandscape);
       // 前置镜像仅在「sensor-native 横屏像素」时补做：竖屏像素的前置 JPEG
-      // （iOS WYSIWYG video 帧直出 / OHOS 相册增强成品）已是镜像结果，
-      // 再镜像会双重水平翻转。与 capture_page._applyColorMatrixOnGpu 同规则。
+      // （iOS WYSIWYG video 帧直出为镜像）已是最终方向，再镜像会双重水平翻转。
+      // 注：本文件当前无调用方（photoPipelineProvider 无消费方），仅为历史管线
+      // 保留；拍摄/编辑实际管线见 capture_page._applyColorMatrixOnGpu 与
+      // photo_post_processor._alignOrientation（均已按平台收敛）。
       final needMirror = facing == 'front' && jpegIsLandscape;
       // 用户变换（如果有，则在方向对齐之上叠加）
       final hasTransform = transform != null && !transform.isIdentity;

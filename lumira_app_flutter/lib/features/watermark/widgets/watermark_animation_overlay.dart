@@ -39,18 +39,20 @@ class WatermarkAnimationOverlay extends StatefulWidget {
   final bool isPortrait;
 
   /// 动画源是否已是屏幕空间 WYSIWYG 帧（iOS/OHOS 快门冻结取景器截图，
-  /// 已物理竖屏 + 已前置镜像 + 已含色彩滤镜）。
+  /// 已物理竖屏 + 已含色彩滤镜；iOS/Android 前置已在截图时补翻对齐真实方向，
+  /// OHOS 取景器即真实方向无需补翻）。
   /// true：跳过 [_alignOrientation]，避免对已对齐帧二次旋转/镜像
   /// （前置双重镜像 bug 的根因）；
   /// false：成片回退源（原始照片），按设备方向 + 前置镜像对齐。
   final bool sourceAligned;
 
-  /// 强制对源做水平镜像（回退源=相册增强成品时）：
-  /// OHOS 相册增强的前置成品「已镜像」（与取景器一致），而成片管线
-  /// processJpeg(isFront) 会再翻转成真实方向——动画直接用增强成品会与
+  /// 强制对源做水平镜像（回退源=OHOS 前置相册 asset 时）：
+  /// OHOS 设备/相册管线对前置照片镜像，asset 派生图「已镜像」，而成片管线
+  /// processJpeg(isFront) 会再翻转成真实方向——动画直接用 asset 会与
   /// 成片左右相反（用户可见「水印动画镜像翻转/直接出原图」），故强制补一翻。
-  /// 竖屏增强帧本不落入 needMirror（jpegIsLandscape=false），此参数补齐。
+  /// 竖屏 asset 帧本不落入 needMirror（jpegIsLandscape=false），此参数补齐。
   final bool flipSource;
+
   final VoidCallback onAnimationComplete;
 
   const WatermarkAnimationOverlay({
@@ -274,10 +276,10 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
     final deviceIsPortrait = widget.isPortrait;
     final needRotate = (deviceIsPortrait && jpegIsLandscape) ||
         (!deviceIsPortrait && !jpegIsLandscape);
-    // 前置镜像仅在「sensor-native 横屏像素」时补做：竖屏像素的前置 JPEG
-    // （iOS WYSIWYG video 帧直出 / OHOS 相册增强成品）已是镜像结果，
-    // 再镜像会双重水平翻转。与 capture_page._applyColorMatrixOnGpu 同规则。
-    // [flipSource] 例外：回退源=OHOS 相册增强前置成品（已镜像/与取景器一致），
+    // 前置镜像规则：
+    // - iOS：竖屏像素的前置 JPEG（WYSIWYG video 帧直出）已是镜像结果，再镜像=
+    //   双重水平翻转；横屏 sensor 原始帧未镜像才补。
+    // [flipSource] 例外：回退源=OHOS 前置相册 asset（设备/相册管线镜像），
     // 而成片管线 processJpeg(isFront) 会翻回真实方向——此时无论竖横屏像素
     // 都必须强制补一翻，否则动画与成片左右相反（用户可见「水印动画镜像」）。
     final needMirror =

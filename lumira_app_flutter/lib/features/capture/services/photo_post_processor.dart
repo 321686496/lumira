@@ -89,6 +89,9 @@ class PhotoPostProcessor {
           outputPath: outputPath ?? inputPath,
           targetRatio: targetRatio,
           isPortrait: isPortrait,
+          // 原图备份=拍摄时的相册 asset：OHOS 设备/相册管线对前置照片镜像
+          // （takePhoto 传 mirror:false 也不例外）→ 原生 isFront 翻一次还原
+          // 真实方向，与拍摄成片（fastNative 同规则）一致。
           isFront: effectiveFacing == 'front',
           matrix: composePostProcessMatrix(params),
           sharpen: params.sharpen,
@@ -117,8 +120,10 @@ class PhotoPostProcessor {
       debugPrint(
           '[post-process] 解码: ${srcImage.width}x${srcImage.height}, facing=$effectiveFacing, isPortrait=$isPortrait, ${sw.elapsedMilliseconds}ms');
 
-      // 1.5. 方向对齐（前置镜像由 effectiveFacing 驱动：原图备份为 sensor 原始
-      //      横屏未镜像 JPEG，编辑保存必须补做与拍摄时一致的镜像）
+      // 1.5. 方向对齐（needMirror=facing=='front'&&(isOhos||jpegIsLandscape)：
+      //       OHOS 原图备份=相册 asset（设备/相册管线镜像，取景器才是真实方向），
+      //       竖屏像素也需补翻；iOS/Android 仅横屏 sensor 原始帧未镜像才补。
+      //       原图备份与拍摄成片同源，编辑保存与拍摄方向天然一致）
       var alignedImage = await _alignOrientation(srcImage, isPortrait, effectiveFacing);
       if (alignedImage != srcImage) {
         srcImage.dispose();
@@ -640,10 +645,13 @@ class PhotoPostProcessor {
     final deviceIsPortrait = isPortrait;
     final needRotate = (deviceIsPortrait && jpegIsLandscape) ||
         (!deviceIsPortrait && !jpegIsLandscape);
-    // 前置镜像仅在「sensor-native 横屏像素」时补做：竖屏像素的前置 JPEG
-    // （iOS WYSIWYG video 帧直出 / OHOS 相册增强成品）已是镜像结果，
-    // 再镜像会双重水平翻转。与 capture_page._applyColorMatrixOnGpu 同规则。
-    final needMirror = facing == 'front' && jpegIsLandscape;
+    // 前置镜像规则（按平台收敛）：
+    // - iOS/Android：竖屏像素的前置 JPEG（iOS WYSIWYG video 帧直出等）已是镜像
+    //   结果，再镜像=双重水平翻转；横屏 sensor 原始帧未镜像才补。
+    // - OHOS：输入=相册 asset，设备/相册管线对前置照片镜像（取景器才是真实
+    //   方向），无论竖横屏像素都要补一翻还原真实方向。
+    final isOhos = !Platform.isIOS && !Platform.isAndroid;
+    final needMirror = facing == 'front' && (isOhos || jpegIsLandscape);
     if (!needRotate && !needMirror) return src;
 
     final int rotation;

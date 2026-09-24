@@ -330,7 +330,11 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
       packer = image.createImagePacker();
       const packOpts: image.PackingOption = { format: 'image/jpeg', quality: quality };
       const packed = await packer.packing(pixelMap, packOpts);
-      result.success({ jpeg: packed });
+      // 必须 Uint8Array 回传：packed 是 ArrayBuffer，flutter_ohos StandardMethodCodec
+      // 不支持 ArrayBuffer 序列化 → Dart 端拿到非 Uint8List/List<int> 的值，
+      // encodeJpegFromRgba 静默返回 null（快门帧回退 PNG 软编码 ~1.3s 的根因）。
+      // 与 decodeJpegToRgba 的 rgba 回传（new Uint8Array）保持同一可行类型。
+      result.success({ jpeg: new Uint8Array(packed) });
     } catch (e) {
       const err = e as BusinessError;
       console.error(`[ImageProcessor] encodeJpegFromRgba failed: ${err.code} ${err.message}`);
