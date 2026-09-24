@@ -106,12 +106,13 @@ export async function aiGenerateImageBatchStartAction(
   }
 }
 
-/** 轮询批量姿势图进度（total/completed/current/status/results） */
+/** 轮询批量姿势图进度（total/completed/current/status/results/events）；since 传上个 lastSeq 只取增量事件 */
 export async function aiGenerateImageBatchStatusAction(
   batchId: string,
+  since?: number,
 ): Promise<AiBatchStatusResult | { error: string }> {
   try {
-    return await api.aiGenerateImageBatchStatus(batchId);
+    return await api.aiGenerateImageBatchStatus(batchId, since);
   } catch (e) {
     if (e instanceof UnauthenticatedError) redirect('/login');
     return { error: (e as Error).message };

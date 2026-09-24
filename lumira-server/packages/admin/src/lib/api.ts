@@ -590,9 +590,11 @@ export const api = {
       body: formData,
     }, AI_ENDPOINT_TIMEOUT_MS),
 
-  /** 轮询单个批次进度（total/completed/current/status/results） */
-  aiGenerateImageBatchStatus: (batchId: string) =>
-    adminFetch<AiBatchStatusResult>(`/templates/ai-generate-image/batch/${batchId}`),
+  /** 轮询单个批次进度（total/completed/current/status/results/events）；since 只取增量流程事件 */
+  aiGenerateImageBatchStatus: (batchId: string, since?: number) =>
+    adminFetch<AiBatchStatusResult>(
+      `/templates/ai-generate-image/batch/${batchId}${typeof since === 'number' && since > 0 ? `?since=${since}` : ''}`,
+    ),
 
   /** 查询生图任务状态（done 带 image/mimeType；error 带 error） */
   aiGenerateImageStatus: (taskId: string) =>
