@@ -220,6 +220,8 @@ export function AiCreateWizard({
     setAnalyzing(true);
     setErrorText(null);
     setTraceEvents([]);
+    // 新一轮识别开始时重新展示过程面板（用户此前可能手动关过）
+    setProgressPanelHidden(false);
     try {
       const analyzeFd = new FormData();
       if (exampleFile) analyzeFd.set('image', exampleFile);
