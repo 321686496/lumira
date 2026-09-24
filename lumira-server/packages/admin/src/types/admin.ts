@@ -381,6 +381,10 @@ export interface BannerAdminItem {
   position?: number | null;
   /** 广告点击跳转的外部 URL（kind=ad 时必填） */
   externalUrl?: string | null;
+  /** App 内搜索关键字（kind=search 时必填） */
+  searchKeyword?: string | null;
+  /** 搜索范围：all=全部 / template=模板 / scene=场景 / academy=美学院 */
+  searchScope?: string;
   isActive: number;
   sortOrder: number;
   createdAt: number;
@@ -408,6 +412,8 @@ export interface BannerPayload {
   position?: number | null;
   /** 广告点击跳转的外部 URL（kind=ad 时必填） */
   externalUrl?: string | null;
+  searchKeyword?: string | null;
+  searchScope?: string;
   isActive?: boolean;
   sortOrder?: number;
 }
