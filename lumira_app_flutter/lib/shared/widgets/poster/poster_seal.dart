@@ -4,7 +4,7 @@ import 'poster_common.dart';
 
 /// 画卷小印：22 × 22 金框圆角方章，竖排两字（默认「如 / 画」）。
 ///
-/// 用于画卷方向（⑦ 立轴款行 / ⑧ 诗塘题字 / ⑨ 对题栏尾）的款行小印：
+/// 用于画卷方向（9:16 立轴 j1 款行）的款行小印：
 /// 色板取 [PosterPalette.goldDeep]，衬线字形，固定品牌资产不随主题切换。
 class PosterSeal extends StatelessWidget {
   const PosterSeal({

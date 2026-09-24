@@ -135,7 +135,7 @@ class _PickerItem {
   final PosterStyle? style;
 }
 
-/// 分组标签：金色短竖条 + 竖排组名（净版 / 画刊 / 画卷）。
+/// 分组标签：金色短竖条 + 竖排组名（满版 / 画刊 / 画卷）。
 class _GroupLabel extends StatelessWidget {
   const _GroupLabel(this.label);
   final String label;

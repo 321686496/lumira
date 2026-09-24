@@ -1,5 +1,13 @@
 # 如画 · 9:16 照片分享海报重设计（三方向九款）
 
+> **状态更新（2026-09-24）：本九款方案已被「最终三款」取代。** 用户在九款实现 +
+> v11 新四方向探索后，最终仅选定三款：**满版照片**（源自
+> `docs/design/poster_mockup_selected.html` stage2·方向1）、**竖排刊**、**立轴**
+> （后两者即本文 §4 的 ⑥/⑦），视觉基准为
+> `docs/preview/poster-9-16-preview-v12.html`；其余六款（①-⑤、⑧、⑨）已从代码删除。
+> 实现计划：`docs/superpowers/plans/2026-09-24-photo-poster-9-16-final-three.md`。
+> 本文以下正文作为九款探索过程的历史记录保留。
+
 - 日期：2026-09-24
 - 状态：已批准（用户选定「都来」——三方向九款全部实现）
 - 视觉基准：`docs/preview/poster-9-16-preview-v10.html`（三方向九款 HTML 设计稿，picsum 示例图）

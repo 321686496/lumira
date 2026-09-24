@@ -89,7 +89,7 @@ class PosterStyle {
     this.group = '',
   });
 
-  /// 样式 id，如 'pA' / 'n1' / 'pE' / 'ckF'。
+  /// 样式 id，如 'pA' / 'f1' / 'pE' / 'ckF'。
   final String id;
 
   /// 样式名，如「经典面板」。
@@ -98,7 +98,7 @@ class PosterStyle {
   /// 分组展示名，如「样式一 · 经典面板」。
   final String groupName;
 
-  /// 样式选择条分组标签（如「净版 / 画刊 / 画卷」；为空表示不分组）。
+  /// 样式选择条分组标签（如「满版 / 画刊 / 画卷」；为空表示不分组）。
   final String group;
 
   final PosterKind kind;
