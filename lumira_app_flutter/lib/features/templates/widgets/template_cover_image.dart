@@ -65,10 +65,15 @@ class TemplateCoverImage extends StatelessWidget {
     if (c != null && c.isNotEmpty) {
       final displayCover =
           thumbWidth == null ? c : templateThumbUrl(c, w: thumbWidth!);
+      // 缩略图走存储域名直连，旧数据未预生成时 404 → 回退后端动态端点按需生成
+      final thumbFallback = thumbWidth == null
+          ? null
+          : templateThumbFallbackUrl(c, w: thumbWidth!);
       return LumiraImage(
         displayCover,
         fit: fit,
         alignment: alignment,
+        fallbackUrl: thumbFallback,
         errorWidget: errorFallback ?? _defaultError(context),
       );
     }

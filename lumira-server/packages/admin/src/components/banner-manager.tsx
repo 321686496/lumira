@@ -28,7 +28,8 @@ import { X } from '@phosphor-icons/react/dist/csr/X';
 import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
 import { useToast } from '@/hooks/use-toast';
 import { saveBanner, removeBanner, setBannerActive, uploadBannerImage } from '@/actions/banners';
-import { toAssetUrl, toTemplateThumbUrl } from '@/lib/asset-url';
+import { toAssetUrl, toTemplateThumbUrl, toTemplateThumbFallbackUrl } from '@/lib/asset-url';
+import { ThumbImage } from '@/components/thumb-image';
 import type { AdminTemplateListItem, BannerAdminItem, BannerPayload } from '@/types/admin';
 
 const ROUTE_OPTIONS = [
@@ -662,6 +663,7 @@ export function BannerManager({
                   {templates.map((t) => {
                     const selected = form.templateId === t.id;
                     const cover = toTemplateThumbUrl(t.coverUrl, '', 320) ?? '';
+                    const coverFallback = toTemplateThumbFallbackUrl(t.coverUrl, 320) ?? '';
                     return (
                       <button
                         key={t.id}
@@ -682,12 +684,10 @@ export function BannerManager({
                         ].join(' ')}
                       >
                         {cover ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
+                          <ThumbImage
                             src={cover}
+                            fallbackSrc={coverFallback}
                             alt=""
-                            loading="lazy"
-                            decoding="async"
                             className="aspect-[4/3] w-full object-cover"
                           />
                         ) : (

@@ -28,6 +28,7 @@ class LumiraImage extends StatelessWidget {
     this.width,
     this.height,
     this.borderRadius = BorderRadius.zero,
+    this.fallbackUrl,
     this.placeholder,
     this.errorWidget,
   });
@@ -43,6 +44,10 @@ class LumiraImage extends StatelessWidget {
   final double? width;
   final double? height;
   final BorderRadius? borderRadius;
+
+  /// 网络主 URL 加载失败时的回退地址（如存储直连缩略图 404 时回退后端动态端点）。
+  /// 与 [src] 相同或为空时忽略；仅网络来源生效。
+  final String? fallbackUrl;
 
   /// 加载/解码中的占位 widget（当前网络路径渲染占位；asset/file/base64 无异步加载态）。
   final Widget? placeholder;
@@ -77,8 +82,10 @@ class LumiraImage extends StatelessWidget {
 
     // 网络 URL → 复用 CachedNetworkImage（自带磁盘缓存 + 降采样）
     if (s.startsWith('http://') || s.startsWith('https://')) {
+      final fb = fallbackUrl;
       return CachedNetworkImage(
         url: s,
+        fallbackUrl: (fb != null && fb.isNotEmpty && fb != s) ? fb : null,
         fit: fit,
         alignment: alignment,
         width: width,

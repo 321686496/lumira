@@ -1,6 +1,13 @@
 // src/lib/__tests__/asset-url.test.ts
 import { describe, it, expect } from 'vitest';
-import { toAssetUrl, toCategoryThumbUrl, toTemplateThumbUrl } from '../asset-url';
+import {
+  toAssetUrl,
+  toCategoryThumbUrl,
+  toCategoryThumbFallbackUrl,
+  toTemplateThumbUrl,
+  toTemplateThumbFallbackUrl,
+  snapThumbWidth,
+} from '../asset-url';
 
 const BACKEND = 'http://localhost:3000';
 
@@ -44,30 +51,72 @@ describe('toAssetUrl', () => {
   });
 });
 
+describe('snapThumbWidth', () => {
+  it('snaps to the nearest ladder step', () => {
+    expect(snapThumbWidth(100)).toBe(160);
+    expect(snapThumbWidth(200)).toBe(160);
+    expect(snapThumbWidth(280)).toBe(320);
+    expect(snapThumbWidth(700)).toBe(640);
+    expect(snapThumbWidth(1200)).toBe(1080);
+  });
+
+  it('takes the smaller step when distances tie', () => {
+    // 240 距 160/320 各 80 → 取较小值 160
+    expect(snapThumbWidth(240)).toBe(160);
+    // 560 距 480/640 各 80 → 取较小值 480
+    expect(snapThumbWidth(560)).toBe(480);
+  });
+});
+
 describe('thumbnail URLs', () => {
-  it('loads template thumbnails directly from an HTTPS backend', () => {
+  it('derives template thumbnails from the storage origin (HTTPS direct)', () => {
     expect(
       toTemplateThumbUrl(
         'https://lumira.example.com/uploads/templates/srv_a/image_0.png',
         'https://lumira.example.com',
         640,
       ),
-    ).toBe('https://lumira.example.com/api/v1/thumbs/templates/srv_a/image_0.png?w=640');
+    ).toBe('https://lumira.example.com/uploads/thumbs/templates/srv_a/image_0.w640.webp');
   });
 
-  it('uses the same-origin proxy for an HTTP backend', () => {
+  it('falls back to the same-origin relative path for an HTTP backend', () => {
     expect(
       toTemplateThumbUrl('http://localhost:3000/uploads/templates/srv_a/cover.jpg', BACKEND),
-    ).toBe('/api/v1/thumbs/templates/srv_a/cover.jpg?w=480');
+    ).toBe('/uploads/thumbs/templates/srv_a/cover.w480.webp');
   });
 
-  it('builds category thumbnail URLs', () => {
+  it('builds category thumbnail URLs (width snapped to the ladder)', () => {
     expect(
       toCategoryThumbUrl(
         'https://lumira.example.com/uploads/categories/portrait/icon.png',
         'https://lumira.example.com',
         280,
       ),
-    ).toBe('https://lumira.example.com/api/v1/thumbs/categories/portrait?w=280');
+    ).toBe('https://lumira.example.com/uploads/thumbs/categories/portrait/w320.jpg');
+  });
+
+  it('falls back to toAssetUrl for non-/uploads/ sources', () => {
+    expect(
+      toTemplateThumbUrl('https://cdn.example.com/cover.png', 'https://lumira.example.com', 480),
+    ).toBe('https://cdn.example.com/cover.png');
+  });
+
+  it('builds template thumbnail fallback URLs (backend dynamic endpoint)', () => {
+    expect(
+      toTemplateThumbFallbackUrl('https://lumira.example.com/uploads/templates/srv_a/image_0.png', 640),
+    ).toBe('/api/v1/thumbs/templates/srv_a/image_0.png?w=640');
+  });
+
+  it('builds category thumbnail fallback URLs (backend dynamic endpoint)', () => {
+    expect(
+      toCategoryThumbFallbackUrl('https://lumira.example.com/uploads/categories/portrait/icon.png', 280),
+    ).toBe('/api/v1/thumbs/categories/portrait?w=320');
+  });
+
+  it('returns null thumbnails/fallbacks for empty input', () => {
+    expect(toTemplateThumbUrl(null, BACKEND)).toBeNull();
+    expect(toCategoryThumbUrl(null, BACKEND)).toBeNull();
+    expect(toTemplateThumbFallbackUrl(null)).toBeNull();
+    expect(toCategoryThumbFallbackUrl(null)).toBeNull();
   });
 });

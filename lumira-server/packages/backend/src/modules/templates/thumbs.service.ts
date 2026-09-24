@@ -1,6 +1,12 @@
 // lumira-server/packages/backend/src/modules/templates/thumbs.service.ts
-// 分类图标缩略图生成：App 端网格只为小尺寸卡面请求缩略图，
-// 避免首次加载把后台上传的全尺寸原图（可能是 2000-4000px）一次性拉下来。
+// 缩略图生成与持久化：
+// - 读链路：本地磁盘缓存 → 激活存储 → 生成并持久化（激活存储 + 本地缓存）
+// - 写链路：admin 保存模板/分类时预生成阶梯宽度，客户端直连存储域名取图，
+//   不再走后端动态端点（省一次后端往返，也避免 /api/v1/thumbs URL 暴露后端域名）。
+//
+// 存储键（admin / Flutter 客户端按同一规则推导直连 URL，三端改必须同步）：
+//   模板：/uploads/thumbs/templates/{templateId}/{源文件主名}.w{width}.webp
+//   分类：/uploads/thumbs/categories/{key}/w{width}.jpg
 
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { eq, asc } from 'drizzle-orm';
@@ -13,9 +19,15 @@ import { activeStorageAdapter, getActiveId } from '../../common/storage/runtime-
 import { mimeOf } from '../../common/storage/mime';
 
 const THUMB_WIDTH_DEFAULT = 600;
-const THUMB_WIDTH_MIN = 200;
+const THUMB_WIDTH_MIN = 16;
 const THUMB_WIDTH_MAX = 2000;
 const JPEG_QUALITY = 88;
+
+/**
+ * 预生成宽度阶梯：与 admin `snapThumbWidth` / Flutter `snapThumbWidth` 保持一致。
+ * 客户端请求宽度先吸附到本阶梯，再推导存储直连 URL；写链路按全阶梯预生成。
+ */
+export const THUMB_WIDTH_LADDER = [160, 320, 480, 640, 800, 1080] as const;
 
 export interface ThumbResult {
   data: Buffer;
@@ -88,17 +100,91 @@ export class ThumbsService {
     return data ? { data, filename } : null;
   }
 
-  /** 返回（或生成并缓存）分类图标的指定宽度 JPEG 缩略图 */
+  // ===== 缩略图存储键（客户端按同一规则推导直连 URL）=====
+
+  private templateThumbKey(templateId: string, filename: string, width: number): string {
+    const base = path.basename(filename, path.extname(filename));
+    return `/uploads/thumbs/templates/${templateId}/${base}.w${width}.webp`;
+  }
+
+  private categoryThumbKey(key: string, width: number): string {
+    return `/uploads/thumbs/categories/${key}/w${width}.jpg`;
+  }
+
+  /**
+   * 读已持久化的缩略图字节：本地磁盘缓存 → 激活存储。
+   * 两级都 miss 返回 null（由调用方走生成链路）。
+   */
+  private async readPersistedThumb(thumbKey: string): Promise<Buffer | null> {
+    const file = this.localFilePath(thumbKey);
+    if (file && fs.existsSync(file)) {
+      try {
+        return fs.readFileSync(file);
+      } catch {
+        // 读盘失败 → 继续查远端
+      }
+    }
+    if (getActiveId() !== 'local') {
+      try {
+        return await activeStorageAdapter.readBuffer(thumbKey);
+      } catch {
+        // 远端缺失 → 走生成
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 持久化缩略图：写入激活存储（客户端直连的来源）+ 本地磁盘缓存（后端读链路兜底）。
+   * 任一步失败都静默跳过，不影响本次响应。
+   */
+  private async persistThumb(thumbKey: string, data: Buffer): Promise<void> {
+    // thumbKey 形如 /uploads/thumbs/{group}/{id}/{filename}，换算为 write(category, id, filename)
+    const rel = thumbKey.replace(/^\/uploads\/thumbs\//, '');
+    const parts = rel.split('/');
+    const filename = parts.pop();
+    const id = parts.join('/');
+    if (!filename || !id) return;
+    try {
+      await activeStorageAdapter.write('thumbs', id, filename, data);
+    } catch {
+      // 远端写失败不影响响应（本地缓存仍会写）
+    }
+    const file = this.localFilePath(thumbKey);
+    if (file) {
+      try {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, data);
+      } catch {
+        // 缩略图写盘失败不影响本次响应
+      }
+    }
+  }
+
+  /** sharp 生成单张缩略图；源图解码失败返回 null */
+  private async renderThumb(source: Buffer, width: number, format: 'webp' | 'jpeg'): Promise<Buffer | null> {
+    try {
+      const pipeline = sharp(source, { failOn: 'error' })
+        .rotate()
+        .resize({ width, withoutEnlargement: true });
+      return format === 'webp'
+        ? await pipeline.webp({ quality: 82 }).toBuffer()
+        : await pipeline.jpeg({ quality: JPEG_QUALITY }).toBuffer();
+    } catch {
+      return null;
+    }
+  }
+
+  // ===== 读链路（/api/v1/thumbs 端点，保留作按需兜底）=====
+
+  /** 返回（或生成并持久化）分类图标的指定宽度 JPEG 缩略图 */
   async categoryIcon(key: string, rawWidth: string | number): Promise<ThumbResult> {
     const width = this.clampWidth(rawWidth);
+    const thumbKey = this.categoryThumbKey(key, width);
 
-    // 磁盘命中优先：已生成缩略图直接返回（零 DB、零 CPU），
-    // 配合写链路 preGenerate 后命中率接近 100%
-    const thumbDir = path.join(this.uploadDir, 'thumbs', 'categories', key);
-    const thumbFile = path.join(thumbDir, `w${width}.jpg`);
-    if (fs.existsSync(thumbFile)) {
-      return { data: fs.readFileSync(thumbFile), type: 'image/jpeg' };
-    }
+    // 已持久化（本地缓存 / 激活存储）→ 直接返回，零 DB、零 CPU
+    const cached = await this.readPersistedThumb(thumbKey);
+    if (cached) return { data: cached, type: 'image/jpeg' };
 
     // 未命中才查 DB（只为了拿上传文件名），并懒生成（覆盖旧分类/迁移前数据）
     const src = await this.resolveIconSource(key);
@@ -106,28 +192,13 @@ export class ThumbsService {
 
     // 与模板缩略图一致使用 sharp，确保 WebP 源图也能正常生成 JPEG 缩略图。
     // 若图片解码失败，回退返回原图。
-    try {
-      const buf = await sharp(src.data, { failOn: 'error' })
-        .rotate()
-        .resize({ width, withoutEnlargement: true })
-        .jpeg({ quality: JPEG_QUALITY })
-        .toBuffer();
-      try {
-        fs.mkdirSync(thumbDir, { recursive: true });
-        fs.writeFileSync(thumbFile, buf);
-      } catch (_) {
-        // 缩略图写盘失败不影响本次响应
-      }
-      return { data: buf, type: 'image/jpeg' };
-    } catch {
-      return { data: src.data, type: mimeOf(src.filename) };
-    }
+    const buf = await this.renderThumb(src.data, width, 'jpeg');
+    if (!buf) return { data: src.data, type: mimeOf(src.filename) };
+    await this.persistThumb(thumbKey, buf);
+    return { data: buf, type: 'image/jpeg' };
   }
 
-  /**
-   * 预生成某分类的多个宽度缩略图（写链路调用，把生成成本从读请求挪到上传时）。
-   * 若源图解码失败，静默跳过，读链路懒生成兑底。
-   */
+  /** 返回（或生成并持久化）模板图的指定宽度 WebP 缩略图 */
   async templateImage(
     templateId: string,
     filename: string,
@@ -141,61 +212,88 @@ export class ThumbsService {
     }
 
     const width = this.clampWidth(rawWidth);
-    const cacheDir = path.join(this.uploadDir, 'thumbs', 'templates', templateId);
-    const basename = path.basename(filename, path.extname(filename));
-    const cacheFile = path.join(cacheDir, `${basename}.w${width}.webp`);
-    if (fs.existsSync(cacheFile)) {
-      return { data: fs.readFileSync(cacheFile), type: 'image/webp' };
-    }
+    const thumbKey = this.templateThumbKey(templateId, filename, width);
+
+    const cached = await this.readPersistedThumb(thumbKey);
+    if (cached) return { data: cached, type: 'image/webp' };
 
     const source = await this.readSourceBytes(`/uploads/templates/${templateId}/${filename}`);
     if (!source) {
       throw new NotFoundException('template image not found');
     }
 
-    try {
-      const data = await sharp(source, { failOn: 'error' })
-        .rotate()
-        .resize({ width, withoutEnlargement: true })
-        .webp({ quality: 82 })
-        .toBuffer();
-      try {
-        fs.mkdirSync(cacheDir, { recursive: true });
-        fs.writeFileSync(cacheFile, data);
-      } catch {
-        // Cache write failures must not fail this response.
-      }
-      return { data, type: 'image/webp' };
-    } catch {
-      return { data: source, type: mimeOf(filename) };
-    }
+    const data = await this.renderThumb(source, width, 'webp');
+    if (!data) return { data: source, type: mimeOf(filename) };
+    await this.persistThumb(thumbKey, data);
+    return { data, type: 'image/webp' };
   }
 
-  async preGenerate(key: string, widths: number[] = [200, 400, 800]): Promise<void> {
+  // ===== 写链路（admin 保存时预生成，客户端直连存储域名）=====
+
+  /**
+   * 预生成某模板全部图片的阶梯宽度缩略图（写链路调用）。
+   * 先删旧缩略图再生成，避免图片删减/替换后残留陈旧键。
+   * 源图不存在（如复制场景引用他库图片）时跳过，由读链路兜底。
+   */
+  async ensureTemplateThumbs(templateId: string, filenames: string[]): Promise<void> {
+    const valid = filenames.filter((f) => /^[a-z0-9][a-z0-9._-]*$/i.test(f));
+    if (valid.length === 0) return;
+    await this.deleteTemplateThumbs(templateId);
+    const jobs: Promise<void>[] = [];
+    for (const filename of valid) {
+      const source = await this.readSourceBytes(`/uploads/templates/${templateId}/${filename}`);
+      if (!source) continue;
+      for (const w of THUMB_WIDTH_LADDER) {
+        const width = this.clampWidth(w);
+        jobs.push(
+          this.renderThumb(source, width, 'webp').then((buf) => {
+            if (buf) return this.persistThumb(this.templateThumbKey(templateId, filename, width), buf);
+          }),
+        );
+      }
+    }
+    await Promise.all(jobs);
+  }
+
+  /** 预生成某分类图标的阶梯宽度缩略图（写链路调用；先删旧再生成） */
+  async ensureCategoryThumbs(key: string): Promise<void> {
+    if (!/^[a-z0-9][a-z0-9_-]*$/i.test(key)) return;
     const src = await this.resolveIconSource(key);
     if (!src) return;
-    const thumbDir = path.join(this.uploadDir, 'thumbs', 'categories', key);
-    for (const w of widths) {
-      try {
-        const width = this.clampWidth(w);
-        const buf = await sharp(src.data, { failOn: 'error' })
-          .rotate()
-          .resize({ width, withoutEnlargement: true })
-          .jpeg({ quality: JPEG_QUALITY })
-          .toBuffer();
-        fs.mkdirSync(thumbDir, { recursive: true });
-        fs.writeFileSync(path.join(thumbDir, `w${width}.jpg`), buf);
-      } catch {
-        // 该宽度生成失败（源格式不支持等）静默跳过
-      }
-    }
+    await this.deleteCategoryThumbs(key);
+    const jobs = THUMB_WIDTH_LADDER.map(async (w) => {
+      const width = this.clampWidth(w);
+      const buf = await this.renderThumb(src.data, width, 'jpeg');
+      if (buf) await this.persistThumb(this.categoryThumbKey(key, width), buf);
+    });
+    await Promise.all(jobs);
   }
 
-  /** 删除某分类的缩略图缓存目录（icon 变更/删除时清理旧宽度残留） */
-  clearCache(key: string): void {
-    const thumbDir = path.join(this.uploadDir, 'thumbs', 'categories', key);
-    if (fs.existsSync(thumbDir)) {
-      fs.rmSync(thumbDir, { recursive: true, force: true });
+  /** 删除某模板的缩略图（激活存储 + 本地磁盘） */
+  async deleteTemplateThumbs(templateId: string): Promise<void> {
+    if (!/^[a-z0-9][a-z0-9_-]*$/i.test(templateId)) return;
+    await this.deleteThumbDir(`templates/${templateId}`);
+  }
+
+  /** 删除某分类的缩略图（激活存储 + 本地磁盘） */
+  async deleteCategoryThumbs(key: string): Promise<void> {
+    if (!/^[a-z0-9][a-z0-9_-]*$/i.test(key)) return;
+    await this.deleteThumbDir(`categories/${key}`);
+  }
+
+  private async deleteThumbDir(relativeId: string): Promise<void> {
+    try {
+      await activeStorageAdapter.deleteByDir('thumbs', relativeId);
+    } catch {
+      // 远端删除失败不影响后续（本地仍会清）
+    }
+    const dir = path.join(this.uploadDir, 'thumbs', ...relativeId.split('/'));
+    if (fs.existsSync(dir)) {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+      } catch {
+        // 忽略
+      }
     }
   }
 }

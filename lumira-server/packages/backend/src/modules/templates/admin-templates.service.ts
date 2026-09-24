@@ -8,12 +8,15 @@ import { DatabaseService } from '../../database/database.service';
 import { templates, templateCategories, templatePrices } from '../../database/schema';
 import { STORAGE_ADAPTER } from '../../common/storage/storage.provider';
 import type { StorageAdapter } from '../../common/storage/storage-adapter.interface';
+import { buildAssetUrl } from '../../common/storage/asset-url';
+import { toStorageKey } from '../../common/storage/storage-key';
 import { ImageCompressionService } from '../../common/storage/image-compression.service';
 import { RedisService } from '../../common/redis/redis.service';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
 import { parsePptpl } from './utils/pptpl-parser';
 import { rowToDetail, sanitizeAmbience } from './templates.service';
+import { ThumbsService } from './thumbs.service';
 import type {
   AdminTemplateListItem,
   AdminTemplateDetail,
@@ -46,6 +49,7 @@ export class AdminTemplatesService {
     @Inject(STORAGE_ADAPTER) private readonly storage: StorageAdapter,
     private readonly redisService: RedisService,
     private readonly imageCompression: ImageCompressionService,
+    private readonly thumbs: ThumbsService,
   ) {}
 
   /** 模板内容变更后统一失效内容缓存 */
@@ -97,7 +101,9 @@ export class AdminTemplatesService {
         category: r.category,
         categoryName: r.categoryName || '',
         price: r.price,
-        coverUrl: r.coverUrl,
+        // 与详情/App 接口一致：相对 key 或旧后端域名绝对 URL 统一重建为
+        // 当前激活存储的公网 URL（后台据此推导缩略图存储直连域名）
+        coverUrl: buildAssetUrl(r.coverUrl),
         isActive: r.isActive === 1,
         sortOrder: r.sortOrder,
         gender: r.gender ?? 'unisex',
@@ -232,7 +238,7 @@ export class AdminTemplatesService {
       imagesArr = meta.images
         .map((img) => {
           const r = img as Record<string, unknown>;
-          const url = typeof r.url === 'string' ? r.url : '';
+          const url = typeof r.url === 'string' ? normalizeImageUrl(r.url) : '';
           const data = typeof r.data === 'string' ? r.data : undefined;
           if (!url) return null;
           return data ? { url, data } : { url };
@@ -331,6 +337,8 @@ export class AdminTemplatesService {
     }
 
     await this.invalidateTemplateCaches();
+    // 预生成缩略图到激活存储：客户端按存储域名直连推导 URL，不再走后端动态端点
+    await this.thumbs.ensureTemplateThumbs(id, templateImageFilenames(imagesArr));
     return this.getDetail(id);
   }
 
@@ -414,6 +422,8 @@ export class AdminTemplatesService {
       index,
       image: await this.compressUploadedImage(img, { maxDim: 1600 }),
     }))) : [];
+    // 图片是否发生变更（决定是否重算缩略图；未变更时旧缩略图仍有效）
+    const imagesChanged = (images !== undefined && images.length > 0) || !!cover || Array.isArray(meta.images);
 
     if (images && images.length > 0) {
       imagesArr = [];
@@ -434,7 +444,7 @@ export class AdminTemplatesService {
       imagesArr = meta.images
         .map((img) => {
           const r = img as Record<string, unknown>;
-          const url = typeof r.url === 'string' ? r.url : '';
+          const url = typeof r.url === 'string' ? normalizeImageUrl(r.url) : '';
           const data = typeof r.data === 'string' ? r.data : undefined;
           if (!url) return null;
           return data ? { url, data } : { url };
@@ -542,6 +552,10 @@ export class AdminTemplatesService {
     }
 
     await this.invalidateTemplateCaches();
+    // 图片有变更 → 重算缩略图（内部先删旧键）；未变更则旧缩略图仍有效
+    if (imagesChanged) {
+      await this.thumbs.ensureTemplateThumbs(id, templateImageFilenames(imagesArr));
+    }
     return this.getDetail(id);
   }
 
@@ -563,6 +577,8 @@ export class AdminTemplatesService {
 
     // 删除文件目录
     await this.storage.deleteByDir('templates', id);
+    // 同步清理缩略图（激活存储 + 本地磁盘）
+    await this.thumbs.deleteTemplateThumbs(id);
 
     await this.invalidateTemplateCaches();
     return { success: true };
@@ -596,6 +612,36 @@ function safeParse(json: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+/**
+ * meta.images URL 归一化：本存储的绝对 URL（含旧后端域名/当前存储域名）→ 相对 storageKey，
+ * 避免后台回传绝对地址导致 DB 囤积域名、换存储后失效；外部 URL / data URI 原样保留。
+ */
+function normalizeImageUrl(url: string): string {
+  return toStorageKey(url) ?? url;
+}
+
+/** 从图片 URL 提取模板目录内的文件名（复制场景引用他库图片时也会提取，读源不存在则跳过） */
+function templateImageFilename(url: string): string | null {
+  const marker = '/uploads/templates/';
+  const idx = url.indexOf(marker);
+  if (idx < 0) return null;
+  const rest = url.slice(idx + marker.length).split(/[?#]/)[0];
+  const parts = rest.split('/').filter(Boolean);
+  if (parts.length < 2) return null;
+  const filename = parts[parts.length - 1];
+  return /^[a-z0-9][a-z0-9._-]*$/i.test(filename) ? filename : null;
+}
+
+/** 汇总 imagesArr 中可生成缩略图的文件名（去重） */
+function templateImageFilenames(imagesArr: Array<{ url: string }>): string[] {
+  const out = new Set<string>();
+  for (const img of imagesArr) {
+    const f = templateImageFilename(img.url);
+    if (f) out.add(f);
+  }
+  return [...out];
 }
 
 /** 解析既有 images_json（admin 更新保留用，原样返回 url/data，不改写） */

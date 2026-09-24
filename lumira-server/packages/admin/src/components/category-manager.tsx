@@ -37,7 +37,8 @@ import {
 } from '@/actions/categories';
 import { buildCategoryTree } from '@/lib/category-tree';
 import { compressImage } from '@/lib/image-compress';
-import { toAssetUrl, toCategoryThumbUrl } from '@/lib/asset-url';
+import { toAssetUrl, toCategoryThumbUrl, toCategoryThumbFallbackUrl } from '@/lib/asset-url';
+import { ThumbImage } from '@/components/thumb-image';
 import type { TemplateCategory, TemplateCategoryTreeNode } from '@/types/admin';
 
 interface FlatRow {
@@ -571,6 +572,7 @@ export function CategoryManager({
               filteredRows.map((row) => {
                 const { node: c, depth, hasChildren, guides } = row;
                 const icon = toCategoryThumbUrl(c.iconUrl, backendUrl, 160);
+                const iconFallback = toCategoryThumbFallbackUrl(c.iconUrl, 160) ?? '';
                 const isCollapsed = collapsedKeys.has(c.key);
                 const levelBadge = LEVEL_BADGE[c.level as 1 | 2 | 3 | 4];
                 const dot = LEVEL_DOT[c.level as 2 | 3 | 4];
@@ -613,12 +615,10 @@ export function CategoryManager({
                         {c.level <= 2 ? (
                           <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-input bg-muted">
                             {icon ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
+                              <ThumbImage
                                 src={icon}
+                                fallbackSrc={iconFallback}
                                 alt={c.name}
-                                loading="lazy"
-                                decoding="async"
                                 className="h-full w-full object-cover"
                               />
                             ) : (

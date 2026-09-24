@@ -170,12 +170,14 @@ export class StorageMigrationAgent {
     return new Set(await this.source.listKeys());
   }
 
-  /** 解析 storageKey `/uploads/{cat}/{id}/{filename}` → write 参数 */
+  /** 解析 storageKey `/uploads/{cat}/{id}/{filename}` → write 参数。
+   *  thumbs 键形如 `/uploads/thumbs/templates/{id}/{file}`，id 含多段，
+   *  因此统一取「末段为 filename、其余为 id」，平铺/嵌套键都能正确 round-trip。 */
   private parseParts(storageKey: string): { category: StorageCategory; id: string; filename: string } {
     const parts = storageKey.replace(/^\/uploads\//, '').split('/');
     const category = parts[0] as StorageCategory;
-    const id = parts[1] ?? '';
-    const filename = parts.slice(2).join('/') || 'unknown';
+    const filename = parts.length >= 3 ? (parts[parts.length - 1] || 'unknown') : 'unknown';
+    const id = parts.slice(1, parts.length >= 3 ? -1 : undefined).join('/');
     return { category, id, filename };
   }
 

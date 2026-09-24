@@ -7,46 +7,156 @@ import 'package:path_provider/path_provider.dart';
 
 import '../config/app_config.dart';
 
-/// 由分类图标原图 URL + 分类 key 构造缩略图请求地址。
-///
-/// 网格/卡片只需要小尺寸封面，让后端按需生成缩略图，可显著减少首次加载
-/// 的下载字节量（避免把后台上传的全尺寸原图整张拉下来）。
-/// 若 [iconUrl] 为空则原样返回，由上层走内置 Material Icon 兜底。
-String categoryThumbUrl(String iconUrl, String key, {int w = 600}) {
-  if (iconUrl.isEmpty || key.isEmpty) return iconUrl;
-  return '${AppConfig.baseUrl}/thumbs/categories/$key?w=$w';
+/// 缩略图宽度阶梯：与后端 THUMB_WIDTH_LADDER、admin asset-url 三端保持一致（改必须同步）。
+const List<int> kThumbWidthLadder = [160, 320, 480, 640, 800, 1080];
+
+/// 把请求宽度吸附到阶梯（差距最小；距离相等取较小值）。
+int snapThumbWidth(int width) {
+  var best = kThumbWidthLadder.first;
+  for (final v in kThumbWidthLadder) {
+    if ((width - v).abs() < (width - best).abs()) best = v;
+  }
+  return best;
 }
 
-/// Rewrite stored template image URLs to a backend WebP variant.
+/// 提取绝对 URL 的 origin（协议+主机，无尾斜杠）；非绝对 URL 返回 null。
+String? _originOf(String url) {
+  final match = RegExp(r'^https?://[^/]+', caseSensitive: false).firstMatch(url);
+  return match?.group(0);
+}
+
+/// 模板原图源信息（Dart 2.19 无 records，用私有类承载）。
+class _TemplateSource {
+  const _TemplateSource(this.templateId, this.filename);
+  final String templateId;
+  final String filename;
+}
+
+/// 从任意图片值中提取 /uploads/templates/{templateId}/{filename} 两段。
+_TemplateSource? _parseTemplateSource(String url) {
+  const marker = '/uploads/templates/';
+  final idx = url.indexOf(marker);
+  if (idx < 0) return null;
+
+  final cleanPath = url.substring(idx + marker.length).split('?').first.split('#').first;
+  final parts = cleanPath.split('/').where((p) => p.isNotEmpty).toList();
+  if (parts.length != 2) return null;
+  final templateId = parts[0];
+  final filename = parts[1];
+  if (!RegExp(r'^[a-z0-9][a-z0-9_-]*$', caseSensitive: false).hasMatch(templateId)) {
+    return null;
+  }
+  if (!RegExp(r'^[a-z0-9][a-z0-9._-]*$', caseSensitive: false).hasMatch(filename)) {
+    return null;
+  }
+  return _TemplateSource(templateId, filename);
+}
+
+/// 分类原图源信息（Dart 2.19 无 records，用私有类承载）。
+class _CategorySource {
+  const _CategorySource(this.key, this.filename);
+  final String key;
+  final String filename;
+}
+
+/// 从任意图片值中提取 /uploads/categories/{key}/{filename} 两段。
+_CategorySource? _parseCategorySource(String url) {
+  const marker = '/uploads/categories/';
+  final idx = url.indexOf(marker);
+  if (idx < 0) return null;
+
+  final cleanPath = url.substring(idx + marker.length).split('?').first.split('#').first;
+  final parts = cleanPath.split('/').where((p) => p.isNotEmpty).toList();
+  if (parts.length != 2) return null;
+  final key = parts[0];
+  final filename = parts[1];
+  if (!RegExp(r'^[a-z0-9][a-z0-9_-]*$', caseSensitive: false).hasMatch(key)) {
+    return null;
+  }
+  if (!RegExp(r'^[a-z0-9][a-z0-9._-]*$', caseSensitive: false).hasMatch(filename)) {
+    return null;
+  }
+  return _CategorySource(key, filename);
+}
+
+/// 存储直连缩略图 URL 拼接：源 URL 为 HTTPS 绝对地址时用其 origin（即激活存储
+/// 公网域名，如七牛）直连；HTTP（本地开发）或相对路径时用后端域名拼接绝对地址。
+String _storageThumbUrl(String sourceUrl, String thumbPath, String? baseUrl) {
+  final origin = _originOf(sourceUrl);
+  if (origin != null && origin.toLowerCase().startsWith('https://')) {
+    return '$origin$thumbPath';
+  }
+  final base = (baseUrl ?? AppConfig.baseUrl).replaceAll(RegExp(r'/+$'), '');
+  return '$base$thumbPath';
+}
+
+/// 由模板原图 URL 构造存储直连缩略图地址（键规则与后端 ThumbsService 一致）。
+///
+/// 缩略图由后端在写入时预生成到激活存储，客户端按固定键规则推导直连 URL：
+/// `{origin}/uploads/thumbs/templates/{templateId}/{源文件主名}.w{width}.webp`。
+/// 旧数据尚未预生成时直连 URL 会 404，由 [templateThumbFallbackUrl] 兜底
+/// （后端动态端点按需生成并持久化，命中后即转为直连）。
+/// 解析失败（非 /uploads/templates/ 两段结构）时原样返回 [url]。
 String templateThumbUrl(
   String url, {
   String? baseUrl,
   int w = 800,
 }) {
-  if (url.isEmpty ||
-      url.contains('/api/v1/thumbs/templates/') ||
-      !url.contains('/uploads/templates/')) {
-    return url;
-  }
+  if (url.isEmpty || url.contains('/uploads/thumbs/')) return url;
 
-  const marker = '/uploads/templates/';
-  final relative = url.substring(url.indexOf(marker) + marker.length);
-  final cleanPath = relative.split('?').first.split('#').first;
-  final parts = cleanPath.split('/').where((part) => part.isNotEmpty).toList();
-  if (parts.length != 2) return url;
-  final templateId = parts[0];
-  final filename = parts[1];
-  if (!RegExp(r'^[a-z0-9][a-z0-9_-]*$', caseSensitive: false)
-      .hasMatch(templateId)) {
-    return url;
-  }
-  if (!RegExp(r'^[a-z0-9][a-z0-9._-]*$', caseSensitive: false)
-      .hasMatch(filename)) {
-    return url;
-  }
+  final parsed = _parseTemplateSource(url);
+  if (parsed == null) return url;
 
+  final snapped = snapThumbWidth(w);
+  final base = parsed.filename.replaceAll(RegExp(r'\.[^.]+$'), '');
+  return _storageThumbUrl(
+    url,
+    '/uploads/thumbs/templates/${parsed.templateId}/$base.w$snapped.webp',
+    baseUrl,
+  );
+}
+
+/// 模板缩略图兜底 URL：后端动态端点（直连 URL 404 时按需生成并持久化）。
+String? templateThumbFallbackUrl(
+  String url, {
+  String? baseUrl,
+  int w = 800,
+}) {
+  if (url.isEmpty) return null;
+  final parsed = _parseTemplateSource(url);
+  if (parsed == null) return null;
+  final snapped = snapThumbWidth(w);
   final base = (baseUrl ?? AppConfig.baseUrl).replaceAll(RegExp(r'/+$'), '');
-  return '$base/thumbs/templates/$templateId/$filename?w=$w';
+  return '$base/thumbs/templates/${parsed.templateId}/${parsed.filename}?w=$snapped';
+}
+
+/// 由分类图标原图 URL + 分类 key 构造存储直连缩略图请求地址。
+///
+/// 网格/卡片只需要小尺寸封面，让后端按需生成缩略图，可显著减少首次加载
+/// 的下载字节量（避免把后台上传的全尺寸原图整张拉下来）。
+/// 解析失败或 [key] 为空时原样返回 [iconUrl]，由上层走内置 Material Icon 兜底。
+String categoryThumbUrl(String iconUrl, String key, {String? baseUrl, int w = 600}) {
+  if (iconUrl.isEmpty || key.isEmpty) return iconUrl;
+
+  final parsed = _parseCategorySource(iconUrl);
+  if (parsed == null || parsed.key != key) return iconUrl;
+
+  final snapped = snapThumbWidth(w);
+  return _storageThumbUrl(
+    iconUrl,
+    '/uploads/thumbs/categories/${parsed.key}/w$snapped.jpg',
+    baseUrl,
+  );
+}
+
+/// 分类缩略图兜底 URL：后端动态端点（直连 URL 404 时按需生成并持久化）。
+String? categoryThumbFallbackUrl(String iconUrl, String key, {String? baseUrl, int w = 600}) {
+  if (iconUrl.isEmpty || key.isEmpty) return null;
+  final parsed = _parseCategorySource(iconUrl);
+  if (parsed == null || parsed.key != key) return null;
+  final snapped = snapThumbWidth(w);
+  final base = (baseUrl ?? AppConfig.baseUrl).replaceAll(RegExp(r'/+$'), '');
+  return '$base/thumbs/categories/${parsed.key}?w=$snapped';
 }
 
 /// 轻量级网络图片缓存
@@ -143,7 +253,9 @@ class ImageCacheUtil {
           _storeMemory(url, bytes);
           return bytes;
         }
-      } catch (_) {
+      } catch (e) {
+        // 404（如存储直连缩略图尚未生成）重试无意义，直接失败走兜底 URL
+        if (e is DioError && e.response?.statusCode == 404) return null;
         // 下载失败，等待后重试
       }
       if (attempt < 2) {

@@ -397,10 +397,10 @@ class _SubCategoryCard extends ConsumerWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // 封面大图（优先缩略图，缩略图接口失败时回退原图，保证显示稳定）
+          // 封面大图（缩略图走存储域名直连，未预生成时 404 → 回退后端动态端点按需生成）
           CachedNetworkImage(
             url: categoryThumbUrl(record.iconUrl, record.key),
-            fallbackUrl: record.iconUrl,
+            fallbackUrl: categoryThumbFallbackUrl(record.iconUrl, record.key),
             fit: BoxFit.cover,
             placeholder: ColoredBox(color: tokens.surfaceAlt),
             errorWidget: Container(

@@ -121,9 +121,9 @@ export class AdminCategoriesService {
     });
 
     await this.invalidateCategoryCaches();
-    // 上传了图标 → 预生成缩略图（生成成本从读链路挪到写链路）
+    // 上传了图标 → 预生成缩略图到激活存储（生成成本从读链路挪到写链路）
     if (icon) {
-      await this.thumbs.preGenerate(meta.key);
+      await this.thumbs.ensureCategoryThumbs(meta.key);
     }
     return this.getByKeyAndParent(meta.key, parentKey);
   }
@@ -169,10 +169,9 @@ export class AdminCategoriesService {
       .where(eq(templateCategories.id, existing.id));
 
     await this.invalidateCategoryCaches();
-    // icon 变更 → 先清旧宽度缩略图残留，再按新图标预生成
+    // icon 变更 → 按新图标重新预生成缩略图（内部先删旧键，避免残留）
     if (icon) {
-      this.thumbs.clearCache(key);
-      await this.thumbs.preGenerate(key);
+      await this.thumbs.ensureCategoryThumbs(key);
     }
     return this.getByKeyAndParent(key, parentKey);
   }
@@ -215,8 +214,8 @@ export class AdminCategoriesService {
 
     await db.delete(templateCategories).where(eq(templateCategories.id, existing.id));
     await this.storage.deleteByDir('categories', key);
-    // 同步清理缩略图缓存目录
-    this.thumbs.clearCache(key);
+    // 同步清理缩略图（激活存储 + 本地磁盘）
+    await this.thumbs.deleteCategoryThumbs(key);
 
     await this.invalidateCategoryCaches();
     return { success: true };

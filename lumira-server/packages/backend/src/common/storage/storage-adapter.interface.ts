@@ -1,7 +1,9 @@
 // lumira-server/packages/backend/src/common/storage/storage-adapter.interface.ts
 // 存储抽象接口：该接口是「每一个应用到图片存储的实体」迁移与校验的根基。
 
-export type StorageCategory = 'templates' | 'categories' | 'banners' | 'feedback' | 'users';
+// 'thumbs' 为缩略图派生目录（/uploads/thumbs/{templates|categories}/...），
+// 由 ThumbsService 预生成/按需生成后写入激活存储，供客户端直连存储域名取图。
+export type StorageCategory = 'templates' | 'categories' | 'banners' | 'feedback' | 'users' | 'thumbs';
 
 export const STORAGE_KEY_PREFIX = '/uploads';
 
