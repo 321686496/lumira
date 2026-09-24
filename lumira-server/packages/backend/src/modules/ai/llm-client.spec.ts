@@ -6,6 +6,8 @@
 // （textModel → visionModel 回退已上移至 getActiveConfig，客户端只取 cfg.model）
 
 import { LlmEndpoint, VisionChatInput, textChat, visionChat, toolChat, extractToolCalls, ToolDef } from './llm-client';
+import { runWithTrace } from './llm-trace';
+import type { AiTraceEvent } from './llm-trace';
 
 /** baseUrl 故意带尾斜杠：验证拼接前先规范化去掉 */
 const CFG: LlmEndpoint = {
@@ -360,5 +362,80 @@ describe('toolChat / extractToolCalls', () => {
 
     // 纯文本 assistant（无 tool_calls）
     expect(extractToolCalls('hello', [{ role: 'assistant', content: 'hello' }])).toEqual([]);
+  });
+});
+
+// ===== 实时采集：LLM 事件带原始响应体（Task 2 追加）=====
+describe('实时采集：LLM 事件带原始响应体', () => {
+  function collect(): { events: Omit<AiTraceEvent, 'seq' | 'ts'>[]; sink: (e: Omit<AiTraceEvent, 'seq' | 'ts'>) => void } {
+    const events: Omit<AiTraceEvent, 'seq' | 'ts'>[] = [];
+    return { events, sink: (e) => events.push(e) };
+  }
+
+  it('textChat：done 事件带 rawResponse（上游原文）与 attempts=1', async () => {
+    const rawResponse = JSON.stringify({ choices: [{ message: { content: '模型输出' } }] });
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(rawResponse, { status: 200 }));
+    const { events, sink } = collect();
+
+    const out = await runWithTrace(sink, () => textChat(CFG, { systemPrompt: 'sys', userText: 'hi' }));
+
+    expect(out).toBe('模型输出');
+    const done = events.find((e) => e.type === 'llm' && e.status === 'done')!;
+    expect(done.response).toBe('模型输出');
+    expect(done.rawResponse).toBe(rawResponse);
+    expect(done.attempts).toBe(1);
+  });
+
+  it('visionChat：jsonMode 400 降级重试后 attempts=2，rawResponse 为最终成功那次的原文', async () => {
+    const okRaw = JSON.stringify({ choices: [{ message: { content: '降级后输出' } }] });
+    jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(errorResponse(400, { error: { message: 'bad' } }))
+      .mockResolvedValueOnce(new Response(okRaw, { status: 200 }));
+    const { events, sink } = collect();
+
+    const out = await runWithTrace(sink, () => visionChat(CFG, { ...baseInput(), jsonMode: true }));
+
+    expect(out).toBe('降级后输出');
+    const done = events.find((e) => e.type === 'llm' && e.status === 'done')!;
+    expect(done.attempts).toBe(2);
+    expect(done.rawResponse).toBe(okRaw);
+  });
+
+  it('toolChat：记录提示词、原始响应体与工具调用名', async () => {
+    const tool: ToolDef = {
+      name: 'web_search',
+      description: '联网搜索',
+      parameters: { type: 'object', properties: { query: { type: 'string' } } },
+    };
+    const rawResponse = JSON.stringify({
+      choices: [{ message: { content: null, tool_calls: [
+        { id: 'call_1', type: 'function', function: { name: 'web_search', arguments: '{"query":"秋日人像"}' } },
+      ] } }],
+    });
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(rawResponse, { status: 200 }));
+    const { events, sink } = collect();
+
+    await runWithTrace(sink, () => toolChat(CFG, { systemPrompt: 'sys', userText: 'hi', tools: [tool] }));
+
+    const llm = events.filter((e) => e.type === 'llm');
+    expect(llm).toHaveLength(2);
+    expect(llm[0]).toMatchObject({ status: 'running', systemPrompt: 'sys', userPrompt: 'hi' });
+    expect(llm[1]!.resultBrief).toBe('调用工具：web_search');
+    expect(llm[1]!.rawResponse).toContain('web_search');
+    expect(llm[1]!.attempts).toBe(1);
+  });
+
+  it('无采集上下文：toolChat 照常执行（trace 为 no-op）', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: { content: '没有工具调用' } }] }), { status: 200 }),
+    );
+
+    const out = await toolChat(CFG, {
+      systemPrompt: 'sys',
+      userText: 'hi',
+      tools: [{ name: 'web_search', description: 'x', parameters: { type: 'object', properties: {} } }],
+    });
+
+    expect(out.content).toBe('没有工具调用');
   });
 });

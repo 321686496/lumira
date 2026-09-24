@@ -131,11 +131,23 @@ export function buildChatBody(input: ChatRequestBase, opts: { tools?: ToolDef[];
   return body;
 }
 
+/** 底层单次请求结果：解析后的 message + 上游原始响应体原文 + 实际请求次数 */
+interface RawChatResult {
+  message: Record<string, unknown>;
+  /** 上游原始响应体原文（保留原始格式，供实时过程「原始数据」展示） */
+  rawText: string;
+  /** 实际发出的请求次数（含 jsonMode 降级 / 5xx 重试） */
+  attempts: number;
+}
+
 /** 底层单次请求：fetch + 错误映射 + jsonMode 降级，返回 choices[0].message（含 tool_calls 时 content 可 null） */
-async function rawChatMessage(cfg: LlmEndpoint, input: ChatRequestBase, opts: { tools?: ToolDef[]; toolChoice?: 'auto' | 'none' | 'required' } = {}): Promise<Record<string, unknown>> {
+async function rawChatMessage(cfg: LlmEndpoint, input: ChatRequestBase, opts: { tools?: ToolDef[]; toolChoice?: 'auto' | 'none' | 'required' } = {}): Promise<RawChatResult> {
   const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
 
+  let attempts = 0;
+
   const doFetch = async (jsonMode: boolean): Promise<Response> => {
+    attempts += 1;
     return fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
@@ -161,17 +173,31 @@ async function rawChatMessage(cfg: LlmEndpoint, input: ChatRequestBase, opts: { 
   }
   if (!res.ok) throw new Error(await upstreamError(res));
 
-  const data = (await res.json()) as { choices?: Array<{ message?: Record<string, unknown> }> } | null;
+  const rawText = await res.text();
+  let data: { choices?: Array<{ message?: Record<string, unknown> }> } | null = null;
+  try {
+    data = JSON.parse(rawText) as { choices?: Array<{ message?: Record<string, unknown> }> };
+  } catch {
+    // 上游返回非 JSON：rawText 仍原样保留供展示，message 视为空
+    data = null;
+  }
   const message = data?.choices?.[0]?.message;
-  return message && typeof message === 'object' ? message : {};
+  return { message: message && typeof message === 'object' ? message : {}, rawText, attempts };
+}
+
+/** 公共请求层结果：提取正文 + 上游原文 + 请求次数 */
+interface ChatRequestResult {
+  content: string;
+  rawText: string;
+  attempts: number;
 }
 
 /** 公共请求层：messages + model → fetch → 错误映射 → jsonMode 降级 → 取 content；失败抛 Error，message 面向运营可读 */
-async function chatRequest(cfg: LlmEndpoint, input: ChatRequestBase): Promise<string> {
-  const message = await rawChatMessage(cfg, input);
+async function chatRequest(cfg: LlmEndpoint, input: ChatRequestBase): Promise<ChatRequestResult> {
+  const { message, rawText, attempts } = await rawChatMessage(cfg, input);
   const content = message.content;
   if (typeof content !== 'string' || !content) throw new Error('AI 服务返回内容为空');
-  return content;
+  return { content, rawText, attempts };
 }
 
 /** 带图 chat（对外签名与行为不变）；识别流程采集中会额外记录提示词与响应 */
@@ -190,14 +216,14 @@ export async function visionChat(cfg: LlmEndpoint, input: VisionChatInput): Prom
     imageBytes: Math.round(input.imageBase64.length * 0.75), // base64 → 近似原始字节
   });
   try {
-    const content = await chatRequest(cfg, {
+    const { content, rawText, attempts } = await chatRequest(cfg, {
       model: cfg.model,
       messages,
       temperature: input.temperature ?? DEFAULT_TEMPERATURE,
       jsonMode: input.jsonMode ?? false,
       timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     });
-    handle?.done(content);
+    handle?.done(content, { rawResponse: rawText, attempts });
     return content;
   } catch (err) {
     handle?.fail(err);
@@ -217,14 +243,14 @@ export async function textChat(cfg: LlmEndpoint, input: TextChatInput): Promise<
     userPrompt: input.userText,
   });
   try {
-    const content = await chatRequest(cfg, {
+    const { content, rawText, attempts } = await chatRequest(cfg, {
       model: cfg.model,
       messages,
       temperature: input.temperature ?? DEFAULT_TEMPERATURE,
       jsonMode: input.jsonMode ?? false,
       timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     });
-    handle?.done(content);
+    handle?.done(content, { rawResponse: rawText, attempts });
     return content;
   } catch (err) {
     handle?.fail(err);
@@ -270,21 +296,39 @@ export async function toolChat(cfg: LlmEndpoint, input: ToolChatInput): Promise<
     { role: 'system', content: input.systemPrompt },
     { role: 'user', content: input.userText },
   ];
-  const message = await rawChatMessage(
-    cfg,
-    {
-      model: cfg.model,
-      messages,
-      temperature: input.temperature ?? DEFAULT_TEMPERATURE,
-      jsonMode: false,
-      timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-    },
-    { tools: input.tools, toolChoice: 'auto' },
-  );
-  const assistantMsg: Record<string, unknown> = { role: 'assistant', content: message.content ?? null };
-  if (Array.isArray(message.tool_calls)) assistantMsg.tool_calls = message.tool_calls;
-  messages.push(assistantMsg);
+  const handle = traceLlmCall({
+    model: cfg.model,
+    systemPrompt: input.systemPrompt,
+    userPrompt: input.userText,
+    title: '工具调用 · LLM',
+  });
+  try {
+    const { message, rawText, attempts } = await rawChatMessage(
+      cfg,
+      {
+        model: cfg.model,
+        messages,
+        temperature: input.temperature ?? DEFAULT_TEMPERATURE,
+        jsonMode: false,
+        timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      },
+      { tools: input.tools, toolChoice: 'auto' },
+    );
+    const assistantMsg: Record<string, unknown> = { role: 'assistant', content: message.content ?? null };
+    if (Array.isArray(message.tool_calls)) assistantMsg.tool_calls = message.tool_calls;
+    messages.push(assistantMsg);
 
-  const content = typeof message.content === 'string' ? message.content : null;
-  return { content, toolCalls: extractToolCalls(content, messages), messages };
+    const content = typeof message.content === 'string' ? message.content : null;
+    const toolCalls = extractToolCalls(content, messages);
+    const names = toolCalls.flatMap((c) => c.tool_calls.map((t) => t.function.name));
+    handle?.done(content ?? undefined, {
+      rawResponse: rawText,
+      attempts,
+      resultBrief: names.length ? `调用工具：${names.join('、')}` : '无工具调用',
+    });
+    return { content, toolCalls, messages };
+  } catch (err) {
+    handle?.fail(err);
+    throw err;
+  }
 }
