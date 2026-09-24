@@ -51,9 +51,9 @@ void main() {
   });
 
   group('PosterStyleRegistry 照片样式（kind=photo）', () {
-    test('9:16 提供 n1 / n2 / n3（方向一 · 净版）', () {
+    test('9:16 提供 n1-n3 / m1-m3（净版 + 画刊）', () {
       final ids = _ids(PosterKind.photo, PosterRatio.fullScreen);
-      expect(ids, <String>['n1', 'n2', 'n3']);
+      expect(ids, <String>['n1', 'n2', 'n3', 'm1', 'm2', 'm3']);
     });
 
     test('照片分享默认样式为满幅净版（n1）', () {
