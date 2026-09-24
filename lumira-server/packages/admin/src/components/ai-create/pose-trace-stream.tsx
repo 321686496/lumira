@@ -1,12 +1,14 @@
 'use client';
 
 // src/components/ai-create/pose-trace-stream.tsx
-// 姿势图批量生成实时过程：按每张（index）归组，展示 排队→生成中→完成/失败 + 耗时 + 模型（折叠 prompt）+ 失败原因。
+// 姿势图批量生成实时过程：按每张（index）归组，展示 排队→生成中→完成/失败 + 耗时 + 模型（prompt 默认展开）+ 失败原因。
+// 该张图生成过程中的模型调用（kind='llm'/'search'）以其原始数据卡片内嵌展示，不参与头部状态灯计算。
 // 数据来源：后端批量状态接口的事件日志（AiBatchImageTraceEvent[]），前端按 lastSeq 增量累积后传入。
 
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { TraceCallCard, TraceTextBlock, collapseTraceCalls } from '@/components/ai-create/trace-call-card';
 import type { AiBatchImageTraceEvent } from '@/types/admin';
 
 interface PoseTraceStreamProps {
@@ -66,12 +68,15 @@ export function PoseTraceStream({ events, running = false, title = '姿势图生
 }
 
 function PoseRow({ index, evs }: { index: number; evs: AiBatchImageTraceEvent[] }) {
-  const latest = evs[evs.length - 1]!;
+  // 头部状态只认姿势图生命周期事件（kind 缺省即 'pose'），避免被模型调用子事件污染
+  const poseEvs = evs.filter((e) => !e.kind || e.kind === 'pose');
+  const latest = poseEvs[poseEvs.length - 1] ?? evs[evs.length - 1]!;
   const meta = STATUS_META[latest.status] ?? STATUS_META.pending;
-  const finished = evs.find((e) => e.status === 'done' || e.status === 'error');
+  const finished = poseEvs.find((e) => e.status === 'done' || e.status === 'error');
   const prompt = finished?.prompt;
   const model = finished?.model;
   const duration = formatDuration(finished?.durationMs);
+  const calls = collapseTraceCalls(evs.filter((e) => e.kind === 'llm' || e.kind === 'search'));
   return (
     <div className="rounded-md border border-border bg-card px-3 py-2">
       <div className="flex items-center gap-2">
@@ -85,12 +90,10 @@ function PoseRow({ index, evs }: { index: number; evs: AiBatchImageTraceEvent[] 
         </span>
       </div>
       {finished?.error && <p className="mt-1 whitespace-pre-wrap break-all text-xs text-destructive">{finished.error}</p>}
-      {prompt && (
-        <details className="mt-1.5">
-          <summary className="cursor-pointer text-[11px] text-muted-foreground hover:text-foreground">提示词（{prompt.length} 字）</summary>
-          <pre className="mt-1 max-h-44 overflow-auto rounded bg-muted p-2 text-[11px] leading-relaxed whitespace-pre-wrap break-all">{prompt}</pre>
-        </details>
-      )}
+      {calls.map(({ key, ev }) => (
+        <TraceCallCard key={key} className="mt-1.5" ev={ev} />
+      ))}
+      {prompt && <TraceTextBlock label="最终生图提示词" text={prompt} />}
     </div>
   );
 }
