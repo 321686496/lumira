@@ -144,7 +144,24 @@ jobs:
           else
             COMPOSE_CMD="docker-compose"
           fi
-          sudo $COMPOSE_CMD -f docker-compose.prod.yml --env-file .env build
+          # BuildKit 偶发内部竞态（failed to solve: failed to compute cache key:
+          # failed to get state for index N on ... COPY ...），与仓库内容无关，
+          # 属已知间歇性 bug；清空构建缓存后重试即可恢复，故最多重试 3 次。
+          BUILD_OK=0
+          for attempt in 1 2 3; do
+            echo "==> docker compose build（第 ${attempt}/3 次尝试）"
+            if sudo $COMPOSE_CMD -f docker-compose.prod.yml --env-file .env build; then
+              BUILD_OK=1
+              break
+            fi
+            echo "==> 构建失败（第 ${attempt} 次），清理 BuildKit 构建缓存后 10 秒重试..."
+            sudo docker builder prune -f || true
+            sleep 10
+          done
+          if [ "$BUILD_OK" -ne 1 ]; then
+            echo "::error::docker compose build 连续 3 次失败，请检查上方构建日志"
+            exit 1
+          fi
 
           echo "==> [5/5] 重建容器（先干净下电再拉起，规避 force-recreate 的容器名竞态）"
           # 背景：docker compose up --force-recreate 会并行"停旧+建新"；
