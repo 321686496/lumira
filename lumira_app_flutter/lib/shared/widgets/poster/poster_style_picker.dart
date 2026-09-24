@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'poster_common.dart';
 import 'poster_style_types.dart';
+import 'poster_styles_shared.dart';
 
 /// 海报样式切换条（底部紧凑缩略条）。
 ///
@@ -41,17 +42,35 @@ class _PosterStylePickerState extends State<PosterStylePicker> {
   static const double _thumbWidth = 58;
   static const double _thumbHeight = 72;
   static const double _stripHeight = _thumbHeight + 20;
+  static const double _groupLabelWidth = 18;
 
   /// 每个样式的缩略图在 initState 时构建一次并缓存，
   /// 后续选中切换不再重建（仅外层选中态装饰变化）。
-  late final List<Widget> _thumbs;
+  late final Map<String, Widget> _thumbs;
+
+  /// 横向滚动项：分组标签（同组首款前插入一次）+ 缩略卡。
+  late final List<_PickerItem> _items;
 
   @override
   void initState() {
     super.initState();
-    _thumbs = widget.styles
-        .map((s) => s.builder(widget.data))
-        .toList(growable: false);
+    _thumbs = {for (final s in widget.styles) s.id: s.builder(widget.data)};
+    _items = _buildItems();
+  }
+
+  List<_PickerItem> _buildItems() {
+    final items = <_PickerItem>[];
+    String? current;
+    for (final s in widget.styles) {
+      if (s.group.isEmpty) {
+        current = null;
+      } else if (s.group != current) {
+        items.add(_PickerItem.group(s.group));
+        current = s.group;
+      }
+      items.add(_PickerItem.style(s));
+    }
+    return items;
   }
 
   @override
@@ -87,20 +106,61 @@ class _PosterStylePickerState extends State<PosterStylePicker> {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 4),
-            itemCount: widget.styles.length,
+            itemCount: _items.length,
             separatorBuilder: (_, __) => const SizedBox(width: 10),
             itemBuilder: (context, index) {
-              final s = widget.styles[index];
+              final item = _items[index];
+              final style = item.style;
+              if (style == null) return _GroupLabel(item.label!);
               return _CompactTab(
-                name: s.name,
-                selected: s.id == widget.selectedId,
-                onTap: () => widget.onSelect(s.id),
-                child: _thumbs[index],
+                name: style.name,
+                selected: style.id == widget.selectedId,
+                onTap: () => widget.onSelect(style.id),
+                child: _thumbs[style.id]!,
               );
             },
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 选择条横向滚动项：分组标签或缩略卡。
+class _PickerItem {
+  const _PickerItem.group(this.label) : style = null;
+  const _PickerItem.style(this.style) : label = null;
+
+  final String? label;
+  final PosterStyle? style;
+}
+
+/// 分组标签：金色短竖条 + 竖排组名（净版 / 画刊 / 画卷）。
+class _GroupLabel extends StatelessWidget {
+  const _GroupLabel(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: _PosterStylePickerState._groupLabelWidth,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(width: 2, height: 8, color: PosterPalette.gold),
+          const SizedBox(height: 3),
+          PosterVerticalText(
+            text: label,
+            style: posterPlain(
+              9,
+              color: PosterPalette.goldDeep,
+              weight: FontWeight.w600,
+              letterSpacing: 1,
+            ),
+            charGap: 1,
+          ),
+        ],
+      ),
     );
   }
 }

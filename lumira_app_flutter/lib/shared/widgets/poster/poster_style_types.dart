@@ -86,6 +86,7 @@ class PosterStyle {
     required this.kind,
     required this.ratios,
     required this.builder,
+    this.group = '',
   });
 
   /// 样式 id，如 'pA' / 'dN' / 'pE' / 'ckF'。
@@ -96,6 +97,9 @@ class PosterStyle {
 
   /// 分组展示名，如「样式一 · 经典面板」。
   final String groupName;
+
+  /// 样式选择条分组标签（如「净版 / 画刊 / 画卷」；为空表示不分组）。
+  final String group;
 
   final PosterKind kind;
 

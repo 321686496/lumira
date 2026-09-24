@@ -86,6 +86,27 @@ void main() {
       final ids = _ids(PosterKind.photo, PosterRatio.ratio43);
       expect(ids, <String>['pC']);
     });
+
+    test('9:16 九款带方向分组（净版 / 画刊 / 画卷）', () {
+      final styles = PosterStyleRegistry.stylesFor(PosterKind.photo, PosterRatio.fullScreen);
+      expect(
+        styles.map((s) => s.group).toList(),
+        <String>['净版', '净版', '净版', '画刊', '画刊', '画刊', '画卷', '画卷', '画卷'],
+      );
+    });
+
+    test('既有 3:4 / 1:1 款不带分组（group 为空）', () {
+      for (final ratio in const [
+        PosterRatio.ratio34,
+        PosterRatio.square,
+        PosterRatio.ratio169,
+        PosterRatio.ratio43,
+      ]) {
+        for (final s in PosterStyleRegistry.stylesFor(PosterKind.photo, ratio)) {
+          expect(s.group, isEmpty, reason: '${s.id} 不应分组');
+        }
+      }
+    });
   });
 
   group('PosterStyleRegistry 通用约束', () {
