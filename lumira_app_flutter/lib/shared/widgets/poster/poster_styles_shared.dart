@@ -341,3 +341,152 @@ class PosterPrintCard extends StatelessWidget {
     );
   }
 }
+
+/// 二维码迷你提示两行：主提示按「·」拆分为两行（副文案暂不上线，
+/// 画布高度收紧后 QR 迷你卡仅保留两行，见 docs/future-optimizations.md）。
+List<String> posterQrMiniLinesOf(PosterStyleData d) {
+  final hint = d.qrHint.isNotEmpty ? d.qrHint : posterQrHintOf(d);
+  final parts = hint
+      .split('·')
+      .map((s) => s.trim())
+      .where((s) => s.isNotEmpty)
+      .toList();
+  if (parts.length >= 2) {
+    return [parts.first, parts.sublist(1).join(' · ')];
+  }
+  return [hint, posterQrSubOf(d)];
+}
+
+/// 二维码迷你卡：白卡 + 36px 二维码 + 两行 8px 提示（九款底行通用）。
+class PosterQrMini extends StatelessWidget {
+  const PosterQrMini({super.key, required this.data});
+  final PosterStyleData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = posterQrMiniLinesOf(data);
+    return Container(
+      padding: const EdgeInsets.all(7),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: PosterPalette.line),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          PosterQr(
+            data: data.qrData,
+            size: 36,
+            padding: 0,
+            radius: 0,
+            background: Colors.white,
+          ),
+          const SizedBox(width: 6),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                lines.first,
+                style: posterPlain(8, color: PosterPalette.ink, weight: FontWeight.w600, letterSpacing: 1),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                lines.last,
+                style: posterPlain(8, color: PosterPalette.text3, letterSpacing: 1),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 迷你品牌脚（右对齐两行）：LUMIRA · 如画 + 如你所见，皆成画卷。
+class PosterFootMini extends StatelessWidget {
+  const PosterFootMini({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('LUMIRA',
+                style: posterSerifEn(8, color: PosterPalette.goldDeep, letterSpacing: 2)),
+            const SizedBox(width: 3),
+            Text('· 如画', style: posterPlain(8, color: PosterPalette.text3)),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text('如你所见，皆成画卷',
+            style: posterPlain(7.5, color: PosterPalette.text3, letterSpacing: 1)),
+      ],
+    );
+  }
+}
+
+/// 题跋文本（画卷方向）：衬线 text2，默认 9.5px / 字距 2 / 行高 1.6。
+class PosterPara extends StatelessWidget {
+  const PosterPara({
+    super.key,
+    required this.text,
+    this.size = 9.5,
+    this.letterSpacing = 2,
+    this.height = 1.6,
+  });
+
+  final String text;
+  final double size;
+  final double letterSpacing;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: posterSerif(
+        size,
+        color: PosterPalette.text2,
+        letterSpacing: letterSpacing,
+        weight: FontWeight.w400,
+        height: height,
+      ),
+    );
+  }
+}
+
+/// 竖排文字：逐字 Column + 固定字距（不用 RotatedBox，字距与基线可控）。
+class PosterVerticalText extends StatelessWidget {
+  const PosterVerticalText({
+    super.key,
+    required this.text,
+    required this.style,
+    this.charGap = 2,
+  });
+
+  final String text;
+  final TextStyle style;
+
+  /// 相邻两字之间的附加间距。
+  final double charGap;
+
+  @override
+  Widget build(BuildContext context) {
+    final glyphs = text.characters.toList();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < glyphs.length; i++) ...[
+          Text(glyphs[i], style: style),
+          if (i < glyphs.length - 1) SizedBox(height: charGap),
+        ],
+      ],
+    );
+  }
+}

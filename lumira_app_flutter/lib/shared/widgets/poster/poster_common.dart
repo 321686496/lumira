@@ -566,6 +566,9 @@ class PosterAuthorRow extends StatelessWidget {
     this.light = false,
     this.avatarSize = 24,
     this.justifyCenter = false,
+    this.whoSize = 11,
+    this.withSize = 9,
+    this.gap = 8,
   });
 
   final String name;
@@ -573,6 +576,15 @@ class PosterAuthorRow extends StatelessWidget {
   final bool light;
   final double avatarSize;
   final bool justifyCenter;
+
+  /// 「@小满」字号（9:16 新款式用 10 / 8.5）。
+  final double whoSize;
+
+  /// 落款「· 用「如画」拍摄」字号（9:16 新款式用 8）。
+  final double withSize;
+
+  /// 头像与文字间距（9:16 新款式用 6 / 5）。
+  final double gap;
 
   @override
   Widget build(BuildContext context) {
@@ -582,10 +594,13 @@ class PosterAuthorRow extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         PosterAvatar(char: name.isEmpty ? 'L' : name.characters.first, size: avatarSize),
-        const SizedBox(width: 8),
-        Text('@$name', style: posterPlain(11, color: who, weight: FontWeight.w600, letterSpacing: 1)),
-        const SizedBox(width: 6),
-        Text('· $suffix', style: posterPlain(9, color: withC, letterSpacing: 1)),
+        SizedBox(width: gap),
+        Text('@$name',
+            style: posterPlain(whoSize, color: who, weight: FontWeight.w600, letterSpacing: 1)),
+        if (suffix.isNotEmpty) ...[
+          const SizedBox(width: 6),
+          Text('· $suffix', style: posterPlain(withSize, color: withC, letterSpacing: 1)),
+        ],
       ],
     );
     return justifyCenter ? Center(child: row) : row;
