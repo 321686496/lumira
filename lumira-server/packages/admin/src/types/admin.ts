@@ -584,8 +584,16 @@ export interface AiBatchImageTraceEvent {
   index: number;
   title: string;
   status: 'pending' | 'running' | 'done' | 'error';
+  /** 事件种类：缺省 'pose'（姿势图生命周期）；'llm'/'search' 为该张图生成过程中的模型调用 */
+  kind?: 'pose' | 'llm' | 'search';
   prompt?: string;
   model?: string;
+  /** 模型调用的原始数据（kind='llm'/'search'） */
+  systemPrompt?: string;
+  userPrompt?: string;
+  response?: string;
+  rawResponse?: string;
+  attempts?: number;
   error?: string;
   durationMs?: number;
 }
@@ -655,6 +663,10 @@ export interface AiTraceEvent {
   imageBytes?: number;
   /** 响应正文（LLM 输出 / 检索命中摘要） */
   response?: string;
+  /** 上游原始响应体全文（LLM 为原始 JSON 文本；检索为原始返回） */
+  rawResponse?: string;
+  /** 实际发出的请求次数（含降级/重试；1 表示一次成功） */
+  attempts?: number;
   /** 阶段结论简述 */
   resultBrief?: string;
   error?: string;
