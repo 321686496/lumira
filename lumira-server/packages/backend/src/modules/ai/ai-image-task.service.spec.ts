@@ -7,6 +7,7 @@ import { AiImageTaskService } from './ai-image-task.service';
 import { AiGenerateImageService } from './ai-generate-image.service';
 import { AiConfigService } from './ai-config.service';
 import type { UploadFile } from '../templates/admin-templates.service';
+import { traceLlmCall } from './llm-trace';
 
 describe('AiImageTaskService', () => {
   let service: AiImageTaskService;
@@ -263,4 +264,44 @@ describe('AiImageTaskService', () => {
     expect(errorEvents[0].error).toBe('AI 上游错误（HTTP 500）：boom');
     expect(typeof errorEvents[0].durationMs).toBe('number');
   }, 30000);
+
+  it('批量姿势任务：生图链路的 LLM 调用以 kind="llm" 归属对应 index，并带提示词与原始响应', async () => {
+    getActiveConfigMock.mockResolvedValue({} as never);
+    generateMock.mockImplementation(async () => {
+      // 模拟 AiGenerateImageService.generate 内部的 composeImagePrompt → textChat：
+      // 只有 run() 建立了采集上下文时 handle 才非 null
+      const handle = traceLlmCall({ model: 'qwen-plus', systemPrompt: '整理生图提示词', userPrompt: '素材…' })!;
+      handle.done('柔和暖光写真', { rawResponse: '{"choices":[{"message":{"content":"柔和暖光写真"}}]}', attempts: 1 });
+      return { base64: 'cG9zZQ==', mimeType: 'image/png', prompt: '柔和暖光写真', model: 'doubao-seedream' };
+    });
+    const draft = { pose: [{ index: 0 }, { index: 1 }] };
+
+    const { batchId } = await service.submitBatch(undefined, JSON.stringify(draft));
+    await waitBatchStatus(batchId, 'done');
+
+    const events = service.getBatch(batchId)!.events;
+    // llm-trace 每次调用留两条事件（running 带提示词、done 带响应），与识别流一致，故按 status 分列断言
+    const llmRunning = events.filter((e) => e.kind === 'llm' && e.status === 'running');
+    const llmDone = events.filter((e) => e.kind === 'llm' && e.status === 'done');
+    expect(llmRunning).toHaveLength(2); // 两张姿势图各一次
+    expect(llmDone).toHaveLength(2);
+    expect(llmRunning.map((e) => e.index).sort((a, b) => a - b)).toEqual([0, 1]);
+    expect(llmDone.map((e) => e.index).sort((a, b) => a - b)).toEqual([0, 1]);
+    expect(llmRunning[0]).toMatchObject({
+      status: 'running',
+      model: 'qwen-plus',
+      systemPrompt: '整理生图提示词',
+      userPrompt: '素材…',
+    });
+    expect(llmDone[0]).toMatchObject({
+      status: 'done',
+      model: 'qwen-plus',
+      response: '柔和暖光写真',
+      rawResponse: '{"choices":[{"message":{"content":"柔和暖光写真"}}]}',
+      attempts: 1,
+    });
+    // pose 自身事件不受影响：仍有两张图的 done 事件
+    const poseDone = events.filter((e) => e.status === 'done' && e.kind !== 'llm');
+    expect(poseDone.map((e) => e.index).sort((a, b) => a - b)).toEqual([0, 1]);
+  });
 });

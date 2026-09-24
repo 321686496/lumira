@@ -8,6 +8,8 @@ import { nanoid } from 'nanoid';
 import { UploadFile } from '../templates/admin-templates.service';
 import { AiConfigService } from './ai-config.service';
 import { AiGenerateImageService } from './ai-generate-image.service';
+import { runWithTrace } from './llm-trace';
+import type { AiTraceEvent } from './llm-trace';
 
 export type ImageTaskStatus = 'pending' | 'running' | 'done' | 'error';
 
@@ -59,8 +61,20 @@ export interface AiBatchImageTraceEvent {
   index: number;
   title: string;
   status: ImageTaskStatus;
+  /**
+   * 事件种类：缺省 'pose'（该张姿势图的生命周期事件）；
+   * 'llm' / 'search' 为该张图生成过程中的模型调用（如提示词整理），用于展示提示词与原始响应。
+   */
+  kind?: 'pose' | 'llm' | 'search';
+  /** 生图最终提示词（仅 pose done 事件） */
   prompt?: string;
   model?: string;
+  /** LLM 调用的原始数据（kind='llm'/'search' 时） */
+  systemPrompt?: string;
+  userPrompt?: string;
+  response?: string;
+  rawResponse?: string;
+  attempts?: number;
   error?: string;
   durationMs?: number;
 }
@@ -253,7 +267,26 @@ export class AiImageTaskService implements OnModuleDestroy {
     this.emitBatchEvent(task.batchId, { index, title: `姿势图 #${index + 1} 生成中`, status: 'running' });
     this.refreshBatch(task.batchId);
     try {
-      const r = await this.generateWithRetry(reference, metaJson, extraPrompt, research);
+      // 该张图生成过程中的 LLM 调用（提示词整理等）以 kind='llm' 归属本张 index，
+      // 前端在「姿势图生成」过程里可看到每次请求的提示词与上游原始响应。
+      const sink = (ev: Omit<AiTraceEvent, 'seq' | 'ts'>): void => {
+        if (ev.type !== 'llm' && ev.type !== 'search') return; // 阶段/备注事件不进入批次流
+        this.emitBatchEvent(task.batchId, {
+          index,
+          kind: ev.type,
+          title: ev.title,
+          status: ev.status === 'running' ? 'running' : ev.status === 'done' ? 'done' : 'error',
+          model: ev.model,
+          systemPrompt: ev.systemPrompt,
+          userPrompt: ev.userPrompt,
+          response: ev.response,
+          rawResponse: ev.rawResponse,
+          attempts: ev.attempts,
+          error: ev.error,
+          durationMs: ev.durationMs,
+        });
+      };
+      const r = await runWithTrace(sink, () => this.generateWithRetry(reference, metaJson, extraPrompt, research));
       task.status = 'done';
       task.result = { image: r.base64, mimeType: r.mimeType };
       task.prompt = r.prompt;
