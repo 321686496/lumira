@@ -55,34 +55,51 @@ function originOf(url: string): string | null {
   return m ? m[0] : null;
 }
 
-/** 从任意图片值中提取 /uploads/templates/{templateId}/{filename} 两段 */
+/**
+ * 从任意图片值中提取 {templateId}/{filename} 两段。
+ * 兼容两类来源：
+ *   - 源图 `/uploads/templates/{templateId}/{filename}`
+ *   - 旧版本遗留的缩略图端点 `/api/v1/thumbs/templates/{templateId}/{filename}?w=...`
+ *     （此类 DB 值无法由 buildAssetUrl 重写，需在此识别以便推导存储直连 URL，见顶部注释）
+ */
 function parseTemplateSource(url: string): { templateId: string; filename: string } | null {
-  const marker = '/uploads/templates/';
-  const idx = url.indexOf(marker);
-  if (idx < 0) return null;
+  const markers = ['/uploads/templates/', '/api/v1/thumbs/templates/'];
+  for (const marker of markers) {
+    const idx = url.indexOf(marker);
+    if (idx < 0) continue;
 
-  const cleanPath = url.slice(idx + marker.length).split(/[?#]/)[0];
-  const parts = cleanPath.split('/').filter(Boolean);
-  if (parts.length !== 2) return null;
-  const [templateId, filename] = parts;
-  if (!/^[a-z0-9][a-z0-9_-]*$/i.test(templateId)) return null;
-  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(filename)) return null;
-  return { templateId, filename };
+    const cleanPath = url.slice(idx + marker.length).split(/[?#]/)[0];
+    const parts = cleanPath.split('/').filter(Boolean);
+    if (parts.length !== 2) return null;
+    const [templateId, filename] = parts;
+    if (!/^[a-z0-9][a-z0-9_-]*$/i.test(templateId)) return null;
+    if (!/^[a-z0-9][a-z0-9._-]*$/i.test(filename)) return null;
+    return { templateId, filename };
+  }
+  return null;
 }
 
-/** 从任意图片值中提取 /uploads/categories/{key}/{filename} 两段 */
+/**
+ * 从任意图片值中提取 {key}（/ 可选 {filename}）两段。
+ * 兼容源图 `/uploads/categories/{key}/{filename}` 与旧缩略图端点
+ * `/api/v1/thumbs/categories/{key}?w=...`（后者仅 key，无 filename）。
+ */
 function parseCategorySource(url: string): { key: string; filename: string } | null {
-  const marker = '/uploads/categories/';
-  const idx = url.indexOf(marker);
-  if (idx < 0) return null;
+  const markers = ['/uploads/categories/', '/api/v1/thumbs/categories/'];
+  for (const marker of markers) {
+    const idx = url.indexOf(marker);
+    if (idx < 0) continue;
 
-  const cleanPath = url.slice(idx + marker.length).split(/[?#]/)[0];
-  const parts = cleanPath.split('/').filter(Boolean);
-  if (parts.length !== 2) return null;
-  const [key, filename] = parts;
-  if (!/^[a-z0-9][a-z0-9_-]*$/i.test(key)) return null;
-  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(filename)) return null;
-  return { key, filename };
+    const cleanPath = url.slice(idx + marker.length).split(/[?#]/)[0];
+    const parts = cleanPath.split('/').filter(Boolean);
+    if (parts.length < 1 || parts.length > 2) return null;
+    const key = parts[0];
+    const filename = parts[1] ?? '';
+    if (!/^[a-z0-9][a-z0-9_-]*$/i.test(key)) return null;
+    if (filename && !/^[a-z0-9][a-z0-9._-]*$/i.test(filename)) return null;
+    return { key, filename };
+  }
+  return null;
 }
 
 /**

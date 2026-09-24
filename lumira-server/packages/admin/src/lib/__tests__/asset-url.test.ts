@@ -101,6 +101,24 @@ describe('thumbnail URLs', () => {
     ).toBe('https://cdn.example.com/cover.png');
   });
 
+  // DB 里可能遗留旧版缩略图端点 URL（/api/v1/thumbs/*），应能识别并推导存储直连
+  it('parses legacy thumbnail-endpoint URLs into storage-direct thumbnails', () => {
+    expect(
+      toTemplateThumbUrl(
+        'https://lumira.iwtle.top/api/v1/thumbs/templates/srv_b/image_0.webp?w=480',
+        'https://lumira.example.com',
+        480,
+      ),
+    ).toBe('https://lumira.iwtle.top/uploads/thumbs/templates/srv_b/image_0.w480.webp');
+    expect(
+      toCategoryThumbUrl(
+        'https://lumira.iwtle.top/api/v1/thumbs/categories/portrait?w=320',
+        'https://lumira.example.com',
+        320,
+      ),
+    ).toBe('https://lumira.iwtle.top/uploads/thumbs/categories/portrait/w320.jpg');
+  });
+
   it('builds template thumbnail fallback URLs (backend dynamic endpoint)', () => {
     expect(
       toTemplateThumbFallbackUrl('https://lumira.example.com/uploads/templates/srv_a/image_0.png', 640),

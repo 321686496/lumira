@@ -32,24 +32,30 @@ class _TemplateSource {
   final String filename;
 }
 
-/// 从任意图片值中提取 /uploads/templates/{templateId}/{filename} 两段。
+/// 从任意图片值中提取 {templateId}/{filename} 两段。
+/// 兼容源图 `/uploads/templates/{id}/{file}` 与旧版本遗留的缩略图端点
+/// `/api/v1/thumbs/templates/{id}/{file}?w=...`（DB 遗留值，buildAssetUrl 无法改写，
+/// 需在此识别以便推导存储直连 URL）。
 _TemplateSource? _parseTemplateSource(String url) {
-  const marker = '/uploads/templates/';
-  final idx = url.indexOf(marker);
-  if (idx < 0) return null;
+  const markers = ['/uploads/templates/', '/api/v1/thumbs/templates/'];
+  for (final marker in markers) {
+    final idx = url.indexOf(marker);
+    if (idx < 0) continue;
 
-  final cleanPath = url.substring(idx + marker.length).split('?').first.split('#').first;
-  final parts = cleanPath.split('/').where((p) => p.isNotEmpty).toList();
-  if (parts.length != 2) return null;
-  final templateId = parts[0];
-  final filename = parts[1];
-  if (!RegExp(r'^[a-z0-9][a-z0-9_-]*$', caseSensitive: false).hasMatch(templateId)) {
-    return null;
+    final cleanPath = url.substring(idx + marker.length).split('?').first.split('#').first;
+    final parts = cleanPath.split('/').where((p) => p.isNotEmpty).toList();
+    if (parts.length != 2) return null;
+    final templateId = parts[0];
+    final filename = parts[1];
+    if (!RegExp(r'^[a-z0-9][a-z0-9_-]*$', caseSensitive: false).hasMatch(templateId)) {
+      return null;
+    }
+    if (!RegExp(r'^[a-z0-9][a-z0-9._-]*$', caseSensitive: false).hasMatch(filename)) {
+      return null;
+    }
+    return _TemplateSource(templateId, filename);
   }
-  if (!RegExp(r'^[a-z0-9][a-z0-9._-]*$', caseSensitive: false).hasMatch(filename)) {
-    return null;
-  }
-  return _TemplateSource(templateId, filename);
+  return null;
 }
 
 /// 分类原图源信息（Dart 2.19 无 records，用私有类承载）。
@@ -59,24 +65,30 @@ class _CategorySource {
   final String filename;
 }
 
-/// 从任意图片值中提取 /uploads/categories/{key}/{filename} 两段。
+/// 从任意图片值中提取 {key}（/ 可选 {filename}）两段。
+/// 兼容源图 `/uploads/categories/{key}/{file}` 与旧缩略图端点
+/// `/api/v1/thumbs/categories/{key}?w=...`（后者仅 key，无 filename）。
 _CategorySource? _parseCategorySource(String url) {
-  const marker = '/uploads/categories/';
-  final idx = url.indexOf(marker);
-  if (idx < 0) return null;
+  const markers = ['/uploads/categories/', '/api/v1/thumbs/categories/'];
+  for (final marker in markers) {
+    final idx = url.indexOf(marker);
+    if (idx < 0) continue;
 
-  final cleanPath = url.substring(idx + marker.length).split('?').first.split('#').first;
-  final parts = cleanPath.split('/').where((p) => p.isNotEmpty).toList();
-  if (parts.length != 2) return null;
-  final key = parts[0];
-  final filename = parts[1];
-  if (!RegExp(r'^[a-z0-9][a-z0-9_-]*$', caseSensitive: false).hasMatch(key)) {
-    return null;
+    final cleanPath = url.substring(idx + marker.length).split('?').first.split('#').first;
+    final parts = cleanPath.split('/').where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty || parts.length > 2) return null;
+    final key = parts[0];
+    final filename = parts.length > 1 ? parts[1] : '';
+    if (!RegExp(r'^[a-z0-9][a-z0-9_-]*$', caseSensitive: false).hasMatch(key)) {
+      return null;
+    }
+    if (filename.isNotEmpty &&
+        !RegExp(r'^[a-z0-9][a-z0-9._-]*$', caseSensitive: false).hasMatch(filename)) {
+      return null;
+    }
+    return _CategorySource(key, filename);
   }
-  if (!RegExp(r'^[a-z0-9][a-z0-9._-]*$', caseSensitive: false).hasMatch(filename)) {
-    return null;
-  }
-  return _CategorySource(key, filename);
+  return null;
 }
 
 /// 存储直连缩略图 URL 拼接：源 URL 为 HTTPS 绝对地址时用其 origin（即激活存储

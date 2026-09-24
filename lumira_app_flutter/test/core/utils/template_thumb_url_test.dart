@@ -29,6 +29,27 @@ void main() {
     expect(templateThumbUrl(thumb), thumb);
   });
 
+  test('parses legacy thumbnail-endpoint URLs into storage-direct thumbnails', () {
+    // DB 里可能遗留旧版缩略图端点 /api/v1/thumbs/*，应能识别并推导存储直连
+    expect(
+      templateThumbUrl(
+        'https://lumira.iwtle.top/api/v1/thumbs/templates/srv_b/image_0.webp?w=480',
+        baseUrl: backendUrl,
+        w: 480,
+      ),
+      'https://lumira.iwtle.top/uploads/thumbs/templates/srv_b/image_0.w480.webp',
+    );
+    expect(
+      categoryThumbUrl(
+        'https://lumira.iwtle.top/api/v1/thumbs/categories/portrait?w=320',
+        'portrait',
+        baseUrl: backendUrl,
+        w: 320,
+      ),
+      'https://lumira.iwtle.top/uploads/thumbs/categories/portrait/w320.jpg',
+    );
+  });
+
   test('builds template thumbnail fallback URL on the backend endpoint', () {
     const original = 'https://cdn.example.com/uploads/templates/srv_a/image_0.png';
     expect(
