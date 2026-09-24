@@ -11,7 +11,8 @@ export 'poster_style_types.dart' show PosterKind, PosterStyle, PosterStyleData;
 /// 海报样式注册表：按 kind + ratio 返回可选样式。
 ///
 /// 样式清单严格对应选型稿 `docs/design/poster_mockup_selected.html`
-/// （模板 15 款 + 照片 11 款）；「扫码导入」海报走导出分享流程
+/// （模板 10 款 + 照片 15 款，其中 9:16 为 2026-09-24 重设计三方向九款）；
+/// 「扫码导入」海报走导出分享流程
 /// （`export_detail_page` 内 `TemplateImportPoster`），不在此注册。
 class PosterStyleRegistry {
   PosterStyleRegistry._();

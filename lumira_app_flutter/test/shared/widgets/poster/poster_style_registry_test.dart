@@ -51,10 +51,14 @@ void main() {
   });
 
   group('PosterStyleRegistry 照片样式（kind=photo）', () {
-    test('9:16 提供 d1 / dN / dL', () {
+    test('9:16 提供 n1 / n2 / n3（方向一 · 净版）', () {
       final ids = _ids(PosterKind.photo, PosterRatio.fullScreen);
-      expect(ids, containsAll(<String>['d1', 'dN', 'dL']));
-      expect(ids.length, 3);
+      expect(ids, <String>['n1', 'n2', 'n3']);
+    });
+
+    test('照片分享默认样式为满幅净版（n1）', () {
+      final def = PosterStyleRegistry.defaultFor(PosterKind.photo, PosterRatio.fullScreen);
+      expect(def?.id, 'n1');
     });
 
     test('3:4 提供 d3 / dA / s1', () {
