@@ -326,6 +326,7 @@ export class InviteService {
         eq(inviteRecords.status, 'pending'),
       ));
     const totalInvites = successCount[0]?.value || 0;
+    const pendingInvites = pendingCount[0]?.value || 0;
 
     // 当前阶梯
     const tiers = await db.query.rewardTiers.findMany({
@@ -434,7 +435,7 @@ export class InviteService {
 
     return {
       totalInvites,
-      pendingInvites: pendingCount,
+      pendingInvites,
       currentTier,
       nextTier,
       myInviteCode,
