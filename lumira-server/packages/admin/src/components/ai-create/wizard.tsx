@@ -36,6 +36,7 @@ import { Upload } from '@phosphor-icons/react/dist/csr/Upload';
 import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
 import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
 import { Check } from '@phosphor-icons/react/dist/csr/Check';
+import { CaretDown } from '@phosphor-icons/react/dist/csr/CaretDown';
 import { cn } from '@/lib/utils';
 
 const WIZARD_STEPS = [
@@ -104,21 +105,34 @@ export function AiCreateWizard({
   /** Step1 附加输入：创作要求 / 姿势个数（'auto' = AI 自动判断）；主文字描述复用 inputText（同时作为 textDesc 附加输入） */
   const [creationReq, setCreationReq] = useState('');
   const [poseCount, setPoseCount] = useState('auto');
+  /** Step1「高级设置」折叠区是否展开（低频参数：补充创作要求 / 姿势个数） */
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   /** AI 剪影可用性（配置且启用）：Step4 默认引擎 + 全自动流程剪影 engine */
   const [aiSilhouetteAvailable, setAiSilhouetteAvailable] = useState(false);
   /** 生效的剪影模型名（未单独指定 = 生图模型），Step4 展示 */
   const [silhouetteModelName, setSilhouetteModelName] = useState<string | null>(null);
   const stampRef = useRef(0);
+  /** 全自动流程的中止控制器（每次 runAutoAll 新建；结束/中止后清空） */
+  const abortRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleImagesChange = useCallback((files: File[]) => setFormImages(files), []);
 
   /** 预览宿主（TemplateForm portal 目标）与 xl 断点（决定宿主位置：右栏 sticky / stepper 下方） */
   const [previewHost, setPreviewHost] = useState<HTMLDivElement | null>(null);
   const [isXl, setIsXl] = useState(true);
+  /** 预览面板是否收起；首次断点测量时按 xl 与否设默认值（<xl 默认收起，xl 默认展开） */
+  const [previewCollapsed, setPreviewCollapsed] = useState(false);
+  const previewInitRef = useRef(false);
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1280px)');
-    const update = () => setIsXl(mq.matches);
+    const update = () => {
+      setIsXl(mq.matches);
+      if (!previewInitRef.current) {
+        previewInitRef.current = true;
+        setPreviewCollapsed(!mq.matches);
+      }
+    };
     update();
     mq.addEventListener('change', update);
     return () => mq.removeEventListener('change', update);
@@ -126,6 +140,8 @@ export function AiCreateWizard({
 
   const busy = analyzing || Boolean(autoState?.running);
   const hasInput = Boolean(exampleFile) || inputText.trim() !== '';
+  /** 高级设置已填项数（用于折叠态提示） */
+  const advancedFilledCount = (creationReq.trim() !== '' ? 1 : 0) + (poseCount !== 'auto' ? 1 : 0);
 
   /** 挂载时读 AI 配置：Step4 默认引擎、全自动剪影 engine、模型名展示 */
   useEffect(() => {
@@ -270,6 +286,9 @@ export function AiCreateWizard({
   const runAutoAll = async () => {
     if (!hasInput) return;
     setErrorText(null);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const { signal } = controller;
     let stage: AutoStage = 'analyzing';
     setTraceEvents([]);
     setPoseTraceEvents([]);
@@ -288,7 +307,7 @@ export function AiCreateWizard({
         setErrorText(started?.error || '识别提交失败，请重试');
         return;
       }
-      const analyzeResult = await pollAiAnalyzeTask(started.taskId, { onEvents: setTraceEvents });
+      const analyzeResult = await pollAiAnalyzeTask(started.taskId, { onEvents: setTraceEvents, signal });
       if (!analyzeResult.draft) {
         setAutoState(null);
         setErrorText('识别结果为空，请重试');
@@ -350,6 +369,7 @@ export function AiCreateWizard({
         draft: draftLocal,
         referenceFile: poseReferenceFile ?? exampleFile,
         research: analyzeResult.research,
+        signal,
         onProgress: setPoseProgress,
         onResult: appendGeneratedPose,
         onEvents: setPoseTraceEvents,
@@ -385,6 +405,7 @@ export function AiCreateWizard({
         mode: 'sketch',
         crop: true,
         engine: aiSilhouetteAvailable ? 'ai' : 'local',
+        signal,
       });
       const silFiles = silResults
         .filter((result): result is { index: number; file: File } => Boolean(result.file))
@@ -405,14 +426,19 @@ export function AiCreateWizard({
       setAutoState({ running: true, stage });
       inject({ silhouettes: silFiles, isActive: true, autoSubmit: true });
     } catch (e) {
-      // 意外异常（网络中断 / 框架层错误）：停在当前阶段，错误透出，不再永久卡"进行中"
+      // 意外异常（网络中断 / 框架层错误）或用户中止：停在当前阶段，错误透出，不再永久卡「进行中」
       const msg = e instanceof Error ? e.message : String(e);
-      setAutoState({ running: false, stage, error: msg });
-      toast({
-        variant: 'destructive',
-        title: `全自动在「${AUTO_STAGE_TEXT[stage]}」阶段异常`,
-        description: msg,
-      });
+      const aborted = msg === '已中止';
+      setAutoState({ running: false, stage, error: aborted ? '已中止，可人工继续或调整后重试' : msg });
+      if (!aborted) {
+        toast({
+          variant: 'destructive',
+          title: `全自动在「${AUTO_STAGE_TEXT[stage]}」阶段异常`,
+          description: msg,
+        });
+      }
+    } finally {
+      abortRef.current = null;
     }
   };
 
@@ -436,13 +462,30 @@ export function AiCreateWizard({
   /** 常驻预览面板：识别前占位，识别后由 TemplateForm portal 填充宿主 */
   const previewPanel = (
     <div className="rounded-lg border border-border bg-card p-4">
-      <h3 className="text-sm font-medium text-foreground mb-3">实时预览</h3>
-      {!formActivated ? (
-        <div className="flex h-[480px] items-center justify-center rounded-md border border-dashed border-border px-4 text-center text-sm text-muted-foreground">
-          识别完成后此处实时预览参数、姿势与封面效果
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-medium text-foreground">实时预览</h3>
+        <button
+          type="button"
+          onClick={() => setPreviewCollapsed((o) => !o)}
+          className="text-xs text-muted-foreground hover:text-foreground"
+        >
+          {previewCollapsed ? '展开' : '收起'}
+        </button>
+      </div>
+      {/* 折叠用 hidden 而非卸载，保住 TemplateForm 的 portal 宿主 */}
+      <div className={cn(previewCollapsed && 'hidden')}>
+        {!formActivated ? (
+          <div className="flex h-[480px] items-center justify-center rounded-md border border-dashed border-border px-4 text-center text-sm text-muted-foreground">
+            识别完成后此处实时预览参数、姿势与封面效果
+          </div>
+        ) : (
+          <div ref={setPreviewHost} />
+        )}
+      </div>
+      {previewCollapsed && (
+        <div className="rounded-md border border-dashed border-border px-4 py-2 text-center text-xs text-muted-foreground">
+          预览已收起
         </div>
-      ) : (
-        <div ref={setPreviewHost} />
       )}
     </div>
   );
@@ -472,29 +515,38 @@ export function AiCreateWizard({
 
         {/* 顶部 stepper */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          {WIZARD_STEPS.map((s, i) => (
-            <div key={s.n} className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                disabled={busy || s.n > maxStep}
-                onClick={() => setStep(s.n)}
-                className={cn(
-                  'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
-                  s.n === step
-                    ? 'bg-primary text-primary-foreground'
-                    : s.n < step || s.n <= maxStep
-                      ? 'bg-primary/10 text-primary'
-                      : 'bg-muted text-muted-foreground',
+          {WIZARD_STEPS.map((s, i) => {
+            const reached = s.n <= maxStep;
+            const isCurrent = s.n === step;
+            const isDone = s.n < step;
+            return (
+              <div key={s.n} className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  disabled={busy || !reached}
+                  onClick={() => setStep(s.n)}
+                  className={cn(
+                    'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
+                    isCurrent
+                      ? 'bg-primary text-primary-foreground'
+                      : isDone
+                        ? 'bg-primary/10 text-primary'
+                        : reached
+                          ? 'border border-border text-foreground'
+                          : 'bg-muted text-muted-foreground',
+                  )}
+                >
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-current text-[10px]">
+                    {isDone ? <Check size={10} /> : s.n}
+                  </span>
+                  <span className="font-medium">{s.title}</span>
+                </button>
+                {i < WIZARD_STEPS.length - 1 && (
+                  <span className={cn(isDone ? 'text-primary/40' : 'text-muted-foreground/50')}>→</span>
                 )}
-              >
-                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-current text-[10px]">
-                  {s.n < step ? <Check size={10} /> : s.n}
-                </span>
-                <span className="font-medium">{s.title}</span>
-              </button>
-              {i < WIZARD_STEPS.length - 1 && <span className="text-muted-foreground/50">→</span>}
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
 
         {/* 非 xl：预览面板置于 stepper 下方 */}
@@ -508,6 +560,13 @@ export function AiCreateWizard({
               {autoState.stage === 'generating-image' && poseProgress
                 ? `（第 ${poseProgress.current}/${poseProgress.total} 张）`
                 : ''}
+              <button
+                type="button"
+                onClick={() => abortRef.current?.abort()}
+                className="ml-auto shrink-0 rounded border border-primary/40 px-2 py-0.5 text-xs text-primary transition-colors hover:bg-primary/10"
+              >
+                中止
+              </button>
             </div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-primary/20">
               <div
@@ -575,42 +634,64 @@ export function AiCreateWizard({
                 )}
               </div>
 
-              {/* 附加输入：影响 AI 识别草稿（识别与全自动均生效） */}
-              <div className="space-y-2">
-                <Label htmlFor="ai-creation-req">创作要求（可选）</Label>
-                <Textarea
-                  id="ai-creation-req"
-                  value={creationReq}
-                  onChange={(e) => setCreationReq(e.target.value)}
-                  placeholder="对 AI 的额外创作指令，如「偏胶片感」「避开正午顶光」"
-                  rows={3}
-                  disabled={busy}
-                />
-              </div>
+              {/* 附加输入：低频参数收进折叠区，避免与主文字描述语义重复 */}
+              <div className="rounded-lg border border-border">
+                <button
+                  type="button"
+                  onClick={() => setAdvancedOpen((o) => !o)}
+                  className="flex w-full items-center gap-2 px-4 py-3 text-left"
+                >
+                  <span className="text-sm font-medium text-foreground">高级设置（可选）</span>
+                  {advancedFilledCount > 0 && (
+                    <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                      已填 {advancedFilledCount} 项
+                    </span>
+                  )}
+                  <CaretDown
+                    size={14}
+                    className={cn('ml-auto text-muted-foreground transition-transform', advancedOpen && 'rotate-180')}
+                  />
+                </button>
+                {advancedOpen && (
+                  <div className="space-y-4 border-t border-border p-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-creation-req">补充创作要求（可选）</Label>
+                      <Textarea
+                        id="ai-creation-req"
+                        value={creationReq}
+                        onChange={(e) => setCreationReq(e.target.value)}
+                        placeholder="对 AI 的额外创作指令，如「偏胶片感」「避开正午顶光」"
+                        rows={3}
+                        disabled={busy}
+                      />
+                    </div>
 
-              <div className="space-y-2 md:max-w-xs">
-                <Label>姿势个数</Label>
-                <Select value={poseCount} onValueChange={setPoseCount} disabled={busy}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="AI 自动判断" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">AI 自动判断</SelectItem>
-                    {[1, 2, 3, 4, 5, 6].map((n) => (
-                      <SelectItem key={n} value={String(n)}>
-                        固定 {n} 个
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  选「AI 自动判断」时，将结合文字描述 / 创作要求（含示例图中可见的文字要求）在 1~6 个范围内决定姿势数量
-                </p>
+                    <div className="space-y-2 md:max-w-xs">
+                      <Label>姿势个数</Label>
+                      <Select value={poseCount} onValueChange={setPoseCount} disabled={busy}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="AI 自动判断" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">AI 自动判断</SelectItem>
+                          {[1, 2, 3, 4, 5, 6].map((n) => (
+                            <SelectItem key={n} value={String(n)}>
+                              固定 {n} 个
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        选「AI 自动判断」时，将结合文字描述 / 补充创作要求（含示例图中可见的文字要求）在 1~6 个范围内决定姿势数量
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="rounded-lg border border-border p-4">
                 <Label htmlFor="ai-input-text" className="text-sm font-medium text-foreground">
-                  文字描述 / 创作要求（可选）
+                  文字描述（可选）
                 </Label>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   无示例图时可仅用文字描述；也可与示例图同用，AI 将向你的要求倾斜
@@ -641,17 +722,22 @@ export function AiCreateWizard({
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center gap-3">
-                <Button disabled={!hasInput || busy} onClick={handleAnalyze}>
-                  {analyzing ? '识别中…' : '开始识别'}
-                </Button>
-                <Button variant="outline" disabled={!hasInput || busy} onClick={runAutoAll}>
-                  <MagicWand size={14} className="mr-1" /> 全自动生成并上架
-                </Button>
+              <div className="flex flex-wrap items-start gap-4">
+                <div className="space-y-1">
+                  <Button disabled={!hasInput || busy} onClick={handleAnalyze}>
+                    {analyzing ? '识别中…' : '开始识别'}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">只产出草稿，后续步骤可逐步确认</p>
+                </div>
+                <div className="space-y-1">
+                  <Button variant="outline" disabled={!hasInput || busy} onClick={runAutoAll}>
+                    <MagicWand size={14} className="mr-1" /> 一键生成并上架
+                  </Button>
+                  <p className="max-w-xs text-xs text-muted-foreground">
+                    识别 → 生图作封面 → 线稿剪影 → 创建上架；任一步失败停在对应步骤转人工，已成功资产保留
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                全自动：识别 → 生图作封面 → 生成线稿剪影 → 创建并上架；任一步失败将停在对应步骤转人工，已成功的资产（草稿 / 封面）保留。
-              </p>
             </CardContent>
           </Card>
         )}
