@@ -33,6 +33,10 @@ export interface AiTraceEvent {
   imageBytes?: number;
   /** 响应正文（LLM 原始输出 / 检索综述 / 命中摘要） */
   response?: string;
+  /** 上游**原始响应体全文**（LLM 为原始 JSON 文本；检索为原始返回），与 response 并列展示 */
+  rawResponse?: string;
+  /** 实际发出的请求次数（含 jsonMode 降级 / 5xx 重试；1 表示一次成功） */
+  attempts?: number;
   /** 阶段结论简述（条数、是否跳过、校验结果等） */
   resultBrief?: string;
   /** 失败原因 */
@@ -52,8 +56,8 @@ interface TraceStore {
 
 const storage = new AsyncLocalStorage<TraceStore>();
 
-/** 单个字段（提示词 / 响应）保留上限：够看全内容，又不让任务对象被超长文本撑爆 */
-export const TRACE_TEXT_CAP = 20_000;
+/** 单个字段（提示词 / 响应 / 原始响应体）保留上限：够看全内容，又不让任务对象被超长文本撑爆 */
+export const TRACE_TEXT_CAP = 50_000;
 
 /** 截断超长文本并标注（不静默丢内容） */
 function capText(text: string | undefined, cap = TRACE_TEXT_CAP): string | undefined {
@@ -127,7 +131,7 @@ export async function traceStep<T>(
 
 /** 一次调用（LLM / 检索）的完成句柄；无采集上下文时为 null */
 export interface TraceCallHandle {
-  done(response?: string, extra?: { resultBrief?: string }): void;
+  done(response?: string, extra?: { resultBrief?: string; rawResponse?: string; attempts?: number }): void;
   fail(err: unknown): void;
 }
 
@@ -165,6 +169,8 @@ function startCall(input: TraceCallInput): TraceCallHandle | null {
         status: 'done',
         model: input.model,
         response: capText(response),
+        rawResponse: capText(extra?.rawResponse),
+        attempts: extra?.attempts,
         resultBrief: extra?.resultBrief,
         durationMs: Date.now() - startedAt,
       });

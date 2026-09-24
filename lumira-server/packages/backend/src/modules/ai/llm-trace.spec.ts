@@ -79,4 +79,32 @@ describe('llm-trace', () => {
     expect(events[0]!.systemPrompt).toContain('已截断');
     expect(events[1]!.response).toContain(`原长 ${long.length} 字`);
   });
+
+  it('done 携带 rawResponse / attempts：原始响应体与请求次数透传', async () => {
+    const { events, sink } = collect();
+    const raw = '{"choices":[{"message":{"content":"提取正文"}}]}';
+    await runWithTrace(sink, async () => {
+      const h = traceLlmCall({ model: 'qwen-plus' })!;
+      h.done('提取正文', { rawResponse: raw, attempts: 2 });
+    });
+
+    expect(events[1]).toMatchObject({
+      status: 'done',
+      response: '提取正文',
+      rawResponse: raw,
+      attempts: 2,
+    });
+  });
+
+  it('rawResponse 超长同样截断并标注原文长度', async () => {
+    const { events, sink } = collect();
+    const longRaw = 'y'.repeat(TRACE_TEXT_CAP + 5);
+    await runWithTrace(sink, async () => {
+      const h = traceLlmCall({ model: 'm' })!;
+      h.done('ok', { rawResponse: longRaw });
+    });
+
+    expect(events[1]!.rawResponse).toContain(`原长 ${longRaw.length} 字`);
+    expect(events[1]!.rawResponse!.startsWith('y'.repeat(100))).toBe(true);
+  });
 });
