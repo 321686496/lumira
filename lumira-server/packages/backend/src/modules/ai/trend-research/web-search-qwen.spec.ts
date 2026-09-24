@@ -2,6 +2,8 @@
 import { createQwenSearchProvider } from './web-search-qwen';
 import type { WebSearchProvider } from './web-search.provider';
 import { describeTodayUtc8 } from '../../../common/utils/date.util';
+import { runWithTrace } from '../llm-trace';
+import type { AiTraceEvent } from '../llm-trace';
 
 const OK_TOOL_CALL = {
   message: {
@@ -142,5 +144,33 @@ describe('web-search-qwen', () => {
   it('上游 HTTP 错误 → 抛可读错误', async () => {
     jest.spyOn(global, 'fetch').mockResolvedValue(new Response('', { status: 429 }));
     await expect(provider.search({ query: 'x' })).rejects.toThrow(/HTTP 429/);
+  });
+
+  it('采集上下文内：记录提示词与上游原始响应体；无上下文时照常返回', async () => {
+    const raw = JSON.stringify(OK_TOOL_CALL);
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(raw, { status: 200 }));
+    const events: Omit<AiTraceEvent, 'seq' | 'ts'>[] = [];
+
+    const items = await runWithTrace((e) => events.push(e), () => provider.search({ query: '人像', limit: 10 }));
+
+    expect(items).toHaveLength(2);
+    const llm = events.filter((e) => e.type === 'llm');
+    expect(llm).toHaveLength(2);
+    expect(llm[0]).toMatchObject({ status: 'running', model: 'qwen-plus', userPrompt: '人像' });
+    expect(llm[0]!.systemPrompt).toContain('摄影');
+    expect(llm[1]!.rawResponse).toBe(raw);
+    expect(llm[1]!.resultBrief).toBe('2 条');
+  });
+
+  it('采集上下文内：上游报错时记录 fail 事件', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response('boom', { status: 500 }));
+    const events: Omit<AiTraceEvent, 'seq' | 'ts'>[] = [];
+
+    await expect(
+      runWithTrace((e) => events.push(e), () => provider.search({ query: '人像', limit: 10 })),
+    ).rejects.toThrow('HTTP 500');
+
+    const fail = events.find((e) => e.type === 'llm' && e.status === 'fail')!;
+    expect(fail.error).toContain('HTTP 500');
   });
 });

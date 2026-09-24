@@ -10,6 +10,7 @@
 import type { ResearchItem } from './research-item';
 import type { WebSearchProvider, WebSearchQuery } from './web-search.provider';
 import { describeTodayUtc8 } from '../../../common/utils/date.util';
+import { traceLlmCall } from '../llm-trace';
 
 export const QWEN_SEARCH_DEFAULT_MODEL = 'qwen-plus';
 
@@ -186,31 +187,63 @@ export function createQwenSearchProvider(cfg: { baseUrl?: string; apiKey?: strin
       if (!base) throw new Error('Qwen 搜索未配置 baseUrl，请到后台「研究管线」填写 Qwen 搜索端点');
       if (!apiKey) throw new Error('Qwen 搜索未配置 API Key，请到后台「研究管线」填写');
 
-      const res = await fetch(`${base}/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: buildSystemPrompt() },
-            { role: 'user', content: q.query },
-          ],
-          enable_search: true,
-          temperature: 0.3,
-          max_tokens: 4096,
-          response_format: { type: 'json_object' },
-        }),
-        signal: AbortSignal.timeout(180_000),
-      }).catch((err: unknown) => {
-        const name = (err as { name?: string } | null | undefined)?.name;
-        if (name === 'AbortError' || name === 'TimeoutError') throw new Error(`Qwen 网上搜索超时（${q.query}）`);
-        throw new Error(`Qwen 网上搜索无效连接（${q.query}）`);
+      // 实时过程采集：本次既是检索也是大模型调用（enable_search），提示词与原始响应都要留痕
+      const handle = traceLlmCall({
+        model,
+        systemPrompt: buildSystemPrompt(),
+        userPrompt: q.query,
+        title: '千问联网搜索 · 大模型调用',
       });
 
-      if (!res.ok) throw new Error(`Qwen 网上搜索上游错误（HTTP ${res.status}，${q.query}）`);
-      const data = await res.json().catch(() => null);
+      let res: Response;
+      try {
+        res = await fetch(`${base}/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: buildSystemPrompt() },
+              { role: 'user', content: q.query },
+            ],
+            enable_search: true,
+            temperature: 0.3,
+            max_tokens: 4096,
+            response_format: { type: 'json_object' },
+          }),
+          signal: AbortSignal.timeout(180_000),
+        });
+      } catch (err) {
+        const name = (err as { name?: string } | null | undefined)?.name;
+        const message = name === 'AbortError' || name === 'TimeoutError'
+          ? `Qwen 网上搜索超时（${q.query}）`
+          : `Qwen 网上搜索无效连接（${q.query}）`;
+        handle?.fail(new Error(message));
+        throw new Error(message);
+      }
+
+      if (!res.ok) {
+        const message = `Qwen 网上搜索上游错误（HTTP ${res.status}，${q.query}）`;
+        handle?.fail(new Error(message));
+        throw new Error(message);
+      }
+      const rawText = await res.text();
+      let data: unknown = null;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = null;
+      }
       const items = extractResearchItems(data);
-      if (!items) throw new Error(`Qwen 网上搜索本次未取到引用（${q.query}）`);
+      if (!items) {
+        const message = `Qwen 网上搜索本次未取到引用（${q.query}）`;
+        handle?.fail(new Error(message));
+        throw new Error(message);
+      }
+      handle?.done(items[0]?.title === '联网综述' ? items[0].snippet : items.map((i) => i.title).filter(Boolean).join('、'), {
+        rawResponse: rawText,
+        resultBrief: `${items.length} 条`,
+      });
       return items;
     },
   };
