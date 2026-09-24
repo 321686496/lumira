@@ -294,7 +294,14 @@ export class AiImageTaskService implements OnModuleDestroy {
     for (let attempt = 1; attempt <= GENERATE_RETRY_LIMIT; attempt += 1) {
       try {
         return await this.aiGenerateImageService.generate(reference, metaJson, extraPrompt, research);
-      } catch (err) { /* 保持不变 */ }
+      } catch (err) {
+        lastError = err;
+        const message = (err as Error)?.message || '';
+        // 「生图服务返回内容为空」多为上游瞬时空响应，重试大概率成功，纳入可重试集合
+        const retryable = /HTTP 429|HTTP 5\d\d|超时|无法连接|返回内容为空/.test(message);
+        if (!retryable || attempt >= GENERATE_RETRY_LIMIT) break;
+        await new Promise((resolve) => setTimeout(resolve, attempt * attempt * 1000));
+      }
     }
     throw lastError instanceof Error ? lastError : new Error('生图失败，请重试');
   }
