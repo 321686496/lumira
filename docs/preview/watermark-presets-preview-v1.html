@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>如画 · 内置水印重做预览 v1</title>
+<style>
+  @font-face{font-family:'Noto Serif SC';src:url('../../lumira_app_flutter/assets/fonts/NotoSerifSC-Regular.otf') format('opentype');font-weight:400;font-display:swap;}
+  @font-face{font-family:'Noto Serif SC';src:url('../../lumira_app_flutter/assets/fonts/NotoSerifSC-Bold.otf') format('opentype');font-weight:700;font-display:swap;}
+  :root{
+    --surface:#FDFBF7;--surfaceAlt:#F6F1E8;
+    --gold:#C9A96E;--gold-deep:#B08D4F;--gold-soft:#E8CFA4;
+    --ink:#1A1A1A;--text2:#6B645C;--text3:#8E867B;
+    --line:rgba(201,169,110,.34);
+    --serif:"Noto Serif SC","Songti SC",Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#EFEAE0;padding:44px 28px 90px;font-family:var(--sans);color:#3f382c;}
+  header{max-width:1200px;margin:0 auto 26px;}
+  header h1{font-size:21px;font-weight:700;letter-spacing:1px;}
+  header p{font-size:12px;color:#7c725f;margin-top:10px;line-height:1.95;letter-spacing:.4px;max-width:1000px;}
+  header p b{color:var(--gold-deep);}
+  header code{font-family:Consolas,monospace;font-size:11px;background:#fff;border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:#6a6150;}
+  .rule{max-width:1200px;margin:34px auto 20px;height:1px;background:var(--line);}
+  .seclabel{max-width:1200px;margin:0 auto 20px;display:flex;align-items:flex-start;gap:12px;}
+  .seclabel::before{content:'';width:3px;height:15px;background:var(--gold);flex:none;margin-top:2px;}
+  .seclabel .t{font-size:14px;font-weight:700;letter-spacing:2px;}
+  .seclabel .d{font-size:11px;color:#7c725f;letter-spacing:.5px;line-height:1.7;}
+
+  .board{max-width:1200px;margin:0 auto;display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start;}
+  .cell{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 16px 18px;
+    box-shadow:0 14px 34px -22px rgba(60,48,28,.55);}
+  .cell .cap{font-size:11px;letter-spacing:1px;color:#6a6150;font-weight:600;margin-bottom:12px;}
+  .cell .cap b{color:var(--gold-deep);}
+  .cell .cap i{font-style:normal;color:#9a9284;font-weight:400;}
+  .row{display:flex;gap:22px;align-items:flex-end;}
+
+  .wmwrap{position:relative;flex:none;}
+  .wmcard{position:absolute;left:0;top:0;overflow:hidden;}
+  .wmcard.polaroid{overflow:visible;}
+  .wmphoto{position:absolute;overflow:hidden;}
+  .wmphoto img{width:100%;height:100%;object-fit:cover;display:block;}
+  .wmphoto.nophoto{background:linear-gradient(155deg,#9aa3ad,#3f464e 58%,#272c31);}
+  .wmphoto.nophoto.light{background:linear-gradient(165deg,#fefdfb,#efe9dc 52%,#c9d3db);}
+  .wmborder{position:absolute;pointer-events:none;}
+  .wmtext{position:absolute;left:0;top:0;white-space:pre;line-height:1.2;}
+
+  .preset{max-width:1200px;margin:0 auto 18px;background:var(--surface);border:1px solid var(--line);
+    border-radius:16px;padding:18px 20px 22px;box-shadow:0 16px 40px -26px rgba(60,48,28,.6);}
+  .phead{display:flex;align-items:baseline;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+  .pidx{font-family:Georgia,serif;font-size:12px;color:var(--gold-deep);letter-spacing:2px;font-weight:700;}
+  .pname{font-size:14px;font-weight:700;letter-spacing:1.5px;}
+  .pintent{font-size:11px;color:#7c725f;letter-spacing:.4px;line-height:1.6;}
+  .pbody{display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap;}
+  .thumbcol{display:flex;gap:14px;align-items:flex-end;}
+  .tcap{font-size:10px;color:#9a9284;letter-spacing:.5px;margin-top:8px;text-align:center;}
+  .tbox{display:flex;flex-direction:column;align-items:center;}
+  .note{font-size:11px;color:#7c725f;line-height:1.9;letter-spacing:.3px;margin-top:14px;
+    border-top:1px dashed var(--line);padding-top:12px;}
+  .note b{color:var(--gold-deep);}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>内置水印重做 · 预览 v1</h1>
+  <p>
+    按<b>成片真实比例</b>渲染（基准照片 900×1200 竖构图），坐标语义与 <code>WatermarkRenderer</code> 完全一致：
+    锚点 = <code>x·基准矩形宽 + 基准矩形.left</code>、<code>y·基准矩形高 + 基准矩形.top</code>，
+    文字再施加 <code>offsetY = -0.85×行高</code>、水平偏移按对齐方式取 <code>0 / -w/2 / -w</code>，
+    字号 = <code>fontSize × 基准矩形宽</code>。
+  </p>
+  <p style="margin-top:6px">
+    本版修掉的三件事：<b>① 基准矩形三处不统一</b>（缩略图忽略画框、编辑页基准矩形高 1.18×照片、成片白板矩形左移 padLeft）→ 统一为一个布局函数；
+    <b>② 6 款预置排版重做</b>（间距、层级、对称性、去掉会裁切的 <code>┌┐└┘</code> 字符拼角）；
+    <b>③ 文字描边 / 光晕可调</b>（新增 <code>shadowOutline</code> 深色描边宽度 + <code>shadowBlur</code> 柔光半径，均相对字号；默认 <code>0 / 0.08</code> 时与旧实现逐像素一致。预置用 <code>shadowOutline:0.07</code>，给白字一圈紧贴字面的深色描边 —— 亮底上压得住，且不加任何底色块）。
+  </p>
+</header>
+
+<div class="rule"></div>
+<div class="seclabel">
+  <div class="t">A · 拍立得：问题复现与修复</div>
+  <div class="d">缩略图（管理页网格 150px）是问题最明显的地方 —— 现状实现完全不处理画框、忽略 <code>space</code>，<br>日期 <code>y:0.5</code> 直接落到整个预览区垂直正中，也就是你看到的「图片中间」。</div>
+</div>
+<div class="board" id="secA"></div>
+
+<div class="rule"></div>
+<div class="seclabel">
+  <div class="t">B · 6 款预置重做</div>
+  <div class="d">每款给 4 个视角：<b>成片</b>（深色照片）· <b>缩略图·网格</b>（150px）· <b>缩略图·列表</b>（92×120）· <b>浅色照片</b>（把同一张图提亮 2.15× 检验白字可读性）。</div>
+</div>
+<div id="secB"></div>
+
+<div class="rule"></div>
+<div class="seclabel">
+  <div class="t">C · 坐标约定说明</div>
+  <div class="d">供实现对齐用</div>
+</div>
+<div class="board" style="display:block;max-width:1200px">
+  <div class="cell" style="width:100%">
+    <div class="note" style="margin-top:0;border-top:none;padding-top:0">
+      <b>统一布局函数输出</b>（输入：照片宽高 + <code>WatermarkFrame</code>）：<br>
+      <code>photoRect</code> = (padLeft, padTop, photoW, photoH)　·　
+      <code>cardRect</code> = (0, 0, photoW+padLeft+padRight, photoH+padTop+padBottom)　·　
+      <code>plateRect</code> = (0, photoRect.bottom, cardRect.width, padBottom)<br>
+      <b>基准矩形选择</b>：<code>element.space == frame</code> → <code>plateRect</code>；否则 → <code>photoRect</code>；<code>plateRect</code> 不可用（非拍立得 / 无白板）时回退 <code>photoRect</code>。<br>
+      <b>缩略图</b>：几何完全走同一布局函数（含白边/白板/内描边），仅对字号加「下限 5 显示像素、上限显示宽的 16%」的可读性夹取 —— 夹取必须在<b>显示像素</b>上做（现有实现按卡片坐标夹取，小尺寸下会把文字放大到互相重叠）。<br>
+      <b>编辑页</b>：同样走该函数，并把文字垂直偏移从「<code>-fontSize</code>」改为「<code>-实际行高×0.85</code>」，与成片 WYSIWYG。
+    </div>
+  </div>
+</div>
+
+<script>
+const REF = 400;
+const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
+const hex2rgba = (hex, a) => {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+  return `rgba(${r},${g},${b},${a == null ? 1 : a})`;
+};
+
+/* ── 统一布局函数：三处（渲染器 / 缩略图 / 编辑页）共用的唯一真源 ── */
+function layout(tpl, pw, ph, legacyPlate) {
+  const f = tpl.frame || {type:'none'};
+  let pL = 0, pR = 0, pT = 0, pB = 0;
+  if (f.type === 'polaroid') {
+    pL = f.borderLeft * pw; pR = f.borderRight * pw; pT = f.borderTop * pw;
+    pB = f.borderBottom * pw + (f.bottomPlate ? f.bottomRatio * ph : 0);
+  }
+  const outW = pw + pL + pR, outH = ph + pT + pB;
+  const photoRect = {x: pL, y: pT, w: pw, h: ph};
+  const plateRect = (f.type === 'polaroid' && f.bottomPlate)
+    ? {x: legacyPlate ? pL : 0, y: photoRect.y + photoRect.h, w: outW, h: pB}
+    : photoRect;
+  return {f, outW, outH, photoRect, plateRect, padL: pL, padT: pT, padB: pB};
+}
+
+/* ── 卡片外壳（不含文字）── */
+function shell(tpl, opt, L) {
+  const card = document.createElement('div');
+  card.className = 'wmcard';
+  card.style.width = L.outW + 'px';
+  card.style.height = L.outH + 'px';
+  const f = L.f;
+  if (f.type === 'polaroid') {
+    card.classList.add('polaroid');
+    card.style.background = f.color;
+    card.style.boxShadow = '0 12px 28px -14px rgba(0,0,0,.5)';
+    if (f.borderRadius > 0) card.style.borderRadius = (f.borderRadius * opt.photoW) + 'px';
+  }
+  const ph = document.createElement('div');
+  ph.className = 'wmphoto';
+  ph.style.left = L.photoRect.x + 'px';
+  ph.style.top = L.photoRect.y + 'px';
+  ph.style.width = L.photoRect.w + 'px';
+  ph.style.height = L.photoRect.h + 'px';
+  if (opt.photoUrl) {
+    const img = document.createElement('img');
+    img.src = opt.photoUrl;
+    // 浅色底压力测试：提亮真实照片（保留纹理），比合成纯色渐变更接近实际
+    if (opt.light) img.style.filter = 'brightness(2.15) contrast(0.82) saturate(0.55)';
+    img.onerror = () => { ph.classList.add('nophoto'); img.remove(); };
+    ph.appendChild(img);
+  } else {
+    ph.classList.add('nophoto');
+    if (opt.light) ph.classList.add('light');
+  }
+  card.appendChild(ph);
+  if (f.type === 'innerBorder') {
+    const s = f.borderRatio * opt.photoW;
+    const b = document.createElement('div');
+    b.className = 'wmborder';
+    b.style.left = (s/2) + 'px'; b.style.top = (s/2) + 'px';
+    b.style.right = (s/2) + 'px'; b.style.bottom = (s/2) + 'px';
+    b.style.border = s + 'px solid ' + (f.strokeColor || '#FFFFFF');
+    if (f.borderRadius > 0) b.style.borderRadius = (f.borderRadius * opt.photoW) + 'px';
+    card.appendChild(b);
+  }
+  return card;
+}
+
+/* ── 文字元素：测量后再定位，保证与渲染器一致 ── */
+function texts(card, tpl, opt, L, k) {
+  for (const el of tpl.elements) {
+    if (el.type === 'image') continue;
+    const base = (el.space === 'frame' && L.plateRect.w > 0) ? L.plateRect : L.photoRect;
+    let fs = el.fontSize * base.w;
+    if (opt.clampFont) {
+      // 可读性夹取必须在「显示像素」上做，否则小尺寸缩略图会被放大到互相重叠
+      const dispW = L.outW * k;
+      fs = clamp(fs * k, 5, dispW * 0.16) / k;
+    }
+    const span = document.createElement('span');
+    span.className = 'wmtext';
+    span.textContent = el.text;
+    span.style.fontSize = fs + 'px';
+    span.style.fontFamily = el.fontFamily === 'serif' ? 'var(--serif)' : 'var(--sans)';
+    span.style.fontWeight = el.bold ? '700' : '400';
+    span.style.fontStyle = el.italic ? 'italic' : 'normal';
+    span.style.letterSpacing = ((el.letterSpacing || 0) * (base.w / REF)) + 'px';
+    span.style.color = hex2rgba(el.color, el.opacity);
+    // 阴影 = 深色描边 + 柔光晕。强度与渲染器一致：shadowColor.alpha × element.opacity
+    const sc = el.shadow || '#000000';
+    const sa = (el.shadowA == null ? 0.4 : el.shadowA) * (el.opacity == null ? 1 : el.opacity);
+    const sBlur = clamp(fs * (el.shadowBlur == null ? 0.08 : el.shadowBlur), 0.5, 40);
+    const outline = clamp(fs * (el.shadowOutline == null ? 0 : el.shadowOutline), 0, 8);
+    const parts = [];
+    if (sa > 0) {
+      if (outline > 0) {
+        // 8 向零模糊偏移 = 紧贴字面的深色描边，不侵入字面（亮底上白字立起来）
+        for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]]) {
+          parts.push(`${hex2rgba(sc, sa)} ${(dx*outline).toFixed(2)}px ${(dy*outline).toFixed(2)}px 0px`);
+        }
+      } else {
+        parts.push(`${hex2rgba(sc, sa)} 0px 0px ${clamp(fs*0.05,0.6,3.2).toFixed(2)}px`);
+      }
+      // 柔光晕：暗照片上文字不发虚
+      parts.push(`${hex2rgba(sc, sa*0.75)} ${(sBlur*0.4).toFixed(1)}px ${(sBlur*0.4).toFixed(1)}px ${sBlur.toFixed(1)}px`);
+    }
+    span.style.textShadow = parts.length ? parts.join(', ') : 'none';
+    card.appendChild(span);
+
+    const tw = span.offsetWidth, th = span.offsetHeight;
+    const ax = el.x * base.w + base.x;
+    const ay = el.y * base.h + base.y;
+    let ox = 0;
+    if (el.align === 'center') ox = -tw / 2;
+    else if (el.align === 'right') ox = -tw;
+    const oy = -th * 0.85;
+    span.style.transformOrigin = '0 0';
+    span.style.transform = `translate(${ax}px,${ay}px) rotate(${el.rotation || 0}rad) translate(${ox}px,${oy}px)`;
+  }
+}
+
+/* ── 挂载并按目标尺寸缩放 ── */
+function mount(parent, tpl, opt, targetW, targetH) {
+  const L = layout(tpl, opt.photoW, opt.photoH, opt.legacyPlate);
+  const k = Math.min(targetW / L.outW, targetH / L.outH);
+  const card = shell(tpl, opt, L);
+  const wrap = document.createElement('div');
+  wrap.className = 'wmwrap';
+  wrap.appendChild(card);
+  parent.appendChild(wrap);                  // 先入文档流，才能测量文字
+  texts(card, tpl, opt, L, k);
+  wrap.style.width = (L.outW * k) + 'px';
+  wrap.style.height = (L.outH * k) + 'px';
+  card.style.transformOrigin = '0 0';
+  card.style.transform = `scale(${k})`;
+  return wrap;
+}
+
+/* ── 现状（有 bug）缩略图：忽略画框与 space，一律以整个预览矩形为基准 ── */
+function legacyThumb(parent, tpl, w, h) {
+  const box = document.createElement('div');
+  box.className = 'wmwrap';
+  box.style.width = w + 'px';
+  box.style.height = h + 'px';
+  box.style.background = '#2A2A2A';
+  box.style.borderRadius = '8px';
+  box.style.overflow = 'hidden';
+  box.style.position = 'relative';
+  parent.appendChild(box);
+  for (const el of tpl.elements) {
+    if (el.type === 'image') continue;
+    const fs = clamp(el.fontSize * w, 7, w * 0.18);
+    const span = document.createElement('span');
+    span.className = 'wmtext';
+    span.textContent = el.text;
+    span.style.fontSize = fs + 'px';
+    span.style.fontFamily = el.fontFamily === 'serif' ? 'var(--serif)' : 'var(--sans)';
+    span.style.fontStyle = el.italic ? 'italic' : 'normal';
+    span.style.letterSpacing = ((el.letterSpacing || 0) * (w / REF)) + 'px';
+    span.style.color = hex2rgba(el.color, el.opacity);
+    const blur = clamp(fs * 0.08, 0.5, 8);
+    span.style.textShadow = `${blur*0.4}px ${blur*0.4}px ${blur}px ${hex2rgba(el.shadow || '#000000', el.shadowA == null ? 0.4 : el.shadowA)}`;
+    box.appendChild(span);
+    const tw = span.offsetWidth, th = span.offsetHeight;
+    let ox = 0;
+    if (el.align === 'center') ox = -tw / 2;
+    else if (el.align === 'right') ox = -tw;
+    span.style.transformOrigin = '0 0';
+    span.style.transform = `translate(${el.x*w}px,${el.y*h}px) rotate(${el.rotation||0}rad) translate(${ox}px,${-th*0.85}px)`;
+  }
+  return box;
+}
+
+/* ══════════ 预置数据（重做后） ══════════ */
+const DATE = '2026.08.08';
+
+const PRESETS = [
+  {
+    name: '简约日期', intent: '左下角单列 · 日期为主视觉、品牌为辅 · 字距拉开做呼吸感',
+    frame: {type:'none'},
+    elements: [
+      {type:'dateTime', text:DATE, x:0.06, y:0.914, fontSize:0.045, bold:true, align:'left',
+       color:'#FFFFFF', shadow:'#000000', shadowA:1, shadowBlur:0.45, shadowOutline:0.07},
+      {type:'text', text:'LUMIRA', x:0.06, y:0.962, fontSize:0.023, letterSpacing:6.0, align:'left',
+       color:'#FFFFFF', opacity:0.80, shadow:'#000000', shadowA:1, shadowBlur:0.45, shadowOutline:0.07},
+    ],
+  },
+  {
+    name: '胶片印记', intent: '右下角 · 琥珀色日期 + 数字间拉开字距（模拟胶片打印机的等宽走纸）· 下方白色品牌行',
+    frame: {type:'none'},
+    elements: [
+      {type:'dateTime', text:DATE, x:0.94, y:0.912, fontSize:0.036, bold:true, letterSpacing:3.5, align:'right',
+       color:'#F0B45A', shadow:'#000000', shadowA:1, shadowBlur:0.45, shadowOutline:0.07},
+      {type:'text', text:'LUMIRA', x:0.94, y:0.955, fontSize:0.018, letterSpacing:5.0, align:'right',
+       color:'#FFFFFF', opacity:0.82, shadow:'#000000', shadowA:1, shadowBlur:0.45, shadowOutline:0.07},
+    ],
+  },
+  {
+    name: '艺术签名', intent: '右下角 · 衬线斜体签名（微倾 -3°）+ 小字距日期，像手写落款',
+    frame: {type:'none'},
+    elements: [
+      {type:'text', text:'Lumira', x:0.93, y:0.905, fontSize:0.050, italic:true, fontFamily:'serif',
+       align:'right', rotation:-0.05, color:'#FFFFFF', opacity:0.95,
+       shadow:'#000000', shadowA:1, shadowBlur:0.45, shadowOutline:0.07},
+      {type:'dateTime', text:DATE, x:0.93, y:0.945, fontSize:0.017, letterSpacing:3.5, align:'right',
+       rotation:-0.05, color:'#FFFFFF', opacity:0.72, shadow:'#000000', shadowA:1, shadowBlur:0.45, shadowOutline:0.07},
+    ],
+  },
+  {
+    name: '杂志排版', intent: '左上角刊头 · 大字距品牌行在上、小字距日期在下，与「简约日期」在版面上完全分开',
+    frame: {type:'none'},
+    elements: [
+      {type:'text', text:'LUMIRA', x:0.06, y:0.055, fontSize:0.022, letterSpacing:9.0, align:'left',
+       color:'#FFFFFF', opacity:0.92, shadow:'#000000', shadowA:1, shadowBlur:0.45, shadowOutline:0.07},
+      {type:'dateTime', text:DATE, x:0.06, y:0.095, fontSize:0.017, letterSpacing:3.0, align:'left',
+       color:'#FFFFFF', opacity:0.70, shadow:'#000000', shadowA:1, shadowBlur:0.45, shadowOutline:0.07},
+    ],
+  },
+  {
+    name: '画框水印', intent: '内描边细画框（1.2% 宽）+ 底部居中日期 · 不再用 ┌┐└┘ 字符拼角（会被裁切且不对称）',
+    frame: {type:'innerBorder', borderRatio:0.012, borderRadius:0, strokeColor:'rgba(255,255,255,.90)'},
+    elements: [
+      {type:'dateTime', text:DATE, x:0.5, y:0.947, fontSize:0.026, letterSpacing:3.0, align:'center',
+       color:'#FFFFFF', opacity:0.95, shadow:'#000000', shadowA:1, shadowBlur:0.45, shadowOutline:0.07},
+    ],
+  },
+  {
+    name: '拍立得', intent: '白板内居中日期 · 基准矩形改为整卡宽的底板（原实现左移了 padLeft，不居中）· 字号按底板宽度收敛',
+    frame: {type:'polaroid', color:'#FFFFFF', borderTop:0.05, borderRight:0.05, borderBottom:0.05,
+            borderLeft:0.05, borderRadius:0, bottomPlate:true, bottomRatio:0.18},
+    elements: [
+      {type:'dateTime', text:DATE, x:0.5, y:0.54, fontSize:0.035, italic:true, fontFamily:'serif',
+       align:'center', space:'frame', color:'#3D3D3D', shadow:'#000000', shadowA:0, shadowBlur:0},
+    ],
+  },
+];
+
+/* ══════════ 渲染 ══════════ */
+const PHOTO = 'https://picsum.photos/id/1027/900/1200';
+
+function renderAll() {
+  /* A · 拍立得前后对比 */
+  const pol = PRESETS[5];
+  const secA = document.getElementById('secA');
+
+  const c1 = document.createElement('div');
+  c1.className = 'cell';
+  c1.innerHTML = '<div class="cap"><b>现状</b> · 缩略图（网格 150px）<i>　日期落在图片正中</i></div>';
+  const r1 = document.createElement('div'); r1.className = 'row';
+  c1.appendChild(r1); secA.appendChild(c1);
+  legacyThumb(r1, pol, 150, 150);
+
+  const c2 = document.createElement('div');
+  c2.className = 'cell';
+  c2.innerHTML = '<div class="cap"><b>修复后</b> · 缩略图（网格 150px）<i>　日期回到白板内</i></div>';
+  const r2 = document.createElement('div'); r2.className = 'row';
+  c2.appendChild(r2); secA.appendChild(c2);
+  mount(r2, pol, {photoW:900, photoH:1200, photoUrl:PHOTO, clampFont:true}, 150, 150);
+
+  const c3 = document.createElement('div');
+  c3.className = 'cell';
+  c3.innerHTML = '<div class="cap"><b>现状</b> · 成片<i>　白板基准矩形左移 padLeft，不居中</i></div>';
+  const r3 = document.createElement('div'); r3.className = 'row';
+  c3.appendChild(r3); secA.appendChild(c3);
+  mount(r3, pol, {photoW:900, photoH:1200, photoUrl:PHOTO, legacyPlate:true}, 260, 360);
+
+  const c4 = document.createElement('div');
+  c4.className = 'cell';
+  c4.innerHTML = '<div class="cap"><b>修复后</b> · 成片<i>　底板基准 = 整卡宽，真正居中</i></div>';
+  const r4 = document.createElement('div'); r4.className = 'row';
+  c4.appendChild(r4); secA.appendChild(c4);
+  mount(r4, pol, {photoW:900, photoH:1200, photoUrl:PHOTO}, 260, 360);
+
+  /* B · 6 款 */
+  const secB = document.getElementById('secB');
+  PRESETS.forEach((tpl, i) => {
+    const box = document.createElement('div');
+    box.className = 'preset';
+    box.innerHTML = `<div class="phead"><span class="pidx">${String(i+1).padStart(2,'0')}</span>`
+      + `<span class="pname">${tpl.name}</span><span class="pintent">${tpl.intent}</span></div>`;
+    const body = document.createElement('div');
+    body.className = 'pbody';
+    box.appendChild(body);
+    secB.appendChild(box);          // 必须先入文档流：文字测量依赖 offsetHeight
+    const mk = (cap, targetW, targetH, opt, tcap) => {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.innerHTML = `<div class="cap">${cap}</div>`;
+      const row = document.createElement('div'); row.className = 'row';
+      cell.appendChild(row); body.appendChild(cell);
+      mount(row, tpl, opt, targetW, targetH);
+      if (tcap) {
+        const t = document.createElement('div');
+        t.className = 'tcap'; t.textContent = tcap;
+        cell.appendChild(t);
+      }
+    };
+
+    mk('成片', 300, 400, {photoW:900, photoH:1200, photoUrl:PHOTO});
+    mk('缩略图 · 网格', 150, 150, {photoW:900, photoH:1200, photoUrl:PHOTO, clampFont:true}, '管理页 150px');
+    mk('缩略图 · 列表', 92, 120, {photoW:900, photoH:1200, photoUrl:PHOTO, clampFont:true}, '92 × 120');
+    mk('浅色照片（可读性）', 190, 253, {photoW:900, photoH:1200, photoUrl:PHOTO, light:true}, '提亮至 2.15×');
+  });
+}
+
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(renderAll);
+} else {
+  renderAll();
+}
+</script>
+</body>
+</html>
