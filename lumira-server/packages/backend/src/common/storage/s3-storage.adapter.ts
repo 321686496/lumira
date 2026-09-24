@@ -13,6 +13,7 @@ import {
 } from '@aws-sdk/client-s3';
 import type { StorageAdapter, StorageCategory } from './storage-adapter.interface';
 import { storageKeyToR2Key, r2KeyToStorageKey } from './storage-key';
+import { mimeOf } from './mime';
 
 export interface S3Config {
   /** S3 endpoint，如 `https://<account>.r2.cloudflarestorage.com` */
@@ -112,13 +113,4 @@ export class S3StorageAdapter implements StorageAdapter {
 function normalizeEndpoint(raw: string): string {
   const t = raw.trim().replace(/\/+$/, '');
   return /^https?:\/\//i.test(t) ? t : `https://${t}`;
-}
-
-function mimeOf(filename: string): string {
-  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
-  const map: Record<string, string> = {
-    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
-    gif: 'image/gif', svg: 'image/svg+xml', avif: 'image/avif', bmp: 'image/bmp',
-  };
-  return map[ext] ?? 'application/octet-stream';
 }

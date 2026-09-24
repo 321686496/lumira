@@ -7,6 +7,7 @@ import * as fs from "fs";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import { AppModule } from "./app.module";
+import { registerUploadsRoute } from "./common/storage/uploads.route";
 
 // Production fail-fast: refuse to boot if security env vars are missing or still
 // set to their dev defaults. Dev fallbacks remain in the guards/modules for tests/dev.
@@ -27,6 +28,8 @@ async function bootstrap() {
     new FastifyAdapter({
       trustProxy: true,
       bodyLimit: 32 * 1024 * 1024,
+      // GET 路由自动暴露 HEAD（/uploads 图片路由需要，替代原 fastifyStatic 的 HEAD 行为）
+      exposeHeadRoutes: true,
     }),
   );
 
@@ -66,14 +69,10 @@ async function bootstrap() {
   if (!fs.existsSync(uploadRoot)) {
     fs.mkdirSync(uploadRoot, { recursive: true });
   }
-  // 上传图片静态服务：URL 含类别/id/文件名，基本不可变 → 用强缓存减少 App 冷启动重复下载。
-  await app.register(fastifyStatic, {
-    root: uploadRoot,
-    prefix: "/uploads/",
-    setHeaders(res) {
-      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-    },
-  });
+  // 上传图片读取：跟随「当前激活存储」——后台切换七牛/R2 后无需重启即生效。
+  // 激活=本地 → 读本地磁盘；激活=远端 → 读远端存储，本地磁盘兜底（迁移过渡期旧文件仍在本地）。
+  // 替代原来写死本地磁盘的 @fastify/static /uploads 注册。
+  registerUploadsRoute(fastifyInstance, uploadRoot);
 
   // Static file serving for public website
   const publicRoot = path.resolve(__dirname, "../public");

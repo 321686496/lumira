@@ -9,6 +9,8 @@ import * as path from 'path';
 import sharp from 'sharp';
 import { DatabaseService } from '../../database/database.service';
 import { templateCategories } from '../../database/schema';
+import { activeStorageAdapter, getActiveId } from '../../common/storage/runtime-storage';
+import { mimeOf } from '../../common/storage/mime';
 
 const THUMB_WIDTH_DEFAULT = 600;
 const THUMB_WIDTH_MIN = 200;
@@ -34,8 +36,40 @@ export class ThumbsService {
     return Math.min(Math.max(n, THUMB_WIDTH_MIN), THUMB_WIDTH_MAX);
   }
 
-  /** 定位某分类的上传图标源文件（返回绝对路径），找不到返回 null */
-  private async findIconFile(key: string): Promise<string | null> {
+  /** storageKey → 本地磁盘绝对路径；解析结果必须位于 uploadDir 之内 */
+  private localFilePath(storageKey: string): string | null {
+    const rel = storageKey.replace(/^\/uploads\//, '');
+    if (!rel || rel.includes('..')) return null;
+    const file = path.join(this.uploadDir, ...rel.split('/'));
+    return file.startsWith(this.uploadDir + path.sep) ? file : null;
+  }
+
+  /**
+   * 读源图字节：跟随「当前激活存储」。
+   * 激活=远端（七牛/R2…）→ 先读远端，缺失时回落本地磁盘（迁移过渡期旧文件仍在本地）；
+   * 激活=本地 → 只读本地磁盘。
+   */
+  private async readSourceBytes(storageKey: string): Promise<Buffer | null> {
+    if (getActiveId() !== 'local') {
+      try {
+        return await activeStorageAdapter.readBuffer(storageKey);
+      } catch {
+        // 远端缺失/读取失败 → 本地兜底
+      }
+    }
+    const file = this.localFilePath(storageKey);
+    if (file && fs.existsSync(file)) {
+      try {
+        return fs.readFileSync(file);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /** 定位某分类图标源图（DB 拿文件名 → 读源图字节），找不到返回 null */
+  private async resolveIconSource(key: string): Promise<{ data: Buffer; filename: string } | null> {
     const db = this.dbService.getDb();
     // 同名 key 可能跨层级出现，取 level 最小的（最接近根）当作唯一分类
     const rows = await db
@@ -50,8 +84,8 @@ export class ThumbsService {
     if (!filename) return null;
     // 防止路径穿越：只允许普通文件名，不允许 "../" 等
     if (!/^[a-z0-9][a-z0-9._-]*$/i.test(filename)) return null;
-    const file = path.join(this.uploadDir, 'categories', key, filename);
-    return fs.existsSync(file) ? file : null;
+    const data = await this.readSourceBytes(`/uploads/categories/${key}/${filename}`);
+    return data ? { data, filename } : null;
   }
 
   /** 返回（或生成并缓存）分类图标的指定宽度 JPEG 缩略图 */
@@ -67,13 +101,13 @@ export class ThumbsService {
     }
 
     // 未命中才查 DB（只为了拿上传文件名），并懒生成（覆盖旧分类/迁移前数据）
-    const src = await this.findIconFile(key);
+    const src = await this.resolveIconSource(key);
     if (!src) throw new NotFoundException('category icon not found');
 
     // 与模板缩略图一致使用 sharp，确保 WebP 源图也能正常生成 JPEG 缩略图。
     // 若图片解码失败，回退返回原图。
     try {
-      const buf = await sharp(src, { failOn: 'error' })
+      const buf = await sharp(src.data, { failOn: 'error' })
         .rotate()
         .resize({ width, withoutEnlargement: true })
         .jpeg({ quality: JPEG_QUALITY })
@@ -86,7 +120,7 @@ export class ThumbsService {
       }
       return { data: buf, type: 'image/jpeg' };
     } catch {
-      return { data: fs.readFileSync(src), type: 'application/octet-stream' };
+      return { data: src.data, type: mimeOf(src.filename) };
     }
   }
 
@@ -114,8 +148,8 @@ export class ThumbsService {
       return { data: fs.readFileSync(cacheFile), type: 'image/webp' };
     }
 
-    const source = path.join(this.uploadDir, 'templates', templateId, filename);
-    if (!fs.existsSync(source)) {
+    const source = await this.readSourceBytes(`/uploads/templates/${templateId}/${filename}`);
+    if (!source) {
       throw new NotFoundException('template image not found');
     }
 
@@ -133,18 +167,18 @@ export class ThumbsService {
       }
       return { data, type: 'image/webp' };
     } catch {
-      return { data: fs.readFileSync(source), type: 'application/octet-stream' };
+      return { data: source, type: mimeOf(filename) };
     }
   }
 
   async preGenerate(key: string, widths: number[] = [200, 400, 800]): Promise<void> {
-    const src = await this.findIconFile(key);
+    const src = await this.resolveIconSource(key);
     if (!src) return;
     const thumbDir = path.join(this.uploadDir, 'thumbs', 'categories', key);
     for (const w of widths) {
       try {
         const width = this.clampWidth(w);
-        const buf = await sharp(src, { failOn: 'error' })
+        const buf = await sharp(src.data, { failOn: 'error' })
           .rotate()
           .resize({ width, withoutEnlargement: true })
           .jpeg({ quality: JPEG_QUALITY })

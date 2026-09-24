@@ -72,7 +72,7 @@ describe('llm-trace', () => {
   it('超长提示词/响应截断并标注原文长度', async () => {
     const { events, sink } = collect();
     const long = 'x'.repeat(TRACE_TEXT_CAP + 10);
-    await runWithTrace(sink, () => {
+    await runWithTrace(sink, async () => {
       const h = traceLlmCall({ model: 'm', systemPrompt: long })!;
       h.done(long);
     });
