@@ -564,9 +564,26 @@ export interface AiBatchResultItem {
   image?: string;
   mimeType?: string;
   error?: string;
+  startedAt?: number;
+  finishedAt?: number;
+  prompt?: string;
+  model?: string;
 }
 
-/** 批量姿势图进度（total/completed/current/status/results；status=done 即全部处理完毕） */
+/** 批量姿势图的单条实时 trace 事件（seq 增量拉取与去重依据） */
+export interface AiBatchImageTraceEvent {
+  seq: number;
+  ts: number;
+  index: number;
+  title: string;
+  status: 'pending' | 'running' | 'done' | 'error';
+  prompt?: string;
+  model?: string;
+  error?: string;
+  durationMs?: number;
+}
+
+/** 批量姿势图进度（total/completed/current/status/results/events；status=done 即全部处理完毕） */
 export interface AiBatchStatusResult {
   batchId: string;
   total: number;
@@ -574,6 +591,9 @@ export interface AiBatchStatusResult {
   current: number;
   status: 'pending' | 'running' | 'done' | 'error';
   results: AiBatchResultItem[];
+  createdAt: number;
+  events: AiBatchImageTraceEvent[];
+  lastSeq: number;
 }
 
 /** 查询生图任务状态（done 带 image/mimeType，error 带 error） */
