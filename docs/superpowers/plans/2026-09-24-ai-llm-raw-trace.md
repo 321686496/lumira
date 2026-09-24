@@ -710,6 +710,8 @@ git push github master
     - `TraceCallCard({ ev, defaultOpen }: { ev: TraceCallCardData; defaultOpen?: boolean })`
     - `TraceTextBlock({ label, text, defaultOpen }: { label: string; text: string; defaultOpen?: boolean })`
 
+> **评审增补（与用户确认后补记）**：后端 `startCall` 每次调用会产出 `running`（含 System/User 提示词）与 `done`/`fail`（含 response/rawResponse/attempts/durationMs）**两条**事件。若按 1:1 渲染，则一次调用出现两张卡片，且提示词那张会永久停在「等待响应…」。因此新增纯函数 `collapseTraceCalls`（按 title+model 就近配对，合并成一条数据、key 沿用 running 的 seq，使卡片原位补齐而非新增一张），归入 Task 6 Step 0 落地，Task 6/7 的调用点统一经它渲染。
+
 - [ ] **Step 1: 扩展类型**
 
 `types/admin.ts` 的 `AiTraceEvent` 内、`response?: string;` 之后加：
@@ -762,6 +764,8 @@ export interface TraceCallCardData {
   userPrompt?: string;
   response?: string;
   rawResponse?: string;
+  /** 实际发出的请求次数（含降级/重试；> 1 时卡片显示「请求 N 次」） */
+  attempts?: number;
   resultBrief?: string;
   error?: string;
   durationMs?: number;
@@ -885,11 +889,93 @@ git push github master
 ### Task 6: 后台 —— 识别流接入共享卡片（默认展开 + 复制）
 
 **Files:**
+- Modify: `lumira-server/packages/admin/src/components/ai-create/trace-call-card.tsx`（新增 `collapseTraceCalls`）
 - Modify: `lumira-server/packages/admin/src/components/ai-create/analyze-trace-stream.tsx`
 
 **Interfaces:**
 - Consumes: Task 5 的 `TraceCallCard` / `TraceCallCardData`
-- Produces: 无新导出（内部渲染替换）
+- Produces: `trace-call-card.tsx` 新增导出 `TraceCallSource`、`TraceCallItem`、`collapseTraceCalls(sources): TraceCallItem[]`
+
+- [ ] **Step 0: 新增 `collapseTraceCalls`（每次调用合并成一张卡片）**
+
+后端 `startCall` 每次调用产两条事件（`running` 带提示词 → `done`/`fail` 带响应）。若 1:1 渲染，一次调用会出现两张卡片、且提示词那张永久停在「等待响应…」。故加纯函数按 `type/kind + title + model` 就近配对合并，**key 沿用 running 事件的 seq**，使卡片原位补齐而非新增一张。追加到 `trace-call-card.tsx` 末尾：
+
+```tsx
+/** 可参与合并的事件源（识别流 AiTraceEvent 与批次流 AiBatchImageTraceEvent 的公共子集） */
+export interface TraceCallSource {
+  seq: number;
+  /** 识别流用 type；批次流用 kind */
+  type?: 'llm' | 'search' | 'step' | 'note' | 'pose';
+  kind?: 'pose' | 'llm' | 'search';
+  title: string;
+  model?: string;
+  status: string;
+  systemPrompt?: string;
+  userPrompt?: string;
+  response?: string;
+  rawResponse?: string;
+  attempts?: number;
+  resultBrief?: string;
+  error?: string;
+  durationMs?: number;
+}
+
+export interface TraceCallItem {
+  key: number;
+  ev: TraceCallCardData;
+}
+
+/** 只覆盖有值的字段，避免 done 事件把 running 已记录的提示词清成 undefined */
+function mergeDefined<T extends object>(base: T, patch: Partial<T>): T {
+  const out: Record<string, unknown> = { ...base };
+  for (const [k, v] of Object.entries(patch)) if (v !== undefined) out[k] = v;
+  return out as T;
+}
+
+/**
+ * 把「一次调用的两条事件」折叠成一张卡片的数据：
+ * running/pending 开一个待配对槽位并占据当前位置；随后同 种类+title+model 的 done/fail/error
+ * 原位补齐响应字段（key 不变 → React 不重建节点，表现为同一张卡片内容变完整）。
+ * 未能配对的事件各自单独成条（如只有 done 的历史事件、并发同名调用）。
+ */
+export function collapseTraceCalls(sources: TraceCallSource[]): TraceCallItem[] {
+  const items: TraceCallItem[] = [];
+  const open = new Map<string, number>();
+  for (const src of sources) {
+    const isSearch = src.kind === 'search' || src.type === 'search';
+    const ev: TraceCallCardData = {
+      type: isSearch ? 'search' : 'llm',
+      title: src.title,
+      model: src.model,
+      status: src.status as TraceCallCardData['status'],
+      systemPrompt: src.systemPrompt,
+      userPrompt: src.userPrompt,
+      response: src.response,
+      rawResponse: src.rawResponse,
+      attempts: src.attempts,
+      resultBrief: src.resultBrief,
+      error: src.error,
+      durationMs: src.durationMs,
+    };
+    const key = `${isSearch ? 'search' : 'llm'}|${src.title}|${src.model ?? ''}`;
+    const waiting = src.status === 'running' || src.status === 'pending';
+    if (waiting) {
+      if (open.has(key)) continue; // 同一次调用不会重复 running；重复时忽略以免卡片抖动
+      open.set(key, items.length);
+      items.push({ key: src.seq, ev });
+      continue;
+    }
+    const idx = open.get(key);
+    if (typeof idx === 'number') {
+      open.delete(key);
+      items[idx] = { key: items[idx].key, ev: mergeDefined(items[idx].ev, ev) };
+      continue;
+    }
+    items.push({ key: src.seq, ev });
+  }
+  return items;
+}
+```
 
 - [ ] **Step 1: 替换 CallCard 与 Collapsible**
 
@@ -898,20 +984,21 @@ git push github master
 1) import 区加：
 
 ```ts
-import { TraceCallCard } from '@/components/ai-create/trace-call-card';
+import { TraceCallCard, collapseTraceCalls } from '@/components/ai-create/trace-call-card';
 ```
 
 2) 删除文件末尾的本地 `CallCard` 与 `Collapsible` 两个函数（整段删除）。
 
 3) 两处调用点替换：
 
-- `AnalyzeTraceStream` 的孤立事件渲染（原 `<CallCard key={ev.seq} ev={ev} />`）：
+- `AnalyzeTraceStream` 的孤立事件渲染（原 `{timeline.orphans.map((ev) => <CallCard key={ev.seq} ev={ev} />)}`）：
 
 ```tsx
+            {collapseTraceCalls(timeline.orphans).map(({ key, ev }) => (
               <TraceCallCard
-                key={ev.seq}
+                key={key}
                 ev={{
-                  type: ev.type === 'search' ? 'search' : 'llm',
+                  type: ev.type,
                   title: ev.title,
                   model: ev.model,
                   status: ev.status,
@@ -919,21 +1006,25 @@ import { TraceCallCard } from '@/components/ai-create/trace-call-card';
                   userPrompt: ev.userPrompt,
                   response: ev.response,
                   rawResponse: ev.rawResponse,
+                  attempts: ev.attempts,
                   resultBrief: ev.resultBrief,
                   error: ev.error,
                   durationMs: ev.durationMs,
                 }}
               />
+            ))}
 ```
+
+> 说明：`collapseTraceCalls` 已把 `AiTraceEvent` 映射为 `TraceCallCardData`，上面显式列字段仅为可读性；若嫌冗长可直接 `<TraceCallCard key={key} ev={ev} />`（等价）。
 
 - `PhaseRow` 内的调用列表（原 `{phase.calls.map((ev) => <CallCard key={ev.seq} ev={ev} />)}`）：
 
 ```tsx
-          {phase.calls.map((ev) => (
+          {collapseTraceCalls(phase.calls).map(({ key, ev }) => (
             <TraceCallCard
-              key={ev.seq}
+              key={key}
               ev={{
-                type: ev.type === 'search' ? 'search' : 'llm',
+                type: ev.type,
                 title: ev.title,
                 model: ev.model,
                 status: ev.status,
@@ -941,6 +1032,7 @@ import { TraceCallCard } from '@/components/ai-create/trace-call-card';
                 userPrompt: ev.userPrompt,
                 response: ev.response,
                 rawResponse: ev.rawResponse,
+                attempts: ev.attempts,
                 resultBrief: ev.resultBrief,
                 error: ev.error,
                 durationMs: ev.durationMs,
@@ -948,6 +1040,8 @@ import { TraceCallCard } from '@/components/ai-create/trace-call-card';
             />
           ))}
 ```
+
+> 同样可用等价简写 `<TraceCallCard key={key} ev={ev} />`。两处调用点都必须经 `collapseTraceCalls`，否则每次调用会渲染出「提示词卡（永远显示等待响应…）+ 响应卡」两张卡片。
 
 4) 文件头注释同步（原第 5-7 行「该阶段的 LLM/检索调用折叠收纳到阶段下，默认收拢。…提示词/响应可折叠。」）改为：
 
@@ -971,14 +1065,20 @@ git push github master
 
 ---
 
-### Task 7: 后台 —— 姿势图流内嵌 LLM 子事件
+### Task 7: 后台 —— 姿势图流内嵌 LLM 子事件 + pose 状态灯过滤修复
 
 **Files:**
 - Modify: `lumira-server/packages/admin/src/components/ai-create/pose-trace-stream.tsx`
 
 **Interfaces:**
-- Consumes: Task 4 的 `AiBatchImageTraceEvent.kind` 等字段；Task 5 的 `TraceCallCard` / `TraceTextBlock`
+- Consumes: Task 4 的 `AiBatchImageTraceEvent.kind` 等字段；Task 5 的 `TraceCallCard` / `TraceTextBlock`；Task 6 的 `collapseTraceCalls`
 - Produces: 无新导出
+
+> **必须同时修的回归（Task 4 评审遗留 Important）**：`PoseRow` 现在的状态灯 / 时间 / 模型 / 耗时都来自 `evs` 全量事件，而 Task 4 起 `evs` 里混进了 `kind='llm'/'search'` 子事件，会导致：
+> 1. `latest = evs[evs.length - 1]` 被模型调用事件覆盖 → 状态灯在姿势图仍在跑时反复跳成「生成中/完成」、时间戳显示的是模型调用时间；
+> 2. `finished = evs.find(e => e.status === 'done' || e.status === 'error')` 会命中第一个 LLM done → 提前判定该张「完成」，且 `prompt` / `model` / `durationMs` 取到模型调用的值。
+>
+> 修法：先把 `evs` 按 `kind` 分成「姿势图生命周期事件」与「模型调用事件」两路，头部状态只用前者。
 
 - [ ] **Step 1: 渲染子事件与默认展开的提示词**
 
@@ -987,43 +1087,40 @@ git push github master
 1) import 区加：
 
 ```ts
-import { TraceCallCard, TraceTextBlock } from '@/components/ai-create/trace-call-card';
+import { TraceCallCard, TraceTextBlock, collapseTraceCalls } from '@/components/ai-create/trace-call-card';
 ```
 
-2) `PoseRow` 内、`const duration = formatDuration(finished?.durationMs);` 之后加：
+2) 把 `PoseRow` 函数体开头（现为 `const latest = evs[evs.length - 1]!;` 到 `const duration = formatDuration(finished?.durationMs);`）整段替换为：
 
 ```ts
-  const calls = evs.filter((e) => e.kind === 'llm' || e.kind === 'search');
+  // 头部状态只认姿势图生命周期事件（kind 缺省即 'pose'），避免被模型调用子事件污染
+  const poseEvs = evs.filter((e) => !e.kind || e.kind === 'pose');
+  const latest = poseEvs[poseEvs.length - 1] ?? evs[evs.length - 1]!;
+  const meta = STATUS_META[latest.status] ?? STATUS_META.pending;
+  const finished = poseEvs.find((e) => e.status === 'done' || e.status === 'error');
+  const prompt = finished?.prompt;
+  const model = finished?.model;
+  const duration = formatDuration(finished?.durationMs);
+  const calls = collapseTraceCalls(evs.filter((e) => e.kind === 'llm' || e.kind === 'search'));
 ```
+
+> `latest` 的兜底 `?? evs[evs.length - 1]!` 是为了极端情况下（只有子事件、还没有 pose 事件）不崩；此时 `poseEvs` 为空数组。
 
 3) `PoseRow` 返回值最后，把原 `<details>` 提示词块替换为下面整段：
 
 ```tsx
-      {calls.map((ev) => (
-        <TraceCallCard
-          key={ev.seq}
-          className="mt-1.5"
-          ev={{
-            type: ev.kind === 'search' ? 'search' : 'llm',
-            title: ev.title,
-            model: ev.model,
-            status: ev.status,
-            systemPrompt: ev.systemPrompt,
-            userPrompt: ev.userPrompt,
-            response: ev.response,
-            rawResponse: ev.rawResponse,
-            error: ev.error,
-            durationMs: ev.durationMs,
-          }}
-        />
+      {calls.map(({ key, ev }) => (
+        <TraceCallCard key={key} className="mt-1.5" ev={ev} />
       ))}
       {prompt && <TraceTextBlock label="最终生图提示词" text={prompt} />}
 ```
 
+> `collapseTraceCalls` 的入参类型是 `TraceCallSource`，`AiBatchImageTraceEvent` 结构上满足（`kind` 为 `'pose'|'llm'|'search'`，其中 `'pose'` 已被上面的 filter 排除），无需手写映射。
+
 4) 文件头注释同步：把「（折叠 prompt）」改为「（prompt 默认展开）」，并补一句：
 
 ```
-// 该张图生成过程中的模型调用（kind='llm'/'search'）以其原始数据卡片内嵌展示。
+// 该张图生成过程中的模型调用（kind='llm'/'search'）以其原始数据卡片内嵌展示，不参与头部状态灯计算。
 ```
 
 - [ ] **Step 2: 构建确认通过**
