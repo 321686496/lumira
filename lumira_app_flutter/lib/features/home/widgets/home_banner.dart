@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -9,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/lumira/feedback/lumira_toast.dart';
 import '../../templates/widgets/template_cover_image.dart';
 import '../../usage/usage_providers.dart';
 import '../data/home_mock_data.dart';
@@ -198,13 +200,33 @@ class _HomeBannerState extends ConsumerState<HomeBanner>
         .catchError((_) {});
   }
 
-  /// 用系统浏览器打开广告/外链；失败静默（不阻断轮播交互）
+  /// 用系统浏览器打开广告/外链。
+  /// OHOS 端 url_launcher 无原生实现，`launchUrl` 会抛异常；Android 上
+  /// 缺少匹配浏览器时返回 false。两种情况都降级为「复制链接 + Toast 提示」，
+  /// 避免点击广告后无声无息（曾有静默吞异常导致"无反应"缺陷）。
   Future<void> _openExternalUrl(String url) async {
     final uri = Uri.tryParse(url);
-    if (uri == null || !uri.hasScheme) return;
+    if (uri == null || !uri.hasScheme) {
+      _fallbackOpenExternal(url);
+      return;
+    }
+    var opened = false;
     try {
-      await launchUrl(uri, mode: LaunchMode.platformDefault);
-    } catch (_) {}
+      opened = await launchUrl(uri, mode: LaunchMode.platformDefault);
+    } catch (_) {
+      opened = false;
+    }
+    if (!opened && mounted) _fallbackOpenExternal(url);
+  }
+
+  /// 打开外部链接兜底：复制到剪贴板并给出可见提示（不阻断轮播交互）。
+  void _fallbackOpenExternal(String url) {
+    Clipboard.setData(ClipboardData(text: url));
+    LumiraToast.show(
+      context,
+      '无法打开外部链接，已复制链接',
+      position: ToastPosition.bottom,
+    );
   }
 
   /// 曝光埋点：banner 成为当前页时上报一次（按 trackingId 会话内去重）

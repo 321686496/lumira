@@ -4,6 +4,18 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- 系统相机拍照（image_picker ImageSource.camera 需要） -->
     <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- Android 11+ (SDK30) 起 url_launcher 需声明 <queries> 才能发现并启动浏览器打开外部链接，
+         缺失会导致 launchUrl 返回 false / 无反应（广告 Banner 外链） -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" />
+        </intent>
+    </queries>
    <application
         android:label="如画 Lumira"
         android:name="${applicationName}"
