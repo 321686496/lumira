@@ -64,9 +64,10 @@ const TEST_TARGET_OPTIONS: { value: AiConfigTestTarget; label: string }[] = [
 ];
 const ALL_TEST_TARGETS = TEST_TARGET_OPTIONS.map((option) => option.value);
 
-/** 搜索方式（研究管线）：模型自带(Qwen) / SearXNG 自建(免费) / 关闭 */
-const SEARCH_MODE_OPTIONS: { value: 'qwen' | 'searxng' | 'off'; label: string }[] = [
-  { value: 'qwen', label: '模型自带搜索（Qwen）' },
+/** 搜索方式（研究管线，四选一互斥）：Qwen 官方百炼 / Qwen 三方 MaaS / SearXNG 自建(免费) / 关闭 */
+const SEARCH_MODE_OPTIONS: { value: 'qwen-official' | 'qwen' | 'searxng' | 'off'; label: string }[] = [
+  { value: 'qwen-official', label: 'Qwen 官方百炼' },
+  { value: 'qwen', label: 'Qwen 三方 MaaS' },
   { value: 'searxng', label: 'SearXNG 自建搜索（免费）' },
   { value: 'off', label: '关闭' },
 ];
@@ -81,13 +82,16 @@ interface FormState {
   silhouetteModel: string; // 留空 = 与生图模型一致
   enabled: boolean;
   // 研究管线（Agentic）
-  searchMode: 'qwen' | 'searxng' | 'off';
+  searchMode: 'qwen-official' | 'qwen' | 'searxng' | 'off';
   searchSite: string;
   searchBaseUrl: string;
   searchApiKey: string; // 留空 = 不修改原值
   searchQwenBaseUrl: string;
   searchQwenApiKey: string; // 留空 = 不修改原值
   searchQwenModel: string;
+  searchQwenOfficialBaseUrl: string;
+  searchQwenOfficialApiKey: string; // 留空 = 不修改原值
+  searchQwenOfficialModel: string;
   maxIterations: number; // 迭代上限（预算护栏 1~3）
 }
 
@@ -188,7 +192,11 @@ export function AiConfigForm({
           silhouetteModel: initial.silhouetteModel ?? '',
           enabled: initial.enabled,
           searchMode: initial.searchEnabled
-            ? (initial.searchProvider === 'qwen' ? 'qwen' : 'searxng')
+            ? initial.searchProvider === 'qwen-official'
+              ? 'qwen-official'
+              : initial.searchProvider === 'qwen'
+                ? 'qwen'
+                : 'searxng'
             : 'off',
           searchBaseUrl: initial.searchBaseUrl,
           searchSite: initial.searchSite ?? '',
@@ -196,6 +204,9 @@ export function AiConfigForm({
           searchQwenBaseUrl: initial.searchQwenBaseUrl,
           searchQwenApiKey: '',
           searchQwenModel: initial.searchQwenModel,
+          searchQwenOfficialBaseUrl: initial.searchQwenOfficialBaseUrl,
+          searchQwenOfficialApiKey: '',
+          searchQwenOfficialModel: initial.searchQwenOfficialModel,
           maxIterations: initial.maxIterations,
         }
       : {
@@ -214,6 +225,9 @@ export function AiConfigForm({
           searchQwenBaseUrl: '',
           searchQwenApiKey: '',
           searchQwenModel: '',
+          searchQwenOfficialBaseUrl: '',
+          searchQwenOfficialApiKey: '',
+          searchQwenOfficialModel: '',
           maxIterations: 2,
         },
   );
@@ -256,6 +270,10 @@ export function AiConfigForm({
   /** 已保存 Qwen 搜索 API 的脱敏 Key（占位符展示） */
   const [searchQwenApiKeyMasked, setSearchQwenApiKeyMasked] = useState(
     configured ? initial.searchQwenApiKeyMasked : '',
+  );
+  /** 已保存 Qwen 官方百炼搜索 API 的脱敏 Key（占位符展示） */
+  const [searchQwenOfficialApiKeyMasked, setSearchQwenOfficialApiKeyMasked] = useState(
+    configured ? initial.searchQwenOfficialApiKeyMasked : '',
   );
   const [testResult, setTestResult] = useState<AiConfigTestResult | null>(null);
   const [testTargets, setTestTargets] = useState<AiConfigTestTarget[]>(ALL_TEST_TARGETS);
@@ -397,7 +415,24 @@ export function AiConfigForm({
       });
       return;
     }
-    if (form.searchMode === 'qwen') {
+    if (form.searchMode === 'qwen-official') {
+      if (!form.searchQwenOfficialBaseUrl.trim()) {
+        toast({
+          variant: 'destructive',
+          title: '请填写完整',
+          description: 'Qwen 官方搜索必须填写 baseUrl',
+        });
+        return;
+      }
+      if (!searchQwenOfficialApiKeyMasked && !form.searchQwenOfficialApiKey.trim()) {
+        toast({
+          variant: 'destructive',
+          title: '缺少 API Key',
+          description: '首次启用 Qwen 官方搜索必须填写 API Key',
+        });
+        return;
+      }
+    } else if (form.searchMode === 'qwen') {
       if (!form.searchQwenBaseUrl.trim()) {
         toast({
           variant: 'destructive',
@@ -448,10 +483,16 @@ export function AiConfigForm({
         payload.silhouetteBaseUrl = silhouetteOverride.baseUrl.trim();
         if (silhouetteOverride.apiKey.trim()) payload.silhouetteApiKey = silhouetteOverride.apiKey.trim();
       }
-      // 研究管线（Agentic）：搜索方式三选一 → provider/sources/字段映射
+      // 研究管线（Agentic）：搜索方式四选一互斥 → provider/sources/字段映射
       payload.searchEnabled = form.searchMode !== 'off';
       payload.maxIterations = form.maxIterations;
-      if (form.searchMode === 'qwen') {
+      if (form.searchMode === 'qwen-official') {
+        payload.searchProvider = 'qwen-official';
+        payload.searchSources = ['qwen-official'];
+        if (form.searchQwenOfficialBaseUrl.trim()) payload.searchQwenOfficialBaseUrl = form.searchQwenOfficialBaseUrl.trim();
+        if (form.searchQwenOfficialApiKey.trim()) payload.searchQwenOfficialApiKey = form.searchQwenOfficialApiKey.trim();
+        payload.searchQwenOfficialModel = form.searchQwenOfficialModel.trim() || 'qwen-plus';
+      } else if (form.searchMode === 'qwen') {
         payload.searchProvider = 'qwen';
         payload.searchSources = ['qwen'];
         if (form.searchQwenBaseUrl.trim()) payload.searchQwenBaseUrl = form.searchQwenBaseUrl.trim();
@@ -478,6 +519,7 @@ export function AiConfigForm({
       setSilhouettePlatformMasked(config.silhouettePlatform?.apiKeyMasked ?? '');
       setSearchApiKeyMasked(config.searchApiKeyMasked);
       setSearchQwenApiKeyMasked(config.searchQwenApiKeyMasked);
+      setSearchQwenOfficialApiKeyMasked(config.searchQwenOfficialApiKeyMasked);
       // 后端为权威：独立开关与平台字段按保存结果回填（被清除时保留输入、仅置回跟随）
       setTextOverride((o) => {
         const saved = overrideFromPlatform(config.textPlatform);
@@ -823,7 +865,7 @@ export function AiConfigForm({
           {/* 模态四：剪影模型（AI 一键建模「生成剪影」用，默认跟随生图平台） */}
           {renderModalitySection('silhouette')}
 
-          {/* 研究管线（Agentic）：搜索方式三选一 */}
+          {/* 研究管线（Agentic）：搜索方式四选一（互斥） */}
           <div className="space-y-4 rounded-lg border border-border p-4">
             <div>
               <div className="text-sm font-medium text-foreground">研究管线（Agentic 趋势研究）</div>
@@ -853,10 +895,43 @@ export function AiConfigForm({
               </div>
             </div>
 
+            {form.searchMode === 'qwen-official' && (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="ai-qwen-official-base-url">Qwen 官方端点（Base URL）</Label>
+                  <Input
+                    id="ai-qwen-official-base-url"
+                    value={form.searchQwenOfficialBaseUrl}
+                    onChange={(e) => setForm((f) => ({ ...f, searchQwenOfficialBaseUrl: e.target.value }))}
+                    placeholder="https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ai-qwen-official-api-key">Qwen 官方 API Key</Label>
+                  <Input
+                    id="ai-qwen-official-api-key"
+                    type="password"
+                    value={form.searchQwenOfficialApiKey}
+                    onChange={(e) => setForm((f) => ({ ...f, searchQwenOfficialApiKey: e.target.value }))}
+                    placeholder={searchQwenOfficialApiKeyMasked ? `${searchQwenOfficialApiKeyMasked}（留空 = 不修改）` : '…'}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ai-qwen-official-model">Qwen 官方模型</Label>
+                  <Input
+                    id="ai-qwen-official-model"
+                    value={form.searchQwenOfficialModel}
+                    onChange={(e) => setForm((f) => ({ ...f, searchQwenOfficialModel: e.target.value }))}
+                    placeholder="qwen-plus"
+                  />
+                </div>
+              </div>
+            )}
+
             {form.searchMode === 'qwen' && (
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="ai-qwen-base-url">Qwen 搜索端点（Base URL）</Label>
+                  <Label htmlFor="ai-qwen-base-url">Qwen 三方 MaaS 端点（Base URL）</Label>
                   <Input
                     id="ai-qwen-base-url"
                     value={form.searchQwenBaseUrl}
@@ -865,7 +940,7 @@ export function AiConfigForm({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="ai-qwen-api-key">Qwen 搜索 API Key</Label>
+                  <Label htmlFor="ai-qwen-api-key">Qwen 三方 MaaS API Key</Label>
                   <Input
                     id="ai-qwen-api-key"
                     type="password"
@@ -875,7 +950,7 @@ export function AiConfigForm({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="ai-qwen-model">Qwen 搜索模型</Label>
+                  <Label htmlFor="ai-qwen-model">Qwen 三方 MaaS 模型</Label>
                   <Input
                     id="ai-qwen-model"
                     value={form.searchQwenModel}
