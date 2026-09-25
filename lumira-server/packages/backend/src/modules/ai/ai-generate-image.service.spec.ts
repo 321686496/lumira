@@ -92,7 +92,10 @@ describe('AiGenerateImageService', () => {
     expect(input.size).toBe('864x1152'); // mapSize('doubao', '3:4')
     expect(input.referenceBase64).toBe(Buffer.from('ref-bytes').toString('base64'));
     expect(input.referenceMime).toBe('image/jpeg');
-    expect(res).toEqual({ base64: 'aGVsbG8=', mimeType: 'image/png' });
+    // 结果透传：图片本体 + 出口加固后的提示词与实际使用的生图模型
+    expect(res).toMatchObject({ base64: 'aGVsbG8=', mimeType: 'image/png' });
+    expect(res.prompt).toBe(hardenPhotoRealism('润色后的提示词'));
+    expect(res.model).toBe(ACTIVE_CFG.image.model);
   });
 
   it('润色失败 → generateImage 收到原始拼接 prompt', async () => {

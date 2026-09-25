@@ -66,6 +66,8 @@ export interface AiBatchImageTraceEvent {
    * 'llm' / 'search' 为该张图生成过程中的模型调用（如提示词整理），用于展示提示词与原始响应。
    */
   kind?: 'pose' | 'llm' | 'search';
+  /** 一次调用的关联标识（kind='llm'/'search' 时）：并发同名调用的 running/done 精确配对 */
+  callId?: string;
   /** 生图最终提示词（仅 pose done 事件） */
   prompt?: string;
   model?: string;
@@ -275,6 +277,7 @@ export class AiImageTaskService implements OnModuleDestroy {
           index,
           kind: ev.type,
           title: ev.title,
+          callId: ev.callId,
           status: ev.status === 'running' ? 'running' : ev.status === 'done' ? 'done' : 'error',
           model: ev.model,
           systemPrompt: ev.systemPrompt,

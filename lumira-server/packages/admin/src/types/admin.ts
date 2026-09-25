@@ -595,6 +595,8 @@ export interface AiBatchImageTraceEvent {
   status: 'pending' | 'running' | 'done' | 'error';
   /** 事件种类：缺省 'pose'（姿势图生命周期）；'llm'/'search' 为该张图生成过程中的模型调用 */
   kind?: 'pose' | 'llm' | 'search';
+  /** 一次调用的关联标识（kind=llm/search）：并发同名调用的 running/done 精确配对 */
+  callId?: string;
   prompt?: string;
   model?: string;
   /** 模型调用的原始数据（kind='llm'/'search'） */
@@ -663,6 +665,8 @@ export interface AiTraceEvent {
   step: string;
   /** 父阶段标识（嵌套阶段 / 阶段内调用与说明）；顶层事件缺省 */
   parentStep?: string;
+  /** 一次调用的关联标识（type=llm/search）：并发同名调用的 running/done 精确配对 */
+  callId?: string;
   /** 阶段中文名 */
   title: string;
   status: AiTraceEventStatus;

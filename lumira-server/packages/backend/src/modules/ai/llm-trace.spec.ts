@@ -165,4 +165,24 @@ describe('llm-trace', () => {
       ['researchDigest', 'researchDigest'],
     ]);
   });
+
+  it('并发同名调用：每次调用带唯一 callId，running 与 done 靠 callId 精确配对', async () => {
+    const { events, sink } = collect();
+    await runWithTrace(sink, async () => {
+      // 模拟同一来源的多组短查询并行检索（标题完全相同）
+      const first = traceLlmCall({ model: 'qwen-plus' })!;
+      const second = traceLlmCall({ model: 'qwen-plus' })!;
+      second.done('第二次的响应');
+      first.done('第一次的响应');
+    });
+
+    const llm = events.filter((e) => e.type === 'llm');
+    expect(llm).toHaveLength(4);
+    const [r1, r2, d2, d1] = llm;
+    expect(r1!.callId).toBeDefined();
+    expect(r1!.callId).not.toBe(r2!.callId);
+    // 响应按 callId 各归各位，而不是按到达顺序错配
+    expect(d1).toMatchObject({ callId: r1!.callId, response: '第一次的响应' });
+    expect(d2).toMatchObject({ callId: r2!.callId, response: '第二次的响应' });
+  });
 });

@@ -128,7 +128,18 @@ researchDigest = r.brief ? renderResearchBrief(r.brief) : buildResearchDigest(r.
 
 `ai-orchestrator.service.ts`：删除复用分支中重复的 `traceNote('research', …)`。
 
-管理端 `types/admin.ts` 的 `AiTraceEvent` 同步增加 `parentStep?: string`。
+### 3.6 调用关联：`callId`
+
+同一来源的多组短查询是**并行**发出的，其 `title`（`联网检索 · 来源名`）完全相同。仅按
+「种类+标题+模型」配对会把并发的 running 占位丢弃、甚至把响应错配到别的调用上。故：
+
+- `llm-trace.ts` 的 `startCall` 生成模块级递增的 `callId`（`c1`、`c2`…，进程内唯一），
+  running / done / fail 三条事件都带该字段；
+- 批次流（`ai-image-task.service.ts`）透传 `callId`；
+- 前端 `collapseTraceCalls` **优先按 `callId` 精确配对**，无 `callId` 的历史事件退回
+  「种类+标题+模型」FIFO 配对。
+
+管理端 `types/admin.ts` 的 `AiTraceEvent` 同步增加 `parentStep?: string`、`callId?: string`。
 
 ## 4. 前端设计：嵌套竖轨时间线
 

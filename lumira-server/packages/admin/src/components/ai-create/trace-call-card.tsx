@@ -131,6 +131,8 @@ export interface TraceCallSource {
   type?: 'llm' | 'search' | 'step' | 'note' | 'pose';
   kind?: 'pose' | 'llm' | 'search';
   title: string;
+  /** 一次调用的关联标识（后端 llm-trace 产出）：并发同名调用靠它精确配对 */
+  callId?: string;
   model?: string;
   status: string;
   systemPrompt?: string;
@@ -157,13 +159,20 @@ function mergeDefined<T extends object>(base: T, patch: Partial<T>): T {
 
 /**
  * 把「一次调用的两条事件」折叠成一张卡片的数据：
- * running/pending 开一个待配对槽位并占据当前位置；随后同 种类+title+model 的 done/fail/error
+ * running/pending 开一个待配对槽位并占据当前位置；随后同一次调用的 done/fail/error
  * 原位补齐响应字段（key 不变 → React 不重建节点，表现为同一张卡片内容变完整）。
- * 未能配对的事件各自单独成条（如只有 done 的历史事件、并发同名调用）。
+ * 配对优先用后端 callId（并发同名调用也能各归各位）；无 callId 的历史事件退回
+ * 「种类+标题+模型」FIFO 配对。未能配对的事件各自单独成条。
  */
 export function collapseTraceCalls(sources: TraceCallSource[]): TraceCallItem[] {
   const items: TraceCallItem[] = [];
-  const open = new Map<string, number>();
+  /** 未完成的调用槽位队列（同 key 可能有多个并发调用同时在跑） */
+  const open = new Map<string, number[]>();
+  const pairKey = (src: TraceCallSource): string => {
+    if (src.callId) return `id|${src.callId}`;
+    const isSearch = src.kind === 'search' || src.type === 'search';
+    return `${isSearch ? 'search' : 'llm'}|${src.title}|${src.model ?? ''}`;
+  };
   for (const src of sources) {
     const isSearch = src.kind === 'search' || src.type === 'search';
     const ev: TraceCallCardData = {
@@ -180,18 +189,21 @@ export function collapseTraceCalls(sources: TraceCallSource[]): TraceCallItem[] 
       error: src.error,
       durationMs: src.durationMs,
     };
-    const key = `${isSearch ? 'search' : 'llm'}|${src.title}|${src.model ?? ''}`;
+    const key = pairKey(src);
+    const queue = open.get(key);
     const waiting = src.status === 'running' || src.status === 'pending';
     if (waiting) {
-      if (open.has(key)) continue; // 同一次调用不会重复 running；重复时忽略以免卡片抖动
-      open.set(key, items.length);
+      // 并发同名调用各自占位（不再丢弃），保证每次检索/请求都有「请求提示词」可取
+      const slot = items.length;
       items.push({ key: src.seq, ev });
+      if (queue) queue.push(slot);
+      else open.set(key, [slot]);
       continue;
     }
-    const idx = open.get(key);
-    if (typeof idx === 'number') {
-      open.delete(key);
-      items[idx] = { key: items[idx].key, ev: mergeDefined(items[idx].ev, ev) };
+    if (queue && queue.length) {
+      const slot = queue.shift() as number;
+      if (!queue.length) open.delete(key);
+      items[slot] = { key: items[slot].key, ev: mergeDefined(items[slot].ev, ev) };
       continue;
     }
     items.push({ key: src.seq, ev });

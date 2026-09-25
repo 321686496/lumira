@@ -24,6 +24,8 @@ export interface AiTraceEvent {
   title: string;
   /** 所属父阶段标识（无嵌套时缺省）；后台据此渲染嵌套时间线，避免父子被拍平成同级导致因果倒置 */
   parentStep?: string;
+  /** 一次调用的关联标识（仅 llm/search）：并发同名调用的 running/done 靠它精确配对，不靠标题 */
+  callId?: string;
   status: AiTraceEventStatus;
   /** LLM 模型名 / 检索来源名 */
   model?: string;
@@ -165,18 +167,26 @@ interface TraceCallInput {
   imageBytes?: number;
 }
 
+/** 单次调用关联 id 计数（模块级递增 → 同一进程内唯一，批次流并行多张图也不会撞号） */
+let callSeq = 0;
+
 /** 开始记录一次外部调用（提示词在开始时就记下，响应在完成时补记） */
 function startCall(input: TraceCallInput): TraceCallHandle | null {
   const store = storage.getStore();
   if (!store) return null;
   const current = topStep();
   const step = current?.step ?? 'call';
+  const title = input.title || current?.title || input.title;
+  // 并发同名调用（如同一来源的多组短查询并行检索）标题完全相同，靠 callId 才能把
+  // 各自的 running 与 done 精确配上，避免响应被错配或占位被丢弃。
+  const callId = `c${(callSeq += 1)}`;
   const startedAt = Date.now();
   store.sink({
     type: input.type,
     step,
-    title: input.title || current?.title || input.title,
+    title,
     parentStep: current?.step,
+    callId,
     status: 'running',
     model: input.model,
     systemPrompt: capText(input.systemPrompt),
@@ -188,8 +198,9 @@ function startCall(input: TraceCallInput): TraceCallHandle | null {
       store.sink({
         type: input.type,
         step,
-        title: input.title || current?.title || input.title,
+        title,
         parentStep: current?.step,
+        callId,
         status: 'done',
         model: input.model,
         response: capText(response),
@@ -203,8 +214,9 @@ function startCall(input: TraceCallInput): TraceCallHandle | null {
       store.sink({
         type: input.type,
         step,
-        title: input.title || current?.title || input.title,
+        title,
         parentStep: current?.step,
+        callId,
         status: 'fail',
         model: input.model,
         error: err instanceof Error ? err.message : String(err),
