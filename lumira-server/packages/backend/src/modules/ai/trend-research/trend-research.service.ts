@@ -28,7 +28,7 @@ export function splitQueries(query: string, groupSize = 3, maxGroups = 4): strin
 
 /** 单个启用搜索来源的配置 */
 export interface SearchSourceConfig {
-  /** 来源标识（bing / vendor / baidu） */
+  /** 来源标识（vendor / searxng / baidu / qwen / qwen-official） */
   name: string;
   /** 适配器名（未知抛错） */
   provider: string;
@@ -36,7 +36,7 @@ export interface SearchSourceConfig {
   apiKey?: string;
   /** SearXNG 站点限定（provider=searxng 时可选，拼接 site: 前缀） */
   site?: string;
-  /** Qwen 模型自带联网搜索模型（provider=qwen 时使用，缺省回退 qwen-plus） */
+  /** Qwen 搜索模型（provider=qwen / qwen-official 时使用，缺省回退 qwen-plus） */
   model?: string;
   /** 厂商联网检索端点（provider=vendor 时必填） */
   vendorEndpoint?: unknown;

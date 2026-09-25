@@ -936,7 +936,7 @@ export function AiConfigForm({
                     id="ai-qwen-base-url"
                     value={form.searchQwenBaseUrl}
                     onChange={(e) => setForm((f) => ({ ...f, searchQwenBaseUrl: e.target.value }))}
-                    placeholder="https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+                    placeholder="https://your-maas-relay.com/v1"
                   />
                 </div>
                 <div className="space-y-2">

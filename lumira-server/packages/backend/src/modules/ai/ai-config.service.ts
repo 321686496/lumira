@@ -439,7 +439,8 @@ export class AiConfigService {
 
     const names = parseSearchSources(row.searchSources);
     const sources: SearchSourceConfig[] = [];
-    // 搜索方式 = qwen-official（Qwen 官方百炼）：用官方端点 + Key；缺任一 → sources 空（研究跑 0 条，绝不误写 skip-research）
+    // 搜索方式 = qwen-official（Qwen 官方百炼）：用官方端点 + Key；缺任一 → sources 空（研究跑 0 条）
+    // 注意：sources 空时编排层仍会记 skip-research（凭据缺失与未配置未区分）→ 见 docs/future-optimizations.md
     if (row.searchProvider === 'qwen-official') {
       const hasOfficial = Boolean((row.searchQwenOfficialBaseUrl ?? '').trim() && (row.searchQwenOfficialApiKey ?? '').trim());
       return {
@@ -455,7 +456,8 @@ export class AiConfigService {
           : [],
       };
     }
-    // 搜索方式 = qwen（Qwen 三方 MaaS）：用独立 Qwen 端点 + Key；缺任一 → sources 空（研究跑 0 条，绝不误写 skip-research）
+    // 搜索方式 = qwen（Qwen 三方 MaaS）：用独立 Qwen 端点 + Key；缺任一 → sources 空（研究跑 0 条）
+    // 注意：sources 空时编排层仍会记 skip-research（凭据缺失与未配置未区分）→ 见 docs/future-optimizations.md
     if (row.searchProvider === 'qwen') {
       const hasQwen = Boolean((row.searchQwenBaseUrl ?? '').trim() && (row.searchQwenApiKey ?? '').trim());
       return {

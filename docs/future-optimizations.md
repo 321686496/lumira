@@ -805,3 +805,15 @@
 - **背景/动机**：满版照片是用户点名的唯一压字款，当前逐值照抄 v12 静态设计稿，未做内容自适应。
 - **目标状态**：对 `photoBuilder` 输出做粗采样亮度估计，暗图降低压暗强度、亮图提高（或标题区加局部色块），保持零裁切。
 - **状态**：📝 登记待做（2026-09-24，随最终三款收敛落地）
+
+---
+
+## AI 研究管线 · 联网搜索（2026-09-25）
+
+### P1 · 搜索来源「缺端点/Key」与「未配置」混为一谈，编排层会误写 skip-research
+
+- **模块**：AI 一键生图研究管线（后端 `modules/ai/ai-config.service.ts` `getSearchConfig()` + `modules/ai/ai-orchestrator.service.ts` step 2 研究）
+- **优化点**：`getSearchConfig()` 在 `searchProvider=qwen` / `qwen-official` 且**缺端点或 API Key** 时返回 `sources: []`；而 `ai-orchestrator.service.ts:99` 以 `enabled && sources.length && topic` 判定 `researchEnabled`，`sources` 为空即落进 `else if (!researchEnabled)` 分支写 trace `skip-research`。于是「研究已开启、只是凭据没填全」被记成「研究未开启」，与设计文档「绝不误写 skip-research」的表述冲突。
+- **背景/动机**：2026-09-25 「Qwen 官方百炼 / Qwen 三方 MaaS 联网搜索拆分」实现时评审发现（I-1）。该行为在拆分前的 `qwen` 分支即已存在，非本次引入，故本次只登记不改，避免扩大改动面。
+- **目标状态**：让编排层依 `searchCfg.enabled` 决定是否跳过，而非依 `sources.length`；并把「未配置搜索」（正常 skip）与「已配置但凭据缺失/异常」（应记失败原因，如 `skip-research: missing-credentials`）在 trace 上区分开。补 `ai-orchestrator` / `ai-config.service` 单测覆盖两种情形。
+- **状态**：⏳ 待优化
