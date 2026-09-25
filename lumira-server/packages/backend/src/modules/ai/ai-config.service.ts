@@ -34,13 +34,13 @@ export interface AiConfigView {
   enabled: boolean;
   /** 研究管线开关：true=启用（orchestrator 走研究管线）；false=关闭（原单次路径） */
   searchEnabled: boolean;
-  /** 搜索服务商：'general'（通用搜索 API）| 'vendor'（厂商联网检索）| 'qwen'（Qwen 模型自带搜索）| null（未启用） */
-  searchProvider: 'general' | 'vendor' | 'qwen' | null;
+  /** 搜索服务商：'general' | 'vendor' | 'qwen'（Qwen 三方 MaaS）| 'qwen-official'（Qwen 官方百炼）| null（未启用） */
+  searchProvider: 'general' | 'vendor' | 'qwen' | 'qwen-official' | null;
   /** 通用搜索 API baseUrl（searchProvider=general 时使用） */
   searchBaseUrl: string;
   /** 通用搜索 API key（脱敏） */
   searchApiKeyMasked: string;
-  /** 启用的搜索来源（searxng/vendor/baidu/qwen） */
+  /** 启用的搜索来源（searxng/vendor/baidu/qwen/qwen-official） */
   searchSources: string[];
   /** SearXNG 站点限定（可选，如 xiaohongshu.com / v.douyin.com）；空串 = 全站搜索 */
   searchSite: string;
@@ -52,6 +52,12 @@ export interface AiConfigView {
   searchQwenApiKeyMasked: string;
   /** Qwen 搜索模型（缺省 = qwen-plus） */
   searchQwenModel: string;
+  /** Qwen 官方百炼搜索端点（searchProvider=qwen-official 时使用） */
+  searchQwenOfficialBaseUrl: string;
+  /** Qwen 官方百炼搜索 API key（脱敏） */
+  searchQwenOfficialApiKeyMasked: string;
+  /** Qwen 官方百炼搜索模型（缺省 = qwen-plus） */
+  searchQwenOfficialModel: string;
 }
 
 /** 单模态运行时端点（含明文 apiKey） */
@@ -79,7 +85,7 @@ export interface ActiveAiConfig {
   /** 研究管线配置（orchestrator / trend-research 使用） */
   search: {
     enabled: boolean;
-    provider: 'general' | 'vendor' | 'qwen' | null;
+    provider: 'general' | 'vendor' | 'qwen' | 'qwen-official' | null;
     baseUrl: string;
     apiKey: string;
     /** SearXNG 站点限定（可选；空串 = 全站搜索） */
@@ -125,7 +131,7 @@ function parseSearchSources(raw: string | null | undefined): string[] {
     const arr = JSON.parse(raw);
     return Array.isArray(arr)
       ? (arr
-          .filter((s) => ['bing', 'vendor', 'baidu', 'qwen', 'searxng'].includes(s))
+          .filter((s) => ['bing', 'vendor', 'baidu', 'qwen', 'qwen-official', 'searxng'].includes(s))
           // 老数据归一化：bing 已退役，按 searxng 处理（免费自建，无需 Key）
           .map((s) => (s === 'bing' ? 'searxng' : s)) as string[])
       : [];
@@ -174,7 +180,7 @@ export class AiConfigService {
       enabled: row.enabled === 1,
       searchEnabled: row.searchEnabled === 1,
       searchProvider:
-        row.searchProvider === 'general' || row.searchProvider === 'vendor' || row.searchProvider === 'qwen'
+        row.searchProvider === 'general' || row.searchProvider === 'vendor' || row.searchProvider === 'qwen' || row.searchProvider === 'qwen-official'
           ? row.searchProvider
           : null,
       searchBaseUrl: row.searchBaseUrl ?? '',
@@ -185,6 +191,9 @@ export class AiConfigService {
       searchQwenBaseUrl: row.searchQwenBaseUrl ?? '',
       searchQwenApiKeyMasked: maskKey(row.searchQwenApiKey ?? ''),
       searchQwenModel: row.searchQwenModel ?? 'qwen-plus',
+      searchQwenOfficialBaseUrl: row.searchQwenOfficialBaseUrl ?? '',
+      searchQwenOfficialApiKeyMasked: maskKey(row.searchQwenOfficialApiKey ?? ''),
+      searchQwenOfficialModel: row.searchQwenOfficialModel ?? 'qwen-plus',
     };
   }
 
@@ -262,6 +271,9 @@ export class AiConfigService {
     const searchQwenBaseUrl = dto.searchQwenBaseUrl?.trim() || existing?.searchQwenBaseUrl || null;
     const resolvedSearchQwenApiKey = dto.searchQwenApiKey?.trim() || existing?.searchQwenApiKey || null;
     const searchQwenModel = dto.searchQwenModel?.trim() || existing?.searchQwenModel || null;
+    const searchQwenOfficialBaseUrl = dto.searchQwenOfficialBaseUrl?.trim() || existing?.searchQwenOfficialBaseUrl || null;
+    const resolvedSearchQwenOfficialApiKey = dto.searchQwenOfficialApiKey?.trim() || existing?.searchQwenOfficialApiKey || null;
+    const searchQwenOfficialModel = dto.searchQwenOfficialModel?.trim() || existing?.searchQwenOfficialModel || null;
     if (searchEnabled === 1 && searchProvider === 'general') {
       // SearXNG 自建搜索免费且无需 Key，仅要求 baseUrl
       if (!searchBaseUrl) throw new BadRequestException('通用搜索 API 必须填写 baseUrl');
@@ -269,6 +281,10 @@ export class AiConfigService {
     if (searchEnabled === 1 && searchProvider === 'qwen') {
       if (!searchQwenBaseUrl) throw new BadRequestException('Qwen 搜索必须填写 baseUrl');
       if (!resolvedSearchQwenApiKey) throw new BadRequestException('首次启用 Qwen 搜索必须填写 API Key');
+    }
+    if (searchEnabled === 1 && searchProvider === 'qwen-official') {
+      if (!searchQwenOfficialBaseUrl) throw new BadRequestException('Qwen 官方搜索必须填写 baseUrl');
+      if (!resolvedSearchQwenOfficialApiKey) throw new BadRequestException('首次启用 Qwen 官方搜索必须填写 API Key');
     }
 
     if (!existing) {
@@ -304,6 +320,9 @@ export class AiConfigService {
         searchQwenBaseUrl,
         searchQwenApiKey: resolvedSearchQwenApiKey,
         searchQwenModel,
+        searchQwenOfficialBaseUrl,
+        searchQwenOfficialApiKey: resolvedSearchQwenOfficialApiKey,
+        searchQwenOfficialModel,
         createdAt: now,
         updatedAt: now,
       });
@@ -337,6 +356,9 @@ export class AiConfigService {
           searchQwenBaseUrl,
           searchQwenApiKey: dto.searchQwenApiKey?.trim() ? resolvedSearchQwenApiKey : existing?.searchQwenApiKey,
           searchQwenModel,
+          searchQwenOfficialBaseUrl,
+          searchQwenOfficialApiKey: dto.searchQwenOfficialApiKey?.trim() ? resolvedSearchQwenOfficialApiKey : existing?.searchQwenOfficialApiKey,
+          searchQwenOfficialModel,
           apiKey: dto.apiKey ? dto.apiKey : existing.apiKey, // 留空 = 不改
           updatedAt: now,
         })
@@ -417,7 +439,23 @@ export class AiConfigService {
 
     const names = parseSearchSources(row.searchSources);
     const sources: SearchSourceConfig[] = [];
-    // 搜索方式 = qwen（模型自带）：用独立 Qwen 端点 + Key；缺任一 → sources 空（研究跑 0 条，绝不误写 skip-research）
+    // 搜索方式 = qwen-official（Qwen 官方百炼）：用官方端点 + Key；缺任一 → sources 空（研究跑 0 条，绝不误写 skip-research）
+    if (row.searchProvider === 'qwen-official') {
+      const hasOfficial = Boolean((row.searchQwenOfficialBaseUrl ?? '').trim() && (row.searchQwenOfficialApiKey ?? '').trim());
+      return {
+        enabled: row.searchEnabled === 1,
+        sources: hasOfficial
+          ? [{
+              name: 'qwen-official',
+              provider: 'qwen-official',
+              baseUrl: (row.searchQwenOfficialBaseUrl ?? '').trim(),
+              apiKey: (row.searchQwenOfficialApiKey ?? '').trim(),
+              model: (row.searchQwenOfficialModel ?? '').trim() || 'qwen-plus',
+            }]
+          : [],
+      };
+    }
+    // 搜索方式 = qwen（Qwen 三方 MaaS）：用独立 Qwen 端点 + Key；缺任一 → sources 空（研究跑 0 条，绝不误写 skip-research）
     if (row.searchProvider === 'qwen') {
       const hasQwen = Boolean((row.searchQwenBaseUrl ?? '').trim() && (row.searchQwenApiKey ?? '').trim());
       return {
@@ -491,7 +529,7 @@ export class AiConfigService {
       search: {
         enabled: row.searchEnabled === 1,
         provider:
-          row.searchProvider === 'general' || row.searchProvider === 'vendor' || row.searchProvider === 'qwen'
+          row.searchProvider === 'general' || row.searchProvider === 'vendor' || row.searchProvider === 'qwen' || row.searchProvider === 'qwen-official'
             ? row.searchProvider
             : null,
         baseUrl: row.searchBaseUrl ?? '',

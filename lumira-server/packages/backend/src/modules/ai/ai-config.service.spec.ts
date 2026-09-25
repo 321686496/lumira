@@ -613,3 +613,186 @@ describe('AiConfigService — search qwen', () => {
     expect(cfg?.sources[0]).toMatchObject({ name: 'searxng', provider: 'searxng', site: 'xiaohongshu.com' });
   });
 });
+
+describe('AiConfigService — search qwen-official（官方百炼）', () => {
+  it('get() search_provider=qwen-official + search_sources 含 qwen-official → 白名单透传 + 官方字段/脱敏', async () => {
+    const service = new AiConfigService(readonlyDb(row({
+      enabled: 1,
+      searchEnabled: 1,
+      searchProvider: 'qwen-official',
+      searchSources: JSON.stringify(['qwen-official']),
+      searchQwenOfficialBaseUrl: 'https://ws.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
+      searchQwenOfficialApiKey: 'sk-official-long',
+      searchQwenOfficialModel: 'qwen-plus',
+    })));
+    const view = await service.get();
+    if (view.configured !== true) throw new Error('should be configured');
+    expect(view.searchProvider).toBe('qwen-official');
+    // parseSearchSources 白名单未含 qwen-official 时这里会是 []（失败点）
+    expect(view.searchSources).toEqual(['qwen-official']);
+    expect(view.searchQwenOfficialBaseUrl).toBe('https://ws.cn-beijing.maas.aliyuncs.com/compatible-mode/v1');
+    expect(view.searchQwenOfficialApiKeyMasked).toBe('sk-****ng');
+    expect(view.searchQwenOfficialModel).toBe('qwen-plus');
+  });
+
+  it('search_provider=qwen-official 且官方端点+Key 齐全 → getSearchConfig 返回 sources=[qwen-official]（model 缺省 qwen-plus）', async () => {
+    const service = new AiConfigService(readonlyDb(row({
+      enabled: 1,
+      searchEnabled: 1,
+      searchProvider: 'qwen-official',
+      searchSources: JSON.stringify(['qwen-official']),
+      searchQwenOfficialBaseUrl: 'https://ws.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
+      searchQwenOfficialApiKey: 'sk-official-long',
+    })));
+    const cfg = await service.getSearchConfig();
+    expect(cfg?.enabled).toBe(true);
+    expect(cfg?.sources).toHaveLength(1);
+    expect(cfg?.sources[0]).toMatchObject({
+      name: 'qwen-official',
+      provider: 'qwen-official',
+      baseUrl: 'https://ws.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
+      apiKey: 'sk-official-long',
+      model: 'qwen-plus',
+    });
+  });
+
+  it('search_provider=qwen-official 但缺 Key → sources 为空且 enabled 保持开关状态（不抛，绝不误写 skip-research）', async () => {
+    const service = new AiConfigService(readonlyDb(row({
+      enabled: 1,
+      searchEnabled: 1,
+      searchProvider: 'qwen-official',
+      searchSources: JSON.stringify(['qwen-official']),
+      searchQwenOfficialBaseUrl: 'https://ws.example/v1',
+      searchQwenOfficialApiKey: '',
+    })));
+    const cfg = await service.getSearchConfig();
+    expect(cfg?.enabled).toBe(true);
+    expect(cfg?.sources).toHaveLength(0);
+  });
+
+  it('两种 Qwen 互斥：search_provider=qwen-official 只读官方字段（不串三方 MaaS 字段）', async () => {
+    const service = new AiConfigService(readonlyDb(row({
+      enabled: 1,
+      searchEnabled: 1,
+      searchProvider: 'qwen-official',
+      searchQwenBaseUrl: 'https://maas.example/v1',
+      searchQwenApiKey: 'sk-maas',
+      searchQwenModel: 'qwen3.7-max',
+      searchQwenOfficialBaseUrl: 'https://official.example/v1',
+      searchQwenOfficialApiKey: 'sk-official',
+      searchQwenOfficialModel: 'qwen-max',
+    })));
+    const cfg = await service.getSearchConfig();
+    expect(cfg?.sources).toHaveLength(1);
+    expect(cfg?.sources[0]).toMatchObject({
+      name: 'qwen-official',
+      provider: 'qwen-official',
+      baseUrl: 'https://official.example/v1',
+      apiKey: 'sk-official',
+      model: 'qwen-max',
+    });
+  });
+
+  it('两种 Qwen 互斥：search_provider=qwen 只读三方 MaaS 字段（不串官方字段）', async () => {
+    const service = new AiConfigService(readonlyDb(row({
+      enabled: 1,
+      searchEnabled: 1,
+      searchProvider: 'qwen',
+      searchQwenBaseUrl: 'https://maas.example/v1',
+      searchQwenApiKey: 'sk-maas',
+      searchQwenModel: 'qwen3.7-max',
+      searchQwenOfficialBaseUrl: 'https://official.example/v1',
+      searchQwenOfficialApiKey: 'sk-official',
+      searchQwenOfficialModel: 'qwen-max',
+    })));
+    const cfg = await service.getSearchConfig();
+    expect(cfg?.sources).toHaveLength(1);
+    expect(cfg?.sources[0]).toMatchObject({
+      name: 'qwen',
+      provider: 'qwen',
+      baseUrl: 'https://maas.example/v1',
+      apiKey: 'sk-maas',
+      model: 'qwen3.7-max',
+    });
+  });
+
+  it('getActiveConfig() search.provider 透传 qwen-official', async () => {
+    const service = new AiConfigService(readonlyDb(row({
+      enabled: 1,
+      searchEnabled: 1,
+      searchProvider: 'qwen-official',
+      searchSources: JSON.stringify(['qwen-official']),
+    })));
+    const cfg = await service.getActiveConfig();
+    expect(cfg.search.provider).toBe('qwen-official');
+  });
+});
+
+describe('AiConfigService — save() qwen-official', () => {
+  const dto = (overrides: Record<string, unknown> = {}) => ({
+    provider: 'qwen',
+    baseUrl: 'https://x.example',
+    apiKey: 'sk-1234567890',
+    visionModel: 'qwen-vl-max',
+    imageModel: 'wanx2.1-t2i-turbo',
+    enabled: true,
+    searchEnabled: true,
+    ...overrides,
+  });
+
+  it('searchProvider=qwen-official 首次无存量 Key 且未传 Key → 400', async () => {
+    const { service } = writableDb(row());
+    await expect(service.save(dto({
+      searchProvider: 'qwen-official',
+      searchQwenOfficialBaseUrl: 'https://official.example/v1',
+    }))).rejects.toThrow('首次启用 Qwen 官方搜索必须填写 API Key');
+  });
+
+  it('searchProvider=qwen-official 但缺 baseUrl → 400', async () => {
+    const { service } = writableDb(row());
+    await expect(service.save(dto({
+      searchProvider: 'qwen-official',
+      searchQwenOfficialApiKey: 'sk-official',
+    }))).rejects.toThrow('Qwen 官方搜索必须填写 baseUrl');
+  });
+
+  it('searchProvider=qwen-official 齐全 → update set 收到官方三列，且三方三列保持不动', async () => {
+    const { service, updateSet } = writableDb(row({
+      searchQwenBaseUrl: 'https://maas.example/v1',
+      searchQwenApiKey: 'sk-maas',
+      searchQwenModel: 'qwen3.7-max',
+    }));
+    await service.save(dto({
+      searchProvider: 'qwen-official',
+      searchSources: ['qwen-official'],
+      searchQwenOfficialBaseUrl: 'https://official.example/v1',
+      searchQwenOfficialApiKey: 'sk-official',
+      searchQwenOfficialModel: 'qwen-max',
+    }));
+    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({
+      searchProvider: 'qwen-official',
+      searchQwenOfficialBaseUrl: 'https://official.example/v1',
+      searchQwenOfficialApiKey: 'sk-official',
+      searchQwenOfficialModel: 'qwen-max',
+      searchQwenBaseUrl: 'https://maas.example/v1',
+      searchQwenApiKey: 'sk-maas',
+      searchQwenModel: 'qwen3.7-max',
+    }));
+  });
+
+  it('searchProvider=qwen-official 首次保存 → insert values 收到官方三列', async () => {
+    const { service, insertValues } = writableDb(undefined);
+    await service.save(dto({
+      searchProvider: 'qwen-official',
+      searchSources: ['qwen-official'],
+      searchQwenOfficialBaseUrl: 'https://official.example/v1',
+      searchQwenOfficialApiKey: 'sk-official',
+      searchQwenOfficialModel: 'qwen-max',
+    }));
+    expect(insertValues).toHaveBeenCalledWith(expect.objectContaining({
+      searchQwenOfficialBaseUrl: 'https://official.example/v1',
+      searchQwenOfficialApiKey: 'sk-official',
+      searchQwenOfficialModel: 'qwen-max',
+    }));
+  });
+});

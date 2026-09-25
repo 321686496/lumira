@@ -94,9 +94,9 @@ export class UpdateAiConfigDto {
   @IsBoolean()
   searchEnabled?: boolean;
 
-  /** 搜索服务商：'general'（通用搜索 API）| 'vendor'（厂商联网检索）| 'qwen'（Qwen 模型自带）| 'off'（关闭） */
+  /** 搜索服务商：'general'（通用搜索 API）| 'vendor'（厂商联网检索）| 'qwen'（Qwen 三方 MaaS）| 'qwen-official'（Qwen 官方百炼）| 'off'（关闭） */
   @IsOptional()
-  @IsIn(['general', 'vendor', 'off', 'qwen'] as const)
+  @IsIn(['general', 'vendor', 'off', 'qwen', 'qwen-official'] as const)
   searchProvider?: string;
 
   /** 通用搜索 API 的 baseUrl（searchProvider=general 时使用） */
@@ -111,12 +111,12 @@ export class UpdateAiConfigDto {
   @MaxLength(255)
   searchApiKey?: string;
 
-  /** 启用的搜索来源数组（searxng/vendor/baidu/qwen）；缺省 = 沿用原值 */
+  /** 启用的搜索来源数组（searxng/vendor/baidu/qwen/qwen-official）；缺省 = 沿用原值 */
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(3)
   @ArrayNotEmpty()
-  @IsIn(['searxng', 'vendor', 'baidu', 'qwen'], { each: true })
+  @IsIn(['searxng', 'vendor', 'baidu', 'qwen', 'qwen-official'], { each: true })
   searchSources?: string[];
 
   /** SearXNG 站点限定（可选，如 xiaohongshu.com / v.douyin.com）；空串/缺省 = 全站搜索 */
@@ -149,4 +149,22 @@ export class UpdateAiConfigDto {
   @IsString()
   @MaxLength(64)
   searchQwenModel?: string;
+
+  /** Qwen 官方百炼搜索端点（searchProvider=qwen-official 时使用） */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  searchQwenOfficialBaseUrl?: string;
+
+  /** Qwen 官方百炼搜索 API key：空串/缺省 = 保留原值；首次启用官方搜索必填 */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  searchQwenOfficialApiKey?: string;
+
+  /** Qwen 官方百炼搜索模型（缺省 = qwen-plus） */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  searchQwenOfficialModel?: string;
 }
