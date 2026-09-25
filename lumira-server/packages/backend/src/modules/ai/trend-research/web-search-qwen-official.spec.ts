@@ -5,25 +5,32 @@ import { describeTodayUtc8 } from '../../../common/utils/date.util';
 import { runWithTrace } from '../llm-trace';
 import type { AiTraceEvent } from '../llm-trace';
 
-/** 官方百炼：仅有顶层 search_info.search_results[]（content 为空，不产生综述条目） */
+/** DashScope 原生生成端点（由配置的 compatible-mode base 派生） */
+const DASHSCOPE_URL = 'https://ws.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/text-generation/generation';
+
+/** 官方百炼 DashScope 原生：output.search_info.search_results[]（content 为空，不产生综述条目） */
 const OK_SEARCH_INFO = {
-  choices: [{ message: { role: 'assistant', content: '' } }],
-  search_info: {
-    search_results: [
-      { index: 1, title: '秋日少女写真', url: 'https://a.example', site_name: 'a.example' },
-      { index: 2, title: '胶片感人像', url: '', site_name: 'b.example' }, // url 为空 → 回退 site_name
-    ],
+  output: {
+    choices: [{ message: { role: 'assistant', content: '' } }],
+    search_info: {
+      search_results: [
+        { index: 1, title: '秋日少女写真', url: 'https://a.example', site_name: 'a.example' },
+        { index: 2, title: '胶片感人像', url: '', site_name: 'b.example' }, // url 为空 → 回退 site_name
+      ],
+    },
   },
 };
 
 /** 官方百炼：既有 search_info.search_results[] 又有正文综述（真实联网场景） */
 const OK_SEARCH_INFO_WITH_CONTENT = {
-  choices: [{ message: { role: 'assistant', content: '这是带来源链接的正文综述（https://a.example）。' } }],
-  search_info: {
-    search_results: [
-      { index: 1, title: '秋日少女写真', url: 'https://a.example', site_name: 'a.example' },
-      { index: 2, title: '胶片感人像', url: '', site_name: 'b.example' },
-    ],
+  output: {
+    choices: [{ message: { role: 'assistant', content: '这是带来源链接的正文综述（https://a.example）。' } }],
+    search_info: {
+      search_results: [
+        { index: 1, title: '秋日少女写真', url: 'https://a.example', site_name: 'a.example' },
+        { index: 2, title: '胶片感人像', url: '', site_name: 'b.example' },
+      ],
+    },
   },
 };
 
@@ -41,23 +48,37 @@ describe('web-search-qwen-official', () => {
     expect(provider.name).toBe('qwen-official');
   });
 
-  it('仅有 search_info.search_results → ResearchItem[]（source=qwen-official；url 缺省回退 site_name）', async () => {
+  it('走 DashScope 原生生成端点（兼容模式不返回来源），请求体按 input/parameters 组织', async () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify(OK_SEARCH_INFO), { status: 200 }));
     const items = await provider.search({ query: '人像', limit: 10 });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe('https://ws.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions');
+    expect(String(url)).toBe(DASHSCOPE_URL);
     const body = JSON.parse(String((init as RequestInit).body));
-    expect(body.enable_search).toBe(true);
-    expect(body.search_options).toEqual({ forced_search: true, enable_source: true });
-    expect(body.response_format).toBeUndefined(); // 官方走「正文 + search_info」，绝不带强 JSON
-    expect(body.temperature).toBe(0.3);
-    expect(body.max_tokens).toBe(4096);
+    expect(body.model).toBe('qwen-plus');
+    expect((body.input as { messages: { role: string }[] }).messages.map((m) => m.role)).toEqual(['system', 'user']);
+    expect(body.parameters).toMatchObject({
+      enable_search: true,
+      search_options: { forced_search: true, enable_source: true },
+      result_format: 'message',
+      temperature: 0.3,
+      max_tokens: 4096,
+    });
     expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer sk-official' });
     expect(items).toHaveLength(2);
     expect(items[0]).toMatchObject({ source: 'qwen-official', title: '秋日少女写真', url: 'https://a.example' });
     expect(items[1]).toMatchObject({ source: 'qwen-official', title: '胶片感人像', url: 'b.example' });
     expect(Array.isArray(items[0].keywords)).toBe(true);
+  });
+
+  it('base 已含 /api/v1 或为域名根时，同样派生出正确的 DashScope 端点', async () => {
+    for (const baseUrl of ['https://ws.cn-beijing.maas.aliyuncs.com', 'https://ws.cn-beijing.maas.aliyuncs.com/api/v1']) {
+      const p = createQwenOfficialSearchProvider({ baseUrl, apiKey: 'k', model: 'qwen-plus' });
+      const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify(OK_SEARCH_INFO), { status: 200 }));
+      await p.search({ query: '人像', limit: 10 });
+      expect(String(fetchMock.mock.calls[0][0])).toBe(DASHSCOPE_URL);
+      fetchMock.mockRestore();
+    }
   });
 
   it('既有 search_info 又有正文 → 「联网综述」置首，其后为带 url 的引用条目（顺序稳定）', async () => {
@@ -79,7 +100,7 @@ describe('web-search-qwen-official', () => {
 
   it('search_info 为空但正文有实质内容 → 「联网综述」兜底（source=qwen-official，keywords 为空）', async () => {
     jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({
-      choices: [{ message: { role: 'assistant', content: '根据检索到的公开资料：中秋为 9/25，国庆为 10/1。' } }],
+      output: { choices: [{ message: { role: 'assistant', content: '根据检索到的公开资料：中秋为 9/25，国庆为 10/1。' } }] },
     }), { status: 200 }));
     const items = await provider.search({ query: '最近节日', limit: 10 });
     expect(items).toHaveLength(1);
@@ -92,7 +113,7 @@ describe('web-search-qwen-official', () => {
   });
 
   it('search_info 与正文皆空 → 抛「未取到引用」错误（绝不编造 URL）', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: '   ' } }] }), { status: 200 }));
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ output: { choices: [{ message: { content: '   ' } }] } }), { status: 200 }));
     await expect(provider.search({ query: '冷门', limit: 10 })).rejects.toThrow('未取到引用');
   });
 
@@ -116,7 +137,8 @@ describe('web-search-qwen-official', () => {
     await provider.search({ query: '最近的节日 摄影模板', limit: 10 });
     const [, init] = fetchMock.mock.calls[0];
     const body = JSON.parse(String((init as RequestInit).body));
-    const sys = (body.messages as { role: string; content: string }[]).find((m) => m.role === 'system')!.content;
+    const messages = (body.input as { messages: { role: string; content: string }[] }).messages;
+    const sys = messages.find((m) => m.role === 'system')!.content;
     expect(sys).toContain(describeTodayUtc8());
     expect(sys).toContain('严禁凭训练记忆猜测节日名称或日期');
     expect(sys).toContain('来源链接');

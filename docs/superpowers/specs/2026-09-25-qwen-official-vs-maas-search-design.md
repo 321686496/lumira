@@ -21,8 +21,12 @@
 | 后台 | `ai-config-form.tsx` 搜索方式三选一（`qwen/searxng/off`） | 无法区分官方/三方 |
 | 分发 | `web-search.provider.ts` `case 'qwen'` | 单一 provider 名 |
 
-官方文档要点：OpenAI 兼容 Chat Completions 顶层传 `enable_search: true`；**执行了搜索时响应带 `search_info` 字段**
-（`search_info.search_results[]`，含 `index/title/url/site_name`），`usage.plugins` 记录检索次数；
+官方文档要点：`enable_search: true` 在四种调用方式下都能开启联网，但**来源返回能力不同**——
+**OpenAI 兼容 Chat Completions 不返回搜索来源**（官方原文：该端点不返回搜索来源，需要引用请改用
+Responses API 或 DashScope；故该方式下 `enable_source` 不生效，响应里没有 `search_info`）。
+来源只能走 **DashScope 原生**（`POST {root}/api/v1/services/aigc/text-generation/generation`，响应
+`output.search_info.search_results[]`，含 `index/title/url/site_name`）或 **Responses API**
+（`output[].action.sources[]`，但其不支持 `qwen-plus`，且 `sources` 基本只有 URL）。
 `search_options` 可配 `forced_search` / `enable_source`；支持联网的模型含 `qwen-plus` 等。
 
 ## 二、分工（互斥四选一）
@@ -46,24 +50,33 @@
 ### 3.1 官方适配器 `web-search-qwen-official.ts`
 复用 `WebSearchProvider` 接口，provider 名 `qwen-official`。
 
-请求：`POST {base}/chat/completions`，`Authorization: Bearer <key>`，body：
+请求：`POST {root}/api/v1/services/aigc/text-generation/generation`（`{root}` 由后台配置的 base 归一化派生：
+剥掉结尾的 `/compatible-mode/v1` 或 `/api/v1`，故兼容模式 base / 域名根 / `…/api/v1` 三种写法都能用），
+`Authorization: Bearer <key>`，body：
 
 ```json
 {
   "model": "<qwenOfficialModel，缺省 qwen-plus>",
-  "messages": [{"role":"system","content":"<系统提示词，含当天日期+来源要求>"},{"role":"user","content":"<主题>"}],
-  "enable_search": true,
-  "search_options": { "forced_search": true, "enable_source": true },
-  "temperature": 0.3,
-  "max_tokens": 4096
+  "input": {
+    "messages": [{"role":"system","content":"<系统提示词，含当天日期+来源要求>"},{"role":"user","content":"<主题>"}]
+  },
+  "parameters": {
+    "enable_search": true,
+    "search_options": { "forced_search": true, "enable_source": true },
+    "result_format": "message",
+    "temperature": 0.3,
+    "max_tokens": 4096
+  }
 }
 ```
 
-三处与三方适配器的差异及理由：
-1. 加 `search_options.forced_search` / `enable_source`：官方文档说明模型可能自行判断不检索；研究管线每次都要真实检索且需要来源列表。
-2. **去掉 `response_format: json_object`**：官方联网返回「正文 + `search_info`」，强 JSON 会丢掉带链接的正文综述。
-3. 解析以**顶层 `search_info.search_results[]`** 为主（映射 `title` / `url`（回退 `site_name`）/ 摘要），
-   正文「联网综述」兜底（沿用 2000 字上限），两者皆空 → 抛错，由上层 `allSettled` 收进 `sourceErrors`，不编造 URL。
+与三方适配器的差异及理由：
+1. **走 DashScope 原生而非 OpenAI 兼容模式**：兼容模式 Chat Completions 不返回来源（官方文档明确），
+   来源只能从 DashScope 的 `output.search_info.search_results[]` 取；该协议仍支持默认模型 `qwen-plus`。
+2. 加 `search_options.forced_search` / `enable_source`：官方文档说明模型可能自行判断不检索；研究管线每次都要真实检索且需要来源列表。
+3. 解析以 **`output.search_info.search_results[]`** 为主（映射 `title` / `url`（回退 `site_name`）/ 摘要），
+   正文取 `output.choices[0].message.content` 作「联网综述」兜底（沿用 2000 字上限），两者皆空 → 抛错，
+   由上层 `allSettled` 收进 `sourceErrors`，不编造 URL。
 
 ### 3.2 公共工具抽取 `qwen-shared.ts`
 把 `extractJson / firstStr / tokenize / clean / summarizeItem`（`toResearchItem` 映射）从 `web-search-qwen.ts`
@@ -90,7 +103,7 @@
 
 ## 五、测试
 
-- 新增 `web-search-qwen-official.spec.ts`：① `search_info.search_results` → 带 url 的 `ResearchItem[]`（`source='qwen-official'`）；
+- 新增 `web-search-qwen-official.spec.ts`：① `output.search_info.search_results` → 带 url 的 `ResearchItem[]`（`source='qwen-official'`；另覆盖兼容模式 base / 域名根 / `…/api/v1` 三种写法都派生出正确 DashScope 端点）；
   ② 仅正文 → 「联网综述」兜底；③ 空响应 → 抛错；④ HTTP 非 200 → 抛错。
 - `ai-config.service.spec.ts` 补：`qwen-official` 映射 sources；缺 Key → `sources: []`；两种 Qwen 互斥不串字段。
 - 现有 `web-search-qwen.spec.ts` 保持通过（回归证明三方链路未被改坏）。
