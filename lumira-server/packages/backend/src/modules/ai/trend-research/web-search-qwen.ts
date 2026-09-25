@@ -1,18 +1,30 @@
 // lumira-server/packages/backend/src/modules/ai/trend-research/web-search-qwen.ts
-// 千问(Qwen)模型自带联网搜索适配器：直连 Chat Completions + enable_search
+// 千问(Qwen)模型自带联网搜索适配器——三方 MaaS 网关形态：直连 Chat Completions + enable_search
 // 设计文档：docs/superpowers/specs/2026-09-21-qwen-web-search-design.md 3.1
+//          docs/superpowers/specs/2026-09-25-qwen-official-vs-maas-search-design.md（双通道拆分）
 //
 // 多形态宽松解析引用：顶层 sources[] / tool_calls.web_search.search_info.search_results[] /
 // message.content 数组引用块 / content 文本 JSON{results}。仍取不到任何引用时，
 // 退化为保留「联网综述」正文（提示词已要求正文标注来源链接），只有正文也为空才抛 Error
 // （上层 allSettled 收集为 sourceErrors，绝不编造 URL）。
+//
+// 纯函数（extractJson / toResearchItem / toSummaryItem 等）已抽到 ./qwen-shared 与官方适配器共用；
+// 本文件保留「三方 MaaS」形态的解析优先级，运行行为与抽取前完全一致（由 web-search-qwen.spec.ts 回归保证）。
 
 import type { ResearchItem } from './research-item';
 import type { WebSearchProvider, WebSearchQuery } from './web-search.provider';
 import { describeTodayUtc8 } from '../../../common/utils/date.util';
 import { traceLlmCall } from '../llm-trace';
+import {
+  QWEN_SEARCH_DEFAULT_MODEL,
+  extractJson,
+  toResearchItem,
+  toSummaryItem,
+} from './qwen-shared';
+import type { SearchHit } from './qwen-shared';
 
-export const QWEN_SEARCH_DEFAULT_MODEL = 'qwen-plus';
+// 保持既有导出面（历史上由本文件导出默认模型名）
+export { QWEN_SEARCH_DEFAULT_MODEL } from './qwen-shared';
 
 /** 系统提示词按次构造（注入当天日期）：模块级常量会跨天变旧，导致节日/时效类判断错乱。 */
 function buildSystemPrompt(): string {
@@ -25,77 +37,6 @@ function buildSystemPrompt(): string {
     '2. 主题要求「最近的节日」时，先列出今天之后最近的 1~3 个节日及其公历日期与距今天数，再围绕其中最近的节日给灵感。',
     '3. 输出的每条关键结论都要带可核验的来源链接（markdown 链接或裸 URL）；没有来源支撑的信息不要写。',
   ].join('\n');
-}
-
-/** 一条引用命中（松散字段） */
-interface SearchHit {
-  title?: unknown; url?: unknown; site?: unknown; caption?: unknown;
-  snippet?: unknown; content?: unknown;
-}
-
-/** 宽松提取 JSON（对象/数组）：直接 parse，失败剥 markdown 代码块后再试，仍失败返回 null */
-function extractJson(text: string): unknown | null {
-  const candidates: string[] = [];
-  // 设计意图“直接 parse”：原始文本优先；失败再剥 markdown 代码块/对象/数组片段
-  candidates.push(text);
-  const fence = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  if (fence) candidates.push(fence[1]);
-  const brace = text.match(/\{[\s\S]*\}/);
-  if (brace) candidates.push(brace[0]);
-  const bracket = text.match(/\[[\s\S]*\]/);
-  if (bracket) candidates.push(bracket[0]);
-  for (const c of candidates) {
-    try { return JSON.parse(c); } catch { /* try next */ }
-  }
-  return null;
-}
-
-/** 取首个非空字符串 */
-function firstStr(...vals: unknown[]): string | undefined {
-  for (const v of vals) {
-    if (typeof v === 'string' && v.trim()) return v.trim();
-  }
-  return undefined;
-}
-
-/** 摘要/标题 → 关键词数组（保留含字母/数字/中日韩字，排除纯符号，前 12） */
-function tokenize(...texts: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  const hasContent = /[\p{L}\p{N}]/u;
-  for (const text of texts) {
-    if (!text) continue;
-    for (const w of text.split(/\s+/)) {
-      const t = w.trim();
-      if (t && hasContent.test(t) && !seen.has(t)) { seen.add(t); out.push(t); }
-    }
-  }
-  return out.slice(0, 12);
-}
-
-/** 清洗引用字段：去掉 markdown 代码反引号、加粗星号、两端空白，返回干净字符串 */
-function clean(field: string): string {
-  return field.replace(/`+|[*_~]+/g, '').trim();
-}
-
-function toResearchItem(hit: SearchHit): ResearchItem {
-  const title = clean(firstStr(hit.title) ?? '');
-  const snippet = clean(firstStr(hit.snippet, hit.content) ?? '');
-  const url = clean(firstStr(hit.url, hit.site, hit.caption) ?? '');
-  return { source: 'qwen', title, snippet, keywords: tokenize(snippet, title), url };
-}
-
-/** 正文综述捕获上限：保住节日日历/趋势清单核心信息，同时约束透传载荷 */
-const SUMMARY_SNIPPET_CAP = 2000;
-
-/** message.content 正文综述 → 首条 ResearchItem（title=联网综述）。
- *  仅捕获非 JSON 的实质性文本（结构化 {results} 引用走分支 3 正式解析）；
- *  keywords 留空——长综述无分词意义，避免污染下游 keywords 汇集。 */
-function toSummaryItem(msg: Record<string, unknown>): ResearchItem | null {
-  if (typeof msg.content !== 'string') return null;
-  const text = msg.content.trim();
-  if (!text || extractJson(text)) return null;
-  return { source: 'qwen', title: '联网综述', snippet: text.slice(0, SUMMARY_SNIPPET_CAP), keywords: [] };
 }
 
 /** 多形态提取引用 → ResearchItem[]；无引用返回 null */
@@ -120,9 +61,9 @@ function extractResearchItems(data: unknown): ResearchItem[] | null {
   const topSources = Array.isArray(root.sources) ? (root.sources as SearchHit[]) : [];
   if (topSources.length) {
     const items: ResearchItem[] = [];
-    const summary = toSummaryItem(msg);
+    const summary = toSummaryItem(msg, 'qwen');
     if (summary) items.push(summary);
-    items.push(...topSources.map(toResearchItem).filter((i) => i.title || i.url));
+    items.push(...topSources.map((hit) => toResearchItem(hit, 'qwen')).filter((i) => i.title || i.url));
     if (items.length) return items;
   }
 
@@ -139,7 +80,7 @@ function extractResearchItems(data: unknown): ResearchItem[] | null {
     const args = parsed as Record<string, unknown>;
     const si = args.search_info && typeof args.search_info === 'object' ? (args.search_info as Record<string, unknown>) : null;
     const results = Array.isArray(si?.search_results) ? (si.search_results as SearchHit[]) : [];
-    const items = results.map(toResearchItem);
+    const items = results.map((hit) => toResearchItem(hit, 'qwen'));
     if (items.length) return items;
   }
 
@@ -151,7 +92,7 @@ function extractResearchItems(data: unknown): ResearchItem[] | null {
       const b = block as Record<string, unknown>;
       const type = typeof b.type === 'string' ? b.type : '';
       if (!/search_result|reference|citation|web_page/i.test(type)) continue;
-      items.push(toResearchItem({ title: b.title, url: b.url ?? b.link, snippet: b.snippet ?? b.content }));
+      items.push(toResearchItem({ title: b.title, url: b.url ?? b.link, snippet: b.snippet ?? b.content }, 'qwen'));
     }
     if (items.length) return items;
   }
@@ -162,20 +103,20 @@ function extractResearchItems(data: unknown): ResearchItem[] | null {
     if (parsed && typeof parsed === 'object') {
       const p = parsed as Record<string, unknown>;
       const list = Array.isArray(parsed) ? (parsed as SearchHit[]) : Array.isArray(p.results) ? (p.results as SearchHit[]) : [];
-      const items = list.map(toResearchItem);
+      const items = list.map((hit) => toResearchItem(hit, 'qwen'));
       if (items.length) return items;
     }
   }
 
   // 4) 兜底：正文有实质文本但未命中任何结构化引用形态（网关只返正文综述、无顶层 sources）
   //    → 仍作为「联网综述」带出，不再整体丢弃；正文为空/纯 JSON 时才判为未取到引用。
-  const fallbackSummary = toSummaryItem(msg);
+  const fallbackSummary = toSummaryItem(msg, 'qwen');
   if (fallbackSummary) return [fallbackSummary];
 
   return null;
 }
 
-/** 创建千问联网搜索适配器（provider 名 qwen） */
+/** 创建千问联网搜索适配器（provider 名 qwen，三方 MaaS 网关形态） */
 export function createQwenSearchProvider(cfg: { baseUrl?: string; apiKey?: string; model?: string }): WebSearchProvider {
   const base = (cfg.baseUrl || '').replace(/\/+$/, '');
   const apiKey = cfg.apiKey || '';
