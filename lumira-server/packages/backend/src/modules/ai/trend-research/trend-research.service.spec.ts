@@ -4,12 +4,16 @@
 import { TrendResearchService } from './trend-research.service';
 import type { SearchProviderFactory } from './trend-research.service';
 import { AiConfigService } from '../ai-config.service';
+import { ResearchDigestService } from './research-digest.service';
 import { clearWebSearchCache } from './web-search.provider';
 import type { ResearchItem } from './research-item';
 import { describeTodayUtc8 } from '../../../common/utils/date.util';
 
 // 文本模型打桩：capture 提示词（重组查询词用例断言日期注入 + 时间约束规则）
 jest.mock('../llm-client', () => ({ textChat: jest.fn(async () => '{"query": null}') }));
+
+/** 资料整理打桩：本 spec 只验证检索编排，整理结论一律返回 null（走规则摘要降级） */
+const digestStub = { summarize: async () => null } as unknown as ResearchDigestService;
 
 function item(source: string, title: string, extra: Partial<ResearchItem> = {}): ResearchItem {
   return { source, title, snippet: '', keywords: [], ...extra };
@@ -18,7 +22,7 @@ function item(source: string, title: string, extra: Partial<ResearchItem> = {}):
 /** 注入型 aiConfig + 工厂辅助 */
 function build(factory: SearchProviderFactory, searchConfig: unknown) {
   const aiConfig = { getSearchConfig: async () => searchConfig } as unknown as AiConfigService;
-  const svc = new TrendResearchService(aiConfig);
+  const svc = new TrendResearchService(aiConfig, digestStub);
   svc.factory = factory;
   return svc;
 }
@@ -133,7 +137,7 @@ describe('TrendResearchService', () => {
       }),
     } as unknown as AiConfigService;
     // 用真实 TrendResearchService + 覆写 reorganizeQuery 为返回重组结果（内联服务，不先跑 LLM）
-    const svc = new TrendResearchService(aiConfig);
+    const svc = new TrendResearchService(aiConfig, digestStub);
     svc.factory = providerFactory;
     // 打桩文本模型：textChat 不可直接注入，故覆写 reorganizeQuery 返回固定重组串，验证 research 使用之
     svc.reorganizeQuery = async () => '电影感人像 横构图 侧拍';
@@ -158,7 +162,7 @@ describe('TrendResearchService', () => {
         throw new Error('AI 未配置');
       },
     } as unknown as AiConfigService;
-    const svc = new TrendResearchService(aiConfig);
+    const svc = new TrendResearchService(aiConfig, digestStub);
     svc.factory = providerFactory;
 
     const res = await svc.research('胶片感 都市夜晚');
@@ -173,7 +177,7 @@ describe('TrendResearchService', () => {
       getSearchConfig: async () => ({ enabled: true, sources: [{ name: 'qwen', provider: 'qwen' }] }),
       getActiveConfig: async () => ({ text: { provider: 'test', baseUrl: 'http://x', apiKey: 'k', model: 'm' } }),
     } as unknown as AiConfigService;
-    const svc = new TrendResearchService(aiConfig);
+    const svc = new TrendResearchService(aiConfig, digestStub);
 
     const q = await svc.reorganizeQuery('距离当前时间最近节日的特色模板，三种不同姿势');
     expect(q).toBe('2026年10月 中秋节 国庆节 人像模板');

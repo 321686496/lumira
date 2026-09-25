@@ -661,6 +661,8 @@ export interface AiTraceEvent {
   type: AiTraceEventType;
   /** 阶段标识：reorganize / research / analyze / describe / poseRefSheet / paramValidate / imageScore / draftRefine / finalize */
   step: string;
+  /** 父阶段标识（嵌套阶段 / 阶段内调用与说明）；顶层事件缺省 */
+  parentStep?: string;
   /** 阶段中文名 */
   title: string;
   status: AiTraceEventStatus;

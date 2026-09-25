@@ -107,4 +107,62 @@ describe('llm-trace', () => {
     expect(events[1]!.rawResponse).toContain(`原长 ${longRaw.length} 字`);
     expect(events[1]!.rawResponse!.startsWith('y'.repeat(100))).toBe(true);
   });
+
+  it('嵌套阶段：子阶段 parentStep 指向父阶段，内层结束后栈复位（兄弟阶段仍归属父阶段）', async () => {
+    const { events, sink } = collect();
+    await runWithTrace(sink, () =>
+      traceStep('research', '趋势研究', async () => {
+        await traceStep('researchDigest', '资料整理', async () => 'd');
+        await traceStep('analyze', '文字构思模板草稿', async () => 'a');
+        return 1;
+      }),
+    );
+
+    const running = events.filter((e) => e.type === 'step' && e.status === 'running');
+    expect(running.map((e) => [e.step, e.parentStep])).toEqual([
+      ['research', undefined],
+      ['researchDigest', 'research'],
+      // 内层已结束 → 栈顶回到 research，兄弟阶段不会被残留的 researchDigest 抢走
+      ['analyze', 'research'],
+    ]);
+    // 父阶段自身的 done 无父阶段（栈已空）
+    const researchDone = events.find((e) => e.type === 'step' && e.step === 'research' && e.status === 'done');
+    expect(researchDone?.parentStep).toBeUndefined();
+  });
+
+  it('阶段内/外的说明节点（traceNote）：有打开阶段时归属其下，否则为顶层', async () => {
+    const { events, sink } = collect();
+    await runWithTrace(sink, async () => {
+      traceNote('finalize', '定稿归一化', '顶层说明');
+      await traceStep('poseRefSheet', '姿势参考面片', async () => {
+        traceNote('poseRefSheet', '面片已生成', '阶段内说明');
+        return 1;
+      });
+    });
+
+    const notes = events.filter((e) => e.type === 'note');
+    expect(notes.map((e) => [e.step, e.parentStep, e.resultBrief])).toEqual([
+      ['finalize', undefined, '顶层说明'],
+      ['poseRefSheet', 'poseRefSheet', '阶段内说明'],
+    ]);
+  });
+
+  it('阶段内的 LLM 调用归属该阶段（step 与 parentStep 均为该阶段）', async () => {
+    const { events, sink } = collect();
+    await runWithTrace(sink, () =>
+      traceStep('research', '趋势研究', async () =>
+        traceStep('researchDigest', '资料整理', async () => {
+          const h = traceLlmCall({ model: 'qwen-plus' })!;
+          h.done('整理结果');
+          return 1;
+        }),
+      ),
+    );
+
+    const llm = events.filter((e) => e.type === 'llm');
+    expect(llm.map((e) => [e.step, e.parentStep])).toEqual([
+      ['researchDigest', 'researchDigest'],
+      ['researchDigest', 'researchDigest'],
+    ]);
+  });
 });

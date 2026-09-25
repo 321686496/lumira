@@ -808,6 +808,39 @@
 
 ---
 
+## 拍摄页对焦 / 曝光交互（2026-09-25）
+
+### P1 · OHOS「AE 锁定后拖动曝光」以「回 AUTO 再重新锁定」实现，待真机验证是否抖动
+
+- **模块**：拍摄页对焦曝光（Flutter `lib/features/capture/widgets/camera_preview.dart` + OHOS `packages/camerawesome_ohos/.../CameraState.ets`）
+- **优化点**：OHOS 在 `EXPOSURE_MODE_LOCKED` 下 `setExposureBias` 不生效（与 iOS 的 `exposureTargetBias` 一致），故锁定态拖动曝光按「`EXPOSURE_MODE_AUTO` → `setExposureBias(新 EV)` → `setMeteringPoint(锁定点)` → `EXPOSURE_MODE_LOCKED`」顺序处理，每次 EV 变化会翻转一次曝光模式。
+- **背景/动机**：为对齐原相机「AE/AF 锁定后上下拖动拉曝光」的交互，OHOS 无「Locked 下直接改 bias」的可用 API，先以重新锁定实现（Dart 侧已按 0.05 EV 节流）。
+- **目标状态**：OHOS 真机验证拖动过程有无曝光跳变/抖动；若抖动明显，改为拖动期间保持 `EXPOSURE_MODE_AUTO` + bias（不逐帧重新锁定），松手后再 `LOCKED` 定格。
+- **状态**：⏳ 待优化（待 OHOS 真机验证）
+
+### P1 · Android 前置取景器镜像情况无代码证据，触点水平翻转目前仅 iOS 生效
+
+- **模块**：拍摄页点击对焦（Flutter `lib/features/capture/services/camerawesome_camera_service.dart`）
+- **优化点**：iOS 前置预览层镜像（`packages/camerawesome/ios/Classes/CameraPreview/CameraPreview.m` 的 `setVideoMirrored:(Sensor == Front)`，AVCam 惯例为 `devicePoint.x = 1 - devicePoint.x`），已在 Dart 侧按平台翻转触点 x；Android fork 内未见 `MIRROR_MODE`/`scaleX` 镜像证据，故未翻转。
+- **背景/动机**：`capture_page.dart` 既有注释称「iOS/Android 前置预览均为系统默认镜像画面」，但当前只找到 iOS 的代码证据；Android（CameraX TextureView 管线）无法在本机编译验证。
+- **目标状态**：Android 真机在前置取景器点按左右两侧，确认对焦落点是否左右相反；若确为镜像，再补 Android 分支翻转。
+- **状态**：⏳ 待优化（待 Android 真机验证）
+
+### P2 · 取景器对焦曝光拖动量程沿用 ±3 档（iOS 原相机太阳滑块约 ±2 档）
+
+- **模块**：拍摄页对焦曝光（Flutter `lib/features/capture/widgets/camera_preview.dart`）
+- **优化点**：对焦框太阳滑块的偏移量程沿用 App 既有 EV 满量程 **±3 档**（`brightness = 0.5 + ev/6`，与顶部 EV 胶囊、参数面板滑块同一语义），iOS 原相机太阳滑块约为 ±2 档。
+- **背景/动机**：量程若单独改为 ±2，会与紧邻的顶部 EV 胶囊 / 参数面板滑块的可调区间不一致，且实际下发亮度是按「参数 EV + 对焦偏移」合成后钳制 ±3 的，收窄偏移量程只影响滑动手感、不改变曝光语义，收益有限。
+- **目标状态**：若后续产品确认应以 iOS 为准，可单独收敛太阳滑块的偏移量程到 ±2 档。
+- **状态**：⏳ 待优化（待产品确认）
+
+> 说明（2026-09-25 已落地）：**对焦曝光与参数曝光已拆分为两个独立功能**，此前本条记录的「轻点不复位」取舍已随拆分取消——
+> - 参数 EV（`CameraParams.exposureCompensation`）：模板 / 会话曝光**基准**，落库、随模板复用，显示在顶部胶囊与参数面板；
+> - 对焦偏移（`CaptureState.focusExposureOffsetProvider`）：锚定最近对焦触点的**临时微调**，不进模板、不落库、不出现在面板/胶囊；
+> - 实际下发 = `CaptureState.effectiveExposureEvProvider`（参数 EV + 偏移，钳制 ±3），取景器亮度与成片同源；换点对焦 / 长按锁定 / 切换前后摄 / 进入拍摄页均将偏移归零。
+
+---
+
 ## AI 研究管线 · 联网搜索（2026-09-25）
 
 ### P1 · 搜索来源「缺端点/Key」与「未配置」混为一谈，编排层会误写 skip-research
@@ -816,4 +849,24 @@
 - **优化点**：`getSearchConfig()` 在 `searchProvider=qwen` / `qwen-official` 且**缺端点或 API Key** 时返回 `sources: []`；而 `ai-orchestrator.service.ts:99` 以 `enabled && sources.length && topic` 判定 `researchEnabled`，`sources` 为空即落进 `else if (!researchEnabled)` 分支写 trace `skip-research`。于是「研究已开启、只是凭据没填全」被记成「研究未开启」，与设计文档「绝不误写 skip-research」的表述冲突。
 - **背景/动机**：2026-09-25 「Qwen 官方百炼 / Qwen 三方 MaaS 联网搜索拆分」实现时评审发现（I-1）。该行为在拆分前的 `qwen` 分支即已存在，非本次引入，故本次只登记不改，避免扩大改动面。
 - **目标状态**：让编排层依 `searchCfg.enabled` 决定是否跳过，而非依 `sources.length`；并把「未配置搜索」（正常 skip）与「已配置但凭据缺失/异常」（应记失败原因，如 `skip-research: missing-credentials`）在 trace 上区分开。补 `ai-orchestrator` / `ai-config.service` 单测覆盖两种情形。
+- **状态**：⏳ 待优化
+
+---
+
+## AI 研究管线 · 研究资料二次整理与时间线（2026-09-26）
+
+### P1 · 研究整理结果仅进程内缓存，未落库共享
+
+- **模块**：AI 一键生模板研究管线（后端 `modules/ai/trend-research/research-digest.service.ts`）
+- **优化点**：新增的「资料整理」阶段把联网检索条目交给文本模型二次整理成结构化 `ResearchBrief`，结果只放在进程内 LRU（max 100，key = topic + 条目指纹）。多实例部署或进程重启后缓存不共享，同主题会重复调用 LLM。
+- **背景/动机**：`schema.ts` 已有 `trend_index`（topic × source × trend_date 幂等 upsert + 7 天新鲜度衰减）表，天然适合承载整理结果；但本次为控制改动面只做进程内缓存，先把「整理后的资料真正进入模板生成提示词」跑通。
+- **目标状态**：把 `ResearchBrief` 按 topic + 日期落 `trend_index`（或新增独立表），跨实例/重启复用；读取时按新鲜度衰减决定是否重新整理，避免重复 LLM 调用。
+- **状态**：⏳ 待优化
+
+### P2 · 生图阶段未复用同一份研究整理结果
+
+- **模块**：AI 一键生图（后端 `modules/ai/image-prompt.composer.ts`）
+- **优化点**：识别阶段已产出结构化 `ResearchBrief`，但生图链路的 `buildPromptMaterial()` 仍消费原始 `ResearchItem[]`（经 `buildResearchLines` 规则拼接），由组织器自身再整理一次。
+- **背景/动机**：生图组织器的提示词已明确要求「忽略排版残留 / 只使用有效信息」，本质上已是一次 LLM 整理，因此不构成「联网做无用功」；但两处各整理一次，风格口径可能不完全一致，且多消耗一次上下文。
+- **目标状态**：把识别阶段的 `ResearchBrief`（或其渲染文本）透传到 `ai-generate-image/batch` → `AiGenerateImageService.generate`，生图组织器直接复用同一份整理结论，去掉原始条目分节。
 - **状态**：⏳ 待优化

@@ -19,12 +19,14 @@ function bySnippetFirst(a: ResearchItem, b: ResearchItem): number {
   return aHas - bHas;
 }
 
+/** 挑选：有摘要（snippet 非空）的条目排前，最多 maxItems 条（同组内保持原顺序，sort 稳定） */
+export function selectResearchItems(items: ResearchItem[], maxItems = 8): ResearchItem[] {
+  return items.slice().sort(bySnippetFirst).slice(0, maxItems);
+}
+
 /** 挑选 + 渲染为「标题：摘要」行数组（有摘要排前，最多 maxItems 条） */
 export function buildResearchLines(items: ResearchItem[], maxItems = 8): string[] {
-  return items
-    .slice()
-    .sort(bySnippetFirst)
-    .slice(0, maxItems)
+  return selectResearchItems(items, maxItems)
     .map((it) => {
       const title = (it.title || '').trim().slice(0, TITLE_CAP);
       const snippet = (it.snippet || '').trim().slice(0, SNIPPET_CAP);

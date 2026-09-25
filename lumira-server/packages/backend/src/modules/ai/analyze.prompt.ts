@@ -191,7 +191,8 @@ function extrasLines(input: AnalyzeUserPromptInput): string[] {
   const digest = typeof input.researchDigest === 'string' ? input.researchDigest.trim() : '';
   if (digest) {
     lines.push(
-      '网络趋势参考（当前实时搜索命中的流行素材；构思模板的主题、风格、场景、节日、姿势时优先贴合其中的有效信息，与创作要求冲突时以创作要求为准）：',
+      '网络趋势参考（已由模型对当前实时联网检索结果做二次整理后的结论，按维度分节给出；' +
+        '构思模板的主题、风格、场景、节日、姿势时优先贴合其中的有效信息，与创作要求冲突时以创作要求为准）：',
       digest,
     );
   } else if (input.researchUnavailable) {

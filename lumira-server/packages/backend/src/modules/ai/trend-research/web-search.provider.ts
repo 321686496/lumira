@@ -12,6 +12,7 @@ import { createVendorSearchProvider } from './web-search-vendor';
 import type { ResearchItem } from './research-item';
 import type { LlmEndpoint } from '../llm-client';
 import { traceSearchCall } from '../llm-trace';
+import { LruCache } from './lru-cache';
 
 /** 单次搜索请求 */
 export interface WebSearchQuery {
@@ -62,32 +63,7 @@ export function createWebSearchProvider(
 
 // ===== LRU 缓存 =====
 
-/** 极简 LRU Map（max 200；访问即刷新顺序） */
-class LruCache {
-  private map = new Map<string, ResearchItem[]>();
-  constructor(private readonly max = 200) {}
-  get(key: string): ResearchItem[] | undefined {
-    const v = this.map.get(key);
-    if (v === undefined) return undefined;
-    // 刷新：删除后重插置末位，保持 LRU 顺序
-    this.map.delete(key);
-    this.map.set(key, v);
-    return v;
-  }
-  set(key: string, value: ResearchItem[]): void {
-    if (this.map.has(key)) this.map.delete(key);
-    this.map.set(key, value);
-    if (this.map.size > this.max) {
-      const oldest = this.map.keys().next().value;
-      if (oldest !== undefined) this.map.delete(oldest);
-    }
-  }
-  clear(): void {
-    this.map.clear();
-  }
-}
-
-const searchCache = new LruCache(200);
+const searchCache = new LruCache<ResearchItem[]>(200);
 
 /** 清空进程内搜索缓存（测试隔离 / 维护用） */
 export function clearWebSearchCache(): void {

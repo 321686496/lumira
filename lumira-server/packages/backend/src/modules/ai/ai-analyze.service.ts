@@ -20,6 +20,7 @@ import { extractJson, normalizeDraft, CategoryNode } from './normalize';
 import { AiOrchestratorService } from './ai-orchestrator.service';
 import type { OrchestratorInput, OrchestratorTraceEntry } from './ai-orchestrator.service';
 import type { ResearchItem } from './trend-research/research-item';
+import { renderResearchBrief } from './trend-research/research-brief';
 import { buildResearchDigest } from './trend-research/research-digest';
 import { TrendResearchService } from './trend-research/trend-research.service';
 import { traceNote, traceStep } from './llm-trace';
@@ -99,8 +100,10 @@ export class AiAnalyzeService {
     const cfg = await this.aiConfigService.getActiveConfig();
 
     // 3.5 研究前置：搜索开启且主题非空 → 先搜后写草稿。
-    //     研究摘要注入草稿生成提示词，让结构性数据（主题/风格/场景/姿势描述）贴合当下趋势；
-    //     搜索失败静默降级（不阻断识别）。主题口径与 orchestrator 一致：创作要求 ?? 文字描述。
+    //     检索命中后由文本模型二次整理成结构化结论（ResearchBrief），再把整理后的资料注入
+    //     草稿生成提示词，让结构性数据（主题/风格/场景/姿势描述）贴合当下趋势；
+    //     整理失败回退规则摘要，搜索失败静默降级（均不阻断识别）。
+    //     主题口径与 orchestrator 一致：创作要求 ?? 文字描述。
     let research: ResearchItem[] = [];
     let researchDigest = '';
     /** 搜索开启且主题非空、但本次没取到任何条目（失败或空结果）→ 下游禁止编造时效信息 */
@@ -113,10 +116,11 @@ export class AiAnalyzeService {
             'research',
             '趋势研究（联网检索）',
             () => this.trendResearch.research(topic, { limitPerSource: 5 }),
-            (res) => (res.items.length ? `${res.items.length} 条参考来源` : '未取到来源'),
+            (res) => (res.items.length ? `${res.items.length} 条参考来源${res.brief ? '（已二次整理）' : ''}` : '未取到来源'),
           );
           research = r.items;
-          researchDigest = buildResearchDigest(r.items);
+          const brief = r.brief ?? null;
+          researchDigest = brief ? renderResearchBrief(brief) : buildResearchDigest(r.items);
         } catch {
           // 搜索失败 → 无摘要，草稿生成回到无研究参考的原路径
         }

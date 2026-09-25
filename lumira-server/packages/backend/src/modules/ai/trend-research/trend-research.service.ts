@@ -10,6 +10,8 @@ import { AiConfigService } from '../ai-config.service';
 import { cacheableSearch, createWebSearchProvider } from './web-search.provider';
 import type { WebSearchProvider, WebSearchQuery } from './web-search.provider';
 import type { ResearchItem } from './research-item';
+import type { ResearchBrief } from './research-brief';
+import { ResearchDigestService } from './research-digest.service';
 import { textChat } from '../llm-client';
 import { extractJson } from '../normalize';
 import { describeTodayUtc8 } from '../../../common/utils/date.util';
@@ -60,11 +62,13 @@ const defaultProviderFactory: SearchProviderFactory = (name, cfg) =>
     vendorEndpoint: cfg.vendorEndpoint as never,
   });
 
-/** research 执行结果：命中条目 + 单个来源失败原因（供编排层透传到 trace / 弹窗） */
+/** research 执行结果：命中条目 + 二次整理结论 + 单个来源失败原因（供编排层透传到 trace / 弹窗） */
 export interface ResearchResult {
   items: ResearchItem[];
   /** 失败来源及其错误信息；全部成功则缺省为空数组 */
   sourceErrors?: { name: string; error: string }[];
+  /** 文本模型二次整理后的结构化结论；未命中条目 / 整理失败 → null（下游回退规则摘要） */
+  brief?: ResearchBrief | null;
 }
 
 @Injectable()
@@ -72,7 +76,10 @@ export class TrendResearchService {
   /** 搜索工厂（测试注入用；生产缺省走 defaultProviderFactory） */
   factory: SearchProviderFactory = defaultProviderFactory;
 
-  constructor(private readonly aiConfigService: AiConfigService) {}
+  constructor(
+    private readonly aiConfigService: AiConfigService,
+    private readonly researchDigest: ResearchDigestService,
+  ) {}
 
   /**
    * 用文本模型把「创作意图 / 口语化描述」重组成适合搜索引擎的关键词查询。
@@ -174,6 +181,10 @@ export class TrendResearchService {
         out.push(it);
       }
     }
-    return { items: out, sourceErrors };
+
+    // 二次整理：把原始条目交给文本模型提炼成结构化结论（内部以 traceStep 记录为「趋势研究」的
+    // 子步骤「资料整理」）。失败/无有效内容 → null，由调用方回退规则摘要 buildResearchDigest。
+    const brief = out.length ? await this.researchDigest.summarize(topic, out) : null;
+    return { items: out, sourceErrors, brief };
   }
 }

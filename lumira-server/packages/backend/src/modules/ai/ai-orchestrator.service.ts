@@ -99,10 +99,11 @@ export class AiOrchestratorService {
     )) as { enabled?: boolean; sources?: unknown[] } | undefined;
     const researchEnabled = Boolean(searchCfg?.enabled && Array.isArray(searchCfg.sources) && searchCfg.sources.length && topic);
     if (Array.isArray(opts.research)) {
-      // 识别前置已搜出（ai-analyze 先搜后写草稿）→ 直接复用，trace 记录条数不重复搜索
+      // 识别前置已搜出（ai-analyze 先搜后写草稿）→ 直接复用，trace 记录条数不重复搜索。
+      // 不再补 traceNote：识别阶段已产出「趋势研究」阶段事件（含条数与耗时），
+      // 补 note 会在时间线尾部重复出现同一步骤。
       research = opts.research;
       trace.push({ step: 'research', tool: 'trend-research', resultBrief: `${research.length} 条（识别前置）` });
-      traceNote('research', STEP_TITLES.research!, `${research.length} 条（复用识别前置检索）`);
     } else if (!researchEnabled) {
       trace.push({ step: 'research', tool: 'trend-research', resultBrief: 'skip-research' });
       traceNote('research', STEP_TITLES.research!, 'skip-research（研究未开启/无主题）');

@@ -18,10 +18,12 @@ export interface AiTraceEvent {
   /** 记录时间（ms epoch） */
   ts: number;
   type: AiTraceEventType;
-  /** 阶段标识：reorganize / research / analyze / describe / poseRefSheet / paramValidate / imageScore / draftRefine / finalize */
+  /** 阶段标识：reorganize / researchDigest / research / analyze / describe / poseRefSheet / paramValidate / imageScore / draftRefine / finalize */
   step: string;
   /** 阶段中文名（后台直接展示） */
   title: string;
+  /** 所属父阶段标识（无嵌套时缺省）；后台据此渲染嵌套时间线，避免父子被拍平成同级导致因果倒置 */
+  parentStep?: string;
   status: AiTraceEventStatus;
   /** LLM 模型名 / 检索来源名 */
   model?: string;
@@ -50,11 +52,17 @@ export type TraceSink = (ev: Omit<AiTraceEvent, 'seq' | 'ts'>) => void;
 
 interface TraceStore {
   sink: TraceSink;
-  /** 当前阶段（LLM/检索事件据此归属到所属步骤） */
-  currentStep?: { step: string; title: string };
+  /** 打开中的阶段栈（LIFO）：栈顶即当前阶段，也是嵌套事件的 parentStep 来源 */
+  stack: { step: string; title: string }[];
 }
 
 const storage = new AsyncLocalStorage<TraceStore>();
+
+/** 栈顶阶段（未打开任何阶段返回 undefined） */
+function topStep(): { step: string; title: string } | undefined {
+  const stack = storage.getStore()?.stack;
+  return stack && stack.length ? stack[stack.length - 1] : undefined;
+}
 
 /** 单个字段（提示词 / 响应 / 原始响应体）保留上限：够看全内容，又不让任务对象被超长文本撑爆 */
 export const TRACE_TEXT_CAP = 50_000;
@@ -68,7 +76,7 @@ function capText(text: string | undefined, cap = TRACE_TEXT_CAP): string | undef
 
 /** 在该 sink 的采集上下文内执行；嵌套调用沿用最外层上下文 */
 export function runWithTrace<T>(sink: TraceSink, fn: () => Promise<T>): Promise<T> {
-  return storage.run({ sink }, fn);
+  return storage.run({ sink, stack: [] }, fn);
 }
 
 /** 是否有采集上下文（少数需要预先判断的场景） */
@@ -78,16 +86,19 @@ export function hasTrace(): boolean {
 
 /** 当前阶段（无上下文返回 undefined） */
 export function currentTraceStep(): { step: string; title: string } | undefined {
-  return storage.getStore()?.currentStep;
+  return topStep();
 }
 
-/** 记录一条独立事件（如「任务已提交」「定稿完成」） */
+/** 记录一条独立事件（如「任务已提交」「定稿完成」）；有打开中的阶段时归属其下 */
 export function traceNote(step: string, title: string, resultBrief?: string): void {
-  storage.getStore()?.sink({ type: 'note', step, title, status: 'done', resultBrief });
+  const store = storage.getStore();
+  if (!store) return;
+  store.sink({ type: 'note', step, title, parentStep: topStep()?.step, status: 'done', resultBrief });
 }
 
 /**
  * 记录一个阶段的开始/结束（异常也记录 fail 后原样抛出）。
+ * 有打开中的阶段时，本阶段记为它的子阶段（parentStep）——后台据此渲染嵌套时间线。
  * 无采集上下文时等价于直接执行 fn（零额外开销）。
  */
 export async function traceStep<T>(
@@ -99,16 +110,17 @@ export async function traceStep<T>(
   const store = storage.getStore();
   if (!store) return fn();
 
-  const prev = store.currentStep;
-  store.currentStep = { step, title };
+  const parentStep = topStep()?.step;
+  store.stack.push({ step, title });
   const startedAt = Date.now();
-  store.sink({ type: 'step', step, title, status: 'running' });
+  store.sink({ type: 'step', step, title, parentStep, status: 'running' });
   try {
     const value = await fn();
     store.sink({
       type: 'step',
       step,
       title,
+      parentStep,
       status: 'done',
       resultBrief: brief?.(value),
       durationMs: Date.now() - startedAt,
@@ -119,13 +131,22 @@ export async function traceStep<T>(
       type: 'step',
       step,
       title,
+      parentStep,
       status: 'fail',
       error: err instanceof Error ? err.message : String(err),
       durationMs: Date.now() - startedAt,
     });
     throw err;
   } finally {
-    store.currentStep = prev;
+    // 弹出本阶段：正常路径下栈顶即自身（嵌套时内层已先弹出）；异常路径按最后一次同名项移除，
+    // 避免残留导致后续 parentStep 错乱。
+    const top = store.stack[store.stack.length - 1];
+    if (top && top.step === step) {
+      store.stack.pop();
+    } else {
+      const last = store.stack.map((s) => s.step).lastIndexOf(step);
+      if (last >= 0) store.stack.splice(last, 1);
+    }
   }
 }
 
@@ -148,12 +169,14 @@ interface TraceCallInput {
 function startCall(input: TraceCallInput): TraceCallHandle | null {
   const store = storage.getStore();
   if (!store) return null;
-  const { step, title } = store.currentStep ?? { step: 'call', title: input.title };
+  const current = topStep();
+  const step = current?.step ?? 'call';
   const startedAt = Date.now();
   store.sink({
     type: input.type,
     step,
-    title: input.title || title,
+    title: input.title || current?.title || input.title,
+    parentStep: current?.step,
     status: 'running',
     model: input.model,
     systemPrompt: capText(input.systemPrompt),
@@ -165,7 +188,8 @@ function startCall(input: TraceCallInput): TraceCallHandle | null {
       store.sink({
         type: input.type,
         step,
-        title: input.title || title,
+        title: input.title || current?.title || input.title,
+        parentStep: current?.step,
         status: 'done',
         model: input.model,
         response: capText(response),
@@ -179,7 +203,8 @@ function startCall(input: TraceCallInput): TraceCallHandle | null {
       store.sink({
         type: input.type,
         step,
-        title: input.title || title,
+        title: input.title || current?.title || input.title,
+        parentStep: current?.step,
         status: 'fail',
         model: input.model,
         error: err instanceof Error ? err.message : String(err),
