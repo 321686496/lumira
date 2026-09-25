@@ -7,6 +7,7 @@
 
 import { createSearxngSearchProvider } from './web-search-searxng';
 import { createQwenSearchProvider } from './web-search-qwen';
+import { createQwenOfficialSearchProvider } from './web-search-qwen-official';
 import { createVendorSearchProvider } from './web-search-vendor';
 import type { ResearchItem } from './research-item';
 import type { LlmEndpoint } from '../llm-client';
@@ -33,7 +34,7 @@ export interface VendorWebSearchProvider extends WebSearchProvider {
 }
 
 /**
- * 按名称创建搜索适配器：searxng / baidu / vendor；未知名称 → 抛错。
+ * 按名称创建搜索适配器：searxng / qwen / qwen-official / baidu / vendor；未知名称 → 抛错。
  * vendor 需要额外 LlmEndpoint（联网检索模型）；未提供时抛可读错误。
  */
 export function createWebSearchProvider(
@@ -46,6 +47,8 @@ export function createWebSearchProvider(
       return createSearxngSearchProvider(cfg);
     case 'qwen':
       return createQwenSearchProvider(cfg);
+    case 'qwen-official':
+      return createQwenOfficialSearchProvider(cfg);
     case 'baidu':
       throw new Error('baidu 搜索适配器尚未接入');
     case 'vendor':
@@ -118,3 +121,4 @@ export async function cacheableSearch(provider: WebSearchProvider, q: WebSearchQ
 // re-export，便于统一入口
 export { createSearxngSearchProvider };
 export { createQwenSearchProvider };
+export { createQwenOfficialSearchProvider };
