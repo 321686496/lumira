@@ -50,9 +50,20 @@ Responses API 或 DashScope；故该方式下 `enable_source` 不生效，响应
 ### 3.1 官方适配器 `web-search-qwen-official.ts`
 复用 `WebSearchProvider` 接口，provider 名 `qwen-official`。
 
-请求：`POST {root}/api/v1/services/aigc/text-generation/generation`（`{root}` 由后台配置的 base 归一化派生：
-剥掉结尾的 `/compatible-mode/v1` 或 `/api/v1`，故兼容模式 base / 域名根 / `…/api/v1` 三种写法都能用），
-`Authorization: Bearer <key>`，body：
+**端点：`{root}` 由后台配置的 base 归一化派生**（剥掉结尾的 `/compatible-mode/v1` 或 `/api/v1`，
+故兼容模式 base / 域名根 / `…/api/v1` 三种写法都能用）。DashScope 原生生成端点分两条，
+**必须与模型类型匹配**，用错端点上游返回 `HTTP 400` + `code: InvalidParameter` +
+`message: "url error, please check url！"`（双向都会出现）：
+
+| 通道 | 端点 | 适配模型 |
+| --- | --- | --- |
+| `text` | `{root}/api/v1/services/aigc/text-generation/generation` | 纯文本模型（`qwen-plus` 等），`content` 为**字符串** |
+| `multimodal` | `{root}/api/v1/services/aigc/multimodal-generation/generation` | 多模态模型（Qwen3.8 系列如 `qwen3.8-flash`、Qwen3.7-Flash/Plus、Qwen3.6/3.5 系列等），`content` 为 **`[{text}]` 数组** |
+
+**不维护会过期的多模态模型名单**：先按 `text` 调用，仅在收到 400 且响应体含 `url error` 时
+自动改走 `multimodal` **重试一次**（新模型系列自动兼容）；其它 400 不重试，直接抛错避免无谓二次请求。
+
+请求：`Authorization: Bearer <key>`，body：
 
 ```json
 {
@@ -70,13 +81,18 @@ Responses API 或 DashScope；故该方式下 `enable_source` 不生效，响应
 }
 ```
 
+> `input.messages[].content` 依通道而异：`text` 通道为字符串，`multimodal` 通道为 `[{"text": "…"}]` 数组
+> （数组形式传给 text 端点或字符串传给 multimodal 端点都会报错）。
+> 实测：`stream: true` 在 HTTP 非 SSE 调用下**并非必需**，multimodal 端点不加 stream 同样返回 200 且带 `search_info`。
+
 与三方适配器的差异及理由：
 1. **走 DashScope 原生而非 OpenAI 兼容模式**：兼容模式 Chat Completions 不返回来源（官方文档明确），
    来源只能从 DashScope 的 `output.search_info.search_results[]` 取；该协议仍支持默认模型 `qwen-plus`。
 2. 加 `search_options.forced_search` / `enable_source`：官方文档说明模型可能自行判断不检索；研究管线每次都要真实检索且需要来源列表。
 3. 解析以 **`output.search_info.search_results[]`** 为主（映射 `title` / `url`（回退 `site_name`）/ 摘要），
-   正文取 `output.choices[0].message.content` 作「联网综述」兜底（沿用 2000 字上限），两者皆空 → 抛错，
-   由上层 `allSettled` 收进 `sourceErrors`，不编造 URL。
+   正文取 `output.choices[0].message.content` 作「联网综述」兜底（沿用 2000 字上限）；
+   **多模态通道的 `[{text}]` 数组 content 先归一化成纯文本**再交 `toSummaryItem`（其只认 string，否则综述会丢）。
+   两者皆空 → 抛错，由上层 `allSettled` 收进 `sourceErrors`，不编造 URL。
 
 ### 3.2 公共工具抽取 `qwen-shared.ts`
 把 `extractJson / firstStr / tokenize / clean / summarizeItem`（`toResearchItem` 映射）从 `web-search-qwen.ts`
@@ -104,13 +120,16 @@ Responses API 或 DashScope；故该方式下 `enable_source` 不生效，响应
 ## 五、测试
 
 - 新增 `web-search-qwen-official.spec.ts`：① `output.search_info.search_results` → 带 url 的 `ResearchItem[]`（`source='qwen-official'`；另覆盖兼容模式 base / 域名根 / `…/api/v1` 三种写法都派生出正确 DashScope 端点）；
-  ② 仅正文 → 「联网综述」兜底；③ 空响应 → 抛错；④ HTTP 非 200 → 抛错。
+  ② 仅正文 → 「联网综述」兜底；③ 空响应 → 抛错；④ HTTP 非 200 → 抛错；
+  ⑤ `text` 端点报 400 `url error`（多模态模型）→ 自动改走 `multimodal` 端点，`[{text}]` 数组 content 归一化为「联网综述」；
+  ⑥ 非 `url error` 的 400 不重试，只发 1 次请求即抛错。（共 14 用例）
 - `ai-config.service.spec.ts` 补：`qwen-official` 映射 sources；缺 Key → `sources: []`；两种 Qwen 互斥不串字段。
 - 现有 `web-search-qwen.spec.ts` 保持通过（回归证明三方链路未被改坏）。
 
 ## 六、不做
 
-不做 Responses API / Anthropic 兼容 / 多模态流式（多模态需 `multimodal-generation` + 流式）；
+不做 Responses API / Anthropic 兼容 / 多模态流式（多模态模型已按需自动切到 `multimodal-generation`，
+但**不用流式**——实测 HTTP 非 SSE 调用即可拿到 `search_info`）；
 不让两套 Qwen 并联；不改评分与细化闭环；不改动主对话端点。
 
 ## 七、落地顺序

@@ -55,6 +55,19 @@ function pickMessage(root: Record<string, unknown>): Record<string, unknown> | n
   return null;
 }
 
+/** 多模态端点的 message.content 是 [{text}] 数组，归一化成纯文本供「联网综述」捕获
+ *  （toSummaryItem 只认 string，否则整条正文综述会丢）。 */
+function normalizeMessageContent(msg: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(msg.content)) return msg;
+  const text = (msg.content as unknown[])
+    .map((b) => (b && typeof b === 'object' && typeof (b as Record<string, unknown>).text === 'string'
+      ? ((b as Record<string, unknown>).text as string)
+      : ''))
+    .filter(Boolean)
+    .join('\n');
+  return { ...msg, content: text };
+}
+
 /** 官方形态解析（DashScope 原生，正文综述绝不丢弃）：
  *  1) 正文综述（content 为非 JSON 实质文本 → 「联网综述」，2000 字上限、keywords 留空）置首；
  *  2) output.search_info.search_results[] → 结构化引用（url 缺省回退 site_name）随后；
@@ -64,8 +77,8 @@ function extractOfficialItems(data: unknown): ResearchItem[] | null {
   const root = data as Record<string, unknown>;
 
   // 正文综述：真实联网场景官方会在正文给带链接的结论，必须保留（不能用引用条目顶替）
-  const msg = pickMessage(root);
-  const summary = msg ? toSummaryItem(msg, 'qwen-official') : null;
+  const rawMsg = pickMessage(root);
+  const summary = rawMsg ? toSummaryItem(normalizeMessageContent(rawMsg), 'qwen-official') : null;
 
   // 结构化引用：DashScope 原生 output.search_info.search_results[]；
   // site_name → site，借用 toResearchItem 的 url 回退链（url → site → caption）
@@ -85,13 +98,26 @@ function extractOfficialItems(data: unknown): ResearchItem[] | null {
   return items.length ? items : null;
 }
 
+/** DashScope 原生端点分两条：纯文本模型走 text-generation；多模态模型（Qwen3.8 系列、Qwen3.7-Flash/Plus、
+ *  Qwen3.6 系列、Qwen3.5 系列等）必须走 multimodal-generation。用错端点上游返回 400「url error, please check url」。 */
+type DashScopeChannel = 'text' | 'multimodal';
+
 /** 由后台配置的 base 派生 DashScope 原生生成端点。
  *  兼容模式（…/compatible-mode/v1）不返回搜索来源，来源必须走 DashScope 原生，
  *  故这里把已配置的兼容模式 base 归一化后拼上原生路径；
  *  容忍「域名根 / …/api/v1 / …/compatible-mode/v1」三种写法。 */
-function toDashScopeGenerationUrl(base: string): string {
+function toDashScopeGenerationUrl(base: string, channel: DashScopeChannel): string {
   const root = base.replace(/\/(?:compatible-mode|api)\/v1$/i, '').replace(/\/+$/, '');
-  return `${root}/api/v1/services/aigc/text-generation/generation`;
+  const endpoint = channel === 'multimodal' ? 'multimodal-generation' : 'text-generation';
+  return `${root}/api/v1/services/aigc/${endpoint}/generation`;
+}
+
+/** 组消息：多模态端点要求 message.content 为 [{text}] 数组，纯文本端点用字符串。 */
+function buildMessages(query: string, channel: DashScopeChannel): { role: string; content: unknown }[] {
+  const system = buildSystemPrompt();
+  return channel === 'multimodal'
+    ? [{ role: 'system', content: [{ text: system }] }, { role: 'user', content: [{ text: query }] }]
+    : [{ role: 'system', content: system }, { role: 'user', content: query }];
 }
 
 /** 创建千问官方百炼联网搜索适配器（provider 名 qwen-official） */
@@ -114,19 +140,16 @@ export function createQwenOfficialSearchProvider(cfg: { baseUrl?: string; apiKey
         title: '千问官方联网搜索 · 大模型调用',
       });
 
-      let res: Response;
-      try {
-        res = await fetch(toDashScopeGenerationUrl(base), {
+      // 端点与模型必须匹配：纯文本模型走 text-generation，多模态模型（Qwen3.8/3.7-Flash/Plus、
+      // Qwen3.6/3.5 系列等）必须走 multimodal-generation，用错端点上游返回 400「url error, please check url」。
+      // 不维护会过期的多模态名单：先按 text 调，命中该错误再换 multimodal 重试一次。
+      const callOnce = async (channel: DashScopeChannel): Promise<{ status: number; rawText: string }> => {
+        const res = await fetch(toDashScopeGenerationUrl(base, channel), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({
             model,
-            input: {
-              messages: [
-                { role: 'system', content: buildSystemPrompt() },
-                { role: 'user', content: q.query },
-              ],
-            },
+            input: { messages: buildMessages(q.query, channel) },
             // 搜索与来源开关都在 parameters（DashScope 原生协议形态）；
             // result_format:'message' 才会返回 output.choices[0].message.content 正文
             parameters: {
@@ -139,6 +162,18 @@ export function createQwenOfficialSearchProvider(cfg: { baseUrl?: string; apiKey
           }),
           signal: AbortSignal.timeout(180_000),
         });
+        return { status: res.status, rawText: await res.text() };
+      };
+
+      let status = 0;
+      let rawText = '';
+      try {
+        let attempt = await callOnce('text');
+        if (attempt.status === 400 && /url error/i.test(attempt.rawText)) {
+          attempt = await callOnce('multimodal');
+        }
+        status = attempt.status;
+        rawText = attempt.rawText;
       } catch (err) {
         const name = (err as { name?: string } | null | undefined)?.name;
         const message = name === 'AbortError' || name === 'TimeoutError'
@@ -148,12 +183,11 @@ export function createQwenOfficialSearchProvider(cfg: { baseUrl?: string; apiKey
         throw new Error(message);
       }
 
-      if (!res.ok) {
-        const message = `Qwen 官方网上搜索上游错误（HTTP ${res.status}，${q.query}）`;
+      if (status < 200 || status >= 300) {
+        const message = `Qwen 官方网上搜索上游错误（HTTP ${status}，${q.query}）`;
         handle?.fail(new Error(message));
         throw new Error(message);
       }
-      const rawText = await res.text();
       let data: unknown = null;
       try {
         data = JSON.parse(rawText);

@@ -5,8 +5,23 @@ import { describeTodayUtc8 } from '../../../common/utils/date.util';
 import { runWithTrace } from '../llm-trace';
 import type { AiTraceEvent } from '../llm-trace';
 
-/** DashScope 原生生成端点（由配置的 compatible-mode base 派生） */
+/** DashScope 原生生成端点（由配置的 compatible-mode base 派生）：纯文本模型走 text-generation */
 const DASHSCOPE_URL = 'https://ws.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/text-generation/generation';
+/** 多模态模型（Qwen3.8/3.7-Flash/Plus、Qwen3.6、Qwen3.5 系列等）必须走 multimodal-generation */
+const DASHSCOPE_MULTIMODAL_URL = 'https://ws.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
+
+/** 端点与模型不匹配时上游的真实报错（多模态模型调 text-generation，或反之，均为此错） */
+const URL_ERROR_400 = { request_id: 'r-1', code: 'InvalidParameter', message: 'url error, please check url！' };
+
+/** 多模态模型（qwen3.8-flash）在 multimodal-generation 的正常响应：content 为 [{text}] 数组 */
+const MULTIMODAL_OK = {
+  output: {
+    choices: [{ message: { role: 'assistant', content: [{ text: '多模态正文综述（https://a.example）。' }] } }],
+    search_info: {
+      search_results: [{ index: 1, title: '秋日少女写真', url: 'https://a.example', site_name: 'a.example' }],
+    },
+  },
+};
 
 /** 官方百炼 DashScope 原生：output.search_info.search_results[]（content 为空，不产生综述条目） */
 const OK_SEARCH_INFO = {
@@ -43,6 +58,8 @@ describe('web-search-qwen-official', () => {
       model: 'qwen-plus',
     });
   });
+  // 各用例都 spy 同一个 global.fetch；不还原会让后续用例的调用次数累加（曾致「只调用 1 次」断言误判为 3 次）
+  afterEach(() => jest.restoreAllMocks());
 
   it('provider.name = qwen-official（与三方 MaaS 的 qwen 区分，缓存 key 不冲突）', () => {
     expect(provider.name).toBe('qwen-official');
@@ -79,6 +96,34 @@ describe('web-search-qwen-official', () => {
       expect(String(fetchMock.mock.calls[0][0])).toBe(DASHSCOPE_URL);
       fetchMock.mockRestore();
     }
+  });
+
+  it('纯文本端点报 400「url error」（多模态模型）→ 自动改走多模态端点，数组 content 归一化为「联网综述」', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(URL_ERROR_400), { status: 400 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(MULTIMODAL_OK), { status: 200 }));
+
+    const items = await provider.search({ query: '人像', limit: 10 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0][0])).toBe(DASHSCOPE_URL);
+    expect(String(fetchMock.mock.calls[1][0])).toBe(DASHSCOPE_MULTIMODAL_URL);
+    // 多模态端点要求 message.content 为 [{text}] 数组
+    const mmBody = JSON.parse(String((fetchMock.mock.calls[1][1] as RequestInit).body));
+    expect((mmBody.input as { messages: { role: string; content: unknown }[] }).messages.map((m) => m.content))
+      .toEqual([[{ text: expect.stringContaining('摄影') }], [{ text: '人像' }]]);
+    expect(mmBody.parameters).toMatchObject({ enable_search: true, result_format: 'message' });
+    // 数组 content 归一化 → 综述条目正常产出
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({ source: 'qwen-official', title: '联网综述', snippet: '多模态正文综述（https://a.example）。' });
+    expect(items[1]).toMatchObject({ source: 'qwen-official', title: '秋日少女写真', url: 'https://a.example' });
+  });
+
+  it('非「url error」的 400 不重试，直接抛上游错误（避免无谓二次请求）', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ code: 'InvalidParameter', message: 'other' }), { status: 400 }));
+    await expect(provider.search({ query: 'x', limit: 10 })).rejects.toThrow(/HTTP 400/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('既有 search_info 又有正文 → 「联网综述」置首，其后为带 url 的引用条目（顺序稳定）', async () => {
