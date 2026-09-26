@@ -84,6 +84,16 @@ describe('buildImagePrompt', () => {
     expect(prompt).toContain('三分线');
     expect(prompt).toContain('颗粒感');
 
+    // 构图落位（subjectFrame 归一化坐标 → 可读落位与占比）与相机参数（原先整段丢失）
+    expect(prompt).toContain('主体落在画面中部纵向居中');
+    expect(prompt).toContain('横向占画幅约 40%');
+    expect(prompt).toContain('以 85mm f/1.8、快门 1/400、ISO 200、日光白平衡、曝光补偿 +0.3EV 拍摄');
+
+    // 随拍感只作用于质感：不得再写「构图抓拍式 / 水平线轻微倾斜」
+    expect(prompt).toContain('构图讲究');
+    expect(prompt).not.toContain('水平线轻微倾斜');
+    expect(prompt).not.toContain('构图抓拍式');
+
     // 一段式、无占位残留
     expect(prompt).not.toContain('\n');
     expect(prompt).not.toContain('undefined');

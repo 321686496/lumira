@@ -870,3 +870,43 @@
 - **背景/动机**：生图组织器的提示词已明确要求「忽略排版残留 / 只使用有效信息」，本质上已是一次 LLM 整理，因此不构成「联网做无用功」；但两处各整理一次，风格口径可能不完全一致，且多消耗一次上下文。
 - **目标状态**：把识别阶段的 `ResearchBrief`（或其渲染文本）透传到 `ai-generate-image/batch` → `AiGenerateImageService.generate`，生图组织器直接复用同一份整理结论，去掉原始条目分节。
 - **状态**：⏳ 待优化
+
+---
+
+## 连拍（OHOS）· 原生侧并发与卡顿（2026-09-26）
+
+### P1 · 原生图像处理仍跑在 ArkTS 平台线程，是连拍卡顿的主因
+
+- **模块**：Flutter OHOS 原生插件（`lumira_app_flutter/ohos/entry/src/main/ets/plugins/ImageProcessorPlugin.ets`）
+- **优化点**：`processJpeg` / `decodeJpegToRgba` / `encodeJpegFromRgba` 虽为 `async`，但全部运行在 ArkTS 平台线程（即 Flutter UI 线程）。连拍时「快门冻结帧编码 + 每张成片原生调色 + 早帧初版成片」会串行挤在同一线程上执行，直接冻结 UI（本次已去掉 Dart 侧整文件读尺寸等主线程开销，但原生侧大头未动）。
+- **背景/动机**：同一线程的模型意味着任何原生图像重活都会转成掉帧，这是连拍手感卡顿的结构性原因；本次为控制改动面（需重新构建 OHOS 原生 + 真机验证）未动。
+- **目标状态**：把图像处理搬进 `taskpool`（或原生 C++ 工作线程）执行，只把结果回传平台线程；同时评估「快门冻结帧可否改为降采样尺寸编码」进一步压低耗时。
+- **状态**：⏳ 待优化
+
+### P1 · 原生早帧请求单槽节流，连拍只有首张能拿到早帧
+
+- **模块**：Flutter OHOS 原生插件（`packages/camerawesome_ohos/ohos/src/main/ets/components/cameraX/CameraState.ets` `requestEarlyFrameForAnimation`）
+- **优化点**：`_earlyFrameRequestId` 是单槽守卫，`photoAssetAvailable` 里第二张起会因槽位已被占用而直接 `skip`。Dart 侧已按「发起顺序 = 到达顺序」FIFO 配对 photoId（本次落地），所以不会错配；但连拍第 2..n 张实际拿不到早帧，「先快后真」在连拍里只有首张生效。
+- **背景/动机**：本次连拍错帧修复依赖原生 `_photoDirectQueue`/`_photoAssetQueue` 的 per-capture 配对把拍照放开成并发，早帧通道本身没有 per-capture 化，为控制原生改动面未动。
+- **目标状态**：把早帧请求改为按 ctx 入队（与 `_photoDirectQueue` 同构），或让早帧事件带上 photoId，使连拍每张都能独立拿到早帧；Dart 侧 FIFO 配对逻辑可直接退化为按 id 精确配对。
+- **状态**：⏳ 待优化
+
+### P2 · 原生增强兜底路径用模块级全局存放本帧上下文，并发不安全
+
+- **模块**：Flutter OHOS 原生插件（`CameraState.ets` `saveCameraPhoto` / `MediaDataHandler` / 顶层 `savePhotoPath` `savePhotoCtx` `takePhotoResult` `photoRequestId`）
+- **优化点**：`photoAvailable` 直出路径已按 per-capture ctx 配对（并发安全）；但增强兜底路径（设备不支持分段式拍照、`directDone == false` 时走）把本帧的 path/ctx/result 存进**模块级全局**，并额外有 `photoRequestId` 单槽早退（早退时不给 `result.success/false`，Dart 侧会一直等到 10s 超时）。放开拍照并发后，若设备走的是这条路径，连拍可能出现「后一张覆盖前一张、只落一张」。
+- **背景/动机**：目标设备实测走 `photoAvailable` 直出路径（成片为原始直出、早帧由 `requestEarlyFrameForAnimation` 交付），该兜底路径未在本机触发，故本次未改原生代码；但真机连拍验证若出现丢片，根因即在此。
+- **目标状态**：把 `path`/`result`/`ctx`/`directDone` 改为经 `MediaDataHandler` 构造函数按请求传入，去掉模块级全局与 `photoRequestId` 单槽守卫，使兜底路径同样支持并发。
+- **状态**：⏳ 待优化
+
+---
+
+## AI 生模板 · 提示词质量（2026-09-26）
+
+### P2 · 提示词质量只有关键词单测，没有生成质量的回归集
+
+- **模块**：后端 AI 模块（`analyze.prompt.ts` / `image-prompt.composer.ts` / `image-prompt.builder.ts`）
+- **优化点**：本次把「构图 / 机位 / 景别 / 姿势细节 / 相机参数」写进了三处提示词，并用单测锁住关键措辞（断言必须出现「构图与机位」「相机参数」等分节与字段，禁止再出现「水平线轻微倾斜」这类写法）。但措辞是否真的让模型产出更美的画面，仍只能靠人工看图判断，没有可自动回归的样本集。
+- **背景/动机**：提示词改动的影响是概率性的（同一份提示词多次生成质量有波动），关键词单测只能防止「字段被静默丢弃」这类回归，挡不住「措辞变差导致画面变丑」；维护 `golden-set.service.ts` 的成本当前也偏高。
+- **目标状态**：为若干代表性题材（人像逆光 / 夜景 / 街拍 / 静物）各固化一组「草稿 + 生成图」基准样本，人工打分形成基线；后续改提示词时抽样重跑并对比基线，把「构图合理、主体落位正确、参数互洽」纳入可复现的评估口径。
+- **状态**：⏳ 待优化
