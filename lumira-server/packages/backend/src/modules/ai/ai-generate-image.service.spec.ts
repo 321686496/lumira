@@ -201,3 +201,15 @@ describe('AiGenerateImageService', () => {
     expect(generateImageMock).not.toHaveBeenCalled();
   });
 });
+
+describe('hardenPhotoRealism 自拍设备负面清单', () => {
+  it('自拍（selfie=true）：出口末尾追加拍摄设备负面清单', () => {
+    const out = hardenPhotoRealism('提示词', true);
+    expect(out).toContain('不出现手机、相机、三脚架');
+    expect(out.indexOf('不出现手机、相机、三脚架')).toBeGreaterThan(out.indexOf('提示词'));
+  });
+
+  it('非自拍（默认）：不追加该清单', () => {
+    expect(hardenPhotoRealism('提示词')).not.toContain('不出现手机、相机、三脚架');
+  });
+});

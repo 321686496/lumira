@@ -231,4 +231,44 @@ describe('buildImagePrompt', () => {
     expect(prompt).toContain('参考图是同一套模板的第一张姿势图');
     expect(prompt).toContain('严格复用参考图中的同一人物长相');
   });
+
+  test('自拍（pose.cameraDirection=front）：输出第一人称前置视角，并禁止画面出现拍摄设备', () => {
+    const base = fullDraft();
+    const prompt = buildImagePrompt({
+      ...base,
+      pose: [{ ...(base.pose as Array<Record<string, unknown>>)[0], cameraDirection: 'front' }],
+    });
+
+    expect(prompt).toContain('第一人称前置摄像头自拍视角');
+    expect(prompt).toContain('一臂');
+    expect(prompt).toContain('视线看向镜头');
+    expect(prompt).toContain('不出现手机、相机、三脚架');
+    // 自拍的真实感措辞不再把「手机/抓拍者」写进画面
+    expect(prompt).toContain('本人用前置摄像头随手拍下的自拍照片');
+    expect(prompt).not.toContain('朋友用手机');
+  });
+
+  test('classification.method=selfie 兜底：无 cameraDirection 时同样按自拍视角处理', () => {
+    const base = fullDraft();
+    const prompt = buildImagePrompt({
+      ...base,
+      meta: {
+        ...(base.meta as Record<string, unknown>),
+        classification: { type: 'portrait', majorStyle: 'emo_film', style: 'film', method: 'selfie' },
+      },
+    });
+    expect(prompt).toContain('第一人称前置摄像头自拍视角');
+    expect(prompt).toContain('不出现手机、相机、三脚架');
+  });
+
+  test('他拍（后置 / 无 cameraDirection / method=normal）：不输出自拍视角声明', () => {
+    const base = fullDraft();
+    const back = buildImagePrompt({
+      ...base,
+      pose: [{ ...(base.pose as Array<Record<string, unknown>>)[0], cameraDirection: 'back' }],
+    });
+    expect(back).not.toContain('第一人称');
+    expect(back).not.toContain('不出现手机');
+    expect(buildImagePrompt(base)).not.toContain('第一人称');
+  });
 });

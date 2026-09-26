@@ -33,3 +33,18 @@ describe('analyze.prompt renderCategoryTree 环安全', () => {
     expect(() => buildAnalyzeSystemPrompt(selfLoopCategories())).not.toThrow();
   });
 });
+
+describe('analyze.prompt 自拍（前置）视角契约', () => {
+  const cats: CategoryNode[] = [{ key: 'portrait', name: '人像', parentKey: null, level: 1 }];
+
+  it('输出契约包含 pose[].cameraDirection 前后摄字段', () => {
+    expect(buildTextOnlySystemPrompt(cats)).toContain('cameraDirection');
+  });
+
+  it('含自拍第一人称视角规则：一臂距离 / 近景 / 不出现手机与拍摄设备', () => {
+    const prompt = buildAnalyzeSystemPrompt(cats);
+    expect(prompt).toContain('第一人称');
+    expect(prompt).toContain('一臂');
+    expect(prompt).toContain('不出现手机');
+  });
+});

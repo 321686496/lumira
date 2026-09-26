@@ -95,6 +95,20 @@ function describeCamera(camera: Record<string, unknown>): string | undefined {
 }
 
 /**
+ * 自拍判定：姿势相机方向为前置（pose.cameraDirection=front，normalize 已保留）优先，
+ * 否则回退分类链 method=selfie（主分类树中「自拍」方法 key）。
+ * 多姿势草稿（封面效果图）只要存在前置姿势即视为自拍（composer 复用同一判定）。
+ */
+export function isSelfieDraft(draft: Record<string, unknown>): boolean {
+  const meta = isPlainObject(draft.meta) ? draft.meta : {};
+  const classification = isPlainObject(meta.classification) ? meta.classification : {};
+  if (classification.method === 'selfie') return true;
+  const raw = draft.pose;
+  const poses = Array.isArray(raw) ? raw : [raw];
+  return poses.some((p) => isPlainObject(p) && p.cameraDirection === 'front');
+}
+
+/**
  * 从草稿合成生图 prompt（中文，一段式描述）。前端不拼 prompt。
  *
  * 拼接顺序：classification 主体类型 + aspectRatio 画幅 → tags 风格 → 构图描述 →
@@ -119,6 +133,7 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
   const poseName = isSinglePose && rawPose ? toStr(rawPose.name) : undefined;
   const poseDescription = isSinglePose && rawPose ? toStr(rawPose.description) : undefined;
   const posePhrase = [poseName, poseDescription].filter(Boolean).join('：');
+  const selfie = isSelfieDraft(draft);
 
   // 主体类型：classification.type → meta.category 兜底，均未命中内置映射则跳过
   const subject =
@@ -205,7 +220,11 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
   // 仅在已有真实草稿内容时追加；空草稿仍走兜底文案。
   if (segments.length > 0) {
     segments.push('构图讲究：主体落位与留白经设计，视平线保持水平、主体不被画面边缘随意裁切、肢体线条舒展不互相粘连，机位高度与景别服务于主体');
-    segments.push('真实相机直出的摄影质感，画面像朋友用手机或相机随手抓拍的实拍照片，而非插画、3D 建模渲染、AI 合成、影楼写真或精修广告片');
+    segments.push(
+      selfie
+        ? '真实相机直出的摄影质感，画面像本人用前置摄像头随手拍下的自拍照片，而非插画、3D 建模渲染、AI 合成、影楼写真或精修广告片'
+        : '真实相机直出的摄影质感，画面像随手抓拍的实拍照片，而非插画、3D 建模渲染、AI 合成、影楼写真或精修广告片',
+    );
     segments.push('画面带自然噪点与轻微白平衡偏移（随拍感只作用于质感与瞬间，不作用于构图与画面水平）');
     if (subject === 'portrait') {
       segments.push(
@@ -223,6 +242,16 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
     } else if (subject) {
       segments.push('画面像随手抓拍的实拍照片而非精修广告图，颜色与光线自然不夸张，无塑料或镜面质感');
     }
+  }
+
+  // ⑧.5 自拍视角：第一人称视点声明 + 拍摄设备负面清单（叠在草稿自带的第三人称景别之上，改写为近景）
+  if (selfie) {
+    segments.push(
+      '本张为第一人称前置摄像头自拍视角：镜头就是人物本人的眼睛位置，距面部约一臂之内，只呈现上半身或近景/特写，人物视线看向镜头',
+    );
+    segments.push(
+      '画面中不出现手机、相机、三脚架、自拍杆等拍摄设备，也不出现举着设备的手臂或镜中反射的拍摄者',
+    );
   }
 
   // ⑨ 额外要求：用户显式补充的附加提示词（Step3 输入），置于末尾权重最高

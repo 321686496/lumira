@@ -83,7 +83,7 @@ const DRAFT_JSON_EXAMPLE = `{
     "description": "三分法构图：人物主体落在左侧三分线上、视线朝向右侧留白；前景为虚化的草叶，中景是人物，远景是层叠的田野与天空，形成前中后三层景深。",
     "subjectFrame": { "x": 0.3, "y": 0.2, "w": 0.4, "h": 0.6 } },
   "pose": [{ "name": "侧身回眸", "description": "身体侧转45度、右脚为重心微微后撤，肩线右低左高；左手轻扶草帽帽檐、右手自然垂在身侧微屈，下巴略抬，视线越过右肩看向镜头斜上方，露出颈部线条。",
-    "position": { "x": 0.5, "y": 0.45 }, "scale": 1.0, "rotation": 0 }],  // 数组可含多个姿势（数量规则见硬约束/用户消息）
+    "position": { "x": 0.5, "y": 0.45 }, "scale": 1.0, "rotation": 0, "cameraDirection": "back" }],  // cameraDirection：front=前置摄像头自拍（第一人称视角）/ back=后置他人拍摄（第三人称视角）；数组可含多个姿势（数量规则见硬约束/用户消息）
   "camera": { "exposureCompensation": 0.3, "isoMode": "manual", "iso": 200,
     "shutterSpeed": "1/400", "whiteBalance": "daylight", "whiteBalanceK": 5500,
     "flashMode": "off", "focusMode": "auto", "lensType": "85mm f/1.8",
@@ -135,10 +135,12 @@ ${DRAFT_JSON_EXAMPLE}
    - 写明主体在画面中的位置（左/右/中、上/中/下）与占比（约占画幅几分之几），并给出与之完全一致的 overlayType 与 subjectFrame 归一化坐标（x/y/w/h，0~1）；
    - 写明留白方向与前景 / 中景 / 背景的层次关系；视线或动作朝向的一侧要留出空间；
    - 禁止「主体顶天立地、水平线歪斜、背景线条穿过人物头部、主体被边缘随意裁切」这类无设计感的画面。
-2. 姿势（pose[].description + position/scale/rotation）
+2. 姿势（pose[].description + position/scale/rotation + cameraDirection）
    - 必须写到可直接照做：身体朝向（正/侧/背，转动多少度）、重心与支撑腿、肩线与胯线是否错位、下巴高低、视线看向何处；
    - 手部要分别写明左右手的具体动作与落点（扶帽檐 / 托腮 / 插兜 / 撩发 / 拎包…），不要写「手自然摆放」这类空话；
    - 必须是有美感的肢体线条：四肢不与躯干轮廓重叠粘连，不出现正面僵直站姿、双手对称、关节正对镜头、手臂紧贴身体；
+   - cameraDirection 必须区分自拍与他拍：前置摄像头自拍（对镜自拍也算自拍）→ "front"；他人用后置摄像头拍摄 → "back"；
+   - 自拍（front）必须整体按第一人称视角写：镜头就是人物本人的眼睛位置、距面部在一臂之内，只写近景 / 特写 / 半身（不写「2-3 米」「七分身 / 全身」这类第三人称景别），视线看向镜头；手部动作里不要出现「举着手机自拍」这类画面元素；
    - 同时给出与姿势匹配的 position（归一化中心坐标）、scale（人物大小）、rotation（画面旋转，通常 0）。
 3. 相机参数（camera）—— 必须是「互洽、能实现上述观感」的一组值，而不是各自孤立的数字
    - lensType 与 lensSuggestion 要和景别、透视一致（人像 85mm/50mm 压缩感，环境人像 24~35mm，手机主摄等效 26mm）；
@@ -162,6 +164,8 @@ ${DRAFT_JSON_EXAMPLE}
   但每一个姿势都要独立满足上述「姿势质量」要求（线条、重心、手部落点、视线），不能因为是第 2、3 张就写得更粗略；
   不得改变人物长相、服装、发型、体型、场景、道具、光线或整体风格。仅当用户明确要求不同场景 / 人物 /
   造型时，才允许对应要素变化；
+- 自拍模板（cameraDirection="front"）的 composition.description、sceneGuide.shootingDistance、tips 也必须按第一人称自拍口径写：
+  机位在面部一臂之内、景别为近景 / 半身 / 特写，画面中不出现手机、相机、三脚架、自拍杆等拍摄设备与举着设备的手臂；
 - 未知枚举字段直接省略，不要编造；
 - meta.classification 从分类树逐级选择，非人像题材允许 style/method 留空；
 - 相机参数是「复现该风格的建议参数」，给出合理估算值，并按「创作质量要求」保证各参数互洽；
@@ -201,11 +205,11 @@ export interface AnalyzeUserPromptInput {
 /** 构造姿势数量指令行（vision / text-only 共用） */
 function poseCountLine(poseCount: number | null | undefined): string {
   if (typeof poseCount === 'number' && Number.isInteger(poseCount) && poseCount >= 1 && poseCount <= 6) {
-    return `pose 数组必须恰好输出 ${poseCount} 个姿势，每个姿势有独立的 name / description / position。`;
+    return `pose 数组必须恰好输出 ${poseCount} 个姿势，每个姿势有独立的 name / description / position / cameraDirection。`;
   }
   return (
     '请根据用户文字描述与创作要求（包括示例图中可见的文字要求，如「三连拍」等）判断需要多少个姿势，' +
-    '在 1~6 个范围内输出，每个姿势有独立的 name / description / position；无明确要求时输出 1 个。'
+    '在 1~6 个范围内输出，每个姿势有独立的 name / description / position / cameraDirection；无明确要求时输出 1 个。'
   );
 }
 

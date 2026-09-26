@@ -5,6 +5,7 @@
 
 import { textChat } from './llm-client';
 import type { LlmEndpoint } from './llm-client';
+import { isSelfieDraft } from './image-prompt.builder';
 import type { ResearchItem } from './trend-research/research-item';
 import { buildResearchLines } from './trend-research/research-digest';
 import {
@@ -35,7 +36,8 @@ const COMPOSE_SYSTEM_PROMPT = `你是顶级人像摄影艺术指导兼生图提�
 5. 风格词必须转译后再用：「新中式」「氛围感」「少女」「千金风」等高风格化标签要落成具体的穿着、场景、人物特征（如「穿着新中式盘扣上衣的二十多岁普通女孩」），不得直接堆砌风格词，防止画面滑向唯美插画风。
 6. 网络趋势参考中的有效信息（当下流行题材、风格、视觉元素）要转化为具体可见的画面描述融入提示词，让画面贴合当下审美；与创作要求冲突、明显无效或只是排版残留（标题符号 / 表格 / 来源域名）的忽略。
 7. 严格保留素材中的硬约束：画幅比例、单姿势要求、人物一致性要求、用户额外要求（权重最高，置于提示词末尾附近强调）。
-8. 只使用素材中出现的信息组织画面，不新增素材没有的元素；不输出任何解释，只输出整理后的提示词本身。`;
+8. 自拍视角（素材出现「拍摄方式：自拍 / 相机方向：前置」时强制生效）：必须按第一人称自拍写——画面的视点就是人物本人的眼睛，镜头距面部约一臂之内，只呈现上半身或近景 / 特写，视线看向镜头；成片里不得出现手机、相机、三脚架、自拍杆等拍摄设备，不得出现举着设备的手臂，也不得出现镜中反射的拍摄者。素材里若还带着「2-3 米 / 七分身 / 全身」等第三人称景别，一律按自拍口径改写为近景或半身，不得照抄。
+9. 只使用素材中出现的信息组织画面，不新增素材没有的元素；不输出任何解释，只输出整理后的提示词本身。`;
 
 /** 组织器输入：草稿 + 本张姿势已并入 draft（singlePose 模式）+ 研究结果 + 用户附加提示词 */
 export interface PromptComposeInput {
@@ -197,6 +199,7 @@ export function buildPromptMaterial(input: PromptComposeInput): string {
   const classification = isPlainObject(meta.classification) ? meta.classification : {};
   const isSinglePose = draft.singlePose === true;
   const consistency = isPlainObject(draft.consistency) ? draft.consistency : {};
+  const selfie = isSelfieDraft(draft);
   const rawPose = Array.isArray(draft.pose)
     ? (isPlainObject(draft.pose[0]) ? draft.pose[0] : undefined)
     : isPlainObject(draft.pose)
@@ -212,6 +215,7 @@ export function buildPromptMaterial(input: PromptComposeInput): string {
   if (subject) infoLines.push(`- 主体类型：${subject}`);
   const name = toStr(meta.name);
   if (name) infoLines.push(`- 模板名称：${name}`);
+  if (selfie) infoLines.push('- 拍摄方式：自拍（第一人称前置摄像头视角，镜头即人物本人视点）');
   const tags = toStrArray(meta.tags);
   if (tags.length) infoLines.push(`- 风格标签：${tags.join('、')}`);
   const shortDesc = toStr(meta.shortDesc);
@@ -251,6 +255,12 @@ export function buildPromptMaterial(input: PromptComposeInput): string {
     if (poseName) poseLines.push(`- 姿势名：${poseName}`);
     const poseDesc = toStr(rawPose.description);
     if (poseDesc) poseLines.push(`- 姿势描述：${poseDesc}`);
+    const camDir = toStr(rawPose.cameraDirection);
+    if (camDir === 'front') {
+      poseLines.push('- 相机方向：前置（自拍）——第一人称视角，镜头即人物本人视点、距面部一臂之内，只呈现近景/半身');
+    } else if (camDir === 'back') {
+      poseLines.push('- 相机方向：后置（他拍）——第三人称视角，由他人在画面外拍摄');
+    }
     const placement = describePosePlacement(rawPose);
     if (placement) poseLines.push(`- 人物落位与大小：${placement}`);
     if (poseLines.length) sections.push(`【本张姿势】（本张只生成这一个姿势）\n${poseLines.join('\n')}`);
@@ -288,8 +298,16 @@ export function buildPromptMaterial(input: PromptComposeInput): string {
   reqLines.push('- 构图、机位、景别与姿势线条必须呈现专业摄影水准的美感：画面水平、主体落位与留白经设计、肢体线条舒展，不得出现水平线倾斜、主体顶天立地或被画面边缘随意裁切、四肢与躯干粘连重叠');
   reqLines.push('- 「随拍感」只用于质感与瞬间感（真实材质、自然表情、生活化场景），不得用来合理化随意构图或歪斜的机位');
   reqLines.push('- 构图 / 机位 / 相机参数以【构图与机位】【照片参数】给出的值为准，不得自行改动或降级');
-  reqLines.push('- 真实相机直出、朋友随手抓拍的生活照，而非插画、3D 建模渲染、AI 合成、影楼写真或精修广告片');
-  reqLines.push('- 必须写入具体摄影参数：镜头与光圈（如 85mm f/1.8 浅景深或手机主摄直出）、快门与感光度与噪点（弱光场景用高 ISO，画面带自然噪点）、白平衡轻微偏移');
+  reqLines.push(
+    selfie
+      ? '- 真实相机直出、本人用前置摄像头随手拍下的自拍照片，而非插画、3D 建模渲染、AI 合成、影楼写真或精修广告片'
+      : '- 真实相机直出、随手抓拍的生活照，而非插画、3D 建模渲染、AI 合成、影楼写真或精修广告片',
+  );
+  reqLines.push(
+    selfie
+      ? '- 必须写入具体摄影参数：前置摄像头等效焦距与光圈、快门与感光度与噪点（弱光场景用高 ISO，画面带自然噪点）、白平衡轻微偏移'
+      : '- 必须写入具体摄影参数：镜头与光圈（如 85mm f/1.8 浅景深或手机主摄直出）、快门与感光度与噪点（弱光场景用高 ISO，画面带自然噪点）、白平衡轻微偏移',
+  );
   if (categoryKey === 'portrait') {
     reqLines.push('- 人物是街上随处可见的普通年轻人：肤色不均匀、T 区微泛油光而脸颊哑光、皮肤保留毛孔与细小绒毛及淡痕，头发有几缕碎发，衣服有自然褶皱');
     reqLines.push('- 表情松弛自然像被抓拍的瞬间；五官头发手部贴合真实人体结构无畸变；构图讲究：主体落位与留白经设计、肢体线条舒展有延伸感');
@@ -305,6 +323,10 @@ export function buildPromptMaterial(input: PromptComposeInput): string {
           : '- 同一套模板的连续拍摄：保持同一人物的长相、服装、发型、体型，以及场景、道具、光线和摄影风格一致；本张只改变姿势',
       );
     }
+  }
+  if (selfie) {
+    reqLines.push('- 本张是第一人称自拍：镜头就是人物本人的眼睛位置，距面部一臂之内，只呈现上半身或近景 / 特写，人物视线看向镜头；【构图与机位】里的拍摄距离/景别若有「2-3 米 / 七分身 / 全身」等第三人称写法，一律按自拍口径改写为近景或半身');
+    reqLines.push('- 不得出现手机、相机、三脚架、自拍杆等拍摄设备，不得出现举着设备的手臂，也不得出现镜中反射的拍摄者');
   }
   const extra = typeof extraPrompt === 'string' ? extraPrompt.trim() : '';
   if (extra) reqLines.push(`- 用户额外要求（权重最高，必须满足）：${extra}`);

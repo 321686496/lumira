@@ -130,6 +130,26 @@ describe('buildPromptMaterial', () => {
     const m = buildPromptMaterial({ draft: DRAFT, research: [] });
     expect(m).not.toContain('【网络趋势参考】');
   });
+
+  it('自拍（pose.cameraDirection=front）：下发第一人称前置视角 + 禁止拍摄设备的硬约束', () => {
+    const selfieDraft = { ...DRAFT, pose: [{ ...DRAFT.pose[0], cameraDirection: 'front' }] };
+    const m = buildPromptMaterial({ draft: selfieDraft, research: [] });
+
+    expect(m).toContain('拍摄方式：自拍');
+    expect(m).toContain('第一人称前置摄像头视角');
+    expect(m).toContain('相机方向：前置（自拍）');
+    expect(m).toContain('第一人称自拍');
+    expect(m).toContain('不得出现手机、相机、三脚架');
+    // 自拍下参数措辞不得再指向后置主摄
+    expect(m).not.toContain('手机主摄直出');
+  });
+
+  it('他拍（无 cameraDirection）：不下发自拍视角分节与拍摄方式', () => {
+    const m = buildPromptMaterial({ draft: DRAFT, research: [] });
+    expect(m).not.toContain('拍摄方式：自拍');
+    expect(m).not.toContain('相机方向：前置');
+    expect(m).not.toContain('第一人称自拍');
+  });
 });
 
 describe('composeImagePrompt', () => {
@@ -148,6 +168,18 @@ describe('composeImagePrompt', () => {
     expect(input.systemPrompt).not.toContain('第一优先级，高于画面美观');
     expect(input.userText).toContain('千金小姐他拍风格模板');
     expect(input.userText).toContain('千金风他拍构图');
+  });
+
+  it('系统提示词含自拍视角规则：第一人称 / 一臂距离 / 不得出现拍摄设备 / 第三人称景别须改写', async () => {
+    textChatMock.mockResolvedValueOnce('x');
+
+    await composeImagePrompt(TEXT_ENDPOINT, { draft: DRAFT, research: [] }, 'fallback');
+
+    const [, input] = textChatMock.mock.calls[0];
+    expect(input.systemPrompt).toContain('第一人称');
+    expect(input.systemPrompt).toContain('一臂');
+    expect(input.systemPrompt).toContain('不得出现手机、相机、三脚架');
+    expect(input.systemPrompt).toContain('改写为近景');
   });
 
   it('textChat 失败 → 静默回退 fallback（composed: false，不抛错）', async () => {

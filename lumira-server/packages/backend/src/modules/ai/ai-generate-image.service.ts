@@ -8,7 +8,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { UploadFile } from '../templates/admin-templates.service';
 import { AiConfigService } from './ai-config.service';
 import { GenerateImageResult, generateImage, mapSize } from './image-client';
-import { buildImagePrompt } from './image-prompt.builder';
+import { buildImagePrompt, isSelfieDraft } from './image-prompt.builder';
 import { composeImagePrompt } from './image-prompt.composer';
 import type { ResearchItem } from './trend-research/research-item';
 
@@ -79,10 +79,14 @@ function extractAspectRatio(draft: Record<string, unknown>): string | undefined 
  */
 const PHOTO_REALISM_PREFIX = '一张真实相机直出的实拍照片：';
 const PHOTO_REALISM_SUFFIX =
-  '。真实摄影质感：皮肤为真实人类皮肤材质——可见毛孔、细小绒毛、轻微油光与肤色不均，绝不磨皮、绝不过度光滑发亮；布料、道具、街景均为真实材质纹理；光线来自真实环境光源，有自然的衰减、散射与阴影过渡；画面带轻微噪点与白平衡偏差，像朋友随手抓拍的实拍照片。禁止：动漫、二次元、漫画、插画、赛璐璐、厚涂、CG、3D 渲染、油画、游戏立绘、影楼写真、网红精修风。';
+  '。真实摄影质感：皮肤为真实人类皮肤材质——可见毛孔、细小绒毛、轻微油光与肤色不均，绝不磨皮、绝不过度光滑发亮；布料、道具、街景均为真实材质纹理；光线来自真实环境光源，有自然的衰减、散射与阴影过渡；画面带轻微噪点与白平衡偏差，像随手抓拍的实拍照片。禁止：动漫、二次元、漫画、插画、赛璐璐、厚涂、CG、3D 渲染、油画、游戏立绘、影楼写真、网红精修风。';
+/** 自拍（前置）专属负面清单：第一人称自拍里拍摄设备就是镜头本身，绝不能出现在画面里 */
+const SELFIE_DEVICE_SUFFIX =
+  '本张为第一人称前置摄像头自拍：镜头即人物本人视点、距面部约一臂之内、只呈现上半身或近景，人物视线看向镜头。画面中不出现手机、相机、三脚架、自拍杆等拍摄设备，不出现举着设备的手臂，也不出现镜中反射的拍摄者。';
 
-export function hardenPhotoRealism(prompt: string): string {
-  return `${PHOTO_REALISM_PREFIX}${prompt}${PHOTO_REALISM_SUFFIX}`;
+export function hardenPhotoRealism(prompt: string, selfie = false): string {
+  const suffix = selfie ? `${PHOTO_REALISM_SUFFIX}${SELFIE_DEVICE_SUFFIX}` : PHOTO_REALISM_SUFFIX;
+  return `${PHOTO_REALISM_PREFIX}${prompt}${suffix}`;
 }
 
 @Injectable()
@@ -136,8 +140,8 @@ export class AiGenerateImageService {
       fallbackPrompt,
     );
     // 网络生图（含 qwen 异步轮询/结果下载）纳入全局并发闸门，避免并发打爆上游厂商
-    // prompt 出口统一照片写实加固（媒介声明 + 真实材质 + 反动漫负面清单）
-    const hardenedPrompt = hardenPhotoRealism(prompt);
+    // prompt 出口统一照片写实加固（媒介声明 + 真实材质 + 反动漫负面清单；自拍追加第一人称视角与设备负面清单）
+    const hardenedPrompt = hardenPhotoRealism(prompt, isSelfieDraft(draft));
     const imageResult = await imageSemaphore.run(() => generateImage(cfg.image, {
       prompt: hardenedPrompt,
       size: mapSize(cfg.image.provider, extractAspectRatio(draft)),
