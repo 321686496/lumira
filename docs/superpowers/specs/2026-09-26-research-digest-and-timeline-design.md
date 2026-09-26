@@ -141,7 +141,7 @@ researchDigest = r.brief ? renderResearchBrief(r.brief) : buildResearchDigest(r.
 
 管理端 `types/admin.ts` 的 `AiTraceEvent` 同步增加 `parentStep?: string`、`callId?: string`。
 
-## 4. 前端设计：嵌套竖轨时间线
+## 4. 前端设计：横向轨道时间线 + 点击查看详情
 
 `admin/src/components/ai-create/analyze-trace-stream.tsx` 重写 `buildTimeline` 与渲染。
 
@@ -157,14 +157,20 @@ researchDigest = r.brief ? renderResearchBrief(r.brief) : buildResearchDigest(r.
 按 seq 顺序做先序遍历：父阶段行 → 其子项（子阶段缩进、调用/说明卡片）→ 下一个顶层节点。
 `note` 因此就地插入，不再堆到列表末尾。
 
-### 4.3 视觉
+### 4.3 视觉：横向轨道 + 选中详情
 
-- 每行结构：`[竖轨列：竖线 + 状态圆点] + [内容]`。
-- 子项容器 `ml-4 border-l border-border pl-3` 形成缩进层级（最深 2 层）。
-- 阶段节点：圆点（running 脉冲 / done ✓ / fail !）+ 标题 + step 标识 + 耗时 + 时间戳，
-  可展开收起子项。
-- 调用/说明节点缩进接入既有 `TraceCallCard`。
-- 无 `parentStep` 的历史事件自然退化为平铺，向后兼容。
+- **顶部横向轨道**（可左右滚动）：每个顶层行占一格 `118px`，格内自上而下为
+  「连接线 + 状态圆点 + 阶段名（截断，`title` 悬浮看全）+ 副行（`#序号 · 执行中…/耗时 · 时刻`）」；
+  非首末格的两侧各有一段 `bg-border` 横线，串成一条横向时间轴。
+- **点击某格** → 下方详情区展示该格内容：
+  - 阶段格：阶段头（状态圆点 + 名称 + `#序号` + step 标识 + 耗时 + 时刻）→ 结论/错误 → 其全部子项；
+  - 子项沿用**竖轨嵌套列表**（`[竖轨：竖线 + 圆点] + [内容]`，子阶段再缩进），调用/说明接入既有
+    `TraceCallCard`，`note` 就地插入；
+  - 调用格直接展示 `TraceCallCard`；说明格展示标题 + 说明文本。
+- **选中/跟随**：默认「跟随最新」（选中最后一个格子，轨道自动滚到最右，详情自动滚底）；
+  点击某格即锁定该格，再点该格（或点标题栏「跟随最新」）恢复跟随。
+- 阶段圆点：running 脉冲 `…` / done `✓` / fail `!`；重复阶段在副行显示 `#2`，阶段头另给角标。
+- 无 `parentStep` 的历史事件自然退化为平铺顶层格，向后兼容。
 
 ## 5. 降级与风险
 

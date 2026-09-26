@@ -15,6 +15,8 @@ import { cn } from '@/lib/utils';
 export interface TraceCallCardData {
   type?: 'llm' | 'search';
   title: string;
+  /** 事件时间戳（毫秒）：横向轨道格子显示时刻用 */
+  ts?: number;
   model?: string;
   status?: 'running' | 'done' | 'fail' | 'error' | 'pending';
   systemPrompt?: string;
@@ -127,6 +129,8 @@ export function TraceTextBlock({ label, text, defaultOpen = true }: { label: str
 /** 可参与合并的事件源（识别流 AiTraceEvent 与批次流 AiBatchImageTraceEvent 的公共子集） */
 export interface TraceCallSource {
   seq: number;
+  /** 事件时间戳（毫秒） */
+  ts?: number;
   /** 识别流用 type；批次流用 kind */
   type?: 'llm' | 'search' | 'step' | 'note' | 'pose';
   kind?: 'pose' | 'llm' | 'search';
@@ -178,6 +182,7 @@ export function collapseTraceCalls(sources: TraceCallSource[]): TraceCallItem[] 
     const ev: TraceCallCardData = {
       type: isSearch ? 'search' : 'llm',
       title: src.title,
+      ts: src.ts,
       model: src.model,
       status: src.status as TraceCallCardData['status'],
       systemPrompt: src.systemPrompt,
