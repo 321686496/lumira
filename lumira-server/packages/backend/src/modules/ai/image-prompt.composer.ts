@@ -349,7 +349,7 @@ export async function composeImagePrompt(
       systemPrompt: COMPOSE_SYSTEM_PROMPT,
       userText: buildPromptMaterial(input),
       temperature: 0.4,
-      timeoutMs: 60_000,
+      timeoutMs: 300_000,
     });
     const trimmed = out.trim();
     if (!trimmed) return { prompt: fallbackPrompt, composed: false };
