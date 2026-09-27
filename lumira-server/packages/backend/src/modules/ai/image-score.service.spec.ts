@@ -77,22 +77,32 @@ function input(overrides: Record<string, unknown> = {}) {
 beforeEach(() => textChatMock.mockReset());
 
 describe('ImageScoreService.score', () => {
-  it('高分 0.9 → verdict pass，且 textChat 收到 text 端点 + jsonMode:true', async () => {
-    textChatMock.mockResolvedValueOnce(JSON.stringify({ score: 0.9, reasons: ['风格成熟'], suggests: ['保持'] }));
+  it('总分与分项全达标 → verdict pass，且 textChat 收到 text 端点 + jsonMode:true', async () => {
+    textChatMock.mockResolvedValueOnce(
+      JSON.stringify({
+        aesthetics: { composition: 0.9, pose: 0.88, styling: 0.9, expression: 0.86, lighting: 0.9, styleHit: 0.92 },
+        realism: { anatomy: 0.95, material: 0.9, physical: 0.92 },
+        consistency: 0.9,
+        params: 0.9,
+        metadata: 0.9,
+        score: 0.9,
+        reasons: [],
+        suggests: [],
+      }),
+    );
     const svc = buildService();
 
     const res = await svc.score(input());
 
     expect(res.verdict).toBe('pass');
-    expect(res.score).toBe(0.9);
-    expect(res.reasons).toContain('风格成熟');
+    expect(res.score).toBeCloseTo(0.9, 5);
     const [cfg, chatInput] = textChatMock.mock.calls[0];
     expect(cfg).toEqual(TEXT);
     expect(chatInput.jsonMode).toBe(true);
     expect(chatInput.userText).toContain('飘窗清冷少女人像模板'); // draft 注入
   });
 
-  it('低分 0.6 → verdict retry 且 reasons 非空', async () => {
+  it('低分 0.6 → verdict retry 且保留 LLM 给出的 reasons/suggests', async () => {
     textChatMock.mockResolvedValueOnce(JSON.stringify({ score: 0.6, reasons: ['姿势不一致'], suggests: ['重跑姿势面片'] }));
     const svc = buildService();
 
@@ -100,7 +110,7 @@ describe('ImageScoreService.score', () => {
 
     expect(res.verdict).toBe('retry');
     expect(res.score).toBe(0.6);
-    expect(res.reasons).toHaveLength(1);
+    expect(res.reasons).toContain('姿势不一致');
     expect(res.suggests).toContain('重跑姿势面片');
   });
 
@@ -137,5 +147,135 @@ describe('ImageScoreService.score', () => {
     expect(SCORE_PASS_THRESHOLD).toBe(0.85);
     expect(0.85 >= SCORE_PASS_THRESHOLD).toBe(true);
     expect(0.84 >= SCORE_PASS_THRESHOLD).toBe(false);
+  });
+});
+
+/** 达标分项基线（审美全 >=0.75 / 真实全 >=0.85） */
+const OK_AESTHETICS = { composition: 0.9, pose: 0.9, styling: 0.9, expression: 0.9, lighting: 0.9, styleHit: 0.9 };
+const OK_REALISM = { anatomy: 0.95, material: 0.9, physical: 0.92 };
+
+describe('ImageScoreService.score 三段闸门', () => {
+  it('总分够但审美分项不够（composition 0.6）→ retry，reasons 指明维度', async () => {
+    textChatMock.mockResolvedValueOnce(
+      JSON.stringify({
+        aesthetics: { ...OK_AESTHETICS, composition: 0.6 },
+        realism: OK_REALISM,
+        score: 0.9,
+        reasons: [],
+        suggests: [],
+      }),
+    );
+    const svc = buildService();
+
+    const res = await svc.score(input());
+
+    expect(res.verdict).toBe('retry');
+    expect(res.reasons.join(' ')).toContain('composition');
+  });
+
+  it('审美够但真实分项不够（anatomy 0.6）→ retry，reasons 指明真实底线', async () => {
+    textChatMock.mockResolvedValueOnce(
+      JSON.stringify({
+        aesthetics: OK_AESTHETICS,
+        realism: { ...OK_REALISM, anatomy: 0.6 },
+        score: 0.9,
+        reasons: [],
+        suggests: [],
+      }),
+    );
+    const svc = buildService();
+
+    const res = await svc.score(input());
+
+    expect(res.verdict).toBe('retry');
+    expect(res.reasons.join(' ')).toContain('anatomy');
+  });
+
+  it('分项缺失 → 保守 retry', async () => {
+    textChatMock.mockResolvedValueOnce(JSON.stringify({ score: 0.9, reasons: [], suggests: [] }));
+    const svc = buildService();
+
+    const res = await svc.score(input());
+
+    expect(res.verdict).toBe('retry');
+    expect(res.reasons.join(' ')).toContain('审美分项缺失');
+    expect(res.reasons.join(' ')).toContain('真实分项缺失');
+  });
+
+  it('无参考图（textOnly）→ 阈值放宽：aesthetics min 0.70 / score 0.8 即可 pass', async () => {
+    textChatMock.mockResolvedValueOnce(
+      JSON.stringify({
+        aesthetics: { ...OK_AESTHETICS, composition: 0.72 },
+        realism: OK_REALISM,
+        score: 0.82,
+        reasons: [],
+        suggests: [],
+      }),
+    );
+    const svc = buildService();
+
+    const res = await svc.score(input({ textOnly: true }));
+
+    expect(res.verdict).toBe('pass');
+  });
+
+  it('无参考图但真实底线不够（anatomy 0.8）→ 仍 retry（真实底线不豁免）', async () => {
+    textChatMock.mockResolvedValueOnce(
+      JSON.stringify({
+        aesthetics: OK_AESTHETICS,
+        realism: { ...OK_REALISM, anatomy: 0.8 },
+        score: 0.9,
+        reasons: [],
+        suggests: [],
+      }),
+    );
+    const svc = buildService();
+
+    const res = await svc.score(input({ textOnly: true }));
+
+    expect(res.verdict).toBe('retry');
+    expect(res.reasons.join(' ')).toContain('anatomy');
+  });
+
+  it('suggests 硬要求写入系统提示词：落到具体字段与补法', async () => {
+    textChatMock.mockResolvedValueOnce(
+      JSON.stringify({ aesthetics: OK_AESTHETICS, realism: OK_REALISM, score: 0.9 }),
+    );
+    const svc = buildService();
+
+    await svc.score(input());
+
+    const prompt = String(textChatMock.mock.calls[0][1].systemPrompt);
+    expect(prompt).toContain('pose[0].description');
+    expect(prompt).toContain('补：');
+    expect(prompt).toContain('styleHit');
+    expect(prompt).toContain('真实底线分项');
+  });
+
+  it('trace 分项：返回 result 含结构化 aesthetics / realism', async () => {
+    textChatMock.mockResolvedValueOnce(
+      JSON.stringify({ aesthetics: OK_AESTHETICS, realism: OK_REALISM, score: 0.9 }),
+    );
+    const svc = buildService();
+
+    const res = await svc.score(input());
+
+    expect(res.aesthetics).toEqual(OK_AESTHETICS);
+    expect(res.realism).toEqual(OK_REALISM);
+  });
+
+  it('有风格档案时系统提示词注入档案约束块', async () => {
+    textChatMock.mockResolvedValueOnce(
+      JSON.stringify({ aesthetics: OK_AESTHETICS, realism: OK_REALISM, score: 0.9 }),
+    );
+    const svc = buildService();
+
+    await svc.score(
+      input({ styleProfile: { archetype: 'fashion_editorial', retouchLevel: 'polished' } }),
+    );
+
+    const prompt = String(textChatMock.mock.calls[0][1].systemPrompt);
+    expect(prompt).toContain('本次风格档案（必须遵守）');
+    expect(prompt).toContain('时尚大片');
   });
 });

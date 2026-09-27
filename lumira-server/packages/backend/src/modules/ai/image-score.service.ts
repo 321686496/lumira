@@ -14,19 +14,98 @@ import { extractJson, clampNumber } from './normalize';
 import type { ImageDescription } from './image-describe.service';
 import type { PoseRefSheet } from './pose-ref-sheet.service';
 import type { ResearchItem } from './trend-research/research-item';
+import { renderStyleProfileBlock, normalizeStyleProfile, type StyleProfile } from './style-profile.presets';
 
 /** 通过闸门：score >= 该值 → pass，否则 retry */
 export const SCORE_PASS_THRESHOLD = 0.85;
 
+/** 审美分项：画面是否「好看且命中档案取向」 */
+export interface AestheticsScores {
+  composition: number; // 构图
+  pose: number; // 姿势线条与设计感
+  styling: number; // 穿搭/妆造
+  expression: number; // 表情与情绪
+  lighting: number; // 光线层次
+  styleHit: number; // 是否命中风格档案取向
+}
+
+/** 真实分项：不可突破的底线 */
+export interface RealismScores {
+  anatomy: number; // 人体/结构解剖
+  material: number; // 材质（皮肤/布料/道具）
+  physical: number; // 物理合理性（光/透视/可实拍）
+}
+
+export const AESTHETICS_KEYS: (keyof AestheticsScores)[] = [
+  'composition',
+  'pose',
+  'styling',
+  'expression',
+  'lighting',
+  'styleHit',
+];
+export const REALISM_KEYS: (keyof RealismScores)[] = ['anatomy', 'material', 'physical'];
+
+/** 解析分项：任一键缺失/非数值 → undefined（视为未达标，保守 retry） */
+export function parseScoreGroup<T extends string>(raw: unknown, keys: readonly T[]): Record<T, number> | undefined {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return undefined;
+  const src = raw as Record<string, unknown>;
+  const out = {} as Record<T, number>;
+  for (const k of keys) {
+    const v = src[k];
+    if (typeof v !== 'number' || !Number.isFinite(v)) return undefined;
+    out[k] = Math.max(0, Math.min(1, v));
+  }
+  return out;
+}
+
+export interface GateInput {
+  score: number;
+  aesthetics?: AestheticsScores;
+  realism?: RealismScores;
+  textOnly?: boolean;
+}
+
+/** 三段闸门：总分 + 审美分项 + 真实分项；无图路径放宽审美与总分，真实底线不变 */
+export function evaluateGate(input: GateInput): { pass: boolean; fails: string[] } {
+  const fails: string[] = [];
+  const scoreThreshold = input.textOnly ? 0.8 : SCORE_PASS_THRESHOLD;
+  const aestheticsMin = input.textOnly ? 0.7 : 0.75;
+  const realismMin = 0.85;
+
+  if (input.score < scoreThreshold) fails.push(`总分 ${input.score.toFixed(2)} < ${scoreThreshold}`);
+  if (!input.aesthetics) fails.push('审美分项缺失');
+  else {
+    for (const k of AESTHETICS_KEYS) {
+      if (input.aesthetics[k] < aestheticsMin) {
+        fails.push(`审美维度 ${k}=${input.aesthetics[k].toFixed(2)} < ${aestheticsMin}`);
+      }
+    }
+  }
+  if (!input.realism) fails.push('真实分项缺失');
+  else {
+    for (const k of REALISM_KEYS) {
+      if (input.realism[k] < realismMin) {
+        fails.push(`真实底线 ${k}=${input.realism[k].toFixed(2)} < ${realismMin}`);
+      }
+    }
+  }
+  return { pass: fails.length === 0, fails };
+}
+
 export interface ScoreResult {
   /** 综合质量分 0~1 */
   score: number;
-  /** 闸门结论：pass（>=阈值）| retry（低于阈值或解析失败） */
+  /** 闸门结论：pass（三段闸门全过）| retry（任一段不达标或解析失败） */
   verdict: 'pass' | 'retry';
-  /** 未达标的高优先级差异/问题清单 */
+  /** 未达标的高优先级差异/问题清单（LLM reasons + 闸门 fails） */
   reasons: string[];
   /** 可执行的改进建议（供决策层微调后重跑） */
   suggests: string[];
+  /** 审美分项（供 trace 与后台时间线展示） */
+  aesthetics?: AestheticsScores;
+  /** 真实分项（供 trace 与后台时间线展示） */
+  realism?: RealismScores;
 }
 
 export interface ImageScoreInput {
@@ -42,10 +121,14 @@ export interface ImageScoreInput {
   imageDescOfGenerated?: Record<string, unknown>;
   /** 独立的评审模型端点（避免同源偏好）；缺省用 cfg.text */
   judgeModel?: LlmEndpoint;
+  /** 本次风格档案（可选；有则注入档案约束块并核对 styleHit） */
+  styleProfile?: StyleProfile;
+  /** 无参考图路径（纯草稿评审）：放宽审美与总分阈值，真实底线不变 */
+  textOnly?: boolean;
 }
 
-/** 评分 rubric 系统提示 */
-function buildScoreSystemPrompt(): string {
+/** 评分 rubric 系统提示；有档案时追加档案约束块 */
+function buildScoreSystemPrompt(styleProfile?: StyleProfile): string {
   return [
     '你是资深摄影/时尚编辑，负责为生成的摄影模板做质量与一致性评审（LLM-as-Judge）。',
     '## 评分维度',
@@ -60,9 +143,17 @@ function buildScoreSystemPrompt(): string {
     '8. 元数据质量：命名、关键词、sceneGuide、难度是否给用户可操作。',
     '## 输出',
     '只输出 JSON，不要 markdown 或解释：',
-    '{"score": 0~1, "reasons": ["差异/问题清单"], "suggests": ["可执行改进建议"]}',
-    'score<0.85 时必须在 reasons 列出未达标的具体项，并在 suggests 给出决策层可执行的微调方向。',
-  ].join('\n');
+    '{"aesthetics":{"composition":0~1,"pose":0~1,"styling":0~1,"expression":0~1,"lighting":0~1,"styleHit":0~1},' +
+      '"realism":{"anatomy":0~1,"material":0~1,"physical":0~1},' +
+      '"score":0~1,"reasons":["差异/问题清单"],"suggests":["可执行改进建议"]}',
+    'AestheticsScores 与 RealismScores 的每个分项都必须给出数值，不得省略。',
+    '`suggests` 必须落到具体字段与具体补法，例如「pose[0].description 缺表情与左手落点，补：嘴角放松上提、左手扶帽檐」；禁止「提升美感」「优化构图」这类空话。',
+    '审查时按【风格档案】核对 styleHit：画面是否命中该档案取向；retouchLevel=none 时若出现影棚布光感，styleHit 记不达标。',
+    '真实底线分项（anatomy/material/physical）不因任何风格取向放宽。',
+    styleProfile ? renderStyleProfileBlock(styleProfile) : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 /** 组装用户输入：提取对评审有意义的浓缩信息（不塞整图进文本循环） */
@@ -94,13 +185,14 @@ function buildScoreUserText(input: ImageScoreInput): string {
 export class ImageScoreService {
   constructor(private readonly aiConfigService: AiConfigService) {}
 
-  /** 逐项一致性 + 多维质量评分；低分/解析失败 → 保守 retry 不抛 */
+  /** 逐项一致性 + 总分/审美分项/真实分项三段闸门；不达标或解析失败 → 保守 retry 不抛 */
   async score(input: ImageScoreInput): Promise<ScoreResult> {
     const cfg = await this.aiConfigService.getActiveConfig();
     const endpoint = input.judgeModel ?? cfg.text;
+    const profile = input.styleProfile ? normalizeStyleProfile(input.styleProfile) : undefined;
 
     const content = await textChat(endpoint, {
-      systemPrompt: buildScoreSystemPrompt(),
+      systemPrompt: buildScoreSystemPrompt(profile),
       userText: buildScoreUserText(input),
       temperature: 0.3,
       jsonMode: true,
@@ -116,6 +208,8 @@ export class ImageScoreService {
       typeof json.score === 'number' && Number.isFinite(json.score)
         ? clampNumber(json.score, 0, 1) ?? 0
         : 0;
+    const aesthetics = parseScoreGroup(json.aesthetics, AESTHETICS_KEYS);
+    const realism = parseScoreGroup(json.realism, REALISM_KEYS);
     const reasons = Array.isArray(json.reasons)
       ? json.reasons.filter((s): s is string => typeof s === 'string')
       : [];
@@ -123,11 +217,14 @@ export class ImageScoreService {
       ? json.suggests.filter((s): s is string => typeof s === 'string')
       : [];
 
+    const gate = evaluateGate({ score: rawScore, aesthetics, realism, textOnly: input.textOnly });
     return {
       score: rawScore,
-      verdict: rawScore >= SCORE_PASS_THRESHOLD ? 'pass' : 'retry',
-      reasons,
+      verdict: gate.pass ? 'pass' : 'retry',
+      reasons: [...reasons, ...gate.fails],
       suggests,
+      ...(aesthetics ? { aesthetics } : {}),
+      ...(realism ? { realism } : {}),
     };
   }
 }
