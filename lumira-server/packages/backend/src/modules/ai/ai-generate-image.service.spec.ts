@@ -6,7 +6,12 @@
 // meta 非对象 400 / meta 缺省空草稿兜底 / 无参考图字段缺省 / 结果透传 / 润色失败回退。
 
 import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
-import { AiGenerateImageService, hardenPhotoRealism } from './ai-generate-image.service';
+import {
+  AiGenerateImageService,
+  hardenPhotoRealism,
+  PHOTO_REALISM_BASELINE_SUFFIX,
+  RETOUCH_REALISM_SUFFIX,
+} from './ai-generate-image.service';
 import { AiConfigService } from './ai-config.service';
 import { generateImage } from './image-client';
 import { buildImagePrompt } from './image-prompt.builder';
@@ -204,12 +209,48 @@ describe('AiGenerateImageService', () => {
 
 describe('hardenPhotoRealism 自拍设备负面清单', () => {
   it('自拍（selfie=true）：出口末尾追加拍摄设备负面清单', () => {
-    const out = hardenPhotoRealism('提示词', true);
+    const out = hardenPhotoRealism('提示词', { selfie: true });
     expect(out).toContain('不出现手机、相机、三脚架');
     expect(out.indexOf('不出现手机、相机、三脚架')).toBeGreaterThan(out.indexOf('提示词'));
   });
 
   it('非自拍（默认）：不追加该清单', () => {
     expect(hardenPhotoRealism('提示词')).not.toContain('不出现手机、相机、三脚架');
+  });
+});
+
+describe('hardenPhotoRealism 精修档分档', () => {
+  it('分档加固：三档结尾句不同；确定性不含「轻微噪点」「禁止影楼写真」「网红精修风」', () => {
+    const none = hardenPhotoRealism('P', { retouchLevel: 'none' });
+    const light = hardenPhotoRealism('P', { retouchLevel: 'light' });
+    const polished = hardenPhotoRealism('P', { retouchLevel: 'polished' });
+
+    expect(none).toContain(RETOUCH_REALISM_SUFFIX.none);
+    expect(light).toContain(RETOUCH_REALISM_SUFFIX.light);
+    expect(polished).toContain(RETOUCH_REALISM_SUFFIX.polished);
+    for (const p of [none, light, polished]) {
+      expect(p).not.toContain('轻微噪点');
+      expect(p).not.toContain('禁止影楼写真');
+      expect(p).not.toContain('网红精修风');
+      expect(p).toContain('禁止：动漫、二次元、漫画、插画');
+      expect(p).toContain(PHOTO_REALISM_BASELINE_SUFFIX);
+    }
+  });
+
+  it('不传 opts：默认 none 档，且与旧调用兼容（返回包含原 prompt）', () => {
+    const out = hardenPhotoRealism('原提示词');
+    expect(out).toContain('原提示词');
+    expect(out).toContain(RETOUCH_REALISM_SUFFIX.none);
+  });
+
+  it('generate()：从 draft.styleProfile 读取 retouchLevel 传给加固', async () => {
+    const { service } = buildService();
+    generateImageMock.mockResolvedValueOnce({ base64: 'eA==', mimeType: 'image/png' });
+    await service.generate(
+      undefined,
+      JSON.stringify({ styleProfile: { archetype: 'fashion_editorial', retouchLevel: 'polished' } }),
+    );
+    const [, input] = generateImageMock.mock.calls[0];
+    expect(String(input.prompt)).toContain(RETOUCH_REALISM_SUFFIX.polished);
   });
 });

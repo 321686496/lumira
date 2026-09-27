@@ -8,7 +8,8 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { UploadFile } from '../templates/admin-templates.service';
 import { AiConfigService } from './ai-config.service';
 import { GenerateImageResult, generateImage, mapSize } from './image-client';
-import { buildImagePrompt, isSelfieDraft } from './image-prompt.builder';
+import { buildImagePrompt, isSelfieDraft, retouchLevelOfDraft } from './image-prompt.builder';
+import type { RetouchLevel } from './style-profile.presets';
 import { composeImagePrompt } from './image-prompt.composer';
 import type { ResearchItem } from './trend-research/research-item';
 
@@ -78,15 +79,36 @@ function extractAspectRatio(draft: Record<string, unknown>): string | undefined 
  * 整理得好坏，进入生图 API 的永远是「实拍照片」语境。
  */
 const PHOTO_REALISM_PREFIX = '一张真实相机直出的实拍照片：';
-const PHOTO_REALISM_SUFFIX =
-  '。真实摄影质感：皮肤为真实人类皮肤材质——可见毛孔、细小绒毛、轻微油光与肤色不均，绝不磨皮、绝不过度光滑发亮；布料、道具、街景均为真实材质纹理；光线来自真实环境光源，有自然的衰减、散射与阴影过渡；画面带轻微噪点与白平衡偏差，像随手抓拍的实拍照片。禁止：动漫、二次元、漫画、插画、赛璐璐、厚涂、CG、3D 渲染、油画、游戏立绘、影楼写真、网红精修风。';
+/** 恒定保留的真实底线（与风格档案无关）：媒介真实 + 解剖真实 + 可实拍 + 真实材质 */
+export const PHOTO_REALISM_BASELINE_SUFFIX =
+  '真实照片媒介，不是动漫、二次元、漫画、插画、赛璐璐、厚涂、CG、3D 渲染、油画或游戏立绘；' +
+  '真实人体结构与解剖，无肢体、手指与面部畸变；可实拍复现，无无源光、无不可能透视与姿势；' +
+  '真实材质，皮肤有毛孔与绒毛、布料有纹理、环境光有衰减与阴影过渡。' +
+  '禁止：动漫、二次元、漫画、插画；禁止无源光与不可能透视；禁止肢体与面部畸变。';
+/** 按精修档追加的质感句（不再把写真/大片当贬义） */
+export const RETOUCH_REALISM_SUFFIX: Record<RetouchLevel, string> = {
+  none: '自然环境光与生活化瞬间感，保留真实的环境明暗关系。',
+  light: '干净通透，光比克制，皮肤保留真实毛孔与绒毛，不磨皮。',
+  polished: '布光精致考究、调色讲究、明暗层次分明，但皮肤、布料与道具仍是真实材质纹理。',
+};
 /** 自拍（前置）专属负面清单：第一人称自拍里拍摄设备就是镜头本身，绝不能出现在画面里 */
 const SELFIE_DEVICE_SUFFIX =
   '本张为第一人称前置摄像头自拍：镜头即人物本人视点、距面部约一臂之内、只呈现上半身或近景，人物视线看向镜头。画面中不出现手机、相机、三脚架、自拍杆等拍摄设备，不出现举着设备的手臂，也不出现镜中反射的拍摄者。';
 
-export function hardenPhotoRealism(prompt: string, selfie = false): string {
-  const suffix = selfie ? `${PHOTO_REALISM_SUFFIX}${SELFIE_DEVICE_SUFFIX}` : PHOTO_REALISM_SUFFIX;
-  return `${PHOTO_REALISM_PREFIX}${prompt}${suffix}`;
+export interface HardenOptions {
+  selfie?: boolean;
+  retouchLevel?: RetouchLevel;
+}
+
+export function hardenPhotoRealism(prompt: string, opts: HardenOptions = {}): string {
+  const { selfie = false, retouchLevel = 'none' } = opts;
+  const parts = [
+    `${PHOTO_REALISM_PREFIX}${prompt}`,
+    RETOUCH_REALISM_SUFFIX[retouchLevel],
+    PHOTO_REALISM_BASELINE_SUFFIX,
+  ];
+  if (selfie) parts.push(SELFIE_DEVICE_SUFFIX);
+  return parts.join(' ');
 }
 
 @Injectable()
@@ -141,7 +163,10 @@ export class AiGenerateImageService {
     );
     // 网络生图（含 qwen 异步轮询/结果下载）纳入全局并发闸门，避免并发打爆上游厂商
     // prompt 出口统一照片写实加固（媒介声明 + 真实材质 + 反动漫负面清单；自拍追加第一人称视角与设备负面清单）
-    const hardenedPrompt = hardenPhotoRealism(prompt, isSelfieDraft(draft));
+    const hardenedPrompt = hardenPhotoRealism(prompt, {
+      selfie: isSelfieDraft(draft),
+      retouchLevel: retouchLevelOfDraft(draft),
+    });
     const imageResult = await imageSemaphore.run(() => generateImage(cfg.image, {
       prompt: hardenedPrompt,
       size: mapSize(cfg.image.provider, extractAspectRatio(draft)),
