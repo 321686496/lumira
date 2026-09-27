@@ -3,7 +3,7 @@
 // 有图走 visionChat（文字作补充要求）/ 仅文字走 textChat → extractJson → normalizeDraft
 // 设计文档：docs/specs/2026-09-09-ai-template-one-click-creation-design.md 第三节/第五节
 
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Optional } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { templateCategories } from '../../database/schema';
@@ -23,6 +23,7 @@ import type { ResearchItem } from './trend-research/research-item';
 import { renderResearchBrief } from './trend-research/research-brief';
 import { buildResearchDigest } from './trend-research/research-digest';
 import { TrendResearchService } from './trend-research/trend-research.service';
+import { StyleProfileService, type StyleProfileResolveResult } from './style-profile.service';
 import { traceNote, traceStep } from './llm-trace';
 
 /** 允许的示例图 mimetype */
@@ -46,6 +47,7 @@ export class AiAnalyzeService {
     private readonly aiConfigService: AiConfigService,
     private readonly trendResearch: TrendResearchService,
     private readonly orchestrator?: AiOrchestratorService,
+    @Optional() private readonly styleProfileService?: StyleProfileService,
   ) {}
 
   /**
@@ -99,6 +101,16 @@ export class AiAnalyzeService {
     // 3. 取启用配置（未配置/未启用 → 503 透传）
     const cfg = await this.aiConfigService.getActiveConfig();
 
+    // 3.4 风格定位：只判定一次，供草稿生成 / 编排 / 评审 / 生图分流（失败降级不阻断链路）
+    let styleResolve: StyleProfileResolveResult | undefined;
+    if (this.styleProfileService) {
+      styleResolve = await this.styleProfileService.resolve({
+        text: trimmedText,
+        creationReq: extra.creationReq ?? undefined,
+      });
+    }
+    const styleProfile = styleResolve?.profile;
+
     // 3.5 研究前置：搜索开启且主题非空 → 先搜后写草稿。
     //     检索命中后由文本模型二次整理成结构化结论（ResearchBrief），再把整理后的资料注入
     //     草稿生成提示词，让结构性数据（主题/风格/场景/姿势描述）贴合当下趋势；
@@ -136,7 +148,7 @@ export class AiAnalyzeService {
         '识图生成模板草稿',
         () =>
           visionChat(cfg.vision, {
-            systemPrompt: buildAnalyzeSystemPrompt(categories),
+            systemPrompt: buildAnalyzeSystemPrompt(categories, styleProfile),
             userText: buildAnalyzeUserPrompt({
               textDesc: extra.textDesc?.trim() || trimmedText || undefined,
               creationReq: extra.creationReq,
@@ -157,7 +169,7 @@ export class AiAnalyzeService {
         '文字构思模板草稿',
         () =>
           textChat(cfg.text, {
-            systemPrompt: buildTextOnlySystemPrompt(categories),
+            systemPrompt: buildTextOnlySystemPrompt(categories, styleProfile),
             userText: buildTextOnlyUserPrompt({
               textDesc: trimmedText,
               creationReq: extra.creationReq,
@@ -179,6 +191,8 @@ export class AiAnalyzeService {
     }
 
     // 6. 归一化（枚举校验 / 分类链校验 / 数值夹取，非法值丢弃并收集 warnings）
+    //    风格档案写入草稿顶层，normalizeDraft 白名单已放行
+    if (styleResolve) json.styleProfile = styleResolve.profile;
     const normalized = normalizeDraft(json, categories);
 
     // 7. 研究管线开启（orchestrator 已接入）→ 走 Agentic 再判：以单次识别草稿为基，
@@ -192,7 +206,7 @@ export class AiAnalyzeService {
         creationReq: extra.creationReq ?? undefined,
         poseCount: poseCount ?? undefined,
       };
-      const r = await this.orchestrator.run(input, { categories, draft: json, research });
+      const r = await this.orchestrator.run(input, { categories, draft: json, research, styleProfile: styleResolve });
       return { draft: r.draft, warnings: r.warnings, trace: r.trace, raw: json, research: r.research ?? [] };
     }
 

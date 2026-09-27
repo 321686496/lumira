@@ -458,5 +458,10 @@ export function normalizeDraft(raw: unknown, categories: CategoryNode[]): Normal
   // ===== poseRefSheet（姿势参考面片，透传 object；Task 9 新增，仅接收合法对象）=====
   if (isPlainObject(src.poseRefSheet)) draft.poseRefSheet = src.poseRefSheet;
 
+  // ===== styleProfile（风格档案，Task 12 新增）：形状校验（必须有合法 archetype 字符串），非法时丢弃 =====
+  if (isPlainObject(src.styleProfile) && typeof (src.styleProfile as Record<string, unknown>).archetype === 'string') {
+    draft.styleProfile = { ...(src.styleProfile as Record<string, unknown>) };
+  }
+
   return { draft, warnings };
 }

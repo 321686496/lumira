@@ -367,3 +367,52 @@ describe('AiAnalyzeService — 多输入', () => {
     expect(visionChatMock).not.toHaveBeenCalled();
   });
 });
+
+describe('AiAnalyzeService — 风格定位接线', () => {
+  const CFG_WITH_SEARCH = { ...ACTIVE_CFG, search: { enabled: true } };
+
+  function buildWithSearch(orchestrator: unknown, styleProfileService: unknown) {
+    const select = jest.fn(() => chainable(CATEGORY_ROWS));
+    const dbService = { getDb: () => ({ select }) } as unknown as DatabaseService;
+    const aiConfigService = { getActiveConfig: async () => CFG_WITH_SEARCH } as unknown as AiConfigService;
+    const trendResearch = {
+      research: jest.fn().mockResolvedValue({ items: [], brief: null, sourceErrors: [] }),
+    } as unknown as TrendResearchService;
+    return new AiAnalyzeService(dbService, aiConfigService, trendResearch, orchestrator as never, styleProfileService as never);
+  }
+
+  it('注入 styleProfileService：档案段落进入系统提示词，且透传给 orchestrator', async () => {
+    textChatMock.mockResolvedValueOnce(JSON.stringify(RAW_DRAFT));
+    const styleProfileService = {
+      resolve: jest.fn().mockResolvedValue({
+        profile: {
+          category: 'portrait', archetype: 'fashion_editorial', aestheticTarget: '杂志大片',
+          subjectStyling: '驼色大衣', expressionMood: '冷峻', poseLanguage: '张力',
+          lightingSignature: '硬光', compositionBias: '对角线', paletteHint: '高级灰',
+          retouchLevel: 'polished', extraNotes: '灰墙',
+        },
+        source: 'llm',
+        note: '时尚大片/portrait/polished',
+      }),
+    };
+    const orchestrator = { run: jest.fn().mockResolvedValue({ draft: RAW_DRAFT, trace: [], warnings: [], research: [] }) };
+    const svc = buildWithSearch(orchestrator, styleProfileService);
+
+    await svc.analyze(undefined, '秋冬时尚大片人像', { poseCount: '1' });
+
+    expect(styleProfileService.resolve).toHaveBeenCalledTimes(1);
+    const systemPrompt = String(textChatMock.mock.calls[0][1].systemPrompt);
+    expect(systemPrompt).toContain('本次风格档案');
+    expect(systemPrompt).toContain('驼色大衣');
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ styleProfile: expect.objectContaining({ source: 'llm' }) }),
+    );
+  });
+
+  it('未注入 styleProfileService 时链路不报错（向后兼容）', async () => {
+    textChatMock.mockResolvedValueOnce(JSON.stringify(RAW_DRAFT));
+    const { service } = buildService();
+    await expect(service.analyze(undefined, '奶油风人像', { poseCount: '1' })).resolves.toBeDefined();
+  });
+});

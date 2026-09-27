@@ -22,6 +22,7 @@ import type { ImageScoreInput } from './image-score.service';
 import { DraftRefineService } from './draft-refine.service';
 import { normalizeDraft } from './normalize';
 import type { CategoryNode } from './normalize';
+import type { StyleProfileResolveResult } from './style-profile.service';
 import { traceNote, traceStep } from './llm-trace';
 
 /** 单条 trace：记录各阶段发生了什么（供后台展示/调试） */
@@ -46,6 +47,8 @@ export interface OrchestratorRunOptions {
   draft?: Record<string, unknown>;
   /** 识别阶段前置搜索的结果；数组（含空数组）= 已预计算，orchestrator 直接复用不再搜索 */
   research?: ResearchItem[];
+  /** 调用方（ai-analyze）已完成的风格定位结果；未传时编排内自行兜底解析 */
+  styleProfile?: StyleProfileResolveResult;
 }
 
 export interface OrchestratorResult {
