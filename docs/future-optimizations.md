@@ -880,6 +880,7 @@
 - **模块**：Flutter OHOS 原生插件（`lumira_app_flutter/ohos/entry/src/main/ets/plugins/ImageProcessorPlugin.ets`）
 - **优化点**：`processJpeg` / `decodeJpegToRgba` / `encodeJpegFromRgba` 虽为 `async`，但全部运行在 ArkTS 平台线程（即 Flutter UI 线程）。连拍时「快门冻结帧编码 + 每张成片原生调色 + 早帧初版成片」会串行挤在同一线程上执行，直接冻结 UI（本次已去掉 Dart 侧整文件读尺寸等主线程开销，但原生侧大头未动）。
 - **背景/动机**：同一线程的模型意味着任何原生图像重活都会转成掉帧，这是连拍手感卡顿的结构性原因；本次为控制改动面（需重新构建 OHOS 原生 + 真机验证）未动。
+- **taskpool 可行性（已核查）**：`processJpeg` 依赖 NAPI 原生模块 `libphoto_processor.so`（`nativeProcessor.processRgba`）完成色彩矩阵/磨皮/锐化，且 `nativeProcessor.processRgba` 是**同步调用**（阻塞在调用线程=ArkTS 平台线程上执行）。taskpool 的 `@Concurrent` 函数对 NAPI 模块加载有额外限制，故不能简单整体搬进 taskpool；更可行的方向是：①「系统解码 + 像素裁剪 + native processRgba + 编码写盘」整段仍留平台线程，但把 `processRgba` 改为**投递到 C++ 侧工作线程**执行（NAPI async work / 独立线程），仅回调回到平台线程；②或把纯 ArkTS 的行拷贝裁剪与 R/B 交换等搬入 taskpool，重活仍由 C++ 承担。
 - **目标状态**：把图像处理搬进 `taskpool`（或原生 C++ 工作线程）执行，只把结果回传平台线程；同时评估「快门冻结帧可否改为降采样尺寸编码」进一步压低耗时。
 - **状态**：⏳ 待优化
 
@@ -891,13 +892,87 @@
 - **目标状态**：把早帧请求改为按 ctx 入队（与 `_photoDirectQueue` 同构），或让早帧事件带上 photoId，使连拍每张都能独立拿到早帧；Dart 侧 FIFO 配对逻辑可直接退化为按 id 精确配对。
 - **状态**：⏳ 待优化
 
-### P2 · 原生增强兜底路径用模块级全局存放本帧上下文，并发不安全
+### P0 · OHOS 拍照通路无法并发：连拍的后续帧既会失败、又必然晚于按下时刻
 
-- **模块**：Flutter OHOS 原生插件（`CameraState.ets` `saveCameraPhoto` / `MediaDataHandler` / 顶层 `savePhotoPath` `savePhotoCtx` `takePhotoResult` `photoRequestId`）
-- **优化点**：`photoAvailable` 直出路径已按 per-capture ctx 配对（并发安全）；但增强兜底路径（设备不支持分段式拍照、`directDone == false` 时走）把本帧的 path/ctx/result 存进**模块级全局**，并额外有 `photoRequestId` 单槽早退（早退时不给 `result.success/false`，Dart 侧会一直等到 10s 超时）。放开拍照并发后，若设备走的是这条路径，连拍可能出现「后一张覆盖前一张、只落一张」。
-- **背景/动机**：目标设备实测走 `photoAvailable` 直出路径（成片为原始直出、早帧由 `requestEarlyFrameForAnimation` 交付），该兜底路径未在本机触发，故本次未改原生代码；但真机连拍验证若出现丢片，根因即在此。
-- **目标状态**：把 `path`/`result`/`ctx`/`directDone` 改为经 `MediaDataHandler` 构造函数按请求传入，去掉模块级全局与 `photoRequestId` 单槽守卫，使兜底路径同样支持并发。
-- **状态**：⏳ 待优化
+- **模块**：Flutter OHOS 原生插件（`packages/camerawesome_ohos/ohos/src/main/ets/components/cameraX/CameraState.ets` `takePhoto` / `photoOutput` 回调 / `saveCameraPhoto` + `MediaDataHandler` 模块级全局）
+- **优化点**：`takePhoto()` 的 native `result` 要等相册直出写盘（`photoAvailable`）才回调，Dart 侧只能串行排队。**实测放开并发后连拍直接失败**（2026-09-26 真机）：并发发起时只有首个请求被交付，后续请求的 `result` 永不回调 → Dart 侧 10s 超时提示「拍照失败」。因此目前只能保持串行，代价是第 2..n 张的 native capture 被推迟到前一张写完之后（~1.9s/张）→ 成片帧比按快门时刻晚约 1.9s×(n-1)，这正是用户报告的「成片变成看着照片那段时间的画面」。另：增强兜底路径把 `savePhotoPath`/`savePhotoCtx`/`takePhotoResult`/`photoRequestId` 存成模块级全局，`photoRequestId` 单槽早退时不给 result 回调，同样会触发超时。
+- **背景/动机**：原生已把 ctx 分别压入 `_photoDirectQueue`/`_photoAssetQueue` 并在回调里出队配对（注释也写了「连拍安全」），但 `photoOutput` 对快速连续 `capture()` 的交付能力仍是单发的；Dart 层无论怎样调度都无法绕开。本次已回退并发、保留串行，先保证可用。
+- **诊断探针（已落地，真机已跑，见下方探针实测）**：为定位「并发时后续请求为何不回调」，已加最小、可丢弃的探针：
+  - 原生（`CameraAwesomeX.takePhoto` / `CameraState.takePhoto`、`photoPathResult`、`photoOutput` 各回调）新增 `[probe]` 日志（经既有 `bridgeNativeLog` → Flutter console 的 `[native]`），记录拍照序号、入队与出队时的两队列深度、`capture()` 是否抛错、以及 `captureStart`/`frameShutter`/`captureEnd`/`photoOutput error` 事件。关键判据：并发发起两次若 `frameShutter`/`captureEnd` 也只出现一行，则属 (a) 框架层丢弃了第 2 次曝光；若出现两行，则属 (b) 抓了帧但交付回调被吞。
+  - 顺带修复了 `CameraAwesomeX.takePhoto` 未接 `catch` 的隐患（`takePhoto()` 的 Promise 拒绝此前被静默吞掉，是 (c) 场景不可见的根因），现以 `[probe] takePhoto#N REJECTED` 显式暴露。
+  - Dart 侧新增编译期开关 `--dart-define=OHOS_CAPTURE_CONCURRENCY_PROBE=true`（默认 false 保持串行，关闭时分支被编译期消除）：开启后 OHOS 跳过 `_captureChain` 直接并发发起，以复现问题并采集上述日志。
+- **串行基线实测（已跑，2026-09-26 真机日志，错帧实锤并量化）**：用户 1 秒内连按 3 次快门（13.491/13.856/14.495），`frameShutter`（传感器实际曝光时刻）仅第 1 张及时（快门后 +62ms），第 2/3 张分别在按快门后 **+3.57s / +6.08s** 才曝光。关键数据：`capture()` 调用本身只要 30-51ms（曝光很快，慢的是等交付）；`photoAssetAvailable` 兜底交付只要 400-535ms（此前 ~1.9s 估算偏保守，1.9s 实为含 HIGH_QUALITY 取数+result 回调的整段）；`photoAvailable` 直出在本机始终不触发（全走兜底，且 `captureEnd frameCount=0`）；单张串行全链 3.4-9.1s（`cameraService.capture` 实测 3434/6622/9080ms）。铁证：第 2/3 张的路径文件名时间戳（capture_…56937/…60481）与第 1/2 张 `cameraService.capture` 完成的毫秒数完全相等——闸门放行瞬间才生成文件名、才发起曝光。含义：错帧不是「曝光慢」，而是「曝光被串行链推迟」；解耦「受理/交付」方向不变。
+- **探针实测（已跑，2026-09-26 真机日志，判定定案：(c) + 两个连环放大器）**：`--dart-define=OHOS_CAPTURE_CONCURRENCY_PROBE=true` 下 4 次快门间隔 150-300ms 并发发起：
+  - **判定 (c) 成立**：#1 `capture()` OK +30ms（captureStart id=6009 + frameShutter）；#2/+149ms、#3/+376ms 的 `capture()` 分别 **3ms/6ms 即同步抛 `code=7400102 Operation not allowed`**——框架是主动拒绝，第 2/3 次曝光根本没发起（既非静默吞回调，也非「抓帧后吞交付」）。
+  - **忙窗口实测 ≈ 0.4-0.7s**：#4 在 #1 `capture()` 后 678ms 重试成功（captureStart id=6010），且**早于** #1 的 `captureEnd`（49.070，本机该事件 `frameCount=0` 无意义）→ 忙窗口不是等 captureEnd 释放，原生内部按 ~0.3-0.7s 节奏串行重试 `capture()` 可行（连拍曝光节奏可达 ~1.5-3 张/秒）。
+  - **放大器一（队列错配）**：`capture()` 抛错后 ctx 仍留在 `_photoDirectQueue`/`_photoAssetQueue`（takePhoto 的 catch 只打日志，不出队、不回 result）。物理照片只有 2 张，`photoAssetAvailable` 也只回调 2 次，但 FIFO shift 出的是 #1 与 **#2 的 ctx**——#4 的照片被配对到 #2 的请求，#3/#4 的 ctx 永远滞留队列。
+  - **放大器二（单槽守卫）**：错配的 #2 ctx 走到 `saveCameraPhoto` 时命中模块级 `photoRequestId` 单槽守卫**直接 return（不回 result）** → #2/#3/#4 的 Dart future 全部悬挂，10s 超时（58.343/58.567/58.789，与各自 takePhoto enter 精确相差 10.00s）；唯一完成的 #1 耗时 3419ms。即便没有守卫，错配也会把 #4 的照片写进 #2 的路径（内容错帧的另一诱因）。
+  - **修复方向（据此定案）**：① 入队时机后移——`capture()` 成功后才 push ctx（队列成员=真实曝光，FIFO 配对天然正确，消灭错配与滞留）；② `capture()` 抛 7400102 时原生内部按 ~250-300ms 重试排队（忙窗口实测可接受），不再上抛导致该帧丢失；③ `saveCameraPhoto` 的 `photoRequestId`/`savePhotoPath`/`takePhotoResult`/`savePhotoCtx` 全局单槽改为按 ctx 传递，允许并发增强交付且守卫命中也必须回 result；④ 可选：takePhoto 受理即回 result、交付走事件流，进一步消除 Dart 10s 超时约束。
+- **目标状态**：原生把「受理拍照」与「交付结果」解耦——`takePhoto` 的 result 在 `photoOutput.capture()` 受理后（或拿到 buffer 的瞬间）立即回调，写盘/编码放后台异步；同时确认 OHOS 是否允许连续 `capture()` 排队触发多次曝光。若硬件通路本身不支持快节奏连拍，则需改用系统的连拍/视频流取帧通路（较大改造，需产品确认连拍定位）。顺带把兜底路径的模块级全局改为 `MediaDataHandler` 构造函数按请求传入，去掉 `photoRequestId` 单槽守卫。
+- **修复落地记录（2026-09-26，按上述修复方向①②③实施，④未实施）**：
+  - ① 入队后移（`CameraState.takePhoto`）：ctx 仅在 `photoOutput.capture()` 受理成功后才 push 进 `_photoDirectQueue`/`_photoAssetQueue`，入队顺序 = 受理顺序 = 帧交付顺序，FIFO 配对天然成立；capture 抛错/重试耗尽/`photoOutput` 已释放时均 `result.success(false)` 必达，不再产生队列滞留。
+  - ② 忙窗口重试：`capture()` 抛 7400102 时原生内部按 300ms 间隔重试（≤20 次 ≈6s < Dart 10s 超时），不再上抛丢帧；每轮重试前自查 `photoOutput` 是否已释放（releaseCamera 竞态安全）。
+  - ③ per-ctx 交付：删除模块级全局 `savePhotoPath`/`takePhotoResult`/`photoRequestId`/`savePhotoCtx` 及单槽守卫；`saveCameraPhoto` 的 path/result/ctx 全部经构造参数注入 `MediaDataHandler`，`onDataPrepared` 中 `ctx.directDone` 为 true（photoAvailable 已回过 result）时静默跳过增强覆盖——result 必达且恰好一次。
+  - Dart 侧配套：`camerawesome_camera_service.dart` 对 OHOS 跳过 `_captureChain` 串行闸门直接并发受理（Android/iOS 维持串行）；诊断编译期开关 `OHOS_CAPTURE_CONCURRENCY_PROBE` 已删除。
+  - 验证状态：`flutter build hap --debug` 编译通过（ArkTS 零错误）、`flutter analyze` 无新增告警；**待真机验证**（预期：连拍无 10s 超时、成片帧时刻贴近按快门瞬间、无内容错位），验证通过后清理 `[probe]` 诊断日志。
+- **真机验证结果（2026-09-26 真机日志，修复①②③验证失败，暴露两个新根因）**：
+  - 对照：旧构建（14:57，PID 1720）4 次快门中只有 #1 成功（`[perf] cameraService.capture: 3419ms`），#2/#3 `capture()` 抛 7400102 被拒、#2/#3/#4 全部 10s 超时；新构建（16:07/16:08，PID 29246）**从「1 张成功」退化为「全部超时」**（#1/#3/#5/#6/#7 无一完成）。
+  - **根因 A（修复②重试从未生效）**：真机该错误的 `code` 可能是 `undefined`，错误号只出现在 message 文本里（旧构建日志 `code=undefined msg=capture() failed code=7400102 msg=Operation not allowed.`）→ `be?.code === 7400102` 恒为 false → `retry=false`，300ms 重试逻辑一次都没跑，受理失败帧直接 `result.success(false)`，Dart 侧表现为 `Bad state: Camera capture failed: <path>`。
+  - **根因 B（修复③把「单发可用」改成「并发饿死」）**：本机 `MediaAssetManager.requestImageData(HIGH_QUALITY_MODE)` **仅在「单请求在飞」时才回调 `onDataPrepared`**——旧构建单请求在飞时 2.1s 正常交付（#1 的 3419ms 即由它驱动）；新构建 5 个请求并发在飞时**无一条回调**（日志里 `[perf-cam] fallback: fd early frame + HIGH_QUALITY deliver` 出现了 5 次，却全程无任何交付日志），于各相差 10.00s 超时。即：被删掉的单槽 `photoRequestId` 守卫虽会吞 result，但它顺带保证了「单发」这一可用性前提。
+  - 次要缺陷（一并修复）：`photoAssetAvailable` 的 `err` 分支直接 `return`（不出队、不回 result）→ 该帧必然悬挂 10s；`onDataPrepared` 的 `data === undefined` 分支在 `photoAvailable` 已回过 result 时存在二次回调风险。
+- **修复④落地记录（2026-09-26，按真机结果定案，仅改原生 ArkTS）**：
+  - A. 忙窗口判定改为双路：`Number(be?.code) === 7400102 || String(be?.message).indexOf('7400102') >= 0`，兼容「code=undefined、错误号在 message 文本」的真机形态，重试得以真正生效。
+  - B. 显式 FIFO 串行闸门（`_enhancedQueue` + `_enhancedInFlightItem` + `drainEnhancedQueue`）：恢复「一次仅一个 `requestImageData` 在飞」这一本机可用前提；不再依赖单槽守卫，故也保留了「多帧各自 result 必达」。
+  - C. 每帧看门狗（`_enhancedWatchdogMs = 7000`，自**入队**起算，覆盖排队等待中的帧）：超时或 `requestImageData` reject 时，用同帧早帧 fd 直拷已落盘的原始 JPEG（新增 `ctx.earlyFramePath`，由 `tryEarlyFrameFd` 写成功时记录）覆盖目标路径交付——它与增强图同为该帧全尺寸原始 JPEG，仅未经相册增强，换取「不超时、不丢帧」；早帧不可用时现取一次只读 fd 直拷；均失败才 `success(false)`（立即报错而非悬挂）。因看门狗自入队起算，任意连拍长度下单帧最迟约入队+7s（≈按快门+7.4s）回 result，恒小于 Dart 侧 10s 超时。
+  - D. result 恰好一次收口：`settleEnhancedItem` 统一结算并释放闸门；`ctx.directDone === true` 视为「result 已由 photoAvailable 回调」，所有结算路径据此只静默结算不二次 success；`photoAssetAvailable` 的 err 分支改为**先出队再回 result**；`releaseCamera` 同时 drain 增强队列（避免切镜头/退出时白等看门狗）。
+  - 未采纳项：④「受理即回 result、交付走事件流」仍未实施（本次以看门狗兜底达到同等「不超时」效果，改动面更小）。
+  - 已知取舍：连拍 ≥4 张时后面的帧可能因看门狗降级为「原始 JPEG 成片」（未经相册增强）；另外若 `capture()` 被受理但框架始终不发 `photoAvailable`/`photoAssetAvailable`（如媒体库落盘失败），仍只有 Dart 10s 超时兜底，未加第二层原生交付看门狗。
+  - 验证状态：`flutter build hap --debug` 编译通过（ArkTS 零错误）；**待真机验证**（预期：连拍不再出现 10s 超时；单张走增强图、密集连拍后段自动降级原始 JPEG），验证通过后清理 `[probe]` 诊断日志。
+- **真机验证结果（2026-09-26 20:59 真机日志，修复④「不再超时」成立，但暴露成品降级）**：
+  - 超时问题已解决：7 帧全部在入队 +7s 看门狗回 result（`cameraService.capture` 7577/7464/7583/8043/9241/9304/9731ms，均 < Dart 10s）；`capture()` 受理成功、无 `7400102` 抛错。
+  - **新缺陷（用户报告「成品照片跟早帧没什么区别」）实锤**：7 帧全部 `WATCHDOG fired` → `fallback raw JPEG bytes=<N>`，且 N 与同帧 `earlyFrameFd: copied bytes=<N>` **逐字节相同**（如 2573382、2620082）→ 成品就是早帧文件原样拷贝；全程 **0 次 `enhanced: saved`**（增强图从未交付）。
+  - 同时推翻修复④的两条推断：① 本机 `requestImageData(HIGH_QUALITY_MODE)` 并非「单请求在飞即可交付」——20:59:01.501 第 1 帧 `qLeft=0` 严格单发、`requestId` 正常返回，7s 内仍零回调；② `enhanced: saved` 在修复④构建里从未出现，说明回调丢失与「并发」无关。
+- **修复⑤落地记录（2026-09-26，根因：handler 回调 this 绑定）**：
+  - **根因**：`MediaDataHandler`（及 `EarlyFrameHandler`）把 `onDataPrepared` 写成**类方法**，方法体内访问 `this.onDataPreparedInternal` / `this.path` 等成员。框架回调不保证以 `handler.onDataPrepared(...)` 形式绑定调用；一旦 unbound 调用，`this` 为 `undefined`，回调在取成员时抛错并被框架静默吞掉 → `onDataPrepared` 永不生效（`requestId` 照常返回、result 只能等看门狗）。对照旧构建：旧 `MediaDataHandler.onDataPrepared` 只读写**模块级全局**，完全不依赖 `this`，故反而能正常交付（14:57 旧构建 #1 的 3419ms 即由它驱动）——这正是「修复③/④ 后成品质量退化」的直接根因。官方示例同样注明「使用箭头函数确保 this 引用不会丢失」。
+  - A. `MediaDataHandler` 改为持有 `owner`（CameraState）+ `item` 两个字段，`onDataPrepared` 改为**箭头函数属性**（`onDataPrepared = async (data, map?) => {...}`），this 在构造时即绑定，不可能丢失；新增 `map?.get('quality')` 与 `bytes` 首行日志（`[perf-cam] enhanced: onDataPrepared enter`），用于判定回调是否到达及交付图质量档位。
+  - B. `EarlyFrameHandler` 同样缺陷、同样改为箭头函数属性（该路径仅在 `photoAvailable` 直出的机型触发，本机不触发，一并修正）。
+  - C. handler 引用随 `item.handler` 持有到交付结束，排除对象被回收导致回调丢失的可能。
+  - D. **成品不再取自早帧文件**：`settleEnhancedFromFallback` 改为「现取一次 asset 只读 fd 直拷」（媒体库当前真实落盘版本，可能已被升级为二阶段全清图），并打印 `fallback asset copy bytes=<N> earlyFrameBytes=<M>` 供判定是否升级；早帧副本降级为**最后手段**（仅当 asset 原文件也读不到，改打 `LAST-RESORT early frame copy` 日志，避免丢照片），全都失败才 `success(false)`。
+  - 编译期返工：首次构建报 `HarCompileArkTS` / `10505001 ArkTS Compiler Error`——`onEnhancedDataPrepared` 原声明为 `private`，但需由独立类 `MediaDataHandler` 跨类转交调用，ArkTS 拒绝（`Property 'onEnhancedDataPrepared' is private and only accessible within class 'CameraState'`）。已去掉 `private` 并加注释说明；再次构建通过。
+  - 验证状态：`flutter build hap --debug` 编译通过（ArkTS 零错误，`√ Built ohos\entry\build\default\outputs\default\entry-default-signed.hap.`）；**待真机验证**（预期：日志出现 `enhanced: onDataPrepared enter ... quality=...` 与 `enhanced: saved bytes=...`，成品不再等于早帧）。
+- **真机验证结果（2026-09-26 21:32 真机日志，PID 20737，5 次快门）**：
+  - **修复⑤ 根因确认成立（回调绑定确为根因）**：`enhanced: onDataPrepared enter bytes=... quality=high` 出现 4 次、`enhanced: saved` 出现 3 次（20:59 构建该两项均为 0 次）。帧 #1/#3/#5 成品被真实增强图替换（bytes=2851702 / 1846706 / 1944308，与各自早帧字节不同）。超时问题保持解决：5 帧 `cameraService.capture` = 4685/6963/9428/9082/3332ms，均 < Dart 10s。
+  - **残留缺陷：看门狗自「入队」起算，排队等待吃掉预算 → 连拍后段帧被误杀**。4 帧在 1s 内连拍，串行 FIFO 队列 = [#1 在飞, #3, #2, #4]；逐帧对照（源码见 `CameraState.ets` 入队处注释「自入队起算」）：
+    | 帧 | 入队 | 看门狗(入队+7s) | 请求实际开始 | 被杀时已跑 | 结果 |
+    |---|---|---|---|---|---|
+    | #1 `529144` | ~09.2s | ~16.2s | ~09.3s | — | ✅ saved 13.652s |
+    | #3 `529729` | ~09.77s | ~16.77s | 13.656s | 2.82s | ✅ saved 16.475s（余量仅 0.3s）|
+    | #2 `529485` | 11.623s | 18.871s | 16.490s | 2.38s | ❌ WATCHDOG |
+    | #4 `530009` | 11.957s | 18.964s | 18.900s | **0.064s** | ❌ WATCHDOG |
+  - #2/#4 兜底成品与早帧**逐字节相同**（2582990/2582990、2534361/2534361）→ 这 2 帧成品仍等于早帧（媒体库磁盘文件未被升级，因为 `requestImageData` 未返回）。
+  - #4 的 `onDataPrepared enter bytes=1772887` 在 22.249s 到达（= 请求开始后 3.35s，本在 7s 窗口内），但因看门狗已在请求开始后 **64ms** 就开火而被 `late data skipped (settled)` 丢弃 → 计时起点错误是**唯一**原因。
+  - 注意：#4 从入队到回调共 10.29s，已超 Dart 10s 上限 → 单纯延长看门狗不足，**串行单发的吞吐**才是瓶颈（4 连拍累计排队 4.87s + 6.94s）。
+  - **深层发现（直接解释用户「成品跟早帧没区别」的观感）**：本机早帧并非「低清」——早帧副本 2582990/2534361/2586904 字节，`[OhosImageProcessor] processJpeg src=1440x1920 out=1440x1920`，成品 `[capture] 照片文件实际尺寸: 1440x1920`。即**早帧与成品同为 1440x1920 全分辨率同一张图**，差异仅 JPEG 重编码；且成品字节数反而更小（1846706/1944308 < 早帧 2534361/2586904）→ 「先快后真」的分辨率升级在本机不存在，`requestImageData(HIGH_QUALITY_MODE)` 可能返回比媒体库原文件更小的重编码版本（待目视比对确认，勿仅凭字节数定论）。
+  - 相机档位：成片仅 1440x1920（2.76MP），远低于 `MAX_PHOTO_PIXELS=5038848`（2592x1944 恰为 5038848）；属独立于本 bug 的画质上限问题。
+- **修复⑥落地记录（2026-09-26，针对上表「看门狗计时起点错误」，原生 + Dart 双侧）**：
+  - A. 原生看门狗改为「双约束」，不再自入队起算固定 7s（`CameraState.ets`）：
+    - `EnhancedDeliveryItem` 新增 `enqueuedAtMs`；新增常量 `_enhancedQueueDeadlineMs = 9000`（入队绝对截止）。
+    - 新增 `armEnhancedWatchdog(item, budgetMs)`：`effective = max(1, min(budgetMs, enqueuedAtMs + 9000 - now))`，即「调用方预算」与「入队绝对截止剩余」取小；重挂前先 `clearTimeout` 旧 id。
+    - 入队时（`saveCameraPhoto`）传 `_enhancedQueueDeadlineMs`——排队等待中的帧同样受绝对截止保护；请求真正进入在飞时（`drainEnhancedQueue`）改传 `_enhancedWatchdogMs = 7000`，把此前排队时间还给本帧。`_enhancedWatchdogMs` 注释同步改为「自请求真正开始起算」。
+  - B. Dart 快门节流闸门（`capture_page.dart`）：按下快门即关闸门，**本帧早帧送达**（`_onEarlyFrameArrived` 配对成功后立刻开）才重新放行；关闭期间再点快门直接 `return` 无反应。安全超时 `_kOhosShutterGateTimeoutMs = 5000` 兜底放行（覆盖早帧偶发不送达）；成片仍在后台处理，不占用闸门。`dispose()` 清理 timer。
+    - 之所以必须从源头限速：上表 #4 入队→回调共 10.29s 已超 Dart 10s 上限，**任何看门狗参数都不可能救回**（修复⑥ 给 #4 的预算被绝对截止压到约 2.06s）；唯一出路是降低队列深度，让每帧都退化为「单发」语境。
+  - C. 新增档位诊断：`photoConfig` 打印 `[perf-cam] photoProfile chosen=WxH preview=WxH maxPixels=N ladder=[...]`，用于判定「成片分辨率上限」是否还有提高空间（真机现状 1440x1920，是独立于本 bug 的画质问题）。
+  - 编译期返工（记忆点）：`ohpm` 依赖安装在 Flutter 下会**间歇性失败**——`ohpm.bat` 用 PATH 里的 `node.exe`，本机系统 PATH 首位是 **node v24.11.1**（`C:\node.js\node24`），它到 `ohpm.openharmony.cn` 建连约 **10.5s**（DevEco 自带 node v18.20.1 仅约 **0.6s**），偶发超过 `fetch_timeout=60000` → `00617101 Fetch Pkg Info Failed` / `NOTFOUND package '@ohos/hypium@1.0.6'`，Flutter 工具随即崩溃退出（与代码无关）。**构建前把 `D:\devecostudio6\DevEco Studio\tools\node` 置于 PATH 首位即可稳定通过**（该项目 `ohos/.ohpmrc` 已指向 `https://ohpm.openharmony.cn/ohpm/`，registry 本身正常可达、包也存在 1.0.6）。
+  - 验证状态：`flutter build hap --debug` **编译通过**（ArkTS 零错误，`√ Built ohos\entry\build\default\outputs\default\entry-default-signed.hap.`，192.2s）；`flutter analyze lib/features/capture/pages/capture_page.dart` 0 error（仅 4 条既有 info）。**待真机验证**（预期：快门被早帧节奏限速、`enhanced: enqueue` 间隔 ≥ 早帧耗时；#2/#4 类帧不再被看门狗误杀；出现 `enhanced: saved bytes=...`；`photoProfile ladder` 给出真机档位）。
+- **修复⑦落地记录（2026-09-26，用户报告三缺陷：早帧比水印动画糊很多 / 连拍后预览只能看到第一张 / 连拍处理期 UI 卡顿）**：
+  - **缺陷 1「早帧特别模糊」根因实锤**：水印动画源 = 快门冻结帧（取景器 GPU 渲染流，含实时色彩矩阵+锐化，锐利）；预览页「早帧」= 相册资产 JPEG 经 processJpeg 的「初版成片」——静态拍照管线（多帧降噪）天然比取景器实时流软，它在 ~1.2s 时顶替了更清晰的快门帧 = 观感降级。放大器：`_kShutterFrameMaxDim=720` 把快门帧限幅低清（限幅的历史前提是 toImage+PNG 软编码 3s+；现已改 rawRgba 读回 + 原生硬件 JPEG 编码 ~150ms/2.7MP，前提已消失）。
+  - A. 快门帧限幅 720→1920（`capture_page.dart`）：= 预览流裁切后的原生内容分辨率（fullscreen 886x1920），与成片对齐，interim→final 升级不再是分辨率降级；快门帧即「按下快门瞬间的取景框内容」（WYSIWYG，用户预期）。
+  - B. 跳过「早帧初版成片」顶替（`capture_page.dart` 新增 `_shutterFrameVisiblePid`）：快门帧作为可见 interim 发布时记录 photoId；`_onEarlyFrameArrived` 命中该 pid 直接 return——快门帧保持 interim 直到成片就绪原位升级，软图不再顶替锐利快门帧。顺带省掉连拍时每张 ~500ms 的原生 processJpeg（含 ArkTS 平台线程同步段），属缺陷 3 减负之一。
+  - **缺陷 2「连拍后预览只能看到第一张」根因（三个叠加）**：(a) 首张未就绪时 stub 分支复用旧列表；(b) 历史列表只在预览页打开时加载一次，连拍 2..n 张在预览页打开后才陆续处理完成落库 → 永远不可见；(c) 新照片插入头部后 PageController 数字索引漂移导致滑动错位。
+  - C. 预览页历史动态刷新（`capture_preview_page.dart`）：新增 `ref.listenManual(captureThumbnailProvider)` 监听**任何**照片进入 final_（不限当前照片），防抖 300ms 合并重载（`_loadHistoryPhotos(applyCurrent: false)`，不重放 `_applyPhotoFromHistory`，避免重置用户未保存的编辑调整）；`_loadHistoryPhotos` 重写支持按 `_currentPhotoId` 重定位索引 + `jumpToPage`，消灭索引漂移；stub 分支恒 `[stub, ...allPhotos]`。
+  - D. 缺陷 3「连拍处理期卡顿」再减负：连拍（`_batchShutterCount > 1`）时跳过 `_writeColorDiagnostics` 与成片尺寸诊断读文件（每张 ~3.5MB×2 磁盘拷贝 + 整文件读入，debug 专用）。
+  - 验证状态：`flutter analyze` 两文件 0 error（仅存量 info lint，均不在改动行）；`flutter build hap --debug` **编译通过**（ArkTS 零错误，`√ Built ohos\entry\build\default\outputs\default\entry-default-signed.hap.`，230.2s）。**待真机验证**（预期：早帧/快门帧 1920px 清晰度对齐水印动画观感；连拍后预览页可滑动查看全部照片；连拍处理期卡顿改善；关注 `[perf] shutterFrame toImage:` 日志确认 1920px 读回耗时不拖慢快门响应）。
+- **状态**：⏳ 修复⑤根因已确证并生效（回调恢复、超时不再出现）；修复⑥已落地并编译通过（看门狗改双约束 + Dart 快门节流），**待真机验证**；修复⑦已落地并编译通过（早帧模糊/连拍预览缺张/连拍卡顿三缺陷），**待真机验证**；早帧/成品的分辨率级差异在本机不存在（`MAX_PHOTO_PIXELS` 是否提高待 `photoProfile ladder` 真机数据决策）
 
 ---
 
@@ -910,3 +985,41 @@
 - **背景/动机**：提示词改动的影响是概率性的（同一份提示词多次生成质量有波动），关键词单测只能防止「字段被静默丢弃」这类回归，挡不住「措辞变差导致画面变丑」；维护 `golden-set.service.ts` 的成本当前也偏高。
 - **目标状态**：为若干代表性题材（人像逆光 / 夜景 / 街拍 / 静物）各固化一组「草稿 + 生成图」基准样本，人工打分形成基线；后续改提示词时抽样重跑并对比基线，把「构图合理、主体落位正确、参数互洽」纳入可复现的评估口径。
 - **状态**：⏳ 待优化
+
+---
+
+## iOS 前置水印动画镜像修复（2026-09-27）
+
+> 背景：用户真机反馈「拍摄页水印动画的内容，在 iOS 前置摄像头下是镜像的」。经根因重查，本文档「OHOS 前置拍照镜像修复（2026-09-23）」中的陈述「快门帧翻转改为 `facing == 'front' && !isOhos`（iOS/Android 预览镜像保留翻转）」对 **iOS 部分失真**，本次予以更正。
+
+### P1 · iOS 前置快门冻结帧不应再水平翻转
+
+- **模块**：拍摄页快门冻结帧（Flutter `capture_page.dart` `_captureShutterViewfinderFrame` / `_doCapture`）
+- **根因**：`_captureShutterViewfinderFrame` 产出的是「屏幕空间取景器截图」，恒与相机预览同向（WYSIWYG）。原判定 `facing == 'front' && !isOhos` 让 iOS 前置额外水平翻转一次；而 iOS **非闪光成片 = 取景器 video 帧直出**（`CameraPreview.m` `captureVideoFrameToJpegAtPath` 直出 `_latestPixelBuffer`，FlutterTexture 预览与成片读的是同一帧 buffer，同为镜像，`CaptureResult.isWysiwyg = true`），方向管线亦确认「iOS 竖屏前置像素已镜像、不再补翻」（`_applyColorMatrixOnGpu` / `photo_post_processor._alignOrientation` 的 `needMirror` 规则）。故 iOS 多翻一次 → 水印动画（及作为缩略图 interim 发布的同一文件）与取景器、成片左右相反，即用户所报镜像。
+- **优化点/目标状态**：翻转条件收敛为 `facing == 'front' && Platform.isAndroid`——iOS/OHOS 不翻（两者取景器与成片同向）、Android 保持原有已验证行为（CameraX 取景器镜像、成片未镜像，需补翻一次对齐）。
+- **状态**：✅ 已实现（2026-09-27，`capture_page.dart` 翻转条件 + 两处注释更正；`flutter analyze` 0 error）。**待 iOS 真机验证**（前置 + 闪光关 + 水印动画开启：水印动画、缩略图 interim 应与取景器、成片同向，无镜像闪变）。
+
+---
+
+## AI 生模板 · 审美与风格档案（2026-09-28）
+
+### P1 · AI 生成图视觉评审 + 不达标重生成闭环
+
+- **模块**：后端 AI 一键生成模板（`lumira-server/packages/backend/src/modules/ai/`）
+- **根因/优化点**：当前美学评审只评「提示词草稿」（生图前），不评「生成出来的图」，因此提示词达标但成图仍可能不好看，且无法自动重生成。
+- **目标状态**：对每张生成图用视觉模型打分（构图/姿势/穿搭/表情/光线/真实底线），不达标时限次重生成（带失败原因改写提示词），并在后台时间线展示每张图的分项与重生成次数。
+- **状态**：⏳ 待实现（成本与耗时较高，本次未做）
+
+### P2 · 风格档案改由后台维护（DB 配置 + 管理界面）
+
+- **模块**：后端 AI 配置（`lumira-server/packages/backend/src/modules/ai/`）+ 后台（`lumira-server/packages/admin/`）
+- **根因/优化点**：当前 7 套风格档案 `STYLE_ARCHETYPE_PRESETS` 为代码内置固定档案，运营无法自定义取向与禁忌。
+- **目标状态**：档案迁移到 DB（`ai_style_profiles` 表），后台提供增删改与启用开关，支持导入导出，链路运行时按启用档案渲染。
+- **状态**：⏳ 待实现（本次为代码内置固定档案）
+
+### P2 · 清理已下线链路的 `prompt-polisher.ts`
+
+- **模块**：后端 AI（`lumira-server/packages/backend/src/modules/ai/prompt-polisher.ts`）
+- **根因/优化点**：`prompt-polisher.ts` 已不在生图链路上被调用（`ai-generate-image.service` 走 `composeImagePrompt`），仅残留死代码与单测。
+- **目标状态**：确认无引用后删除文件与 `prompt-polisher.spec.ts`。
+- **状态**：⏳ 待实现（本次为降低风险未删除）
