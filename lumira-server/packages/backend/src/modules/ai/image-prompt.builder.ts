@@ -7,6 +7,13 @@
 // 主体类型用一级 key → 中文名的小型内置映射（migration 003 预置 7 类），未知 key 跳过；tags 本身是中文直接用。
 
 import { LUT_LABELS, WHITE_BALANCE_LABELS } from './enums';
+import {
+  styleProfileOfDraft,
+  STYLE_ARCHETYPE_LABELS,
+  RETOUCH_LEVELS,
+  type RetouchLevel,
+  type StyleProfile,
+} from './style-profile.presets';
 
 /** 一级分类 key → 中文主体类型（migration 003 预置 7 类，与 Flutter 内置 7 类严格对齐） */
 const CATEGORY_SUBJECT_LABELS: Record<string, string> = {
@@ -33,6 +40,20 @@ const GRAIN_STRONG_THRESHOLD = 30;
 
 /** 空草稿（无任何可用字段）兜底 prompt */
 const FALLBACK_PROMPT = '一张 3:4 竖构图的人像摄影作品，自然光线，柔和氛围，画面干净通透';
+
+/** 三档真实质感结尾句（替代原先写死的「画面带自然噪点与轻微白平衡偏移」） */
+export const RETOUCH_TEXTURE_LINES: Record<RetouchLevel, string> = {
+  none: '质感：自然环境光与生活化瞬间感，保留真实的环境明暗与轻微白平衡偏移，不做修饰性调色。',
+  light: '质感：干净通透，光比克制，皮肤保留真实毛孔与绒毛（不磨皮），布料保留真实纹理与褶皱。',
+  polished: '质感：布光精致考究、调色讲究、明暗层次分明，但皮肤、布料与道具仍为真实材质纹理。',
+};
+
+/** 从草稿顶层风格档案读取精修档，缺失/非法一律回落 none */
+export function retouchLevelOfDraft(draft: unknown): RetouchLevel {
+  const p: StyleProfile | undefined = styleProfileOfDraft(draft);
+  const level = p?.retouchLevel;
+  return level !== undefined && (RETOUCH_LEVELS as readonly string[]).includes(level) ? level : 'none';
+}
 
 const INCONSISTENT_POSE_PROMPT_PATTERN = /(不同场景|不同人物|不同造型|不同风格|不需要保持一致|可以不一致|允许不一致)/;
 
@@ -216,16 +237,31 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
     segments.push('不要合并多个姿势，不要生成连拍、多宫格或姿势对比图');
   }
 
-  // ⑧ 真实感约束：抑制 AI 合成/精修感，向「真实相机随手抓拍」靠拢（人像额外强调真实人的质感与自然光）。
+  // ⑦.5 风格档案审美短语：有档案时把取向 / 穿搭 / 表情 / 姿势语言 / 光线 / 构图 / 色调补进 prompt
+  const profile = styleProfileOfDraft(draft);
+  if (profile) {
+    const styleSegments = [
+      `风格取向：${STYLE_ARCHETYPE_LABELS[profile.archetype]}`,
+      profile.subjectStyling ? `穿搭/妆造：${profile.subjectStyling}` : '',
+      profile.expressionMood ? `表情与情绪：${profile.expressionMood}` : '',
+      profile.poseLanguage ? `姿势语言：${profile.poseLanguage}` : '',
+      profile.lightingSignature ? `光线特征：${profile.lightingSignature}` : '',
+      profile.compositionBias ? `构图偏好：${profile.compositionBias}` : '',
+      profile.paletteHint ? `色调倾向：${profile.paletteHint}` : '',
+    ].filter(Boolean);
+    segments.push(...styleSegments);
+  }
+
+  // ⑧ 真实感约束：抑制 AI 合成感，向「真实照片」靠拢（人像额外强调真实人的质感与自然光）。
   // 仅在已有真实草稿内容时追加；空草稿仍走兜底文案。
   if (segments.length > 0) {
     segments.push('构图讲究：主体落位与留白经设计，视平线保持水平、主体不被画面边缘随意裁切、肢体线条舒展不互相粘连，机位高度与景别服务于主体');
     segments.push(
       selfie
-        ? '真实相机直出的摄影质感，画面像本人用前置摄像头随手拍下的自拍照片，而非插画、3D 建模渲染、AI 合成、影楼写真或精修广告片'
-        : '真实相机直出的摄影质感，画面像随手抓拍的实拍照片，而非插画、3D 建模渲染、AI 合成、影楼写真或精修广告片',
+        ? '真实相机直出的摄影质感，画面像本人用前置摄像头随手拍下的自拍照片，而非插画、动漫、CG、3D 渲染'
+        : '真实相机直出的摄影质感，画面像真实抓拍的照片，而非插画、动漫、CG、3D 渲染',
     );
-    segments.push('画面带自然噪点与轻微白平衡偏移（随拍感只作用于质感与瞬间，不作用于构图与画面水平）');
+    segments.push(RETOUCH_TEXTURE_LINES[retouchLevelOfDraft(draft)]);
     if (subject === 'portrait') {
       segments.push(
         '人物是街上随处可见的普通年轻人而非精修模特：肤色不均匀、T 区微泛油光而脸颊哑光，皮肤保留毛孔、纹理与细小绒毛，不做美颜磨皮，绝不光滑发亮的塑料质感',
@@ -267,6 +303,6 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
   }
   if (extra) segments.push(`额外要求：${extra}`);
 
-  if (segments.length === 0) return FALLBACK_PROMPT;
+  if (segments.length === 0) return `${FALLBACK_PROMPT}。${RETOUCH_TEXTURE_LINES[retouchLevelOfDraft(draft)]}`;
   return `${segments.join('，')}。`;
 }

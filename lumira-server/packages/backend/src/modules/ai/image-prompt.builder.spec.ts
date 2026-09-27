@@ -4,7 +4,7 @@
 // 断言关键词覆盖 task-6-brief.md 要求：画幅 3:4、人像、日系、田野与天空、
 // 侧逆光、午后4-6点、日系清新（LUT 标签）、氛围关键词（把夏天拍进眼睛里）。
 
-import { buildImagePrompt } from './image-prompt.builder';
+import { buildImagePrompt, RETOUCH_TEXTURE_LINES } from './image-prompt.builder';
 
 /** 设计文档第四节完整草稿示例（pose/camera 等不参与 prompt 的字段保留，验证多余字段被忽略） */
 function fullDraft(): Record<string, unknown> {
@@ -270,5 +270,40 @@ describe('buildImagePrompt', () => {
     expect(back).not.toContain('第一人称');
     expect(back).not.toContain('不出现手机');
     expect(buildImagePrompt(base)).not.toContain('第一人称');
+  });
+
+  test('三种 retouchLevel 产出不同质感结尾句，且均不含确定性文案禁令子串', () => {
+    const none = buildImagePrompt({ styleProfile: { archetype: 'candid_lifestyle', retouchLevel: 'none' } });
+    const light = buildImagePrompt({ styleProfile: { archetype: 'photo_portrait', retouchLevel: 'light' } });
+    const polished = buildImagePrompt({ styleProfile: { archetype: 'fashion_editorial', retouchLevel: 'polished' } });
+
+    expect(none).toContain(RETOUCH_TEXTURE_LINES.none);
+    expect(light).toContain(RETOUCH_TEXTURE_LINES.light);
+    expect(polished).toContain(RETOUCH_TEXTURE_LINES.polished);
+    expect(light).not.toContain(RETOUCH_TEXTURE_LINES.none);
+    for (const p of [none, light, polished]) {
+      expect(p).not.toContain('轻微噪点');
+      expect(p).not.toContain('禁止影楼写真');
+      expect(p).not.toContain('网红精修风');
+    }
+  });
+
+  test('无档案时回落 none 档结尾句', () => {
+    const p = buildImagePrompt({});
+    expect(p).toContain(RETOUCH_TEXTURE_LINES.none);
+  });
+
+  test('有档案时补入审美短语（穿搭 / 表情 / 姿势语言）', () => {
+    const p = buildImagePrompt({
+      styleProfile: {
+        archetype: 'fashion_editorial',
+        subjectStyling: '驼色大衣',
+        expressionMood: '冷峻直视',
+        poseLanguage: '线条有张力',
+      },
+    });
+    expect(p).toContain('驼色大衣');
+    expect(p).toContain('冷峻直视');
+    expect(p).toContain('线条有张力');
   });
 });
