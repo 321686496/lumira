@@ -2,7 +2,8 @@
 // 生图提示词组织器单测：结构化素材（模板基本信息/本张姿势/网络趋势参考/照片参数/生图要求）
 // 分节组织 + 文本模型整理（成功透传 / 失败回退 / 空白回退 fallback）。
 
-import { buildPromptMaterial, composeImagePrompt } from './image-prompt.composer';
+import { buildPromptMaterial, buildComposeSystemPrompt, composeImagePrompt } from './image-prompt.composer';
+import type { StyleProfile } from './style-profile.presets';
 import { textChat } from './llm-client';
 import type { LlmEndpoint } from './llm-client';
 
@@ -66,6 +67,58 @@ const DRAFT = {
 
 beforeEach(() => {
   textChatMock.mockReset();
+});
+
+/** 风格档案（时尚大片 / 精致精修档），用于验证素材下发与系统提示词分档 */
+const PROFILE: StyleProfile = {
+  category: 'portrait',
+  archetype: 'fashion_editorial',
+  aestheticTarget: '杂志时尚大片：强设计感、戏剧性光比',
+  subjectStyling: '驼色大衣 + 皮革手套',
+  expressionMood: '冷峻直视镜头',
+  poseLanguage: '身体线条有张力，肩胯错位',
+  lightingSignature: '硬光高光比，轮廓光勾边',
+  compositionBias: '对角线构图，大面积留白',
+  paletteHint: '低饱和高级灰',
+  retouchLevel: 'polished',
+  extraNotes: '',
+};
+
+describe('buildComposeSystemPrompt', () => {
+  it('规则 9 新表述：允许在档案范围内补足审美细节，并禁止档案外风格', () => {
+    const prompt = buildComposeSystemPrompt();
+    expect(prompt).toContain('档案允许范围内补足审美细节');
+    expect(prompt).not.toContain('不新增素材没有的元素');
+  });
+
+  it('规则 4 不再把写真/大片当贬义，改为按精修档表述', () => {
+    const prompt = buildComposeSystemPrompt();
+    expect(prompt).not.toContain('精修写真');
+    expect(prompt).not.toContain('影楼布光大片');
+    expect(prompt).toContain('精修档与档案一致');
+    expect(prompt).toContain('动漫');
+    expect(prompt).toContain('插画');
+  });
+});
+
+describe('buildPromptMaterial · 风格档案', () => {
+  it('素材下发【风格档案】段落（archetype 中文名 / 穿搭 / 表情 / 姿势语言 / 光线 / 构图 / 色调 / 精修档）', async () => {
+    textChatMock.mockResolvedValueOnce('最终提示词');
+    await composeImagePrompt(TEXT_ENDPOINT, { draft: { styleProfile: PROFILE }, research: [] }, '兜底');
+
+    const material = String(textChatMock.mock.calls[0][1].userText);
+    expect(material).toContain('【风格档案】');
+    expect(material).toContain('时尚大片');
+    expect(material).toContain('驼色大衣 + 皮革手套');
+    expect(material).toContain('冷峻直视镜头');
+    expect(material).toContain('精致精修');
+  });
+
+  it('无档案时不出现【风格档案】段落', async () => {
+    textChatMock.mockResolvedValueOnce('最终提示词');
+    await composeImagePrompt(TEXT_ENDPOINT, { draft: {} }, '兜底');
+    expect(String(textChatMock.mock.calls[0][1].userText)).not.toContain('【风格档案】');
+  });
 });
 
 describe('buildPromptMaterial', () => {

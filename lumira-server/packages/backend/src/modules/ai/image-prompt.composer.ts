@@ -17,6 +17,12 @@ import {
   FOCUS_MODE_LABELS,
   LENS_SUGGESTION_LABELS,
 } from './enums';
+import {
+  styleProfileOfDraft,
+  STYLE_ARCHETYPE_LABELS,
+  RETOUCH_LEVEL_LABELS,
+  type StyleProfile,
+} from './style-profile.presets';
 
 const COMPOSE_SYSTEM_PROMPT = `你是顶级人像摄影艺术指导兼生图提示词工程师。用户将提供一份结构化素材（模板基本信息 / 构图与机位 / 本张姿势 / 网络趋势参考 / 照片参数 / 生图要求），请把它们整理成一段高质量的中文生图提示词，最终喂给文生图模型。
 
@@ -29,21 +35,28 @@ const COMPOSE_SYSTEM_PROMPT = `你是顶级人像摄影艺术指导兼生图提�
 2. 构图、机位、景别、姿势线条与相机参数必须呈现专业摄影水准的美感：画面是经过设计的——水平线水平、主体落位与留白讲究、肢体线条舒展有延伸感、景深与光比服务于主体。
 3. 「随拍感」只作用于质感与瞬间感——真实皮肤材质、自然松弛的表情、生活化的光线与场景，让人看不出 AI 痕迹；它绝不作用于画面水平与构图精度。严禁把「随手抓拍」写成构图随意：不要主体偏离平衡位置、不要水平线倾斜、不要主体顶天立地或被画面边缘随意裁切、不要四肢与躯干粘连重叠、不要正面僵直的站姿。
 4. 真实材质细节必须写成具体可见的东西而非口号：
-   a. 开头用实拍语境定调：一张真实相机直出的生活照（不是精修写真，也不是插画）；
+   a. 媒介真实：输出的是真实照片（不是插画、动漫、CG、3D 渲染），皮肤、布料、道具均为真实材质纹理；
    b. 紧跟素材给出的摄影参数：镜头焦段与光圈（如 85mm f/1.8 浅景深虚化，或手机主摄直出）、快门与感光度（弱光夜景写高 ISO 带来的自然噪点）、白平衡，让画面落在「真实照片」的分布上；
    c. 人物写成街上随处可见的普通年轻人：肤色不均匀、T 区微泛油光而脸颊哑光、皮肤保留毛孔与细小绒毛、可有淡痕或淡淡黑眼圈，头发有几缕没梳好的碎发，衣物有自然褶皱；
-   d. 用负面清单收尾：不是插画、CG、油画、网红精修写真或影楼布光大片，皮肤不磨皮不过度均匀，避免完美对称脸、塑料质感、镜面高光、锥子脸、高饱和炫彩和精致摆拍。
+   d. 精修档与档案一致：none → 不过度修饰、保留环境真实感；light → 干净通透、光比克制、皮肤保留毛孔与绒毛；polished → 布光与质感考究、调色讲究，但材质仍真实。
 5. 风格词必须转译后再用：「新中式」「氛围感」「少女」「千金风」等高风格化标签要落成具体的穿着、场景、人物特征（如「穿着新中式盘扣上衣的二十多岁普通女孩」），不得直接堆砌风格词，防止画面滑向唯美插画风。
 6. 网络趋势参考中的有效信息（当下流行题材、风格、视觉元素）要转化为具体可见的画面描述融入提示词，让画面贴合当下审美；与创作要求冲突、明显无效或只是排版残留（标题符号 / 表格 / 来源域名）的忽略。
 7. 严格保留素材中的硬约束：画幅比例、单姿势要求、人物一致性要求、用户额外要求（权重最高，置于提示词末尾附近强调）。
 8. 自拍视角（素材出现「拍摄方式：自拍 / 相机方向：前置」时强制生效）：必须按第一人称自拍写——画面的视点就是人物本人的眼睛，镜头距面部约一臂之内，只呈现上半身或近景 / 特写，视线看向镜头；成片里不得出现手机、相机、三脚架、自拍杆等拍摄设备，不得出现举着设备的手臂，也不得出现镜中反射的拍摄者。素材里若还带着「2-3 米 / 七分身 / 全身」等第三人称景别，一律按自拍口径改写为近景或半身，不得照抄。
-9. 只使用素材中出现的信息组织画面，不新增素材没有的元素；不输出任何解释，只输出整理后的提示词本身。`;
+9. 可在风格档案允许范围内补足审美细节（表情、穿搭与褶皱、肢体线条、光线层次、前景层次、色调统一），使画面更好看；但不得引入与档案冲突的风格取向（例如档案为随拍松弛时不得写成影棚布光大‌片），也不得新增现实中拍不出来的元素；不输出任何解释，只输出整理后的提示词本身。`;
+
+/** 供测试与调用方读取最终系统提示词（规则文本随风格档案分档演进） */
+export function buildComposeSystemPrompt(): string {
+  return COMPOSE_SYSTEM_PROMPT;
+}
 
 /** 组织器输入：草稿 + 本张姿势已并入 draft（singlePose 模式）+ 研究结果 + 用户附加提示词 */
 export interface PromptComposeInput {
   draft: Record<string, unknown>;
   research: ResearchItem[];
   extraPrompt?: string | null;
+  /** 本次风格档案（缺省时从 draft.styleProfile 兜底读取） */
+  styleProfile?: StyleProfile;
 }
 
 export interface ComposeResult {
@@ -191,7 +204,9 @@ function describeCamera(camera: Record<string, unknown>): string[] {
 
 /** 把结构化素材组织成「带分节标签的素材文本」，交给文本模型整理 */
 export function buildPromptMaterial(input: PromptComposeInput): string {
-  const { draft, research, extraPrompt } = input;
+  const { draft, extraPrompt } = input;
+  const research = Array.isArray(input.research) ? input.research : [];
+  const profile = input.styleProfile ?? styleProfileOfDraft(draft);
   const meta = isPlainObject(draft.meta) ? draft.meta : {};
   const composition = isPlainObject(draft.composition) ? draft.composition : {};
   const sceneGuide = isPlainObject(draft.sceneGuide) ? draft.sceneGuide : {};
@@ -293,16 +308,37 @@ export function buildPromptMaterial(input: PromptComposeInput): string {
   }
   if (paramLines.length) sections.push(`【照片参数】\n${paramLines.join('\n')}`);
 
+  // ⑤.5 风格档案（Task 7）：把本次风格取向 / 精修档 / 穿搭 / 表情 / 姿势语言 / 光线 / 构图 / 色调
+  //      下发给文本模型，使其在档案允许范围内补足审美细节（无档案则整段不出现）
+  if (profile) {
+    const styleLines = [
+      `- 取向：${STYLE_ARCHETYPE_LABELS[profile.archetype]}（archetype=${profile.archetype}）｜精修档：${RETOUCH_LEVEL_LABELS[profile.retouchLevel]}（retouchLevel=${profile.retouchLevel}）`,
+      `- 美学目标：${profile.aestheticTarget}`,
+      profile.subjectStyling ? `- 穿搭/妆造：${profile.subjectStyling}` : '',
+      profile.expressionMood ? `- 表情与情绪：${profile.expressionMood}` : '',
+      profile.poseLanguage ? `- 姿势语言：${profile.poseLanguage}` : '',
+      `- 光线：${profile.lightingSignature}`,
+      `- 构图偏好：${profile.compositionBias}`,
+      `- 色调：${profile.paletteHint}`,
+      profile.extraNotes ? `- 现场补充：${profile.extraNotes}` : '',
+    ].filter(Boolean);
+    sections.push(`【风格档案】（在档案允许范围内补足审美细节，但不得突破真实底线）\n${styleLines.join('\n')}`);
+  }
+
   // ⑥ 生图要求（构图/机位保真 + 真实感去 AI 味 / 一致性 / 单姿势 / 用户附加，全部为硬约束）
   const reqLines: string[] = [];
   reqLines.push('- 构图、机位、景别与姿势线条必须呈现专业摄影水准的美感：画面水平、主体落位与留白经设计、肢体线条舒展，不得出现水平线倾斜、主体顶天立地或被画面边缘随意裁切、四肢与躯干粘连重叠');
   reqLines.push('- 「随拍感」只用于质感与瞬间感（真实材质、自然表情、生活化场景），不得用来合理化随意构图或歪斜的机位');
   reqLines.push('- 构图 / 机位 / 相机参数以【构图与机位】【照片参数】给出的值为准，不得自行改动或降级');
-  reqLines.push(
-    selfie
-      ? '- 真实相机直出、本人用前置摄像头随手拍下的自拍照片，而非插画、3D 建模渲染、AI 合成、影楼写真或精修广告片'
-      : '- 真实相机直出、随手抓拍的生活照，而非插画、3D 建模渲染、AI 合成、影楼写真或精修广告片',
-  );
+  // 真实媒介基调按档案精修档分档（不再把「写真 / 大片」当贬义；无档案按 none 处理）
+  const retouchLevel = profile?.retouchLevel ?? 'none';
+  const realismLine =
+    retouchLevel === 'polished'
+      ? '- 真实相机直出的大片级成片：布光与质感考究、调色讲究，但皮肤毛孔与绒毛、布料纹理、道具材质、环境光衰减与阴影过渡必须真实'
+      : retouchLevel === 'light'
+        ? '- 真实相机直出的干净通透成片：光比克制、皮肤保留毛孔与绒毛与自然纹理，而非插画、3D 建模渲染、AI 合成'
+        : '- 真实相机直出的生活化照片：不过度修饰、保留环境真实质感，而非插画、3D 建模渲染、AI 合成';
+  reqLines.push(selfie ? `${realismLine}（本人用前置摄像头随手拍下的自拍）` : realismLine);
   reqLines.push(
     selfie
       ? '- 必须写入具体摄影参数：前置摄像头等效焦距与光圈、快门与感光度与噪点（弱光场景用高 ISO，画面带自然噪点）、白平衡轻微偏移'
@@ -311,7 +347,7 @@ export function buildPromptMaterial(input: PromptComposeInput): string {
   if (categoryKey === 'portrait') {
     reqLines.push('- 人物是街上随处可见的普通年轻人：肤色不均匀、T 区微泛油光而脸颊哑光、皮肤保留毛孔与细小绒毛及淡痕，头发有几缕碎发，衣服有自然褶皱');
     reqLines.push('- 表情松弛自然像被抓拍的瞬间；五官头发手部贴合真实人体结构无畸变；构图讲究：主体落位与留白经设计、肢体线条舒展有延伸感');
-    reqLines.push('- 禁止：磨皮、过度均匀的皮肤、完美对称脸、塑料或镜面质感、影棚式布光、锥子脸、高饱和炫彩、精致摆拍');
+    reqLines.push('- 禁止：动漫、二次元、漫画、插画、CG、3D 渲染；禁止磨皮过度均匀、塑料或镜面质感、完美对称脸、锥子脸、高饱和炫彩、精致摆拍；禁止无源光、不可能透视与姿势、肢体与面部畸变');
   }
   if (isSinglePose) {
     reqLines.push('- 画面中只有一个人物，只呈现上述「本张姿势」；不要合并多个姿势，不要生成连拍、多宫格或姿势对比图');
