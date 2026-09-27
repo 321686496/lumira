@@ -6,6 +6,7 @@ import { textChat } from './llm-client';
 import type { LlmEndpoint } from './llm-client';
 import type { ImageDescription } from './image-describe.service';
 import type { AiConfigService } from './ai-config.service';
+import { type StyleProfile } from './style-profile.presets';
 
 jest.mock('./llm-client', () => ({ textChat: jest.fn() }));
 
@@ -22,6 +23,20 @@ const DESC: ImageDescription = {
   global: { subject: '年轻女性', mood: '清冷', season: '秋', timeOfDay: 'day', palette: { dominant: [], tone: '暖', brightness: '' }, light: {}, composition: { leadLines: '', framing: '', symmetry: '', subjectFrame: {}, cropRatio: '3:4', negativeSpace: '', depthOfField: '' }, reproducibility: { level: 'high', reason: '', enableFillLight: true, lightHint: '' } },
   people: [], scene: { location: '', depthLayers: { near: [], middle: [], far: [] }, props: [], furniture: [], texture: '', cleanliness: '' },
   cameraLike: { lightSuggestion: '', wbSuggestion: '', evSuggestion: '', focusDepth: '' },
+};
+
+const PROFILE: StyleProfile = {
+  category: 'portrait',
+  archetype: 'fashion_editorial',
+  aestheticTarget: '杂志时尚大片：强设计感、戏剧性光比',
+  subjectStyling: '驼色大衣 + 皮革手套',
+  expressionMood: '冷峻直视镜头',
+  poseLanguage: '身体线条有张力与方向性',
+  lightingSignature: '硬光或高光比',
+  compositionBias: '对角线与框架式构图',
+  paletteHint: '低饱和高级灰',
+  retouchLevel: 'polished',
+  extraNotes: '',
 };
 
 function legalSheet(): string {
@@ -66,5 +81,41 @@ describe('PoseRefSheetService.generate', () => {
     textChatMock.mockResolvedValueOnce('没有姿势');
     const svc = buildService();
     await expect(svc.generate(DESC, 2)).rejects.toThrow('无法解析');
+  });
+
+  it('subjectPose 字段级契约：缺失键被补齐为指定默认值', async () => {
+    textChatMock.mockResolvedValueOnce(
+      JSON.stringify({
+        shared: { outfit: '米色针织', scene: '飘窗', light: '窗光', aspectRatio: '3:4', mood: '清冷', palette: '暖棕', styling: '针织开衫 + 细金链', expressionMood: '平静微松' },
+        perPose: [{ name: '坐姿侧靠', differentiationNote: '侧靠偏左', subjectPose: { headFraming: '下巴略收、视窗外', armAndHand: '左手扶窗台、右手搭膝' } }],
+      }),
+    );
+    const svc = buildService();
+    const sheet = await svc.generate(DESC, 1, '秋冬清冷感人像');
+
+    expect(sheet.shared.styling).toBe('针织开衫 + 细金链');
+    expect(sheet.shared.expressionMood).toBe('平静微松');
+    const sp = sheet.perPose[0].subjectPose as Record<string, string>;
+    expect(sp.headFraming).toBe('下巴略收、视窗外');
+    expect(sp.armAndHand).toBe('左手扶窗台、右手搭膝');
+    // 缺失键补齐默认
+    expect(typeof sp.torsoTwist).toBe('string');
+    expect(sp.torsoTwist.length).toBeGreaterThan(0);
+    expect(sp.legStance.length).toBeGreaterThan(0);
+    expect(sp.expression.length).toBeGreaterThan(0);
+    // 每张姿势都必须有 subjectPose
+    expect(sheet.perPose[0].subjectPose).toBeDefined();
+  });
+
+  it('注入 styleProfile：系统提示词含档案段落与姿势线条要求', async () => {
+    textChatMock.mockResolvedValueOnce(JSON.stringify({ shared: {}, perPose: [{ name: 'A', differentiationNote: 'x' }] }));
+    const svc = buildService();
+    await svc.generate(DESC, 1, '时尚大片', PROFILE);
+
+    const systemPrompt = String(textChatMock.mock.calls[0][1].systemPrompt);
+    expect(systemPrompt).toContain('本次风格档案');
+    expect(systemPrompt).toContain('时尚大片');
+    expect(systemPrompt).toContain('双手对称');
+    expect(systemPrompt).toContain('关节正对镜头');
   });
 });

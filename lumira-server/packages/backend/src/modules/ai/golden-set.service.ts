@@ -225,7 +225,7 @@ function scaffoldDesc(subject: string): ImageDescription {
 }
 
 function scaffoldSheet(mood: string): PoseRefSheet {
-  return { shared: { outfit: '', scene: '', light: '', aspectRatio: '3:4', mood, palette: '' }, perPose: [] };
+  return { shared: { outfit: '', scene: '', light: '', aspectRatio: '3:4', mood, palette: '', styling: '', expressionMood: '' }, perPose: [] };
 }
 
 @Injectable()

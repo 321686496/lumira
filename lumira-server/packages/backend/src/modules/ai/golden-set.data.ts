@@ -23,7 +23,7 @@ function scaffold(subject: string): ImageDescription {
 
 /** 通用最小 pose 面片占位（无 poseSheet 时流程兜底） */
 function sheet(mood: string): PoseRefSheet {
-  return { shared: { outfit: '', scene: '', light: '', aspectRatio: '3:4', mood, palette: '' }, perPose: [] };
+  return { shared: { outfit: '', scene: '', light: '', aspectRatio: '3:4', mood, palette: '', styling: '', expressionMood: '' }, perPose: [] };
 }
 
 export const GOLDEN_SET: GoldenCase[] = [
