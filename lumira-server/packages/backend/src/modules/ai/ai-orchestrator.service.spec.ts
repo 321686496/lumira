@@ -12,6 +12,7 @@ import type { PoseRefSheetService } from './pose-ref-sheet.service';
 import type { ImageScoreService } from './image-score.service';
 import { ParamValidateService } from './param-validate.service';
 import type { DraftRefineService } from './draft-refine.service';
+import type { StyleProfileService } from './style-profile.service';
 
 const CATEGORIES = [
   { key: 'portrait', name: '人像', parentKey: null as string | null, level: 1 },
@@ -68,6 +69,26 @@ function build(opts: { searchEnabled?: boolean; scoreSequence?: Array<'pass' | '
     })),
   };
 
+  const styleProfileService = {
+    resolve: jest.fn().mockResolvedValue({
+      profile: {
+        category: 'portrait',
+        archetype: 'candid_lifestyle',
+        aestheticTarget: '生活化松弛随拍',
+        subjectStyling: '',
+        expressionMood: '',
+        poseLanguage: '',
+        lightingSignature: '',
+        compositionBias: '',
+        paletteHint: '',
+        retouchLevel: 'none',
+        extraNotes: '',
+      },
+      source: 'fallback' as const,
+      note: 'fallback: 默认档案',
+    }),
+  };
+
   const service = new AiOrchestratorService(
     aiConfigService,
     research as unknown as TrendResearchService,
@@ -76,6 +97,7 @@ function build(opts: { searchEnabled?: boolean; scoreSequence?: Array<'pass' | '
     paramValidate,
     score as unknown as ImageScoreService,
     draftRefine as unknown as DraftRefineService,
+    styleProfileService as unknown as StyleProfileService,
   );
 
   const optsRun = {
@@ -83,7 +105,7 @@ function build(opts: { searchEnabled?: boolean; scoreSequence?: Array<'pass' | '
     draft: { meta: { name: '飘窗清冷少女人像模板' }, camera: { iso: 200 } },
   };
 
-  return { service, research, describe, poseRefSheet, paramValidate, score, draftRefine, optsRun };
+  return { service, research, describe, poseRefSheet, paramValidate, score, draftRefine, styleProfileService, optsRun };
 }
 
 beforeEach(() => jest.clearAllMocks());
@@ -212,14 +234,60 @@ describe('AiOrchestratorService.run', () => {
     expect(res.trace.some((t) => t.step === 'describe' && String(t.resultBrief).includes('skip'))).toBe(true);
   });
 
-  it('无图 → 跳过 LLM 评分（skip-imageScore），不调用 score 与 refine，直接定稿', async () => {
-    const { service, score, draftRefine, optsRun } = build();
+  it('无图路径不再跳过评审：describe 不调用，poseRefSheet 与 imageScore 仍执行', async () => {
+    const { service, describe, poseRefSheet, score, optsRun } = build();
 
     const res = await service.run({ text: '奶油风人像', poseCount: 1 }, optsRun);
 
-    expect(score.score).not.toHaveBeenCalled();
-    expect(draftRefine.refine).not.toHaveBeenCalled();
-    expect(res.trace.some((t) => t.step === 'imageScore' && String(t.resultBrief).includes('skip'))).toBe(true);
-    expect(res.draft).toBeDefined();
+    expect(describe.describe).not.toHaveBeenCalled();
+    expect(poseRefSheet.generate).toHaveBeenCalled();
+    expect(score.score).toHaveBeenCalledTimes(1);
+    expect(score.score).toHaveBeenCalledWith(expect.objectContaining({ textOnly: true }));
+    expect(res.trace.map((t) => t.step)).toContain('imageScore');
+  });
+
+  it('消费调用方传入的 styleProfile：trace 含 styleProfile 步骤，且透传给 poseRefSheet / score', async () => {
+    const { service, poseRefSheet, score, optsRun } = build();
+    const styleProfile = {
+      profile: {
+        category: 'portrait' as const,
+        archetype: 'fashion_editorial' as const,
+        retouchLevel: 'polished' as const,
+        aestheticTarget: 'x',
+        subjectStyling: '',
+        expressionMood: '',
+        poseLanguage: '',
+        lightingSignature: '',
+        compositionBias: '',
+        paletteHint: '',
+        extraNotes: '',
+      },
+      source: 'llm' as const,
+      note: '时尚大片/portrait/polished',
+    };
+
+    const res = await service.run(
+      { imageBase64: 'aGk=', imageMime: 'image/jpeg', creationReq: '秋冬大片', poseCount: 1 },
+      { ...optsRun, styleProfile },
+    );
+
+    expect(res.trace.map((t) => t.step)).toContain('styleProfile');
+    expect(poseRefSheet.generate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      styleProfile.profile,
+    );
+    expect(score.score).toHaveBeenCalledWith(expect.objectContaining({ styleProfile: styleProfile.profile }));
+    expect(res.draft.styleProfile).toMatchObject({ archetype: 'fashion_editorial' });
+  });
+
+  it('调用方未传 styleProfile → 编排内自行兜底解析一次', async () => {
+    const { service, optsRun } = build();
+
+    const res = await service.run({ imageBase64: 'aGk=', imageMime: 'image/jpeg', poseCount: 1 }, optsRun);
+
+    expect(res.trace.map((t) => t.step)).toContain('styleProfile');
+    expect(res.draft.styleProfile).toBeDefined();
   });
 });

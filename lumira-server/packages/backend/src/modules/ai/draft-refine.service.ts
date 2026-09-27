@@ -15,6 +15,7 @@ import { describeTodayUtc8 } from '../../common/utils/date.util';
 import type { ImageDescription } from './image-describe.service';
 import type { PoseRefSheet } from './pose-ref-sheet.service';
 import type { ResearchItem } from './trend-research/research-item';
+import { renderStyleProfileBlock, type StyleProfile } from './style-profile.presets';
 
 /** 细化输入：当前草稿 + 评审建议 + 上下文锚点（保证随调不改创意） */
 export interface DraftRefineInput {
@@ -27,9 +28,11 @@ export interface DraftRefineInput {
   research: ResearchItem[];
   /** 独立评审/细化模型端点；缺省用 cfg.text */
   judgeModel?: LlmEndpoint;
+  /** 本次风格档案（可选）：整改不得改变档案取向 */
+  styleProfile?: StyleProfile;
 }
 
-function buildRefineSystemPrompt(): string {
+function buildRefineSystemPrompt(styleProfile?: StyleProfile): string {
   return [
     '你是资深摄影/时尚编辑，负责把评审反馈落实到模板草稿中得到一份改进稿（闭环收敛）。',
     describeTodayUtc8(),
@@ -40,9 +43,16 @@ function buildRefineSystemPrompt(): string {
     '4. 保持与当前草稿相同的 JSON 结构（模板契约），不增删关键业务字段。',
     '5. 涉及节日/时令/季节的表述必须以今天日期为准，并用「年份 + 节日名 + 公历日期」写具体；',
     '   不得凭记忆使用已过期的节日（如把近期节日写成端午）或无法核验的日期，草稿里没有依据的时效信息保持原样、不要新增。',
+    '6. 按评审未达标的维度逐项整改，只改相关字段（pose[] / sceneGuide / composition / postProcess / camera），不要无关地改写整份草稿。',
+    '7. 整改必须落到具体字段与具体写法，例如「pose[0].description 缺表情与左手落点」就补上嘴角与左手落点。',
+    '8. 不得破坏真实底线（真实照片媒介、真实解剖、可实拍、真实材质），也不得改变草稿顶层 styleProfile 的档案取向。',
+    '9. 输出仍是完整的草稿 JSON。',
     '## 输出',
     '只输出 JSON：{"draft": {改进后的完整草稿对象}}，不要 markdown 或解释。',
-  ].join('\n');
+    styleProfile ? renderStyleProfileBlock(styleProfile) : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function buildRefineUserText(input: DraftRefineInput): string {
@@ -77,7 +87,7 @@ export class DraftRefineService {
     let content: string;
     try {
       content = await textChat(endpoint, {
-        systemPrompt: buildRefineSystemPrompt(),
+        systemPrompt: buildRefineSystemPrompt(input.styleProfile),
         userText: buildRefineUserText(input),
         temperature: 0.5,
         jsonMode: true,

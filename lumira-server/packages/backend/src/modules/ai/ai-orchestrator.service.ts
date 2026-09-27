@@ -7,7 +7,7 @@
 // → 定稿 normalizeDraft → {draft,warnings,trace}。
 // 工程约束：工具失败 wrap 降级继续（不中断整体跑批）；迭代有预算护栏；契约只扩展不破坏既有。
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { AiConfigService } from './ai-config.service';
 import { TrendResearchService } from './trend-research/trend-research.service';
 import type { ResearchItem } from './trend-research/research-item';
@@ -18,11 +18,14 @@ import { PoseRefSheetService } from './pose-ref-sheet.service';
 import type { PoseRefSheet } from './pose-ref-sheet.service';
 import { ParamValidateService } from './param-validate.service';
 import { ImageScoreService } from './image-score.service';
-import type { ImageScoreInput } from './image-score.service';
+import type { AestheticsScores, ImageScoreInput, RealismScores } from './image-score.service';
 import { DraftRefineService } from './draft-refine.service';
 import { normalizeDraft } from './normalize';
 import type { CategoryNode } from './normalize';
+import { StyleProfileService } from './style-profile.service';
 import type { StyleProfileResolveResult } from './style-profile.service';
+import { defaultStyleProfile } from './style-profile.presets';
+import type { StyleProfile } from './style-profile.presets';
 import { traceNote, traceStep } from './llm-trace';
 
 /** 单条 trace：记录各阶段发生了什么（供后台展示/调试） */
@@ -31,7 +34,20 @@ export interface OrchestratorTraceEntry {
   tool?: string;
   resultBrief: string;
   score?: number;
+  /** 评审审美分项（质量评分阶段才有） */
+  aesthetics?: AestheticsScores;
+  /** 评审真实分项（质量评分阶段才有） */
+  realism?: RealismScores;
 }
+
+/** 一次评分结果（含审美/真实分项） */
+type ScoreOutcome = {
+  score: number;
+  verdict: 'pass' | 'retry';
+  suggests?: string[];
+  aesthetics?: AestheticsScores;
+  realism?: RealismScores;
+};
 
 export interface OrchestratorInput {
   imageBase64?: string;
@@ -64,6 +80,7 @@ const MAX_SCORE_ITERATIONS = 3;
 
 /** 阶段中文名（后台实时流程展示用；未列出的阶段回退 step 原文） */
 const STEP_TITLES: Record<string, string> = {
+  styleProfile: '风格定位',
   research: '趋势研究',
   describe: '示例图识别',
   poseRefSheet: '姿势参考面片',
@@ -82,6 +99,7 @@ export class AiOrchestratorService {
     private readonly paramValidate: ParamValidateService,
     private readonly imageScore: ImageScoreService,
     private readonly draftRefine: DraftRefineService,
+    @Optional() private readonly styleProfileService?: StyleProfileService,
   ) {}
 
   async run(input: OrchestratorInput, opts: OrchestratorRunOptions): Promise<OrchestratorResult> {
@@ -90,6 +108,17 @@ export class AiOrchestratorService {
     const warnings: string[] = [];
 
     trace.push({ step: 'assemble', resultBrief: 'context 就绪（角色+契约+进度）' });
+
+    // (1) 风格定位（只判定一次）：调用方已定位 → 直接消费；否则编排内兜底解析（无服务时用默认档案）
+    const profile: StyleProfile =
+      opts.styleProfile?.profile ??
+      (this.styleProfileService
+        ? (await this.styleProfileService.resolve({ text: input.text, creationReq: input.creationReq })).profile
+        : defaultStyleProfile());
+    const profileNote =
+      opts.styleProfile?.note ?? `兜底：${profile.archetype}/${profile.category}/${profile.retouchLevel}`;
+    trace.push({ step: 'styleProfile', tool: 'style-profile', resultBrief: profileNote });
+    traceNote('styleProfile', STEP_TITLES.styleProfile!, profileNote);
 
     // 研究主题：创作要求 ?? 文字描述；空 → 跳过研究
     const topic = (input.creationReq ?? input.text ?? '').trim();
@@ -151,7 +180,7 @@ export class AiOrchestratorService {
 
     // (4) 姿势参考面片
     const poseSheet = (await this.wrapStep<PoseRefSheet>('poseRefSheet', 'pose-ref-sheet', trace, () =>
-      this.poseRefSheet.generate(desc as ImageDescription, Math.max(1, input.poseCount ?? 1), input.creationReq),
+      this.poseRefSheet.generate(desc as ImageDescription, Math.max(1, input.poseCount ?? 1), input.creationReq, profile),
     )) ?? { shared: {} as PoseRefSheet['shared'], perPose: [] };
 
     // (5)+(6) 参数校准 + 评分闸门（再判 ≤ MAX_SCORE_ITERATIONS）
@@ -169,30 +198,25 @@ export class AiOrchestratorService {
         warnings.push(...validated.adjustments);
       }
 
-      // 6 评分闸门
-      const hasRefImage = Boolean(input.imageBase64 && input.imageMime);
+      // 6 评分闸门（无参考图时对草稿做纯文本评审：textOnly，真实底线不豁免）
       const scoreInput: ImageScoreInput = {
         desc: desc as ImageDescription,
         poseSheet,
         research,
         draft: workingDraft,
+        styleProfile: profile,
+        textOnly: !input.imageBase64,
       };
-      // 无参考图时无可评审的"图"，跳过 LLM 评分（避免对空 draft 硬调文本模型导致超时/504），直接收束为通过。
-      let result: { score: number; verdict: 'pass' | 'retry'; suggests?: string[] };
-      if (!hasRefImage) {
-        trace.push({ step: 'imageScore', tool: 'image-score', resultBrief: 'skip-imageScore（无参考图）' });
-        traceNote('imageScore', STEP_TITLES.imageScore!, 'skip-imageScore（无参考图，直接收束）');
-        result = { score: 1, verdict: 'pass', suggests: [] };
-        bestScore = 1;
-        bestDraft = workingDraft; // 无图 break 前把已 paramValidate 的草稿写为最佳候选
-        break; // 无图无需评审迭代，直接定稿
-      }
-      const scored = await this.wrapStep<{ score: number; verdict: 'pass' | 'retry'; suggests?: string[] }>(
+      const scored = await this.wrapStep<ScoreOutcome>(
         'imageScore', 'image-score', trace, () => this.imageScore.score(scoreInput),
       );
-      result = scored ?? { score: 0, verdict: 'retry' as const };
+      const result: ScoreOutcome = scored ?? { score: 0, verdict: 'retry' as const };
       const last = trace[trace.length - 1];
-      if (last && last.step === 'imageScore') last.score = result.score;
+      if (last && last.step === 'imageScore') {
+        last.score = result.score;
+        last.aesthetics = result.aesthetics;
+        last.realism = result.realism;
+      }
 
       // 保留历史最高分候选（避免最后取的却是更低分版本）
       if (result.score > bestScore) {
@@ -207,7 +231,7 @@ export class AiOrchestratorService {
         const before = JSON.stringify(workingDraft);
         const refined = (await this.wrapStep<Record<string, unknown> | null>(
           'draftRefine', 'draft-refine', trace,
-          () => this.draftRefine.refine({ draft: workingDraft, suggests: result.suggests ?? [], desc: desc as ImageDescription, poseSheet, research }),
+          () => this.draftRefine.refine({ draft: workingDraft, suggests: result.suggests ?? [], desc: desc as ImageDescription, poseSheet, research, styleProfile: profile }),
         )) ?? null;
         if (refined && JSON.stringify(refined) !== before) {
           workingDraft = refined;
@@ -219,8 +243,8 @@ export class AiOrchestratorService {
       }
     }
 
-    // (6.5) 姿势参考面片写入最佳候选并定稿（此前仅用于评分；供 normalize 透传下发）
-    workingDraft = { ...bestDraft, poseRefSheet: poseSheet };
+    // (6.5) 姿势参考面片 + 风格档案写入最佳候选并定稿（此前仅用于评分；供 normalize 透传下发）
+    workingDraft = { ...bestDraft, poseRefSheet: poseSheet, styleProfile: profile };
 
     // (7) 定稿归一化（fail-safe：categories 必传，输入为 object）
     const normalized = normalizeDraft(workingDraft, categories);
