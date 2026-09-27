@@ -15,11 +15,17 @@ export function buildExhaustiveSystemPrompt(): string {
 - 无法判断的字段显式写 "unknown"，不得留空、不得编造。
 - 只输出一个 JSON 对象，不要任何 markdown、解释或代码块标记。
 
+## 审美线索（新增，必填，读不出写 unknown）
+- styleRead：从图中读到的整体风格取向（如「时尚大片」「小红书网感」「随拍松弛」「纪实街拍」「风景意境」「美食生活」）与精修程度（如「无精修/轻精修/精致精修」），读不出写 unknown。
+- expression（人物级）：该人物的表情与眼神（眼睑开合、视线方向、嘴角状态、下颌与颈部松紧），看不清写 unknown。
+- styling（人物级）：该人物的妆造与穿搭质感（颜色、材质、廓形、配饰、褶皱状态），看不清写 unknown。
+
 ## 输出结构（字段全量列出，能填则填，unknown 兜底）
 {
   "global": {
     "subject": "拍摄主体(人/动物/静物/建筑/风景)+主体状态",
     "mood": "氛围基调",
+    "styleRead": "整体风格取向 + 精修程度（时尚大片/小红书网感/随拍松弛/纪实街拍/风景意境/美食生活 + 无精修/轻精修/精致精修）",
     "season": "季节", "timeOfDay": "时段",
     "palette": { "dominant": ["hex1","hex2","hex3"], "tone": "冷暖倾向", "brightness": "明度分布" },
     "light": { "dir": "方向", "kind": "类型", "colorTemp": "冷暖", "tone": "通透度", "contrast": "对比度", "key": "明调/中间调/暗调", "softness": "软硬", "shadowDir": "影子方向" },
@@ -28,6 +34,8 @@ export function buildExhaustiveSystemPrompt(): string {
   },
   "people": [{
     "role": "主体/陪衬",
+    "expression": "该人物表情与眼神（眼睑开合、视线方向、嘴角状态、下颌与颈部松紧）",
+    "styling": "该人物妆造与穿搭质感（颜色、材质、廓形、配饰、褶皱状态）",
     "face": { "expression": "表情", "gazeDir": "视线方向", "headTilt": "头倾角", "angle": "朝向", "openMouth": false },
     "body": { "posture": "躯干姿态", "shoulders": "肩线", "hips": "胯线", "legStretchSuggest": "是否适合拉腿" },
     "limbs": { "armL": "左臂", "armR": "右臂", "handL": "左手动作", "handR": "右手动作", "legL": "左腿", "legR": "右腿", "weightShift": "重心" },

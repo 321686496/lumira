@@ -15,6 +15,8 @@ export interface ImageDescriptionSubjectFrame { x: number; y: number; w: number;
 export interface ImageGlobal {
   subject: string;
   mood: string;
+  /** 整体风格取向 + 精修程度（可选，缺失兜底 unknown） */
+  styleRead?: string;
   season: string;
   timeOfDay: string;
   palette: { dominant: string[]; tone: string; brightness: string };
@@ -33,6 +35,10 @@ export interface ImageGlobal {
 
 export interface Person {
   role: string;
+  /** 该人物表情与眼神（可选，缺失兜底 unknown） */
+  expression?: string;
+  /** 该人物妆造与穿搭质感（可选，缺失兜底 unknown） */
+  styling?: string;
   face: Record<string, unknown>;
   body: Record<string, unknown>;
   limbs: Record<string, unknown>;
@@ -113,6 +119,7 @@ export function normalizeImageDescription(raw: unknown): ImageDescription {
   const global: ImageGlobal = {
     subject: str(rawGlobal.subject),
     mood: str(rawGlobal.mood),
+    styleRead: str(rawGlobal.styleRead),
     season: str(rawGlobal.season),
     timeOfDay: str(rawGlobal.timeOfDay),
     palette: {
@@ -152,6 +159,8 @@ export function normalizeImageDescription(raw: unknown): ImageDescription {
           const positionInFrame = (anchors.positionInFrame && typeof anchors.positionInFrame === 'object' ? anchors.positionInFrame : {}) as Record<string, unknown>;
           return {
             role: str(pp.role),
+            expression: str(pp.expression),
+            styling: str(pp.styling),
             face: unknownKeys(pp.face, FACE_FIELDS),
             body: unknownKeys(pp.body, BODY_FIELDS),
             limbs: unknownKeys(pp.limbs, LIMB_FIELDS),

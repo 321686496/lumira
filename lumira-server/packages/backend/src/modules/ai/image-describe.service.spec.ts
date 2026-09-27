@@ -88,4 +88,25 @@ describe('ImageDescribeService.describe', () => {
 
     await expect(svc.describe({ base64: 'aGk=', mime: 'image/jpeg' })).rejects.toThrow('无法解析');
   });
+
+  it('新契约：people[].expression/styling 与 global.styleRead 可解析，缺失时不崩', async () => {
+    visionChatMock.mockResolvedValueOnce(
+      JSON.stringify({
+        ...LEGAL_DESC,
+        global: { ...LEGAL_DESC.global, styleRead: '小红书网感、轻精修' },
+        people: [{ ...LEGAL_DESC.people[0], expression: '嘴角微松、眼神看侧前方', styling: '米色针织开衫 + 细金链' }],
+      }),
+    );
+    const desc = await buildService().describe({ base64: 'aGk=', mime: 'image/jpeg' });
+    expect(desc.global.styleRead).toBe('小红书网感、轻精修');
+    expect(desc.people[0].expression).toBe('嘴角微松、眼神看侧前方');
+    expect(desc.people[0].styling).toBe('米色针织开衫 + 细金链');
+  });
+
+  it('新契约缺失：styleRead 非字符串 → 空串兜底，不抛错', async () => {
+    visionChatMock.mockResolvedValueOnce(JSON.stringify(LEGAL_DESC));
+    const desc = await buildService().describe({ base64: 'aGk=', mime: 'image/png' });
+    expect(typeof desc.global.styleRead).toBe('string');
+    expect(typeof desc.people[0].expression).toBe('string');
+  });
 });
