@@ -27,6 +27,7 @@ import {
   TIME_TONE_LABELS,
 } from './enums';
 import type { CategoryNode } from './normalize';
+import { renderStyleProfileBlock, STYLE_CATEGORY_LABELS, type StyleProfile } from './style-profile.presets';
 
 /** 枚举行文本：`key（中文标签）、key（中文标签）…`；无标签的 key 原样输出 */
 function enumLine(keys: readonly string[], labels: Record<string, string>): string {
@@ -68,6 +69,51 @@ function renderCategoryTree(categories: CategoryNode[]): string {
   return lines.join('\n');
 }
 
+/**
+ * 人像姿势硬要求：线条设计感 + 表情 + 穿搭 + 左右手落点。
+ */
+export const PORTRAIT_POSE_REQUIREMENT =
+  '姿势要有设计感的线条：避免正面僵直、双手对称、关节正对镜头、手臂紧贴身体。每个姿势必须写清「重心与支撑腿」「肩胯错位」「手部分落点（左右手分别写明动作与落点）」「视线方向」「表情（眼神强度与方向、嘴角、下颌与颈部线的松紧）」「穿搭（颜色、材质、廓形、配饰与褶皱状态，与风格档案的穿搭要求一致）」。';
+
+/**
+ * 非人像大类的拍摄方案硬要求：不套用人像姿势用语。
+ */
+export const NON_PORTRAIT_POSE_REQUIREMENT =
+  '画面要有可执行的拍摄方案：写清主体在画面中的位置与占比、视线/引导线如何进入画面、主体与环境的层次关系（前景—中景—远景）、光线方向与明暗过渡、以及器材与参数（焦段、光圈、快门、ISO）如何服务这一构图。不要套用人像的姿势用语。';
+
+const NON_PORTRAIT_TERMS: Record<Exclude<StyleProfile['category'], 'portrait'>, string> = {
+  landscape: '层次（前景引导—中景主体—远景空气透视）、光时窗（黄金时刻/蓝调时刻）、留白与地平线位置',
+  food: '器皿与道具的摆放逻辑、食物质感的可控高光（蒸汽/油光/碎屑）、俯拍或 45° 视角的取舍',
+  street: '环境叙事要素、抓拍时机与运动相位、现场光比与遮挡关系',
+  night: '光源列表（每个光源的位置/色温/强度）、高光控制与暗部细节、噪点与快门取舍',
+  macro: '放大倍率与最近对焦距离、景深范围（合焦面位置）、背景虚化形态与补光',
+  'still-life': '静物的构图关系（大小/朝向/疏密）、材质对比、背景与台面的色温关系',
+};
+
+export function isPortraitCategory(category: StyleProfile['category']): boolean {
+  return category === 'portrait';
+}
+
+/** 按大类分流的「创作质量要求」第 1/2/4 条 */
+export function qualityRequirements(category: StyleProfile['category']): string {
+  const pose = isPortraitCategory(category) ? PORTRAIT_POSE_REQUIREMENT : NON_PORTRAIT_POSE_REQUIREMENT;
+  const term = isPortraitCategory(category)
+    ? '人像：构图（三分法/居中/框架式/对角线）+ 浅景深虚化形态 + 主体与背景的分离方式 + 情绪表达'
+    : `${STYLE_CATEGORY_LABELS[category]}：${NON_PORTRAIT_TERMS[category]}`;
+  return [
+    `1. 每张图都必须有明确构图意图：${term}。`,
+    `2. ${pose}`,
+    '3. 摄影参数必须互洽：光圈、快门、ISO、焦段与画面景深、噪点、运动模糊一致，不得相互矛盾。',
+    '4. 画面必须有美感落点：光线有方向与层次，色调有统一倾向，主体有视觉引导；不得出现「平平无奇的中性记录」。',
+  ].join('\n');
+}
+
+/** 档案段落（无档案时返回空串，保证向后兼容） */
+function styleProfileBlock(styleProfile?: StyleProfile): string {
+  if (!styleProfile) return '';
+  return `\n\n${renderStyleProfileBlock(styleProfile)}\n\n以上档案是本模板的美学基准，所有字段（meta / camera / pose / sceneGuide / composition / postProcess）都必须与它一致。\n`;
+}
+
 /** 输出 JSON 契约示例（设计文档第四节草稿 JSON，jsonc 注释保留作字段说明） */
 const DRAFT_JSON_EXAMPLE = `{
   "meta": {
@@ -105,7 +151,17 @@ const DRAFT_JSON_EXAMPLE = `{
 }`;
 
 /** 系统提示词公共主体：分类树 + 枚举表 + 输出 JSON 契约 + 硬约束（视觉/纯文字版共用） */
-function buildSystemPromptBody(categories: CategoryNode[]): string {
+function buildSystemPromptBody(categories: CategoryNode[], styleProfile?: StyleProfile): string {
+  const category = styleProfile?.category ?? 'portrait';
+  const portrait = isPortraitCategory(category);
+  const poseConsistencyLine = portrait
+    ? '多姿势模板默认视为同一套连续拍摄：每个 pose.description 只描述动作、身体角度、重心、手部和视线差异，\n' +
+      '  但每一个姿势都要独立满足上述「姿势质量」要求（线条、重心、手部落点、视线），不能因为是第 2、3 张就写得更粗略；\n' +
+      '  不得改变人物长相、服装、发型、体型、场景、道具、光线或整体风格。仅当用户明确要求不同场景 / 人物 /\n' +
+      '  造型时，才允许对应要素变化；'
+    : '多姿势模板默认视为同一套连续拍摄：每个 pose.description 只描述机位 / 取景 / 参数差异，\n' +
+      '  但每一个画面都要独立满足上述「拍摄方案」要求（构图落位、层次、光线、参数），不能因为是第 2、3 张就写得更粗略；\n' +
+      '  不得改变主体、场景、道具、光线或整体风格。仅当用户明确要求不同场景 / 主体 / 造型时，才允许对应要素变化；';
   return `## 分类树（meta.category 取一级 key；meta.classification.majorStyle/style/method 按层级逐级选择，只能从下列 key 中选择，禁止编造 key）
 ${renderCategoryTree(categories)}
 
@@ -127,30 +183,10 @@ ${renderCategoryTree(categories)}
 ${DRAFT_JSON_EXAMPLE}
 \`\`\`
 
-## 创作质量要求（模板合格线：用户照着拍能得到一张「有构图、有机位、有参数、有姿势细节」的好照片）
-只堆氛围词、没有可执行信息的模板视为不合格。以下四块必须写足：
+## 创作质量要求（模板合格线：用户照着拍能得到一张「有构图、有机位、有参数、有细节」的好照片）
+只堆氛围词、没有可执行信息的模板视为不合格。以下四条必须写足：
 
-1. 构图（composition.description + overlayType + subjectFrame）
-   - 写明构图法则（三分法 / 中心对称 / 对角线 / 引导线 / 框架式 / 大面积留白…）以及这么构图的原因；
-   - 写明主体在画面中的位置（左/右/中、上/中/下）与占比（约占画幅几分之几），并给出与之完全一致的 overlayType 与 subjectFrame 归一化坐标（x/y/w/h，0~1）；
-   - 写明留白方向与前景 / 中景 / 背景的层次关系；视线或动作朝向的一侧要留出空间；
-   - 禁止「主体顶天立地、水平线歪斜、背景线条穿过人物头部、主体被边缘随意裁切」这类无设计感的画面。
-2. 姿势（pose[].description + position/scale/rotation + cameraDirection）
-   - 必须写到可直接照做：身体朝向（正/侧/背，转动多少度）、重心与支撑腿、肩线与胯线是否错位、下巴高低、视线看向何处；
-   - 手部要分别写明左右手的具体动作与落点（扶帽檐 / 托腮 / 插兜 / 撩发 / 拎包…），不要写「手自然摆放」这类空话；
-   - 必须是有美感的肢体线条：四肢不与躯干轮廓重叠粘连，不出现正面僵直站姿、双手对称、关节正对镜头、手臂紧贴身体；
-   - cameraDirection 必须区分自拍与他拍：前置摄像头自拍（对镜自拍也算自拍）→ "front"；他人用后置摄像头拍摄 → "back"；
-   - 自拍（front）必须整体按第一人称视角写：镜头就是人物本人的眼睛位置、距面部在一臂之内，只写近景 / 特写 / 半身（不写「2-3 米」「七分身 / 全身」这类第三人称景别），视线看向镜头；手部动作里不要出现「举着手机自拍」这类画面元素；
-   - 同时给出与姿势匹配的 position（归一化中心坐标）、scale（人物大小）、rotation（画面旋转，通常 0）。
-3. 相机参数（camera）—— 必须是「互洽、能实现上述观感」的一组值，而不是各自孤立的数字
-   - lensType 与 lensSuggestion 要和景别、透视一致（人像 85mm/50mm 压缩感，环境人像 24~35mm，手机主摄等效 26mm）；
-   - 光圈与景深、快门与动作/焦距、ISO 与光线亮度、白平衡与画面冷暖、曝光补偿与明暗意图各自对应得上；
-   - 禁止自相矛盾的组合（明亮日景给 ISO 6400、要浅景深却给 f/16、抓拍动态却给 1/30）；
-   - 参数必须是「真实可复现该观感」的估算值，不要浮夸的电影感或影棚数值。
-4. 取景与机位（sceneGuide）
-   - lightDirection 写清方向与性质（右后方侧逆光、顺光、顶光、窗光、路灯…），shootingDistance 与景别一致并带上景别（全身 / 七分身 / 半身 / 特写）；
-   - tips 至少 2 条，必须是可以照做的拍摄要领（机位高度与角度、对焦与构图顺序、如何用前景或反光板解决光线问题…），禁止写「注意光线」这类空话；
-   - background / props 要服务于构图与氛围（例如背景线条的走向、前景虚化物），不要只是罗列名词。
+${qualityRequirements(category)}
 
 ## 硬约束
 - 只输出 JSON，不要任何解释，markdown 代码块标记也尽量省略；
@@ -160,10 +196,7 @@ ${DRAFT_JSON_EXAMPLE}
   两者都不包含数量或多图指令；
 - pose 数组中的每个 description 必须是单张单人可独立生成的姿势，
   不要把多个姿势合并到同一个 description 里；
-- 多姿势模板默认视为同一套连续拍摄：每个 pose.description 只描述动作、身体角度、重心、手部和视线差异，
-  但每一个姿势都要独立满足上述「姿势质量」要求（线条、重心、手部落点、视线），不能因为是第 2、3 张就写得更粗略；
-  不得改变人物长相、服装、发型、体型、场景、道具、光线或整体风格。仅当用户明确要求不同场景 / 人物 /
-  造型时，才允许对应要素变化；
+- ${poseConsistencyLine}
 - 自拍模板（cameraDirection="front"）的 composition.description、sceneGuide.shootingDistance、tips 也必须按第一人称自拍口径写：
   机位在面部一臂之内、景别为近景 / 半身 / 特写，画面中不出现手机、相机、三脚架、自拍杆等拍摄设备与举着设备的手臂；
 - 未知枚举字段直接省略，不要编造；
@@ -175,17 +208,17 @@ ${DRAFT_JSON_EXAMPLE}
   而是在保持光线与风格一致的前提下给出更好的构图与机位建议；
 - 相机参数要给「真正能复现参考图观感」的数值：白平衡 / 曝光必须匹配参考图的明暗冷暖——图中偏暖偏亮就给偏暖色温与正常偏亮曝光，图中暗部柔和就相应降低曝光补正，不要给浮夸的电影感或影棚数值；
 - 光线方向、最佳时段、拍摄距离要与参考图中的真实光影走向一致，文字描述的光线不能与图中阴影方向冲突，确保用户按此模板实拍能复现参考图的光影效果；
-- 不输出 price / silhouette / author / sortOrder / isActive 字段。`;
+- 不输出 price / silhouette / author / sortOrder / isActive 字段。${styleProfileBlock(styleProfile)}`;
 }
 
 /** 视觉识别版系统提示词（现状行为不变，仅结构拆分） */
-export function buildAnalyzeSystemPrompt(categories: CategoryNode[]): string {
-  return `你是资深人像摄影模板编辑，分析用户上传的示例图，产出可直接上线的摄影模板表单数据。\n\n${buildSystemPromptBody(categories)}`;
+export function buildAnalyzeSystemPrompt(categories: CategoryNode[], styleProfile?: StyleProfile): string {
+  return `你是资深摄影/视觉模板编辑（按风格档案作业），分析用户上传的示例图，产出可直接上线的摄影模板表单数据。\n\n${buildSystemPromptBody(categories, styleProfile)}`;
 }
 
 /** 纯文字构思版系统提示词（无示例图，基于文字描述构思模板） */
-export function buildTextOnlySystemPrompt(categories: CategoryNode[]): string {
-  return `你是资深人像摄影模板编辑。用户将提供一段风格描述或创作要求（没有示例图），请据此构思一个可直接上线的摄影模板，产出模板表单数据。描述未提及的字段，给出符合该风格的合理建议值（相机参数为复现该风格的估算值）。\n\n${buildSystemPromptBody(categories)}`;
+export function buildTextOnlySystemPrompt(categories: CategoryNode[], styleProfile?: StyleProfile): string {
+  return `你是资深摄影/视觉模板编辑（按风格档案作业）。用户将提供一段风格描述或创作要求（没有示例图），请据此构思一个可直接上线的摄影模板，产出模板表单数据。描述未提及的字段，给出符合该风格的合理建议值（相机参数为复现该风格的估算值）。\n\n${buildSystemPromptBody(categories, styleProfile)}`;
 }
 
 /** 识别用户提示词附加输入：Step1 文字描述 / 创作要求 / 姿势个数（均可选） */

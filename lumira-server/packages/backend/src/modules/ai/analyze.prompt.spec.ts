@@ -4,6 +4,9 @@
 
 import { buildTextOnlySystemPrompt, buildAnalyzeSystemPrompt } from './analyze.prompt';
 import { CategoryNode } from './normalize';
+import { type StyleProfile } from './style-profile.presets';
+
+const CATS: CategoryNode[] = [{ key: 'portrait', name: '人像', parentKey: null, level: 1 }];
 
 /** 复现 seed 005 中自环：样式 overhead(food 下) + 方法 overhead(父 overhead) */
 function selfLoopCategories(): CategoryNode[] {
@@ -46,5 +49,73 @@ describe('analyze.prompt 自拍（前置）视角契约', () => {
     expect(prompt).toContain('第一人称');
     expect(prompt).toContain('一臂');
     expect(prompt).toContain('不出现手机');
+  });
+});
+
+const PORTRAIT_PROFILE: StyleProfile = {
+  category: 'portrait',
+  archetype: 'fashion_editorial',
+  aestheticTarget: '秋冬杂志大片',
+  subjectStyling: '驼色大衣 + 皮革手套',
+  expressionMood: '冷峻直视镜头',
+  poseLanguage: '线条有张力',
+  lightingSignature: '硬光高光比',
+  compositionBias: '对角线与框架式构图',
+  paletteHint: '高级灰',
+  retouchLevel: 'polished',
+  extraNotes: '灰墙负空间',
+};
+
+const LANDSCAPE_PROFILE: StyleProfile = {
+  ...PORTRAIT_PROFILE,
+  category: 'landscape',
+  archetype: 'landscape_fine_art',
+  aestheticTarget: '层峦空气感',
+  subjectStyling: '',
+  expressionMood: '',
+  poseLanguage: '',
+};
+
+describe('analyze.prompt 风格档案分流', () => {
+  it('注入档案：两种系统提示词都含档案段落与档案字段值', () => {
+    const vision = buildAnalyzeSystemPrompt(CATS, PORTRAIT_PROFILE);
+    const textOnly = buildTextOnlySystemPrompt(CATS, PORTRAIT_PROFILE);
+    for (const p of [vision, textOnly]) {
+      expect(p).toContain('本次风格档案');
+      expect(p).toContain('时尚大片');
+      expect(p).toContain('驼色大衣 + 皮革手套');
+      expect(p).toContain('冷峻直视镜头');
+      expect(p).toContain('对角线与框架式构图');
+      expect(p).toContain('真实照片媒介');
+    }
+  });
+
+  it('不传档案时不得出现档案段落（向后兼容）', () => {
+    const p = buildAnalyzeSystemPrompt(CATS);
+    expect(p).not.toContain('本次风格档案');
+    expect(p).toContain('重心与支撑腿');
+  });
+
+  it('人像档案：要求含表情与穿搭，并含人类专属姿势术语', () => {
+    const p = buildAnalyzeSystemPrompt(CATS, PORTRAIT_PROFILE);
+    expect(p).toContain('表情');
+    expect(p).toContain('穿搭');
+    expect(p).toContain('重心与支撑腿');
+    expect(p).toContain('手部落点');
+  });
+
+  it('非人像档案：不得出现「重心与支撑腿」「手部落点」，改为该大类术语', () => {
+    const p = buildAnalyzeSystemPrompt(CATS, LANDSCAPE_PROFILE);
+    expect(p).not.toContain('重心与支撑腿');
+    expect(p).not.toContain('手部落点');
+    expect(p).toContain('层次');
+    expect(p).toContain('光时窗');
+  });
+
+  it('自拍第一人称契约仍保留（回归）', () => {
+    const p = buildAnalyzeSystemPrompt(CATS, PORTRAIT_PROFILE);
+    expect(p).toContain('第一人称');
+    expect(p).toContain('一臂');
+    expect(p).toContain('不出现手机');
   });
 });
