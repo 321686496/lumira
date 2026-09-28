@@ -120,6 +120,15 @@
 
 > ⚠️ **`BACKEND_PUBLIC_URL`** **必须配置**：后端 `buildPublicUrl()` 用它构造上传图片的可访问 URL，未设置时回退 `http://localhost:3000`，会导致 App 端图片加载失败。修改 `deploy/docker-compose.prod.yml` 后需在服务器 `.env` 同步补充该变量并重新部署。
 
+**服务器 `.env` 可选变量（网页爬取渲染降级）**：
+
+| 变量                    | 说明                                                                        |
+| --------------------- | ------------------------------------------------------------------------- |
+| `CRAWL_COOKIE_SECRET` | 网页爬取 cookie 的 AES-256-GCM 密钥（`openssl rand -hex 32`）。未配置时后台保存 cookie 返回 400，纯静态抓取不受影响 |
+| `RENDERER_WS_ENDPOINT` | 由 `deploy/docker-compose.prod.yml` 注入（`ws://lumira-renderer:9222`），无需在服务器 `.env` 手动维护 |
+
+> ⚠️ 首次部署（或 renderer 镜像有改动）时必须用 `docker compose -f docker-compose.prod.yml --env-file .env up -d --build`，以便构建 `lumira-renderer` 镜像；仅 `up -d` 不会构建新服务。
+
 ### 图片上传与 URL 体系（重要）
 
 **上传接口**：所有上传挂在 `/api/v1/admin/*`（AdminAuthGuard 保护），无独立 /upload 接口：

@@ -22,6 +22,12 @@ if (process.env.NODE_ENV === "production") {
   }
 }
 
+// 渲染降级能力需要 renderer 容器的 CDP 端点（docker-compose 注入）。
+// 未配置时该能力自动关闭——显式告警，避免运营在后台开了开关却「以为开了」。
+if (!process.env.RENDERER_WS_ENDPOINT) {
+  console.warn("WARN: RENDERER_WS_ENDPOINT 未配置，网页爬取的无头渲染降级已关闭（crawlRenderEnabled 开关不会生效）");
+}
+
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
