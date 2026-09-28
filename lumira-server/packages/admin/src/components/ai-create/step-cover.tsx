@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { generateAiPoseImages, type AiPoseProgress } from '@/lib/ai-task';
-import type { AiBatchImageTraceEvent, AiResearchRef } from '@/types/admin';
+import type { AiBatchImageTraceEvent, AiResearchRef, AiResearchBrief } from '@/types/admin';
 import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
 import { ImageSquare } from '@phosphor-icons/react/dist/csr/ImageSquare';
 import { ArrowLeft } from '@phosphor-icons/react/dist/csr/ArrowLeft';
@@ -77,6 +77,7 @@ export function StepCover({
   onReferenceChange,
   draft,
   research,
+  researchBrief,
   candidates,
   setCandidates,
   busy,
@@ -91,6 +92,8 @@ export function StepCover({
   draft: Record<string, unknown> | null;
   /** 识别阶段的网络趋势研究结果（生成时透传给后端提示词组织器，与草稿同源） */
   research?: AiResearchRef[] | null;
+  /** 趋势研究结构化结论（与 items 同源，生成时透传给后端提示词组织器） */
+  researchBrief?: AiResearchBrief | null;
   candidates: CoverCandidate[];
   setCandidates: Dispatch<SetStateAction<CoverCandidate[]>>;
   busy: boolean;
@@ -166,6 +169,7 @@ export function StepCover({
         referenceFile: referenceFile ?? exampleFile,
         extraPrompt,
         research,
+        researchBrief,
         onProgress: setPoseProgress,
         onEvents: onPoseEvents,
         onResult: (result) => {

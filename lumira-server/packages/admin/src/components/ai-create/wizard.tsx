@@ -369,6 +369,7 @@ export function AiCreateWizard({
         draft: draftLocal,
         referenceFile: poseReferenceFile ?? exampleFile,
         research: analyzeResult.research,
+        researchBrief: analyzeResult.researchBrief ?? null,
         signal,
         onProgress: setPoseProgress,
         onResult: appendGeneratedPose,
@@ -845,6 +846,7 @@ export function AiCreateWizard({
             }}
             draft={draft}
             research={analyzeDetail?.research ?? null}
+            researchBrief={analyzeDetail?.researchBrief ?? null}
             candidates={candidates}
             setCandidates={setCandidates}
             busy={busy}

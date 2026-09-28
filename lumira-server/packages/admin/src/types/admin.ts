@@ -688,6 +688,18 @@ export interface AiTraceEvent {
   durationMs?: number;
 }
 
+/** 趋势研究二次整理后的结构化结论（与后端 ResearchBrief 对齐） */
+export interface AiResearchBrief {
+  summary: string;
+  themes: string[];
+  styles: string[];
+  colorLight: string[];
+  visualElements: string[];
+  seasons: string[];
+  poseIdeas: string[];
+  sources: { title: string; url?: string }[];
+}
+
 /** 查询 AI 识别任务状态（done 带 draft/warnings/trace/raw/research，error 带 error） */
 export interface AiAnalyzeStatusResult {
   taskId: string;
@@ -700,6 +712,8 @@ export interface AiAnalyzeStatusResult {
   raw?: Record<string, unknown>;
   /** 趋势研究命中的参考来源（含 URL） */
   research?: AiResearchRef[];
+  /** 趋势研究结构化结论（生图阶段复用；旧后端/未启用时缺省） */
+  researchBrief?: AiResearchBrief | null;
   /** 识别流程实时事件流（含每步提示词与响应，按 seq 递增） */
   events?: AiTraceEvent[];
   /** 已产生的最大 seq（下一次增量拉取的 since） */

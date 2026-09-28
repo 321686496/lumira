@@ -136,18 +136,22 @@ describe('generateAiPoseImages', () => {
     expect(formData?.get('reference')).toBe(reference);
   });
 
-  it('传入研究结果时序列化为 research 字段提交；空数组不提交该字段', async () => {
+  it('传入研究结果时序列化为 { items, brief } 提交；均为空时不提交该字段', async () => {
     batchStartMock.mockResolvedValue({ batchId: 'batch-1' });
     batchStatusMock.mockResolvedValue({
       batchId: 'batch-1', total: 1, completed: 1, current: 1, status: 'done',
       results: [{ index: 0, status: 'done' as const, image: 'aGVsbG8=', mimeType: 'image/png' }],
     });
     const research = [{ source: 'sogou', title: '千金风', snippet: '流行' }];
+    const researchBrief = {
+      summary: '秋季趋势', themes: ['复古'], styles: ['胶片'], colorLight: ['暖调侧逆光'],
+      visualElements: ['枫叶'], seasons: ['秋'], poseIdeas: ['侧身回眸'], sources: [{ title: '来源' }],
+    };
 
-    await generateAiPoseImages({ draft: {}, research });
+    await generateAiPoseImages({ draft: {}, research, researchBrief });
 
     const formData = batchStartMock.mock.calls[0]?.[0];
-    expect(JSON.parse(formData?.get('research') as string)).toEqual(research);
+    expect(JSON.parse(formData?.get('research') as string)).toEqual({ items: research, brief: researchBrief });
 
     await generateAiPoseImages({ draft: {}, research: [] });
 
