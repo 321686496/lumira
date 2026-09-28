@@ -451,6 +451,10 @@ export interface AiProviderConfigView {
   enabled: boolean;
   /** 研究管线开关：true=启用；false=关闭 */
   searchEnabled: boolean;
+  /** 网页爬取工具开关：true=启用（文本模型可调用 crawl_website）；false=关闭 */
+  crawlEnabled: boolean;
+  /** 网页爬取：单会话最大调用次数（1~6） */
+  crawlMaxPerSession: number;
   /** 搜索服务商：'general'（通用搜索 API）| 'vendor'（厂商联网检索）| 'qwen'（三方 MaaS）| 'qwen-official'（官方百炼）| null（未启用） */
   searchProvider: 'general' | 'vendor' | 'qwen' | 'qwen-official' | null;
   /** 通用搜索 API baseUrl（searchProvider=general 时使用） */
@@ -521,6 +525,10 @@ export interface UpdateAiConfigPayload {
   silhouetteApiKey?: string;
   /** 研究管线开关：true=启用；false/缺省 = 关闭 */
   searchEnabled?: boolean;
+  /** 网页爬取工具开关：true=启用；false/缺省 = 关闭 */
+  crawlEnabled?: boolean;
+  /** 网页爬取：单会话最大调用次数（1~6，缺省沿用原值） */
+  crawlMaxPerSession?: number;
   /** 搜索服务商：'general' | 'vendor' | 'qwen' | 'qwen-official' | 'off'（关闭） */
   searchProvider?: string;
   searchBaseUrl?: string;

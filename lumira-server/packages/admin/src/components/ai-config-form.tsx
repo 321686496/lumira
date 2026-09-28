@@ -93,6 +93,9 @@ interface FormState {
   searchQwenOfficialApiKey: string; // 留空 = 不修改原值
   searchQwenOfficialModel: string;
   maxIterations: number; // 迭代上限（预算护栏 1~3）
+  // 网页爬取（文本通用工具循环，spec 2026-09-28）
+  webCrawl: boolean;
+  crawlMaxPerSession: number; // 单会话最大爬取次数 1~6
   // 参考图抓取（spec 2026-09-28 参考图）
   researchImagesEnabled: boolean;
   researchImagesMax: number;
@@ -219,6 +222,8 @@ export function AiConfigForm({
           searchQwenOfficialApiKey: '',
           searchQwenOfficialModel: initial.searchQwenOfficialModel,
           maxIterations: initial.maxIterations,
+          webCrawl: initial.crawlEnabled === true,
+          crawlMaxPerSession: initial.crawlMaxPerSession ?? 3,
           researchImagesEnabled: initial.researchImagesEnabled,
           researchImagesMax: initial.researchImagesMax,
           researchImagesPageFetch: initial.researchImagesPageFetch,
@@ -249,6 +254,8 @@ export function AiConfigForm({
           searchQwenOfficialApiKey: '',
           searchQwenOfficialModel: '',
           maxIterations: 2,
+          webCrawl: false,
+          crawlMaxPerSession: 3,
           researchImagesEnabled: false,
           researchImagesMax: 6,
           researchImagesPageFetch: true,
@@ -514,6 +521,8 @@ export function AiConfigForm({
       }
       // 研究管线（Agentic）：搜索方式四选一互斥 → provider/sources/字段映射
       payload.searchEnabled = form.searchMode !== 'off';
+      payload.crawlEnabled = form.webCrawl;
+      payload.crawlMaxPerSession = Number(form.crawlMaxPerSession) || 3;
       payload.maxIterations = form.maxIterations;
       payload.llmRetryCount = form.llmRetryCount;
       payload.llmTimeoutMs = Math.round(form.llmTimeoutSeconds * 1000);
@@ -1147,6 +1156,45 @@ export function AiConfigForm({
               </div>
             </div>
           </div>
+
+          {/* 网页爬取（文本通用工具循环）：开关 + 单会话次数上限 */}
+          <Card className="space-y-4 p-4 shadow-none">
+            <div>
+              <div className="text-sm font-medium text-foreground">网页爬取</div>
+              <div className="mt-0.5 text-xs text-muted-foreground">
+                开启后，文本模型可在生成过程中按需抓取搜索结果/用户提供链接的网页正文（仅静态页面，单会话有次数上限）。
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label htmlFor="ai-web-crawl-enabled" className="text-sm font-medium text-foreground">
+                启用网页爬取
+              </label>
+              <Switch
+                id="ai-web-crawl-enabled"
+                checked={form.webCrawl}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, webCrawl: v }))}
+              />
+            </div>
+
+            <div className="space-y-2 md:max-w-xs">
+              <Label htmlFor="ai-crawl-max-per-session">单会话次数上限</Label>
+              <Input
+                id="ai-crawl-max-per-session"
+                type="number"
+                min={1}
+                max={6}
+                value={form.crawlMaxPerSession}
+                disabled={!form.webCrawl}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, crawlMaxPerSession: Number(e.target.value) || 3 }))
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                1~6，默认 3。单次会话内模型最多调用该次数，超限后仍会产出最终结果。
+              </p>
+            </div>
+          </Card>
 
           {/* 启用开关 */}
           <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
