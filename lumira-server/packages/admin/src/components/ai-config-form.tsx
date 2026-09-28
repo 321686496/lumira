@@ -1049,7 +1049,7 @@ export function AiConfigForm({
                     min={0}
                     max={3}
                     value={form.llmRetryCount}
-                    onChange={(e) => setForm((f) => ({ ...f, llmRetryCount: Number(e.target.value) || 2 }))}
+                    onChange={(e) => setForm((f) => ({ ...f, llmRetryCount: e.target.value === '' ? 2 : Number(e.target.value) }))}
                   />
                   <p className="text-xs text-muted-foreground">0~3，默认 2。总调用次数 ≤ 次数 + 1。</p>
                 </div>
