@@ -63,7 +63,7 @@ const ACTIVE_CFG = {
 
 /** 模型 RAW 输出夹具（成功路径与多输入用例共用；经 normalize 后 category 命中分类树） */
 const RAW_DRAFT = {
-  meta: { name: '晴空田园少女人像侧拍逆光清新风格模板', category: 'portrait' },
+  meta: { name: '晴空田园少女人像侧拍逆光清新风格模板', category: 'portrait', subjectCount: 1 },
 };
 
 function buildService(opts: { categoryRows?: unknown[]; cfgError?: Error } = {}) {

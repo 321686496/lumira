@@ -29,6 +29,7 @@ function baseDraft(): any {
     meta: {
       name: '晴空田园少女人像侧拍逆光清新风格模板',
       category: 'portrait',
+      subjectCount: 1,
       shortDesc: '把夏天拍进眼睛里',
       description: '逆光下的田园少女，主体清新自然，背景为田野与天空。',
       tags: ['日系', '田园', '清新'],
@@ -382,5 +383,37 @@ describe('normalizeDraft', () => {
 
     expect((draft.postProcess as any).legStretch).toBe(0.5);
     expect(warnings.some((w) => w.includes('legStretch'))).toBe(false);
+  });
+
+  it('meta.subjectCount：缺失回落 1 并记 warning', () => {
+    const draft: any = baseDraft();
+    delete draft.meta.subjectCount;
+    const { draft: out, warnings } = normalizeDraft(draft, CATEGORIES);
+    expect((out.meta as any).subjectCount).toBe(1);
+    expect(warnings.some((w) => w.includes('meta.subjectCount'))).toBe(true);
+  });
+
+  it('meta.subjectCount：合法值原样保留', () => {
+    const draft: any = baseDraft();
+    draft.meta.subjectCount = 3;
+    const { draft: out, warnings } = normalizeDraft(draft, CATEGORIES);
+    expect((out.meta as any).subjectCount).toBe(3);
+    expect(warnings.some((w) => w.includes('meta.subjectCount'))).toBe(false);
+  });
+
+  it('meta.subjectCount：超范围夹取到 1~8 并记 warning', () => {
+    const draft: any = baseDraft();
+    draft.meta.subjectCount = 99;
+    const { draft: out, warnings } = normalizeDraft(draft, CATEGORIES);
+    expect((out.meta as any).subjectCount).toBe(8);
+    expect(warnings.some((w) => w.includes('meta.subjectCount'))).toBe(true);
+  });
+
+  it('meta.subjectCount：非数字回落 1 并记 warning', () => {
+    const draft: any = baseDraft();
+    draft.meta.subjectCount = '3';
+    const { draft: out, warnings } = normalizeDraft(draft, CATEGORIES);
+    expect((out.meta as any).subjectCount).toBe(1);
+    expect(warnings.some((w) => w.includes('meta.subjectCount'))).toBe(true);
   });
 });

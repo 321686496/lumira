@@ -281,6 +281,21 @@ export function normalizeDraft(raw: unknown, categories: CategoryNode[]): Normal
   const description = toStr(rawMeta.description);
   if (description !== undefined) meta.description = description;
 
+  // subjectCount：画面主体人数（1~8 整数，缺省 1）。缺省不是中性值而是「单人」的明确断言，
+  // 因此模型未给出时必须记 warning，避免情侣/全家福场景被静默降级成单人模板。
+  const rawSubjectCount = rawMeta.subjectCount;
+  if (typeof rawSubjectCount === 'number' && Number.isFinite(rawSubjectCount)) {
+    const rounded = Math.round(rawSubjectCount);
+    const clamped = Math.min(8, Math.max(1, rounded));
+    if (clamped !== rawSubjectCount) {
+      warnings.push(`meta.subjectCount ${rawSubjectCount} 不在 1~8 范围内，已夹取为 ${clamped}`);
+    }
+    meta.subjectCount = clamped;
+  } else {
+    warnings.push('未提供 meta.subjectCount，已按 1 人处理');
+    meta.subjectCount = 1;
+  }
+
   // tags：过滤非 string
   if (Array.isArray(rawMeta.tags)) {
     meta.tags = rawMeta.tags.filter((t): t is string => typeof t === 'string');
