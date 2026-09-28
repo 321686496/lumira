@@ -224,4 +224,18 @@ export class UpdateAiConfigDto {
   @Min(1)
   @Max(90)
   researchImagesTtlDays?: number;
+
+  // ===== 网页爬取工具（spec 2026-09-28 网页爬取设计）=====
+
+  /** 网页爬取工具开关：1=启用；缺省 = 沿用原值 */
+  @IsOptional()
+  @IsBoolean()
+  crawlEnabled?: boolean;
+
+  /** 单次文本会话最多爬取次数（1~6）；缺省 = 沿用原值 */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(6)
+  crawlMaxPerSession?: number;
 }

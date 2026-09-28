@@ -67,6 +67,10 @@ export interface AiConfigView {
   llmTimeoutMs: number;
   /** 识别稳定性：单次 LLM 输出 token 上限（默认 8192） */
   llmMaxTokens: number;
+  /** 网页爬取工具开关 */
+  crawlEnabled: boolean;
+  /** 单次文本会话最多爬取次数（1~6） */
+  crawlMaxPerSession: number;
   /** 参考图抓取总开关 */
   researchImagesEnabled: boolean;
   /** 每主题最多保留参考图张数 */
@@ -114,6 +118,11 @@ export interface ActiveAiConfig {
     sources: string[];
     maxIterations: number;
   };
+  /** 网页爬取工具（文本模型工具循环的开关与预算） */
+  crawl: {
+    enabled: boolean;
+    maxPerSession: number;
+  };
   /** 识别链路稳定性（JSON 识别步骤重试 / 超时 / 输出上限） */
   runtime: {
     /** 失败后额外重试次数（0 = 不重试） */
@@ -152,6 +161,8 @@ const ALL_TEST_TARGETS: AiConfigTestTarget[] = ['vision', 'text', 'image', 'silh
 const DEFAULT_LLM_RETRY_COUNT = 2;
 const DEFAULT_LLM_TIMEOUT_MS = 300_000;
 const DEFAULT_LLM_MAX_TOKENS = 8192;
+/** 网页爬取默认次数上限（与迁移 049 的 DEFAULT 一致） */
+const DEFAULT_CRAWL_MAX_PER_SESSION = 3;
 
 /** apiKey 脱敏：空值返回空串（避免与脱敏后的 '****' 混淆）；≤8 位全遮蔽；否则前 3 + **** + 后 2 */
 function maskKey(k: string): string {
@@ -232,6 +243,8 @@ export class AiConfigService {
       llmRetryCount: row.llmRetryCount ?? DEFAULT_LLM_RETRY_COUNT,
       llmTimeoutMs: row.llmTimeoutMs ?? DEFAULT_LLM_TIMEOUT_MS,
       llmMaxTokens: row.llmMaxTokens ?? DEFAULT_LLM_MAX_TOKENS,
+      crawlEnabled: row.crawlEnabled === 1,
+      crawlMaxPerSession: row.crawlMaxPerSession ?? DEFAULT_CRAWL_MAX_PER_SESSION,
       researchImagesEnabled: (row.researchImagesEnabled ?? 0) === 1,
       researchImagesMax: row.researchImagesMax ?? DEFAULT_RESEARCH_IMAGES_CONFIG.max,
       researchImagesPageFetch: (row.researchImagesPageFetch ?? 1) === 1,
@@ -315,6 +328,12 @@ export class AiConfigService {
     const llmRetryCount = dto.llmRetryCount ?? existing?.llmRetryCount ?? DEFAULT_LLM_RETRY_COUNT;
     const llmTimeoutMs = dto.llmTimeoutMs ?? existing?.llmTimeoutMs ?? DEFAULT_LLM_TIMEOUT_MS;
     const llmMaxTokens = dto.llmMaxTokens ?? existing?.llmMaxTokens ?? DEFAULT_LLM_MAX_TOKENS;
+    // 网页爬取配置：越界直接拒绝；开关 / 上限缺省均沿用存量（首次保存回退默认值）
+    if (dto.crawlMaxPerSession !== undefined && (dto.crawlMaxPerSession < 1 || dto.crawlMaxPerSession > 6)) {
+      throw new BadRequestException('网页爬取次数上限需在 1~6 之间');
+    }
+    const crawlEnabled = dto.crawlEnabled === undefined ? (existing?.crawlEnabled === 1 ? 1 : 0) : dto.crawlEnabled ? 1 : 0;
+    const crawlMaxPerSession = dto.crawlMaxPerSession ?? existing?.crawlMaxPerSession ?? DEFAULT_CRAWL_MAX_PER_SESSION;
     const searchQwenBaseUrl = dto.searchQwenBaseUrl?.trim() || existing?.searchQwenBaseUrl || null;
     const resolvedSearchQwenApiKey = dto.searchQwenApiKey?.trim() || existing?.searchQwenApiKey || null;
     const searchQwenModel = dto.searchQwenModel?.trim() || existing?.searchQwenModel || null;
@@ -382,6 +401,8 @@ export class AiConfigService {
         llmRetryCount,
         llmTimeoutMs,
         llmMaxTokens,
+        crawlEnabled,
+        crawlMaxPerSession,
         searchQwenBaseUrl,
         searchQwenApiKey: resolvedSearchQwenApiKey,
         searchQwenModel,
@@ -427,6 +448,8 @@ export class AiConfigService {
           llmRetryCount,
           llmTimeoutMs,
           llmMaxTokens,
+          crawlEnabled,
+          crawlMaxPerSession,
           searchQwenBaseUrl,
           searchQwenApiKey: dto.searchQwenApiKey?.trim() ? resolvedSearchQwenApiKey : existing?.searchQwenApiKey,
           searchQwenModel,
@@ -648,6 +671,10 @@ export class AiConfigService {
         site: row.searchSite ?? '',
         sources: parseSearchSources(row.searchSources),
         maxIterations: row.maxIterations ?? 3,
+      },
+      crawl: {
+        enabled: row.crawlEnabled === 1,
+        maxPerSession: row.crawlMaxPerSession ?? DEFAULT_CRAWL_MAX_PER_SESSION,
       },
       runtime: {
         retryCount: row.llmRetryCount ?? DEFAULT_LLM_RETRY_COUNT,

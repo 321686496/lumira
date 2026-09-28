@@ -392,6 +392,10 @@ export const aiProviderConfig = mysqlTable('ai_provider_config', {
   llmTimeoutMs: int('llm_timeout_ms').notNull().default(300_000),
   /** 单次 LLM 输出 token 上限 */
   llmMaxTokens: int('llm_max_tokens').notNull().default(8192),
+  /** 网页爬取工具开关：1=启用（文本模型可调用 crawl_website）；0=关闭 */
+  crawlEnabled: int('crawl_enabled').notNull().default(0),
+  /** 单次文本会话最多爬取次数（1~6） */
+  crawlMaxPerSession: int('crawl_max_per_session').notNull().default(3),
   /** Qwen 模型自带联网搜索端点（search_provider=qwen 时使用） */
   searchQwenBaseUrl: varchar('search_qwen_base_url', { length: 255 }),
   /** Qwen 搜索 API key（脱敏返回，永不回传明文） */
