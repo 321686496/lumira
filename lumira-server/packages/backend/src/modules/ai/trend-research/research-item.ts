@@ -11,7 +11,7 @@ export interface ResearchItem {
   snippet: string;
   /** 关键词（供中枢 vs 用户意图/季节做命中判断） */
   keywords: string[];
-  /** 命中条目若带图则保留原图地址（交给 T2 队列识别） */
+  /** 命中条目若带图则保留原图地址（第一层参考图来源；由 research-image.service 抓取落盘） */
   imgUrl?: string;
   /** 原文链接 */
   url?: string;

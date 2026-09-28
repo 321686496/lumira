@@ -21,6 +21,8 @@ export interface WebSearchQuery {
   limit?: number;
   /** 可选来源限定 */
   source?: string;
+  /** 可选结果类别（如 'images' 走图片搜索；缺省为综合网页搜索） */
+  categories?: string;
 }
 
 /** 搜索适配器抽象 */
@@ -40,7 +42,7 @@ export interface VendorWebSearchProvider extends WebSearchProvider {
  */
 export function createWebSearchProvider(
   providerName: string,
-  cfg: { baseUrl?: string; apiKey?: string; model?: string; site?: string; vendorEndpoint?: LlmEndpoint },
+  cfg: { baseUrl?: string; apiKey?: string; model?: string; site?: string; categories?: string; vendorEndpoint?: LlmEndpoint },
 ): WebSearchProvider {
   const name = (providerName || '').trim().toLowerCase();
   switch (name) {
@@ -76,7 +78,7 @@ export function clearWebSearchCache(): void {
  * 识别流程采集中会记录本次检索的查询词与命中摘要（供后台实时展示）。
  */
 export async function cacheableSearch(provider: WebSearchProvider, q: WebSearchQuery): Promise<ResearchItem[]> {
-  const key = `${provider.name}|${q.query}|${q.limit ?? 10}`;
+  const key = `${provider.name}|${q.query}|${q.limit ?? 10}|${q.categories ?? ''}`;
   const hit = searchCache.get(key);
   if (hit) return hit;
   const handle = traceSearchCall({ title: `联网检索 · ${provider.name}`, model: provider.name, query: q.query });

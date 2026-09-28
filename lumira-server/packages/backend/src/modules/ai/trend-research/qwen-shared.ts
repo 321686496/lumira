@@ -14,6 +14,7 @@ export const QWEN_SEARCH_DEFAULT_MODEL = 'qwen-plus';
 export interface SearchHit {
   title?: unknown; url?: unknown; site?: unknown; caption?: unknown;
   snippet?: unknown; content?: unknown;
+  imgSrc?: unknown; thumbnail?: unknown; thumbnailSrc?: unknown;
 }
 
 /** 宽松提取 JSON（对象/数组）：直接 parse，失败剥 markdown 代码块后再试，仍失败返回 null */
@@ -66,7 +67,15 @@ export function toResearchItem(hit: SearchHit, source: string): ResearchItem {
   const title = clean(firstStr(hit.title) ?? '');
   const snippet = clean(firstStr(hit.snippet, hit.content) ?? '');
   const url = clean(firstStr(hit.url, hit.site, hit.caption) ?? '');
-  return { source, title, snippet, keywords: tokenize(snippet, title), url };
+  const imgUrl = clean(firstStr(hit.imgSrc, hit.thumbnailSrc, hit.thumbnail) ?? '');
+  return {
+    source,
+    title,
+    snippet,
+    keywords: tokenize(snippet, title),
+    url,
+    imgUrl: imgUrl && /^https?:\/\//i.test(imgUrl) ? imgUrl : undefined,
+  };
 }
 
 /** 正文综述捕获上限：保住节日日历/趋势清单核心信息，同时约束透传载荷 */

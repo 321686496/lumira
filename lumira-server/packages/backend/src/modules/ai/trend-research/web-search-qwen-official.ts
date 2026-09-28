@@ -87,7 +87,7 @@ function extractOfficialItems(data: unknown): ResearchItem[] | null {
   const results = Array.isArray(si?.search_results) ? (si?.search_results as Record<string, unknown>[]) : [];
   const refs = results
     .map((r) => toResearchItem(
-      { title: r.title, url: r.url, site: r.site_name, snippet: r.snippet, content: r.content },
+      { title: r.title, url: r.url, site: r.site_name, snippet: r.snippet, content: r.content, imgSrc: r.img_src ?? r.image ?? r.image_url, thumbnailSrc: r.thumbnail_src ?? r.thumbnail },
       'qwen-official',
     ))
     .filter((i) => i.title || i.url);

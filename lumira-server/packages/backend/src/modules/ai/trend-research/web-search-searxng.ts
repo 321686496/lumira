@@ -14,6 +14,9 @@ interface SearxngResult {
   title?: unknown;
   url?: unknown;
   content?: unknown;
+  img_src?: unknown;
+  thumbnail?: unknown;
+  thumbnail_src?: unknown;
 }
 
 /** 摘要 → 关键词：按空白分词，保留含字母/数字/中日韩字的词（排除纯符号） */
@@ -35,10 +38,11 @@ function tokenizeKeywords(snippet: string, title: string): string[] {
 }
 
 /** 创建 searxng 适配器（site 可选：拼接 site: 前缀做站点限定搜索） */
-export function createSearxngSearchProvider(cfg: { baseUrl?: string; apiKey?: string; site?: string }): WebSearchProvider {
+export function createSearxngSearchProvider(cfg: { baseUrl?: string; apiKey?: string; site?: string; categories?: string }): WebSearchProvider {
   const base = (cfg.baseUrl || 'http://lumira-searxng:8080').replace(/\/+$/, '');
   const apiKey = cfg.apiKey || '';
   const site = (cfg.site || '').trim();
+  const categories = (cfg.categories || '').trim();
 
   return {
     // name 需区分不同 site：cacheableSearch 以 provider.name 作为缓存键的一部分，
@@ -47,6 +51,8 @@ export function createSearxngSearchProvider(cfg: { baseUrl?: string; apiKey?: st
     async search(q: WebSearchQuery): Promise<ResearchItem[]> {
       const query = site ? `site:${site} ${q.query}` : q.query;
       const params = new URLSearchParams({ q: query, format: 'json', language: 'zh-CN' });
+      const cats = (q.categories ?? categories).trim();
+      if (cats) params.set('categories', cats);
       const headers: Record<string, string> = {};
       if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
       const res = await fetch(`${base}/search?${params.toString()}`, {
@@ -67,14 +73,27 @@ export function createSearxngSearchProvider(cfg: { baseUrl?: string; apiKey?: st
       return list.map((it): ResearchItem => {
         const title = typeof it.title === 'string' ? it.title.slice(0, 120) : '';
         const snippet = typeof it.content === 'string' ? it.content.slice(0, 300) : '';
+        const imgUrl = firstImageUrl(it);
         return {
           source: 'searxng',
           title,
           snippet,
           url: typeof it.url === 'string' ? it.url : undefined,
+          imgUrl,
           keywords: tokenizeKeywords(snippet, title),
         };
       });
     },
   };
+}
+
+/** 图片地址优先级：img_src → thumbnail_src → thumbnail（仅接受 http/https 字符串） */
+function firstImageUrl(it: SearxngResult): string | undefined {
+  for (const raw of [it.img_src, it.thumbnail_src, it.thumbnail]) {
+    if (typeof raw === 'string') {
+      const s = raw.trim();
+      if (/^https?:\/\//i.test(s)) return s;
+    }
+  }
+  return undefined;
 }
