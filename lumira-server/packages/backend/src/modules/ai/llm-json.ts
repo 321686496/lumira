@@ -7,6 +7,8 @@
 // 每次尝试都会经 visionChat / textChat 落一条 llm 事件，实时过程面板因此天然可见。
 
 import { textChat, visionChat, type LlmEndpoint } from './llm-client';
+import { chatWithTools } from './tools/text-tool-loop';
+import type { TextToolContext } from './tools/text-tool-loop';
 import { extractJson } from './normalize';
 import { traceNote } from './llm-trace';
 
@@ -29,6 +31,8 @@ export interface JsonChatInput {
   timeoutMs?: number;
   /** 覆盖 runtime.maxTokens */
   maxTokens?: number;
+  /** 文本模型工具上下文（可选；缺省 = 无工具，行为与旧版一致） */
+  ctx?: TextToolContext;
 }
 
 /** JSON 识别最终失败（重试已用尽） */
@@ -111,7 +115,7 @@ export async function visionChatJson(
   );
 }
 
-/** 纯文本 JSON 识别：textChat(jsonMode) → extractJson → 失败按 runtime 有界重试 */
+/** 纯文本 JSON 识别：chatWithTools(jsonMode) → extractJson → 失败按 runtime 有界重试 */
 export async function textChatJson(
   endpoint: LlmEndpoint,
   input: JsonChatInput,
@@ -120,14 +124,18 @@ export async function textChatJson(
   return runJsonChat(
     runtime,
     (userText) =>
-      textChat(endpoint, {
-        systemPrompt: input.systemPrompt,
-        userText,
-        temperature: input.temperature,
-        jsonMode: true,
-        timeoutMs: input.timeoutMs ?? runtime.timeoutMs,
-        maxTokens: input.maxTokens ?? runtime.maxTokens,
-      }),
+      chatWithTools(
+        endpoint,
+        {
+          systemPrompt: input.systemPrompt,
+          userText,
+          temperature: input.temperature,
+          jsonMode: true,
+          timeoutMs: input.timeoutMs ?? runtime.timeoutMs,
+          maxTokens: input.maxTokens ?? runtime.maxTokens,
+        },
+        input.ctx,
+      ),
     input.userText,
   );
 }

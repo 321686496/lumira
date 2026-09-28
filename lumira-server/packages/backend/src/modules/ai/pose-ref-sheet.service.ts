@@ -8,6 +8,7 @@
 import { Injectable } from '@nestjs/common';
 import { AiConfigService } from './ai-config.service';
 import { textChatJson } from './llm-json';
+import { resolveTextTools } from './tools/text-tools';
 import type { ImageDescription } from './image-describe.service';
 import { renderStyleProfileBlock, type StyleProfile } from './style-profile.presets';
 
@@ -165,7 +166,7 @@ export class PoseRefSheetService {
 
     const json = await textChatJson(
       cfg.text,
-      { systemPrompt, userText, temperature: 0.4 },
+      { systemPrompt, userText, temperature: 0.4, ctx: resolveTextTools(cfg) },
       cfg.runtime,
     );
     return normalizePoseRefSheet(json, poseCount);

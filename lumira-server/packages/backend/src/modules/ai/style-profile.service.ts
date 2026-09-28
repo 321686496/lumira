@@ -3,6 +3,7 @@
 import { Injectable } from '@nestjs/common';
 import { AiConfigService } from './ai-config.service';
 import { textChatJson, LlmJsonError } from './llm-json';
+import { resolveTextTools } from './tools/text-tools';
 import {
   defaultStyleProfile,
   normalizeStyleProfile,
@@ -93,7 +94,7 @@ export class StyleProfileService {
       }
       const json = await textChatJson(
         cfg.text,
-        { systemPrompt: STYLE_RESOLVE_SYSTEM_PROMPT, userText, temperature: 0.3 },
+        { systemPrompt: STYLE_RESOLVE_SYSTEM_PROMPT, userText, temperature: 0.3, ctx: resolveTextTools(cfg) },
         cfg.runtime,
       );
       const profile = normalizeStyleProfile(json);

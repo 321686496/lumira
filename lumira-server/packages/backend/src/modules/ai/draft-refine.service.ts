@@ -10,6 +10,7 @@ import { Injectable } from '@nestjs/common';
 import { AiConfigService } from './ai-config.service';
 import type { LlmEndpoint } from './llm-client';
 import { textChatJson } from './llm-json';
+import { resolveTextTools } from './tools/text-tools';
 import { describeTodayUtc8 } from '../../common/utils/date.util';
 import type { ImageDescription } from './image-describe.service';
 import type { PoseRefSheet } from './pose-ref-sheet.service';
@@ -91,6 +92,7 @@ export class DraftRefineService {
           systemPrompt: buildRefineSystemPrompt(input.styleProfile),
           userText: buildRefineUserText(input),
           temperature: 0.5,
+          ctx: resolveTextTools(cfg),
         },
         cfg.runtime,
       );

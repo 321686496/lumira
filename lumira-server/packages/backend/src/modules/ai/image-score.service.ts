@@ -10,6 +10,7 @@ import { Injectable } from '@nestjs/common';
 import { AiConfigService } from './ai-config.service';
 import type { LlmEndpoint } from './llm-client';
 import { textChatJson, LlmJsonError } from './llm-json';
+import { resolveTextTools } from './tools/text-tools';
 import { clampNumber } from './normalize';
 import type { ImageDescription } from './image-describe.service';
 import type { PoseRefSheet } from './pose-ref-sheet.service';
@@ -199,6 +200,7 @@ export class ImageScoreService {
           systemPrompt: buildScoreSystemPrompt(profile),
           userText: buildScoreUserText(input),
           temperature: 0.3,
+          ctx: resolveTextTools(cfg),
         },
         cfg.runtime,
       );

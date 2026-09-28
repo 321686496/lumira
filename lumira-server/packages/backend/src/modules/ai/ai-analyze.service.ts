@@ -10,6 +10,7 @@ import { templateCategories } from '../../database/schema';
 import { MAX_IMAGE_BYTES, UploadFile } from '../templates/admin-templates.service';
 import { AiConfigService } from './ai-config.service';
 import { visionChatJson, textChatJson, LlmJsonError } from './llm-json';
+import { resolveTextTools } from './tools/text-tools';
 import {
   buildAnalyzeSystemPrompt,
   buildAnalyzeUserPrompt,
@@ -215,6 +216,7 @@ export class AiAnalyzeService {
                   researchUnavailable,
                 }),
                 temperature: 0.3,
+                ctx: resolveTextTools(cfg),
               },
               cfg.runtime,
             ),
