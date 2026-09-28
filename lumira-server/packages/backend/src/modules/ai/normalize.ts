@@ -77,33 +77,59 @@ function toFiniteNumber(v: unknown): number | undefined {
  * 仅做语法层修复，绝不臆造字段或值；字符串内的截断无法修复（由重试层负责）。
  */
 function closeUnbalancedJson(candidate: string): string | null {
-  let text = candidate.replace(/,\s*([}\]])/g, '$1');
-
   const stack: string[] = [];
+  const out: string[] = [];
   let inString = false;
   let escaped = false;
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i];
+
+  // 回看输出末尾：跳过空白，若为逗号则删除该逗号（仅在字符串外调用，不会误伤字符串值）
+  const dropTrailingComma = (): void => {
+    for (let i = out.length - 1; i >= 0; i -= 1) {
+      if (out[i].trim() === '') continue;
+      if (out[i] === ',') out.splice(i, 1);
+      return;
+    }
+  };
+
+  // 单次字符串感知扫描，边扫边构造输出（禁止全局正则替换，避免篡改字符串内的 ,} / ,]）
+  for (let i = 0; i < candidate.length; i += 1) {
+    const ch = candidate[i];
     if (inString) {
+      out.push(ch);
       if (escaped) escaped = false;
       else if (ch === '\\') escaped = true;
       else if (ch === '"') inString = false;
       continue;
     }
-    if (ch === '"') inString = true;
-    else if (ch === '{') stack.push('}');
-    else if (ch === '[') stack.push(']');
-    else if (ch === '}' || ch === ']') {
-      if (stack[stack.length - 1] === ch) stack.pop();
-      else return null; // 括号错配（多出右括号）→ 交给其它分支
+    if (ch === '"') {
+      inString = true;
+      out.push(ch);
+    } else if (ch === '{') {
+      stack.push('}');
+      out.push(ch);
+    } else if (ch === '[') {
+      stack.push(']');
+      out.push(ch);
+    } else if (ch === '}' || ch === ']') {
+      if (stack[stack.length - 1] === ch) {
+        stack.pop();
+        dropTrailingComma(); // 闭合前先去掉对象/数组内的尾随逗号
+        out.push(ch);
+      } else {
+        return null; // 括号错配（多出右括号）→ 交给其它分支
+      }
+    } else {
+      out.push(ch);
     }
   }
   // 截断发生在字符串内部：闭合引号也换不回合法 JSON，直接放弃
   if (inString) return null;
-  return text + stack.reverse().join('');
+  // 输入以逗号结尾、需补闭合括号的场景（如 {"a":1, → {"a":1,}）：补括号前先去掉末尾尾随逗号
+  if (stack.length > 0) dropTrailingComma();
+  return out.join('') + stack.reverse().join('');
 }
 
-/** 从首个 { 起，按深度切出最后一个「括号平衡」的 {…} 子串（容忍尾部多余 JSON / 废话） */
+/** 从首个 { 起，按深度切出第一个（首个深度归零的完整对象）「括号平衡」的 {…} 子串（容忍尾部多余 JSON / 废话） */
 function balancedSubstring(candidate: string): string | null {
   const start = candidate.indexOf('{');
   if (start === -1) return null;

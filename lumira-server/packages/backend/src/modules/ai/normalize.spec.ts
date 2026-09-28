@@ -111,6 +111,14 @@ describe('extractJson', () => {
   it('8. 首个 { 之后存在多个 JSON 块 → 取首个括号平衡的完整对象（尾部多余内容不影响）', () => {
     expect(extractJson('{"a":1} 中间说明 {"b":2}')).toEqual({ a: 1 });
   });
+
+  it('9. 字符串外的尾随逗号被去掉，字符串内的 ,} / ,] 原样保留（不篡改值）', () => {
+    expect(extractJson('{"list":[1,2,],"note":"a,}b"}')).toEqual({ list: [1, 2], note: 'a,}b' });
+  });
+
+  it('10. 输入以逗号结尾再补闭合括号 → 去掉尾随逗号后解析成功', () => {
+    expect(extractJson('{"a":1,')).toEqual({ a: 1 });
+  });
 });
 
 describe('mapEnumValue', () => {
