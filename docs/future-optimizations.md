@@ -1153,3 +1153,27 @@
 - **背景/动机**：这两个是纯函数，作用域内没有 `ActiveAiConfig`；其中 `composeImagePrompt` 的唯一生产调用方 `ai-generate-image.service.ts` 属本次计划的禁改文件（并行「生图参考图」WIP），`polishPrompt` 当前无生产调用方，故本次无法在调用点传 `resolveTextTools(cfg)`，只能先把能力留在线程内。
 - **目标状态**：待 `ai-generate-image.service.ts` 解禁后，于其调用处传入 `resolveTextTools(cfg)`，使生图 prompt 润色 / 提示词润色链路可按需调用 `crawl_website`；同时评估 `web-search-vendor.ts`（`createVendorSearchProvider` 作用域内同样取不到带 `crawl` 的配置，本次未接线）是否一并接线。（本条与《P2 · 抖音 / 小红书直连适配器后续接入》无重叠：那条针对搜索内容源适配器，本条针对文本链路工具接线。）
 - **状态**：⏳ 待优化
+
+### P5 · 工具循环与 `llm-client` 的默认参数常量重复定义（可漂移）
+
+- **模块**：后端 AI（`lumira-server/packages/backend/src/modules/ai/tools/text-tool-loop.ts`、`lumira-server/packages/backend/src/modules/ai/llm-client.ts`）
+- **优化点**：`DEFAULT_TEMPERATURE` / `DEFAULT_TIMEOUT_MS` 在 `llm-client.ts` 为文件内私有，`text-tool-loop.ts` 又各自重复定义一份（当前取值一致）；将来只改一处不会同步，可能导致「工具轮」与普通文本调用的默认温度/超时静默漂移。
+- **背景/动机**：本轮实现时 `llm-client.ts` 未导出这两个常量，为不改动已定稿的 client 而在循环层复制一份，属最小改动的取舍。
+- **目标状态**：在 `llm-client.ts` 导出这两个常量、`text-tool-loop.ts` 改为引用，消除双份定义；若届时该漂移风险已由其它手段覆盖，可关闭本条。
+- **状态**：⏳ 待优化
+
+### P6 · 网页爬取开关的边界断言缺口（显式 `false` 与下界越界）
+
+- **模块**：后端 AI 配置测试（`lumira-server/packages/backend/src/modules/ai/ai-config.crawl.spec.ts`）
+- **优化点**：用例未锁定两条边界——①管理员**显式**传 `crawlEnabled: false` 时必须写入 0（而不是沿用存量值）；②`crawlMaxPerSession < 1` 必须被拒。实现当前行为正确，但缺断言防护，后续改动可能静默破坏该语义。
+- **背景/动机**：本轮按 TDD 写了 7 条用例，已覆盖「未传 crawl 沿用存量」「缺列回退 false/3」「首次保存 insert 默认 0/3」，上述两条边界未纳入用例表。
+- **目标状态**：补 2 条用例，分别锁定「显式 false → 写 0」与「下界 < 1 被拒（400）」。
+- **状态**：⏳ 待优化
+
+### P7 · 工具注册表单测覆盖缺口（rethrow / clamp 合法值 / trace 落库）
+
+- **模块**：后端 AI 工具测试（`lumira-server/packages/backend/src/modules/ai/tools/text-tools.spec.ts`）
+- **优化点**：①`createToolExecutor` 中 `crawlUrl` 抛错后的 rethrow 分支未被断言（设计分工要求异常原样抛出、交由循环层回填 error）；②`maxToolCalls` 的 clamp 仅测了越界值（`<1` / `>6`），未测**合法值原样透传**；③`traceCrawlCall` 的 `done` / `fail` 真实落库路径被 mock 掉，未验证真实事件字段。
+- **背景/动机**：本轮 T4 用例表（亦为实施计划所定）未列这三项；功能正确性已由循环层 spec 间接覆盖，但回归防护不足。
+- **目标状态**：至少补「rethrow 分支」与「合法值原样透传」两条用例；trace 落库路径可结合既有 trace 测试基建补验。
+- **状态**：⏳ 待优化
