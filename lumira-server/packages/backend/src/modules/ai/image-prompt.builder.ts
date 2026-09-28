@@ -170,9 +170,16 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
   const posePhrase = [poseName, poseDescription].filter(Boolean).join('：');
   const selfie = isSelfieDraft(draft);
 
-  // 主体类型：classification.type → meta.category 兜底，均未命中内置映射则跳过
-  // （subjectKey 保留一级 key 供人像分支判断，subject 为中文标签）
-  const subjectKey = toStr(classification.type) ?? toStr(meta.category);
+  // 主体类型：优先取能在内置映射里命中的 classification.type，否则回退 meta.category（同样须命中），
+  // 都不命中则跳过。（subjectKey 保留命中后的 key 供人像分支判断，subject 为中文标签）
+  const typeKey = toStr(classification.type);
+  const categoryKey = toStr(meta.category);
+  let subjectKey: string | undefined;
+  if (typeKey !== undefined && CATEGORY_SUBJECT_LABELS[typeKey] !== undefined) {
+    subjectKey = typeKey;
+  } else if (categoryKey !== undefined && CATEGORY_SUBJECT_LABELS[categoryKey] !== undefined) {
+    subjectKey = categoryKey;
+  }
   const subject = subjectKey !== undefined ? CATEGORY_SUBJECT_LABELS[subjectKey] : undefined;
 
   // 画幅短语：比例 + 取向词（如「3:4 竖构图」）；未知比例仅保留比例值

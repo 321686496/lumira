@@ -128,6 +128,19 @@ describe('buildImagePrompt', () => {
     expect(prompt).toContain('3:4');
   });
 
+  test('classification.type 是未登记值时回退 meta.category（同 BASE 语义，仍走人像分支）', () => {
+    const prompt = buildImagePrompt({
+      meta: { category: 'portrait', classification: { type: '人像写真' } },
+    });
+    // 主体类型由 meta.category=portrait 兜底拿到「人像」
+    expect(prompt).toContain('一张人像摄影作品');
+    // 且仍走入人像专属写实段（非 else 泛化句、非空草稿兜底串）
+    expect(prompt).toContain('人物皮肤纹理清晰不糊');
+    expect(prompt).not.toContain('画面像随手抓拍的实拍照片而非精修广告图');
+    // 未登记的 type 值不得泄漏到 prompt
+    expect(prompt).not.toContain('人像写真');
+  });
+
   test('LUT 为 none/未知 key 时跳过色调描述，grain 为 0 时跳过颗粒感', () => {
     const base = { sceneGuide: { background: '海边' } };
     const noneLut = buildImagePrompt({ ...base, postProcess: { lut: 'none', grain: 0 } });
