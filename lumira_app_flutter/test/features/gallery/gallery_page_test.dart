@@ -246,6 +246,108 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('scroll position is preserved after returning from photo detail',
+      (tester) async {
+    tester.binding.window.physicalSizeTestValue = const Size(800, 1200);
+    tester.binding.window.devicePixelRatioTestValue = 1.0;
+    addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+    addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
+
+    // 造足够多的照片让网格可滚动（3 列 × 20 张 ≈ 7 行）
+    for (var i = 0; i < 20; i++) {
+      await dao.insert(GalleryItemRecord(
+        id: 'p$i',
+        dataUrl: 'https://example.com/p$i.jpg',
+        filePath: null,
+        sceneId: null,
+        templateId: null,
+        kitId: null,
+        mood: null,
+        lut: null,
+        createdAt: 1700000000000 + i * 1000,
+      ));
+    }
+
+    // 真机上 sqflite 是真实异步（跨帧返回），返回相册时的 reload 会跨过至少一帧，
+    // 期间 _isLoading=true 会把网格换成 loading 占位。内存库里查询在同一 microtask
+    // 内完成、根本不会渲染出 loading 帧，因此这里用带延迟的 DAO 还原真机时序。
+    final slowDao = _DelayedGalleryDao(db, const Duration(milliseconds: 300));
+    final slowContainer = ProviderContainer(
+      overrides: [galleryDaoProvider.overrideWith((ref) async => slowDao)],
+    );
+    addTearDown(slowContainer.dispose);
+    await slowContainer.read(galleryDaoProvider.future);
+
+    final router = GoRouter(
+      initialLocation: '/gallery',
+      routes: [
+        GoRoute(
+          path: '/gallery',
+          builder: (_, __) => UncontrolledProviderScope(
+            container: slowContainer,
+            child: const GalleryPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/gallery/detail',
+          builder: (_, __) => const Scaffold(body: Text('detail')),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await _pumpFrames(tester, 30);
+
+    // 向下滑动一段距离，模拟用户浏览到相册中部
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -400));
+    await _pumpFrames(tester, 20);
+    final scrolledOffset = _galleryScrollOffset(tester);
+    expect(scrolledOffset, greaterThan(0));
+
+    // 打开某张可见照片详情，再返回相册
+    await tester.tap(find.byType(PhotoCell).hitTestable().first);
+    await _pumpFrames(tester, 20);
+    expect(find.text('detail'), findsOneWidget);
+
+    router.pop();
+    await _pumpFrames(tester, 40);
+
+    // 返回后应停留在原来的滚动位置，而不是回到顶部
+    expect(find.byType(CustomScrollView), findsOneWidget);
+    expect(_galleryScrollOffset(tester), closeTo(scrolledOffset, 0.5));
+  });
+}
+
+/// 给 `getAll` 注入延迟的 DAO：模拟真机上 sqflite 的真实异步（跨帧）行为。
+class _DelayedGalleryDao extends GalleryDao {
+  _DelayedGalleryDao(Database db, this.delay) : super(db);
+
+  final Duration delay;
+
+  @override
+  Future<List<GalleryItemRecord>> getAll({int? limit, int? offset}) async {
+    await Future<void>.delayed(delay);
+    return super.getAll(limit: limit, offset: offset);
+  }
+}
+
+/// 有界推进：按固定帧长推进 N 帧，避免 pumpAndSettle 在存在持续动画时挂起。
+Future<void> _pumpFrames(WidgetTester tester, int frames) async {
+  for (var i = 0; i < frames; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+}
+
+/// 读取相册网格（[CustomScrollView]）当前滚动偏移。
+double _galleryScrollOffset(WidgetTester tester) {
+  final state = tester.state<ScrollableState>(
+    find.descendant(
+      of: find.byType(CustomScrollView),
+      matching: find.byType(Scrollable),
+    ),
+  );
+  return state.position.pixels;
 }
 
 Future<void> _pumpGalleryPage(WidgetTester tester, ProviderContainer container) async {

@@ -37,9 +37,9 @@ class PhotoCell extends ConsumerWidget {
     // - 非多选态：注册快速长按 _QuickLongPressRecognizer（300ms → 进入多选）
     //   与 TapGestureRecognizer（单击 → 打开详情）。
     // - 多选态（onLongPress==null）：不注册任何手势识别器，格子在多选态下完全由
-    //   SweepAlbumGrid 的裸 Listener 接管（按下即选 + 滑动连续选择），
-    //   避免与点击/长按在竞技场里双触发（SweepAlbumGrid 的 Listener 不进竞技场，
-    //   因此辅以去竞技场确保无冲突）。
+    //   SweepAlbumGrid 接管（横向拖动 = 滑动多选、纵向拖动 = 滚动、点按 = 切换选中，
+    //   方向仲裁由该组件的横向拖动识别器与滚动视图竞技完成），
+    //   避免与点击/长按在竞技场里双触发。
     // - 网格搜索态：同理，onTap/onLongPress 均为 null 时去手势，仅展示。
     final hasTap = onTap != null;
     final hasLongPress = onLongPress != null;

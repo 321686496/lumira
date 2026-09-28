@@ -149,46 +149,53 @@ class DiaryTimelineEntry extends ConsumerWidget {
 
     return Column(
       children: List.generate(rows, (r) {
+        // 先按「格子 + 独立间距占位」拼出该行子项：
+        // 间距必须是独立的 SizedBox，不能写成格子内部的 Padding——否则只有
+        // 非最后一列被「挖掉」spacing 宽度，最后一列拿到完整列宽，正方形
+        // 格子随宽度一起变高，同一排里就会出现大小不一致的格子。
+        final cells = <Widget>[];
+        for (var c = 0; c < columns; c++) {
+          if (c > 0) cells.add(const SizedBox(width: spacing));
+          final idx = r * columns + c;
+          if (idx >= count) {
+            cells.add(const Expanded(child: SizedBox.shrink()));
+            continue;
+          }
+          final photo = photos[idx];
+          final isOverflowCell = overflowN > 0 && idx == 8;
+          cells.add(
+            Expanded(
+              child: isOverflowCell
+                  ? _OverflowCell(
+                      photo: photo,
+                      overflowCount: overflowN,
+                      tokens: tokens,
+                      onTap: onViewMore == null
+                          ? null
+                          : () => onViewMore!(entry.day),
+                    )
+                  : DiaryPhotoCell(
+                      photo: photo,
+                      aspectRatio: 1,
+                      tokens: tokens,
+                      showTags: showTagsInCell,
+                      onTap: onPhotoTap == null
+                          ? null
+                          : () => onPhotoTap!(photo.id),
+                      onLongPress: onPhotoLongPress == null
+                          ? null
+                          : () => onPhotoLongPress!(photo.id),
+                    ),
+            ),
+          );
+        }
         return Padding(
           padding: r == rows - 1
               ? EdgeInsets.zero
               : const EdgeInsets.only(bottom: spacing),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: List.generate(columns, (c) {
-              final idx = r * columns + c;
-              if (idx >= count) return const Expanded(child: SizedBox.shrink());
-              final photo = photos[idx];
-              final isOverflowCell = overflowN > 0 && idx == 8;
-              return Expanded(
-                child: Padding(
-                  padding: c == columns - 1
-                      ? EdgeInsets.zero
-                      : const EdgeInsets.only(right: spacing),
-                  child: isOverflowCell
-                      ? _OverflowCell(
-                          photo: photo,
-                          overflowCount: overflowN,
-                          tokens: tokens,
-                          onTap: onViewMore == null
-                              ? null
-                              : () => onViewMore!(entry.day),
-                        )
-                      : DiaryPhotoCell(
-                          photo: photo,
-                          aspectRatio: 1,
-                          tokens: tokens,
-                          showTags: showTagsInCell,
-                          onTap: onPhotoTap == null
-                              ? null
-                              : () => onPhotoTap!(photo.id),
-                          onLongPress: onPhotoLongPress == null
-                              ? null
-                              : () => onPhotoLongPress!(photo.id),
-                        ),
-                ),
-              );
-            }),
+            children: cells,
           ),
         );
       }),

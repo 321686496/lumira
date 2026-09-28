@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -11,22 +12,34 @@ class SweepAlbumSection {
   final int photoCount;
 }
 
-/// 相册级滑动多选驱动（仿 iPhone 原生相册 / 微信选图）。
+/// 相册级滑动多选驱动（仿 iPhone 原生相册多选手势）。
 ///
-/// 交互：
-/// - **非多选态**：格子由调用方决定（点击看图 / 长按进入多选并把该格设为滑动起点）。
-/// - **多选态**：手指**一按下任一图片即选中该格并进入滑动**，拖动时按网格路径
-///   连续加选，反向回扫即可取消；无需再次长按。
+/// 交互（多选态）：
+/// - **上下滑动 = 滚动视图**：多选态下网格保持可滚动，纵向拖动由
+///   [CustomScrollView] 自身接管（原生惯性 / 回弹），不产生任何选中。
+/// - **左右滑动 = 滑动多选**：横向拖动超过 touch slop 后锁定为滑动多选，
+///   以按下的那一格为起点立即选中，继续拖动按**索引区间**连续补选。
+/// - **方向锁定**：一次手势只会成为「滚动」或「滑动多选」其中之一，锁定后不再切换
+///   （纵向拖动不会被选照片打断，横向拖动期间也不会滚动列表）。
+/// - **点按 = 切换选中**：未超过点击容差即抬起时，翻转该格选中态。
+/// - **区间补选**：从「上一张」移动到「当前这张」时，按相册顺序把这个索引区间内的
+///   照片全部补上（[GridGeometry.indicesInRange]），因此横向滑过一行后向下滑到下方
+///   照片，中间被掠过的照片也会一并选中。
 /// - **跨分区连续**：内部把多个时间分区渲染进**同一个 CustomScrollView**，
 ///   照片按分区顺序扁平化成一个连续的网格索引空间（分区头不占索引），
 ///   因此从当前分区滑到下一分区无需打断即可连续选择。
-/// - **到底自动滚动**：滑动时手指接近可视区上/下边缘，自动调用
+/// - **到底自动滚动**：滑动多选期间手指接近可视区上/下边缘时，自动调用
 ///   [ScrollController.jumpTo] 让列表滚动，把下方更多图片带入视口继续选择。
+/// - **非多选态**：格子由调用方决定（点击看图 / 长按进入多选并把该格设为滑动起点）；
+///   长按进入后手指不抬起即可继续拖动连续选。
 ///
-/// 手势的所有权：
-/// - 本组件用**裸 [Listener]** 包住整棵 CustomScrollView，接收原始 pointer 的
-///   down / move / up，据此命中格子并驱动滑动选择 + 自动滚动（不进手势竞技场，
-///   不与点击 / 长按 / 滚动竞技）。
+/// 手势的所有权与方向仲裁：
+/// - 多选态下本组件在整棵 [CustomScrollView] 外层挂一个只注册
+///   [HorizontalDragGestureRecognizer] 的 `RawGestureDetector`。它与滚动视图自身的
+///   纵向拖动识别器同处一个手势竞技场：谁先在各自方向上超过 touch slop 谁获胜，
+///   另一方被 rejected —— 这就是方向锁定，无需手工判断位移。
+/// - 本组件另用**裸 [Listener]** 接收原始 pointer 事件（不进竞技场，不参与仲裁）：
+///   负责命中格子、驱动区间补选、边缘自动滚动，以及在「点按抬起」时翻转选中态。
 /// - 格子定位不依赖手工几何：每个照片格挂 `GlobalObjectKey('album_cell_$i')`，
 ///   命中时遍历已挂载格的 RenderBox 全局矩形，得到精确的扁平索引
 ///   （懒加载 sliver 下只会挂载可视格，遍历成本低）。
@@ -69,7 +82,9 @@ class SweepAlbumGrid extends StatefulWidget {
   /// 选中集合变化回调（返回新的完整集合）。
   final ValueChanged<Set<String>> onSelectionChanged;
 
-  /// 是否已进入多选态。为 true 时按下即选 + 禁用手势滚动（由本组件接管拖动）。
+  /// 是否已进入多选态。为 true 时启用「横向拖动 = 滑动多选、纵向拖动 = 滚动、
+  /// 点按 = 切换选中」的方向仲裁；为 false 时全部手势交给格子自身（点击看图 /
+  /// 长按进入多选）。
   final bool isMultiSelectMode;
 
   /// 供自动滚动使用的滚动控制器（本组件渲染的 CustomScrollView 使用它）。
@@ -101,6 +116,10 @@ class SweepAlbumGridState extends State<SweepAlbumGrid> {
   Set<String> _dragSelected = <String>{};
   bool _maxWarned = false;
 
+  /// 本次手势按下的位置（用于判断是否属于「点按」）。
+  Offset? _downPosition;
+  bool _pointerDown = false;
+
   /// 扁平照片索引 → GlobalObjectKey（命中测试用；懒加载下仅挂载格有 currentContext）。
   List<GlobalKey> _cellKeys = const [];
 
@@ -113,7 +132,10 @@ class SweepAlbumGridState extends State<SweepAlbumGrid> {
     super.dispose();
   }
 
-  /// 把某扁平索引设为滑动起点并选中它（长按进入多选 / 多选态按下共用）。
+  /// 把某扁平索引设为滑动起点并选中它（横向拖动锁定滑动多选 / 长按进入多选共用）。
+  ///
+  /// 长按进入多选时调用方先 `setState(isMultiSelectMode = true)` 再调用本方法，
+  /// 此刻本组件尚未重建，因此这里不做多选态判断。
   void beginSweep(int flatIndex) {
     if (flatIndex < 0 || flatIndex >= _totalPhotos) return;
     _sweeping = true;
@@ -156,8 +178,9 @@ class SweepAlbumGridState extends State<SweepAlbumGrid> {
   void _stepTo(int cur) {
     if (!_sweeping) return;
     if (cur == _lastFlat || cur < 0 || cur >= _totalPhotos) return;
-    final seg = GridGeometry.indicesOnSegment(
-        _lastFlat, cur, widget.crossAxisCount);
+    // 索引区间补选：把「上一张 → 当前这张」之间被掠过的照片全部翻转，
+    // 快速拖动跨行 / 跨分区时也不会漏选中间的格。
+    final seg = GridGeometry.indicesInRange(_lastFlat, cur);
     var accum = _dragSelected;
     for (final i in seg) {
       if (i == _lastFlat) continue; // 起点上一步已翻转，避免重复
@@ -191,16 +214,46 @@ class SweepAlbumGridState extends State<SweepAlbumGrid> {
   }
 
   void _handleDown(PointerDownEvent event) {
-    if (!widget.isMultiSelectMode) return; // 未进入多选态不触发滑动
-    final flat = _hitTestFlatIndex(event.position);
-    if (flat != null) beginSweep(flat);
+    if (!widget.isMultiSelectMode) return;
+    _pointerDown = true;
+    _downPosition = event.position;
   }
 
   void _handleMove(PointerMoveEvent event) {
-    if (!_sweeping) return;
+    if (!_sweeping) return; // 未锁定滑动多选（滚动方向）时不选中任何格
     final flat = _hitTestFlatIndex(event.position);
     if (flat != null) _stepTo(flat);
     _autoScroll(event.position);
+  }
+
+  /// 点按抬起：未超过点击容差且未进入滑动多选时，翻转该格选中态。
+  void _handleUp(PointerUpEvent event) {
+    final wasSweeping = _sweeping;
+    final down = _downPosition;
+    final tracked = _pointerDown && widget.isMultiSelectMode;
+    _pointerDown = false;
+    _downPosition = null;
+    _endSweep();
+    if (!tracked || wasSweeping || down == null) return;
+    if ((event.position - down).distance > kTouchSlop) return; // 属于拖动，不当作点按
+    final flat = _hitTestFlatIndex(event.position);
+    if (flat == null) return;
+    _dragSelected = Set<String>.of(widget.selectedIds); // 以外部最新选中集为准
+    _toggleIndex(flat);
+  }
+
+  void _handleCancel() {
+    _pointerDown = false;
+    _downPosition = null;
+    _endSweep();
+  }
+
+  /// 横向拖动获胜（方向锁定为滑动多选）：以按下那一格为起点开始连续选择。
+  ///
+  /// 该识别器与滚动视图自身的纵向拖动识别器同处一个竞技场，横向获胜即意味着
+  /// 纵向识别器被 rejected —— 本手势后续的纵向移动只会扩展选中，不会滚动列表。
+  void _handleHorizontalDragStart(DragStartDetails details) {
+    beginSweep(_hitTestFlatIndex(details.globalPosition) ?? -1);
   }
 
   /// 手指接近可视区上/下边缘时自动滚动，让更多图片进入视口继续选择。
@@ -243,10 +296,6 @@ class SweepAlbumGridState extends State<SweepAlbumGrid> {
       acc += s.photoCount;
     }
 
-    final physics = widget.isMultiSelectMode
-        ? const NeverScrollableScrollPhysics()
-        : const AlwaysScrollableScrollPhysics();
-
     final slivers = <Widget>[];
     for (var s = 0; s < widget.sections.length; s++) {
       final sec = widget.sections[s];
@@ -284,15 +333,33 @@ class SweepAlbumGridState extends State<SweepAlbumGrid> {
       SliverToBoxAdapter(child: SizedBox(height: widget.bottomPadding)),
     );
 
+    // 多选态下额外注册横向拖动识别器：靠竞技场与滚动视图的纵向拖动识别器做方向锁定。
+    final gestures = <Type, GestureRecognizerFactory>{};
+    if (widget.isMultiSelectMode) {
+      gestures[HorizontalDragGestureRecognizer] =
+          GestureRecognizerFactoryWithHandlers<HorizontalDragGestureRecognizer>(
+        () => HorizontalDragGestureRecognizer(),
+        (instance) {
+          // 以「按下那一格」为滑动起点，而不是识别发生的位置
+          instance.dragStartBehavior = DragStartBehavior.down;
+          instance.onStart = _handleHorizontalDragStart;
+        },
+      );
+    }
+
     return Listener(
       onPointerDown: _handleDown,
       onPointerMove: _handleMove,
-      onPointerUp: (_) => _endSweep(),
-      onPointerCancel: (_) => _endSweep(),
-      child: CustomScrollView(
-        controller: widget.scrollController,
-        physics: physics,
-        slivers: slivers,
+      onPointerUp: _handleUp,
+      onPointerCancel: (_) => _handleCancel(),
+      child: RawGestureDetector(
+        gestures: gestures,
+        child: CustomScrollView(
+          controller: widget.scrollController,
+          // 多选态同样保持可滚动：上下滑动永远是「滑动视图」。
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: slivers,
+        ),
       ),
     );
   }
@@ -514,6 +581,18 @@ class GridGeometry {
     final index = row * crossAxisCount + col;
     if (index < 0 || index >= itemCount) return null;
     return index;
+  }
+
+  /// 返回从索引 [a] 到索引 [b]（含两端）的**整个索引区间**（升序、去重）。
+  ///
+  /// 相册网格按「行优先」把照片展平成连续索引，因此这一段索引就是照片在相册中的
+  /// 自然先后顺序。滑动多选时用它补选「上一张 → 当前这张」之间被手指掠过的照片，
+  /// 避免快速拖动时中间格被漏选（[indicesOnSegment] 只取直线路径，会留空洞）。
+  static List<int> indicesInRange(int a, int b) {
+    final hi = math.max(a, b);
+    final lo = math.max(0, math.min(a, b));
+    if (hi < lo) return const [];
+    return [for (var i = lo; i <= hi; i++) i];
   }
 
   /// 返回从索引 [a] 到 [b]（含两端）的直线路径索引列表（去重）。

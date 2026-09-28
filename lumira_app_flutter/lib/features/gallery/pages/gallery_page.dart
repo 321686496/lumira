@@ -720,7 +720,8 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
       );
     }
     // 时间分组展示：单一 CustomScrollView + 统一滑动驱动
-    // （进入多选态后一按下即选、可跨分区连续滑动、滑到底部自动滚动继续选择）。
+    // （多选态下横向拖动 = 滑动多选并跨分区连续补选、纵向拖动 = 滚动视图、
+    //  点按 = 切换选中；滑到底部边缘自动滚动继续选择）。
     final sectionKeys = grouped.keys.toList();
     final sectionViews = sectionKeys
         .map((k) => grouped[k]!.map(GalleryPhoto.fromRecord).toList())
@@ -740,7 +741,8 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
         photo: photo,
         isSelected: isSelected,
         isMultiSelectMode: _isMultiSelectMode,
-        // 多选态下格子去手势，完全交由 SweepAlbumGrid 的裸 Listener 按下即选；
+        // 多选态下格子去手势，完全交由 SweepAlbumGrid 做方向仲裁
+        // （横向拖动选照片 / 纵向拖动滚动 / 点按切换）；
         // 非多选态保留单击看图 + 快速长按进入多选并定位滑动起点。
         onTap: _isMultiSelectMode ? null : () => _openDetail(photo),
         onLongPress: _isMultiSelectMode
@@ -872,7 +874,9 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
     if (!mounted) return;
     final dao = ref.read(galleryDaoProvider).value;
     if (dao != null) {
-      setState(() => _isLoading = true);
+      // 静默刷新：真机上重拉需跨帧返回，若期间置 _isLoading=true，整个网格会被
+      // loading 占位替换掉 → CustomScrollView 被卸载 → 滚动位置随之丢失，
+      // 返回相册就会跳回顶部。因此这里只更新数据，不切换 loading 态。
       await _loadPhotos(dao);
     }
   }
