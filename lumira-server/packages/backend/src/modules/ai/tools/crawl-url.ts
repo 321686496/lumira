@@ -51,10 +51,13 @@ export function assertCrawlableUrl(raw: string): URL {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new Error(`仅支持 http/https 网址：${raw}`);
   }
-  if (IP_LITERAL.test(url.hostname)) {
+  // 归一化主机名：去掉结尾一个或多个点，防 `localhost.` / `foo.local.` 尾点绕过。
+  // 仅用于校验判定；IPv6 形如 `[::1]` 以 `]` 结尾，不含尾点，不会被裁掉。
+  const host = url.hostname.replace(/\.+$/, '');
+  if (IP_LITERAL.test(host)) {
     throw new Error(`不允许抓取裸 IP 地址：${raw}`);
   }
-  if (BLOCKED_HOST_PATTERNS.some((p) => p.test(url.hostname))) {
+  if (BLOCKED_HOST_PATTERNS.some((p) => p.test(host))) {
     throw new Error(`不允许抓取内网/本机地址：${raw}`);
   }
   return url;
@@ -86,6 +89,27 @@ export function htmlToText(html: string): string {
     .replace(/ *\n */g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+/** 流式读取响应体：逐块累计字节数，超 MAX_BYTES 立即中止并抛「过大」；UTF-8 解码与 res.text() 等价 */
+async function readBodyWithinLimit(res: Response): Promise<string> {
+  const reader = res.body?.getReader();
+  if (!reader) return res.text();
+  const decoder = new TextDecoder();
+  let text = '';
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    received += value.byteLength;
+    if (received > MAX_BYTES) {
+      await reader.cancel();
+      throw new Error('网页内容过大（超过 1MB），已跳过');
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
 }
 
 /** 抓取网页正文；失败抛面向模型可读的 Error（由工具执行器转成 error 文本回填） */
@@ -125,10 +149,8 @@ export async function crawlUrl(raw: string): Promise<CrawlResult> {
     throw new Error('网页内容过大（超过 1MB），已跳过');
   }
 
-  const rawBody = await res.text();
-  if (Buffer.byteLength(rawBody, 'utf8') > MAX_BYTES) {
-    throw new Error('网页内容过大（超过 1MB），已跳过');
-  }
+  // 无 Content-Length（或未超限）时流式读取，累计超 1MB 立即中止，避免整段缓冲占满内存
+  const rawBody = await readBodyWithinLimit(res);
 
   const text = mime.includes('text/plain') ? rawBody.replace(/\s+/g, ' ').trim() : htmlToText(rawBody);
   if (!text) throw new Error('网页未提取到正文内容，请换其他链接');

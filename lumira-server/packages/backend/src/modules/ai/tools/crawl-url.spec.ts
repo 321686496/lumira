@@ -33,6 +33,9 @@ describe('assertCrawlableUrl', () => {
     ['http://10.0.0.5/x', '私有网段'],
     ['http://172.20.3.4/x', '私有网段'],
     ['http://foo.internal/x', '内网域名'],
+    ['http://localhost./x', 'localhost 尾点绕过'],
+    ['http://foo.local./x', '内网域名尾点绕过'],
+    ['http://x.internal./x', '内网域名尾点绕过'],
     ['http://8.8.8.8/x', '裸 IP'],
     ['http://[2001:4860:4860::8888]/x', '裸 IPv6'],
   ])('拒绝 %s', (url) => {
@@ -41,6 +44,11 @@ describe('assertCrawlableUrl', () => {
 
   it('接受公网 https 地址', () => {
     expect(assertCrawlableUrl('https://example.com/a?b=1').hostname).toBe('example.com');
+  });
+
+  it('接受带尾点的公网域名（归一化后放行，且返回的原 URL 不变）', () => {
+    const url = assertCrawlableUrl('https://example.com./a');
+    expect(url.hostname).toBe('example.com.'); // 未改变 fetch 目标 / 缓存 key
   });
 });
 
@@ -75,6 +83,21 @@ describe('crawlUrl', () => {
   it('超大响应体被拒绝', async () => {
     fetchMock.mockResolvedValueOnce(htmlResponse('<body>x</body>', 'text/html', { 'Content-Length': String(2 * 1024 * 1024) }));
     await expect(crawlUrl('https://example.com/big')).rejects.toThrow('过大');
+  });
+
+  it('无 Content-Length 的超大响应被流式拒绝', async () => {
+    const res = new Response('x'.repeat(2 * 1024 * 1024), { headers: { 'Content-Type': 'text/html' } });
+    res.headers.delete('content-length');
+    fetchMock.mockResolvedValueOnce(res);
+    await expect(crawlUrl('https://example.com/big-stream')).rejects.toThrow('过大');
+  });
+
+  it('流式读取正常响应：返回纯文本且 chars/truncated 正确', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('<body><p>流式正文</p></body>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } }));
+    const r = await crawlUrl('https://example.com/stream-ok');
+    expect(r.text).toContain('流式正文');
+    expect(r.chars).toBe(r.text.length);
+    expect(r.truncated).toBe(false);
   });
 
   it('超时抛可读错误', async () => {

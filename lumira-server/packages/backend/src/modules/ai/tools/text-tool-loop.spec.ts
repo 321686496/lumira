@@ -41,6 +41,24 @@ describe('chatWithTools', () => {
     expect(toolChatOnceMock).not.toHaveBeenCalled();
   });
 
+  it('ctx 缺省 → 发往厂商的真实请求体不含 tools 字段', async () => {
+    // 让被 mock 的 textChat 走真实实现，从而检查真实 fetch 请求体
+    const real = jest.requireActual('../llm-client') as typeof import('../llm-client');
+    textChatMock.mockImplementation(real.textChat);
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'plain' } }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const out = await chatWithTools(CFG, INPUT);
+
+    expect(out).toBe('plain');
+    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit | undefined)?.body)) as Record<string, unknown>;
+    expect(body.tools).toBeUndefined();
+  });
+
   it('首轮 tool_calls → 执行工具 → 次轮返回正文', async () => {
     const execute = jest.fn().mockResolvedValue('{"text":"抓到的正文"}');
     toolChatOnceMock
