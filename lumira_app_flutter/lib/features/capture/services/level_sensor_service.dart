@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:flutter/foundation.dart'
+    show debugPrint, kIsWeb, visibleForTesting;
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
 /// 设备持握显示方向：竖屏 or 横屏（并给出横屏时内容要旋转到正向的 90° 圈数）。
@@ -78,6 +80,10 @@ class LevelReading {
 /// - 鸿蒙（OHOS）：自研 EventChannel `lumira/level_sensor`（[x, y, z]，m/s²），
 ///   由原生插件 [LumiraSensorPlugin] 订阅 @ohos.sensor 加速度计并推送
 /// - 无传感器 / 出错：发出 [LevelReading.unavailable] 后结束，气泡回中、不崩溃
+///
+/// 全 App 只保留**一条**底层订阅（多个消费者共享广播派生流）；且仅在 **App 前台**
+/// 期间持有：退到后台立即取消（原生收到 EventChannel cancel → `sensor.off(ACCELEROMETER)`，
+/// 释放加速度计），回到前台自动重建。见 [sharedGatedSource]。
 class LevelSensorService {
   LevelSensorService._();
 
@@ -111,14 +117,83 @@ class LevelSensorService {
   static double clampAngle(double angle, [double maxDeg = 10.0]) =>
       angle.clamp(-maxDeg, maxDeg);
 
-  /// 原始加速度流（[x, y, z]，m/s²）。
-  static Stream<List<double>> _rawStream() {
+  /// 原始加速度流（[x, y, z]，m/s²）：全 App 共享单一底层订阅，并按前后台门控。
+  static Stream<List<double>> _rawStream() => _sharedRawStream;
+
+  /// 全 App 唯一的底层加速度源，多个消费者（拍摄页方向判定 / 水平仪）共享。
+  static final Stream<List<double>> _sharedRawStream =
+      sharedGatedSource(_createPlatformSource);
+
+  /// 按平台创建底层加速度流（[x, y, z]，m/s²，重力≈9.8）。
+  static Stream<List<double>> _createPlatformSource() {
     if (isOhos) {
       return _ohosChannel.receiveBroadcastStream().map(_parseOhosEvent);
     }
     return Sensors().accelerometerEventStream().map((e) {
       return <double>[e.x, e.y, e.z];
     });
+  }
+
+  /// App 是否处于前台。首帧前（[WidgetsBinding.lifecycleState] 为 null）按前台处理：
+  /// 订阅总是发生在页面挂载时，此时必然可见。
+  static bool get _isForeground {
+    final state = WidgetsBinding.instance.lifecycleState;
+    return state == null || state == AppLifecycleState.resumed;
+  }
+
+  /// 把上游传感器流包装为「共享的单一订阅 + 前后台门控」的**广播**流。
+  ///
+  /// 为什么要共享：Flutter 的 [EventChannel.receiveBroadcastStream] 以**通道名为键**
+  /// 注册 Dart 侧消息处理器（`ChannelBuffers.setListener`，同名只保留最后一个），
+  /// 同一通道被并发订阅时后订阅者会顶掉先订阅者的处理器（先订阅者静默收不到数据），
+  /// 任一方 cancel 还会把对方的处理器一并摘掉。故这里只保留一条底层订阅，所有消费者
+  /// 从同一条广播流派生。
+  ///
+  /// 门控：非 [AppLifecycleState.resumed]（inactive/paused/detached）时取消上游订阅，
+  /// [EventChannel] 随即向原生插件发送 cancel → `sensor.off`，释放传感器；回到前台且
+  /// 仍有消费者时自动重新订阅。
+  ///
+  /// 只切断上游、不关闭下游：各方自己的 EMA 滤波 / 方向变换器订阅与状态保持不变，
+  /// 只是后台期间收不到数据，故调用方无需各自处理生命周期。
+  @visibleForTesting
+  static Stream<T> sharedGatedSource<T>(Stream<T> Function() createUpstream) {
+    StreamSubscription<T>? upstream;
+    late final StreamController<T> controller;
+
+    void openUpstream() {
+      if (upstream != null) return;
+      upstream = createUpstream().listen(
+        controller.add,
+        onError: controller.addError,
+        // 上游自然结束只解绑、不关闭下行：本流是 App 级共享单例，一旦关闭，
+        // 之后进入的页面将永久收不到数据。
+        onDone: () => upstream = null,
+      );
+    }
+
+    void closeUpstream() {
+      final sub = upstream;
+      upstream = null;
+      sub?.cancel();
+    }
+
+    final observer = _ForegroundObserver(
+      onForeground: openUpstream,
+      onBackground: closeUpstream,
+    );
+    // broadcast：onListen 在**首个**消费者订阅时触发、onCancel 在**最后一个**消费者
+    // 取消时触发，天然完成引用计数，避免任一消费者退出就误释放传感器。
+    controller = StreamController<T>.broadcast(
+      onListen: () {
+        WidgetsBinding.instance.addObserver(observer);
+        if (_isForeground) openUpstream();
+      },
+      onCancel: () {
+        WidgetsBinding.instance.removeObserver(observer);
+        closeUpstream();
+      },
+    );
+    return controller.stream;
   }
 
   /// 判定手机此刻是竖持(true)还是横持(false)，并给出横屏时内容旋转到正向的圈数。
@@ -218,5 +293,23 @@ class LevelSensorService {
       },
       handleDone: (EventSink<LevelReading> sink) => sink.close(),
     );
+  }
+}
+
+/// App 前后台切换观察者：resumed 视为前台，其余（inactive/paused/detached）均视为
+/// 非前台，以便切后台、来电遮挡等场景都能及时释放传感器。
+class _ForegroundObserver extends WidgetsBindingObserver {
+  _ForegroundObserver({required this.onForeground, required this.onBackground});
+
+  final void Function() onForeground;
+  final void Function() onBackground;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      onForeground();
+    } else {
+      onBackground();
+    }
   }
 }
