@@ -292,37 +292,53 @@ export function extractToolCalls(content: string | null, messages: unknown[]): T
   return [];
 }
 
+/** toolChatOnce 输入：自带完整消息历史（供多轮工具循环渐进追加） */
+export interface ToolChatOnceInput {
+  messages: unknown[];
+  tools: ToolDef[];
+  toolChoice?: 'auto' | 'none';
+  jsonMode?: boolean;
+  temperature?: number;
+  timeoutMs?: number;
+  maxTokens?: number;
+  /** 采集标题（默认「工具调用 · LLM」） */
+  title?: string;
+  /** 采集展示用（可选） */
+  systemPrompt?: string;
+  userPrompt?: string;
+}
+
 /**
- * 函数调用一次往返：system + user + tools → fetch → 返回本轮 assistant 消息。
- * 复用 chatRequest 同款网络 / 错误映射 / jsonMode 降级；content 可为 null（轮到 model 只发 tool_calls）。
- * 返回 messages 为完整上下文（system + user + assistant），供调用方回填工具结果后继续迭代。
+ * 一次带工具的往返（不修改入参消息数组）：messages + tools → fetch → 本轮 assistant 消息。
+ * 返回 messages = 入参 + assistant 消息，供调用方回填 role:'tool' 结果后继续迭代。
  */
-export async function toolChat(cfg: LlmEndpoint, input: ToolChatInput): Promise<{ content: string | null; toolCalls: ToolCallMsg[]; messages: unknown[] }> {
-  const messages: unknown[] = [
-    { role: 'system', content: input.systemPrompt },
-    { role: 'user', content: input.userText },
-  ];
+export async function toolChatOnce(
+  cfg: LlmEndpoint,
+  input: ToolChatOnceInput,
+): Promise<{ content: string | null; toolCalls: ToolCallMsg[]; messages: unknown[] }> {
   const handle = traceLlmCall({
     model: cfg.model,
     systemPrompt: input.systemPrompt,
-    userPrompt: input.userText,
-    title: '工具调用 · LLM',
+    userPrompt: input.userPrompt,
+    title: input.title ?? '工具调用 · LLM',
   });
   try {
     const { message, rawText, attempts } = await rawChatMessage(
       cfg,
       {
         model: cfg.model,
-        messages,
+        messages: input.messages,
         temperature: input.temperature ?? DEFAULT_TEMPERATURE,
-        jsonMode: false,
+        jsonMode: input.jsonMode ?? false,
         timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        maxTokens: input.maxTokens,
       },
-      { tools: input.tools, toolChoice: 'auto' },
+      { tools: input.tools, toolChoice: input.toolChoice ?? 'auto' },
     );
+
     const assistantMsg: Record<string, unknown> = { role: 'assistant', content: message.content ?? null };
     if (Array.isArray(message.tool_calls)) assistantMsg.tool_calls = message.tool_calls;
-    messages.push(assistantMsg);
+    const messages = [...input.messages, assistantMsg];
 
     const content = typeof message.content === 'string' ? message.content : null;
     const toolCalls = extractToolCalls(content, messages);
@@ -337,4 +353,20 @@ export async function toolChat(cfg: LlmEndpoint, input: ToolChatInput): Promise<
     handle?.fail(err);
     throw err;
   }
+}
+
+/** 函数调用一次往返：system + user + tools → fetch → 返回本轮 assistant 消息（保留旧签名） */
+export async function toolChat(cfg: LlmEndpoint, input: ToolChatInput): Promise<{ content: string | null; toolCalls: ToolCallMsg[]; messages: unknown[] }> {
+  return toolChatOnce(cfg, {
+    messages: [
+      { role: 'system', content: input.systemPrompt },
+      { role: 'user', content: input.userText },
+    ],
+    tools: input.tools,
+    toolChoice: 'auto',
+    temperature: input.temperature,
+    timeoutMs: input.timeoutMs,
+    systemPrompt: input.systemPrompt,
+    userPrompt: input.userText,
+  });
 }
