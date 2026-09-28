@@ -1,0 +1,4 @@
+### 仓库配置：使用 OpenHarmony 官方中心仓（https://ohpm.openharmony.cn/ohpm/）
+### 官方旧默认仓库 repo.harmonyos.com 走 CDN 边缘节点，偶发 60s 超时会导致
+### `ohpm install --all` 报 00617101 Fetch Pkg Info Failed / NOTFOUND
+registry=https://ohpm.openharmony.cn/ohpm/

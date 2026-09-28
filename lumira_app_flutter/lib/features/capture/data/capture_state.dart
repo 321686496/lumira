@@ -676,6 +676,24 @@ class CaptureState {
     return ref.watch(freeModeCameraProvider);
   });
 
+  /// 对焦曝光偏移（取景器对焦框右侧的太阳滑块）。
+  ///
+  /// 与参数面板 / 顶部胶囊显示的「EV 参数」是**两个功能不同的曝光**：
+  /// - 参数 EV（[effectiveCameraProvider] 的 `exposureCompensation`）：整套模板 /
+  ///   本次拍摄会话的曝光**基准**，落库、随模板复用、在模板详情页作为规格展示；
+  /// - 对焦偏移（本 provider）：锚定在最近一次对焦触点上的**临时微调**，相对
+  ///   该点测光结果做补偿；换点重新测光即归零，不进模板、不落库、不出现在
+  ///   参数面板与胶囊上（对齐 iPhone 原相机「轻点对焦 → 拖太阳图标」的语义）。
+  static final focusExposureOffsetProvider = StateProvider<double>((ref) => 0.0);
+
+  /// 实际下发给相机的曝光补偿 = 参数 EV + 对焦偏移，钳制在 ±3 档满量程内
+  /// （对应 brightness ∈ [0,1]）。取景器亮度与成片同源，两者都按该值生效。
+  static final effectiveExposureEvProvider = Provider<double>((ref) {
+    final base = ref.watch(effectiveCameraProvider).exposureCompensation;
+    final offset = ref.watch(focusExposureOffsetProvider);
+    return (base + offset).clamp(-3.0, 3.0);
+  });
+
   /// 统一的可编辑后期参数（无论是否有模板）
   ///
   /// 在源参数（模板/自由模式）之上注入 iOS 白平衡「残差」会话态

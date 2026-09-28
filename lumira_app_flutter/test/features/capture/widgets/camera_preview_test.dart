@@ -72,6 +72,9 @@ class _FakeCameraService implements CameraService {
   Stream<String> photoEarlyFrames() => const Stream<String>.empty();
 
   @override
+  Stream<String> nativeLogs() => const Stream<String>.empty();
+
+  @override
   void setZoom(double normalized) {}
 
   @override
@@ -96,13 +99,28 @@ class _FakeCameraService implements CameraService {
   Future<bool> supportsUltraWide() async => false;
 }
 
-/// 以注入 spy 相机服务（不覆写占位预览，走真实 _PinchZoomCamera/_FocusOverlay 路径）渲染 CameraPreview。
-Future<_FakeCameraService> _pumpWithFakeCamera(WidgetTester tester) async {
+/// 测试基座：spy 相机服务 + provider 容器（便于断言 EV 等状态变化）。
+class _Harness {
+  _Harness(this.fake, this.container);
+
+  final _FakeCameraService fake;
+  final ProviderContainer container;
+}
+
+/// 以注入 spy 相机服务（不覆写占位预览，走真实 _PinchZoomCamera/_FocusOverlay 路径）
+/// 渲染 CameraPreview，并返回容器以便断言状态。
+/// [templateId] 非空时进入模板模式：updateCamera 写入 editable 而不触发
+/// 自由模式的 500ms 防抖持久化 Timer，避免测试结束时 Timer pending。
+Future<_Harness> _pumpHarness(WidgetTester tester, {String? templateId}) async {
   final fake = _FakeCameraService();
   final container = ProviderContainer(overrides: [
     cameraServiceProvider.overrideWith((ref) => fake),
   ]);
   addTearDown(container.dispose);
+  if (templateId != null) {
+    container.read(CaptureState.currentTemplateIdProvider.notifier).state =
+        templateId;
+  }
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
@@ -111,8 +129,12 @@ Future<_FakeCameraService> _pumpWithFakeCamera(WidgetTester tester) async {
       ),
     ),
   );
-  return fake;
+  return _Harness(fake, container);
 }
+
+/// 以注入 spy 相机服务渲染 CameraPreview（仅需断言相机调用时使用）。
+Future<_FakeCameraService> _pumpWithFakeCamera(WidgetTester tester) async =>
+    (await _pumpHarness(tester)).fake;
 
 void main() {
   group('CameraPreview', () {
@@ -263,7 +285,7 @@ void main() {
 
   group('CameraPreview focus overlay & AE/AF lock', () {
     testWidgets(
-        'A: tap triggers focusOnPoint and golden focus frame auto-hides',
+        'A: tap triggers focusOnPoint and shows focus frame + sun slider',
         (tester) async {
       final fake = await _pumpWithFakeCamera(tester);
 
@@ -271,13 +293,16 @@ void main() {
       fake.capturedOnTapFocus!(const Offset(200, 200), const Size(800, 600));
       await tester.pump();
 
-      // 金色对焦框出现，且相机对焦被调用
+      // 金色对焦框 + 太阳滑块同时出现（模仿 iOS 原相机：轻点即显示对焦区域与曝光设置），
+      // 且相机对焦被调用
       expect(find.byKey(const Key('focus_frame')), findsOneWidget);
+      expect(find.byKey(const Key('focus_exposure_bar')), findsOneWidget);
       expect(fake.calls, contains('focusOnPoint'));
 
-      // 1.5s 后自动消失
-      await tester.pump(const Duration(milliseconds: 1600));
+      // 2.5s 后自动消失
+      await tester.pump(const Duration(milliseconds: 2600));
       expect(find.byKey(const Key('focus_frame')), findsNothing);
+      expect(find.byKey(const Key('focus_exposure_bar')), findsNothing);
     });
 
     testWidgets('B: long-press locks AE/AF and shows persistent lock badge',
@@ -334,6 +359,107 @@ void main() {
       await tester.pump();
 
       expect(fake.calls, contains('setZoomMultiplier'));
+    });
+
+    testWidgets('E: 轻点对焦后单指纵向拖动只调「对焦曝光」，不动参数 EV（对齐 iOS）',
+        (tester) async {
+      final harness = await _pumpHarness(tester, templateId: 'soft_portrait');
+
+      // 轻点对焦 → 对焦框 + 太阳滑块出现
+      harness.fake
+          .capturedOnTapFocus!(const Offset(400, 300), const Size(800, 600));
+      await tester.pump();
+      expect(find.byKey(const Key('focus_exposure_bar')), findsOneWidget);
+      // 换点重新测光：对焦偏移归零
+      expect(harness.container.read(CaptureState.focusExposureOffsetProvider), 0.0);
+
+      final baseBefore = harness.container
+          .read(CaptureState.effectiveCameraProvider)
+          .exposureCompensation;
+
+      // 单指上滑（首次移动即触发 onScaleStart 并锚定起始 Y，
+      // 故需第二次移动才会产生实际偏移位移）
+      final drag = await tester.startGesture(const Offset(400, 300));
+      await drag.moveBy(const Offset(0, -45));
+      await tester.pump();
+      await drag.moveBy(const Offset(0, -45));
+      await tester.pump();
+      await drag.up();
+      await tester.pump();
+
+      final offset =
+          harness.container.read(CaptureState.focusExposureOffsetProvider);
+      expect(offset, greaterThan(0.0));
+
+      // 拆分核心回归点：拖动太阳滑块**不得**改写参数 EV
+      //（参数 EV 是模板/会话基准，落库、随模板复用、显示在参数面板与顶部胶囊）
+      final baseAfter = harness.container
+          .read(CaptureState.effectiveCameraProvider)
+          .exposureCompensation;
+      expect(baseAfter, baseBefore);
+
+      // 实际下发给相机的曝光 = 参数 EV + 对焦偏移
+      expect(
+        harness.container.read(CaptureState.effectiveExposureEvProvider),
+        closeTo(baseBefore + offset, 1e-9),
+      );
+    });
+
+    testWidgets('F: 锁定后单指纵向拖动更新「对焦曝光偏移」并显示曝光条', (tester) async {
+      final harness = await _pumpHarness(tester, templateId: 'soft_portrait');
+
+      // 先长按进入 AE/AF 锁定
+      final lock = await tester.startGesture(const Offset(400, 300));
+      await tester.pump(const Duration(milliseconds: 600));
+      await lock.up();
+      await tester.pump();
+      expect(find.byKey(const Key('focus_lock_badge')), findsOneWidget);
+
+      final baseBefore = harness.container
+          .read(CaptureState.effectiveCameraProvider)
+          .exposureCompensation;
+
+      // 锁定态下单指上滑（首次移动即触发 onScaleStart 并锚定起始 Y，
+      // 故需第二次移动才会产生实际偏移位移）
+      final drag = await tester.startGesture(const Offset(400, 300));
+      await drag.moveBy(const Offset(0, -45));
+      await tester.pump();
+      await drag.moveBy(const Offset(0, -45));
+      await tester.pump();
+
+      expect(find.byKey(const Key('focus_exposure_bar')), findsOneWidget);
+      await drag.up();
+      await tester.pump();
+
+      final offset =
+          harness.container.read(CaptureState.focusExposureOffsetProvider);
+      expect(offset, greaterThan(0.0));
+
+      // 参数 EV 不受对焦拖动影响（与 E 同一回归点，覆盖锁定态路径）
+      final baseAfter = harness.container
+          .read(CaptureState.effectiveCameraProvider)
+          .exposureCompensation;
+      expect(baseAfter, baseBefore);
+      expect(
+        harness.container.read(CaptureState.effectiveExposureEvProvider),
+        closeTo(baseBefore + offset, 1e-9),
+      );
+    });
+
+    testWidgets('G: 单击对焦 5s 后恢复连续自动对焦（locked: false）', (tester) async {
+      final fake = await _pumpWithFakeCamera(tester);
+
+      fake.capturedOnTapFocus!(const Offset(200, 200), const Size(800, 600));
+      await tester.pump();
+      fake.calls.clear();
+
+      // 2.5s 后对焦框（含太阳滑块）自动隐藏，但此时尚未恢复连续自动对焦
+      await tester.pump(const Duration(milliseconds: 2600));
+      expect(fake.calls, isNot(contains('setFocusAndExposureLock:false')));
+
+      // 单击对焦满 5s → 恢复连续自动对焦/曝光
+      await tester.pump(const Duration(seconds: 5));
+      expect(fake.calls, contains('setFocusAndExposureLock:false'));
     });
   });
 }

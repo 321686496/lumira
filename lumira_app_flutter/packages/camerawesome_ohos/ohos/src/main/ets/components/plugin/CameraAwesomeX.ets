@@ -43,7 +43,7 @@ import { BusinessError } from '@ohos.base';
 import UIAbility from '@ohos.app.ability.UIAbility';
 import { CameraPermissions } from '../cameraX/CameraPermissions';
 import { CameraAbilityLifecycle } from '../cameraX/CameraAbilityLifecycle';
-import { CameraState, CaptureMode, PhotoCaptureContext, PhotoEarlyFrameStreamListener, NativeLogStreamListener } from '../cameraX/CameraState';
+import { CameraState, CaptureMode, PhotoCaptureContext, PhotoEarlyFrameStreamListener, NativeLogStreamListener, bridgeNativeLog } from '../cameraX/CameraState';
 import { PhysicalButtonsHandler } from '../cameraX/PhysicalButtonsHandler';
 import { camera } from '@kit.CameraKit';
 import { abilityAccessCtrl } from '@kit.AbilityKit';
@@ -56,6 +56,10 @@ import { DisplayRotationListener } from '../display/DisplayRotationListener';
 import window from '@ohos.window';
 
 const TAG: string = 'CameraAwesomeX';
+
+// [probe] 连拍诊断序号：区分「受理拍照」与「交付结果」，仅用于定位
+// OHOS 并发 takePhoto 时后续请求 result 永不回调的问题（见 docs/future-optimizations.md）。
+let takePhotoProbeSeq: number = 0;
 
 /** CameraAwesomeX **/
 export default class CameraAwesomeX extends CameraInterface
@@ -198,14 +202,22 @@ export default class CameraAwesomeX extends CameraInterface
   takePhoto(path: string, result: Result<boolean>): void {
     Logger.debug(TAG, `takePhoto is called`);
     // 优先走 photoAvailable 直出路径（原始 JPEG，绕过系统相册增强，避免拍照偏黄）。
-    // path/result 经 photoPathResult 入队（连拍 FIFO 保序）；增强兜底回调改为
-    // 接收「队列配对的本帧 path/result」，不再闭包捕获——连拍时闭包会被后一次
-    // 调用覆盖，导致增强图写错路径/错误回调（部分照片内容错位、方向异常）。
-    this.cameraState!!.photoPathResult = { path: path, result: result }
+    // path/result 直接传入 CameraState.takePhoto：由其在 capture() 受理成功后入队
+    //（修复①，FIFO = 受理顺序 = 帧交付顺序）；增强兜底回调接收「队列配对的本帧
+    // path/result + ctx」，不闭包捕获——连拍时闭包会被后一次调用覆盖。
+    // [probe] 每次拍照分配序号记录受理结果；takePhoto 内部已保证 result 恰好回调
+    // 一次（成功链路 / 重试耗尽 / 相机释放），此处 catch 仅作防御性诊断。
+    const probeSeq = ++takePhotoProbeSeq
+    const probeAt = Date.now()
+    bridgeNativeLog(`[probe] takePhoto#${probeSeq} enter path=${path}`)
     this.cameraState!!.handlePhotoCb = async (photoAsset: photoAccessHelper.PhotoAsset, p: string, r: Result<boolean>, ctx?: PhotoCaptureContext) => {
       await this.cameraState?.saveCameraPhoto(p, photoAsset, r, ctx)
     }
-    this.cameraState?.takePhoto()
+    this.cameraState!!.takePhoto(path, result).then(() => {
+      bridgeNativeLog(`[probe] takePhoto#${probeSeq} accepted (capture() resolved) +${Date.now() - probeAt}ms`)
+    }).catch((e: BusinessError) => {
+      bridgeNativeLog(`[probe] takePhoto#${probeSeq} REJECTED code=${e?.code} msg=${e?.message}`)
+    })
   }
 
   recordVideo(path: string, options: VideoOptions, result: Result<void>): void {

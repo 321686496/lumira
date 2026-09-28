@@ -9,7 +9,7 @@ import MethodChannel, {
   MethodResult
 } from '@ohos/flutter_ohos/src/main/ets/plugin/common/MethodChannel';
 import MethodCall from '@ohos/flutter_ohos/src/main/ets/plugin/common/MethodCall';
-import { common, UIAbility } from '@kit.AbilityKit';
+import { common, OpenLinkOptions, UIAbility } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 
 /**
@@ -24,7 +24,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
  *
  * openLink（API 12+）说明：
  * - 传入 http/https 链接等，由系统选择合适的浏览器应用打开；
- * - 若系统中无匹配应用，结果 LinkResult.code 为非 0；
+ * - 若系统中无匹配应用，结果 AbilityResult.resultCode 为非 0；
  * - 该接口为拉起指定应用（浏览器）的推荐方式，见官方「应用间跳转」文档。
  */
 export default class OpenUrlPlugin implements FlutterPlugin, MethodCallHandler, AbilityAware {
@@ -71,20 +71,20 @@ export default class OpenUrlPlugin implements FlutterPlugin, MethodCallHandler, 
     const uri = raw.startsWith('http://') || raw.startsWith('https://') ? raw : `https://${raw}`;
     try {
       const context = this.requireContext();
-      const options: common.OpenLinkOptions = { appLinkingOnly: false };
-      // openLink 结果回调：LinkResult.code 为 0 表示成功
-      context.openLink(uri, options, (err: BusinessError, data: common.LinkResult) => {
+      const options: OpenLinkOptions = { appLinkingOnly: false };
+      // openLink 结果回调：AbilityResult.resultCode 为 0 表示成功
+      context.openLink(uri, options, (err: BusinessError, data: common.AbilityResult) => {
         if (err) {
           console.error(`[OpenUrlPlugin] openLink error: code=${err.code}, msg=${err.message}`);
           result.success({ success: false, error: `code=${err.code}, msg=${err.message}` });
           return;
         }
-        if (data.code === 0) {
+        if (data.resultCode === 0) {
           console.info(`[OpenUrlPlugin] openLink success: ${uri}`);
           result.success({ success: true });
         } else {
-          console.error(`[OpenUrlPlugin] openLink result code=${data.code}`);
-          result.success({ success: false, error: `code=${data.code}` });
+          console.error(`[OpenUrlPlugin] openLink result code=${data.resultCode}`);
+          result.success({ success: false, error: `code=${data.resultCode}` });
         }
       });
     } catch (e) {

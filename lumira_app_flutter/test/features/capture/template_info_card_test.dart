@@ -150,6 +150,53 @@ void main() {
     expect(find.text('场景'), findsOneWidget);
   });
 
+  testWidgets('折叠再展开保持折叠前手动选中的 tab', (tester) async {
+    await tester
+        .pumpWidget(wrap(const TemplateInfoCard(template: softPortraitTemplate)));
+
+    // 先切到「场景」分区
+    await tester.tap(find.text('场景'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('补光指引'), findsOneWidget);
+
+    // 折叠 → 再展开
+    await tester.tap(find.textContaining('柔光人像'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('柔光人像'));
+    await tester.pumpAndSettle();
+
+    // 仍停留在「场景」，不应回落到默认的「姿势描述」
+    expect(find.textContaining('补光指引'), findsOneWidget);
+    expect(find.textContaining('人物位于画面中央偏右'), findsNothing);
+  });
+
+  testWidgets('持久化 tab 异步载入后内容区跟随切换', (tester) async {
+    ProviderContainer? container;
+    await tester.pumpWidget(
+      wrap(
+        Builder(
+          builder: (context) {
+            container = ProviderScope.containerOf(context);
+            return const TemplateInfoCard(template: softPortraitTemplate);
+          },
+        ),
+      ),
+    );
+
+    // 首帧：持久化值尚未载入 → 默认「姿势描述」
+    expect(find.textContaining('人物位于画面中央偏右'), findsOneWidget);
+
+    // 模拟 loadTemplateInfoCardPreference 异步完成，载入上次选择「场景」
+    container!
+        .read(CaptureState.templateInfoCardTabProvider.notifier)
+        .state = 'scene';
+    await tester.pumpAndSettle();
+
+    // 内容区应跟随切到「场景」
+    expect(find.textContaining('补光指引'), findsOneWidget);
+    expect(find.textContaining('人物位于画面中央偏右'), findsNothing);
+  });
+
   testWidgets('切换模板（不同 id）后重置为展开', (tester) async {
     await tester
         .pumpWidget(wrap(const TemplateInfoCard(template: softPortraitTemplate)));

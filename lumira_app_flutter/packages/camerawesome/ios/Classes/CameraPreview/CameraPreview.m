@@ -8,6 +8,7 @@
 #import "CameraPreview.h"
 #import <ImageIO/ImageIO.h>
 #import <CoreGraphics/CoreGraphics.h>
+#import <math.h>
 
 // 白平衡「残差」：目标增益 / 实际锁定增益（每通道比值，1.0 = 硬件已完整达成）。
 // 硬件被封顶削减的色温强度由软件矩阵按此比值补足，全图均匀（无 ISP shading
@@ -31,6 +32,16 @@ static WbResidual WbResidualIdentity = { 1.0f, 1.0f, 1.0f };
   // 滑杆跨极端档阈值时取景器与 UI 一起冻结；去抖合并拖动中的连续翻转。
   dispatch_queue_t _toneRestartQueue;
   dispatch_source_t _toneRestartSource;
+  // AE 锁定（长按 AE/AF）时的曝光冻结值：
+  // AVCaptureExposureModeLocked 下 exposureTargetBias 不生效，但原相机支持
+  // 「锁定后上下拖动拉曝光」，因此锁定瞬间记下 duration/ISO，拖动时按
+  // ISO *= 2^EV 走自定义曝光（setExposureModeCustomWithDuration）实现偏移。
+  BOOL _aeLocked;
+  CMTime _lockedExposureDuration;
+  float _lockedIso;
+  // 最近一次下发的 brightness（[0,1]）：AE 锁定态改走自定义曝光时不写
+  // exposureTargetBias，解锁恢复连续自动后需按该值补回，否则会残留离线前的旧 bias。
+  CGFloat _lastBrightness;
 }
 
 - (instancetype)initWithCameraSensor:(CameraSensor)sensor
@@ -47,6 +58,8 @@ static WbResidual WbResidualIdentity = { 1.0f, 1.0f, 1.0f };
   _dispatchQueue = dispatchQueue;
   _wbResidual = WbResidualIdentity;
   _wbManuallyLocked = NO;
+  _aeLocked = NO;
+  _lastBrightness = 0.5f; // 中性 EV=0
 
   // 全局色调映射翻转后的去抖会话重启（见 restartSessionForToneMappingFlip）。
   _toneRestartQueue = dispatch_queue_create("lumira.wb.tone-restart", DISPATCH_QUEUE_SERIAL);
@@ -342,18 +355,42 @@ static WbResidual WbResidualIdentity = { 1.0f, 1.0f, 1.0f };
 - (void)setBrightness:(NSNumber *)brightness error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error {
   NSError *brightnessError = nil;
   if ([_captureDevice lockForConfiguration:&brightnessError]) {
+    _lastBrightness = (CGFloat)[brightness floatValue];
+    // brightness∈[0,1] 编码 EV∈[-3,+3]（0.5=0EV，与应用侧滑块一致）。
+    // exposureTargetBias 单位即 EV，直接按 EV 解码以匹配原相机的曝光档位与步进，
+    // 避免把 [0,1] 线性映射到设备满量程（±8EV）导致小步进被放大数倍。
+    CGFloat ev = (_lastBrightness - 0.5f) * 6.0f;
+
+    // AE 锁定态（长按 AE/AF）下拖动曝光：既不能切回连续自动（会解除锁定），
+    // 也不能用 exposureTargetBias（Locked 模式下不生效）。在锁定瞬间的
+    // duration 上按 ISO *= 2^EV 做自定义曝光，等价原相机「锁定后拉曝光」。
+    if (_aeLocked && _lockedIso > 0 && CMTIME_IS_VALID(_lockedExposureDuration) &&
+        [_captureDevice isExposureModeSupported:AVCaptureExposureModeCustom]) {
+      // duration 钳制到当前格式支持区间：越界时 setExposureModeCustom 会抛
+      // NSInvalidArgumentException 直接崩溃。
+      CMTime duration = _lockedExposureDuration;
+      if (CMTimeCompare(duration, _captureDevice.activeFormat.minExposureDuration) < 0) {
+        duration = _captureDevice.activeFormat.minExposureDuration;
+      }
+      if (CMTimeCompare(duration, _captureDevice.activeFormat.maxExposureDuration) > 0) {
+        duration = _captureDevice.activeFormat.maxExposureDuration;
+      }
+      float minIso = _captureDevice.activeFormat.minISO;
+      float maxIso = _captureDevice.activeFormat.maxISO;
+      float iso = MAX(minIso, MIN(maxIso, _lockedIso * powf(2.0f, (float)ev)));
+      [_captureDevice setExposureModeCustomWithDuration:duration iso:iso completionHandler:nil];
+      [_captureDevice unlockForConfiguration];
+      return;
+    }
+
     AVCaptureExposureMode exposureMode = AVCaptureExposureModeContinuousAutoExposure;
     if ([_captureDevice isExposureModeSupported:exposureMode]) {
       [_captureDevice setExposureMode:exposureMode];
     }
     
-    // brightness∈[0,1] 编码 EV∈[-3,+3]（0.5=0EV，与应用侧滑块一致）。
-    // exposureTargetBias 单位即 EV，直接按 EV 解码以匹配原相机的曝光档位与步进，
-    // 避免把 [0,1] 线性映射到设备满量程（±8EV）导致小步进被放大数倍。
     CGFloat minExposureTargetBias = _captureDevice.minExposureTargetBias;
     CGFloat maxExposureTargetBias = _captureDevice.maxExposureTargetBias;
 
-    CGFloat ev = ((CGFloat)[brightness floatValue] - 0.5f) * 6.0f;
     CGFloat exposureTargetBias = MAX(minExposureTargetBias, MIN(maxExposureTargetBias, ev));
     
     [_captureDevice setExposureTargetBias:exposureTargetBias completionHandler:nil];
@@ -716,6 +753,12 @@ static AVCaptureWhiteBalanceGains GainsForTemperatureWithResidual(CGFloat k,
         [_captureDevice isExposureModeSupported:AVCaptureExposureModeLocked]) {
       if ([_captureDevice lockForConfiguration:&lockError]) {
         [_captureDevice setExposurePointOfInterest:position];
+        // 切 Locked 之前先记下当前 AE 收敛出的 duration/ISO：Locked 模式下
+        // setExposureTargetBias 不生效，锁定后用户上下拖动拉曝光需要靠
+        // 「ISO *= 2^EV」的自定义曝光实现（见 setBrightness）。
+        _lockedExposureDuration = _captureDevice.exposureDuration;
+        _lockedIso = _captureDevice.ISO;
+        _aeLocked = YES;
         [_captureDevice setExposureMode:AVCaptureExposureModeLocked];
         [_captureDevice unlockForConfiguration];
       }
@@ -735,6 +778,7 @@ static AVCaptureWhiteBalanceGains GainsForTemperatureWithResidual(CGFloat k,
     }
   } else {
     // —— 解锁：恢复连续自动 ——
+    _aeLocked = NO;
     if ([_captureDevice isFocusModeSupported:AVCaptureFocusModeContinuousAutoFocus]) {
       if ([_captureDevice lockForConfiguration:&lockError]) {
         [_captureDevice setFocusMode:AVCaptureFocusModeContinuousAutoFocus];
@@ -744,6 +788,11 @@ static AVCaptureWhiteBalanceGains GainsForTemperatureWithResidual(CGFloat k,
     if ([_captureDevice isExposureModeSupported:AVCaptureExposureModeContinuousAutoExposure]) {
       if ([_captureDevice lockForConfiguration:&lockError]) {
         [_captureDevice setExposureMode:AVCaptureExposureModeContinuousAutoExposure];
+        // 锁定期间拖动曝光走的是自定义曝光（未写 exposureTargetBias），这里按
+        // 最近一次 brightness 补回，避免解锁后残留 AE 锁定前的旧曝光偏移。
+        CGFloat bias = MAX(_captureDevice.minExposureTargetBias,
+                           MIN(_captureDevice.maxExposureTargetBias, (_lastBrightness - 0.5f) * 6.0f));
+        [_captureDevice setExposureTargetBias:bias completionHandler:nil];
         [_captureDevice unlockForConfiguration];
       }
     }

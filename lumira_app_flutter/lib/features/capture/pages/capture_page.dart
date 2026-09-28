@@ -14,8 +14,7 @@ import 'dart:ui' as ui
         Offset,
         ImmutableBuffer,
         ImageDescriptor,
-        PixelFormat,
-        instantiateImageCodec;
+        PixelFormat;
 
 import 'package:flutter/foundation.dart'
     show compute, defaultTargetPlatform, kDebugMode;
@@ -120,18 +119,38 @@ const int _ohosNativeMaxDim = 2560;
 // 自动 fit 回源分辨率，早帧源分辨率低于成片，不会被放大。
 const int _earlyFrameMaxDim = _ohosNativeMaxDim;
 
-// 快门冻结帧（水印动画源）的最大边像素：动画源短暂浮层使用，无需全屏高采样。
-// OHOS 上按 devicePixelRatio(~3x) 全屏 toImage + PNG 编码实测 3s+，限幅后显著提速。
-// 1280px 实测仍 1.8-2.4s（PNG 编码随像素量线性），降到 720px（像素量再减 ~3.2x）
-// 使水印动画 ~1s 内可启动；动画源仅短暂显示后由成片替换，720px 足够。
-const int _kShutterFrameMaxDim = 720;
+// 快门冻结帧（水印动画源 + 可见 interim 早帧）的最大边像素。
+// 历史：曾限 720px——当时路径是 toImage + PNG 软编码（3s+），限幅保动画启动速度。
+// 现已改 rawRgba（纯读回）+ 原生硬件 JPEG 编码（~150ms/2.7MP），限幅的历史前提消失；
+// 且 720px 快门帧会被「相片观感」的早帧初版成片顶替，用户观感为「早帧比取景器/
+// 动画糊很多」——静态拍照管线（多帧降噪）天然比取景器实时流（含实时锐化）软。
+// 提到 1920：= 预览流裁切后的原生内容分辨率（fullscreen 886x1920、3:4 为 1440x1920
+// 的显示分辨率），快门帧即「按下快门瞬间的取景框内容」（WYSIWYG，用户预期），
+// 分辨率也与成片对齐（886x1920），interim→final 升级不再是分辨率降级。
+const int _kShutterFrameMaxDim = 1920;
+
+/// 待配对早帧的超时（毫秒）：超过此时长仍没等到早帧的快门记录直接丢弃，
+/// 避免后续早帧被错配到这张上（原生早帧通道不带 photoId，只能按顺序配对）。
+/// 取值需大于「photoAssetAvailable + 早帧交付」的最坏耗时（实测 ~2.5s）。
+const int _kEarlyFramePairTimeoutMs = 8000;
+
+/// OHOS 快门节流闸门的安全超时（毫秒）：按下快门后闸门关闭，正常由「本帧早帧送达」
+/// 打开；早帧偶发不送达（真机日志出现过 5 帧只到 3 帧早帧）时用此超时兜底放行，
+/// 否则快门会一直无反应。取值需略大于早帧最坏到达耗时（实测 ~1.8s，含异常余量）。
+const int _kOhosShutterGateTimeoutMs = 5000;
 
 /// 早帧「初版成片」处理快照：快门时刻的有效参数（与成片原生快速路径同源同语义），
 /// 供早帧到达时直接走原生 processJpeg，无需再读 provider。
+///
+/// [ratioId] / [screenRatio] 供早帧到达后「按实际帧尺寸校准方向」时重算 targetRatio
+///（与成片 capture 后的方向修正同规则），故 [targetRatio] / [isPortrait] 仅是快门
+/// 时刻的初值。
 class _EarlyFrameInterimJob {
   const _EarlyFrameInterimJob({
     required this.targetRatio,
     required this.isPortrait,
+    required this.ratioId,
+    required this.screenRatio,
     required this.isFront,
     required this.matrix,
     required this.sharpen,
@@ -143,6 +162,8 @@ class _EarlyFrameInterimJob {
 
   final double targetRatio;
   final bool isPortrait;
+  final String ratioId;
+  final double screenRatio;
   final bool isFront;
   final List<double> matrix;
   final int sharpen;
@@ -150,6 +171,24 @@ class _EarlyFrameInterimJob {
   final int smoothStrength;
   final int vignette;
   final int grain;
+}
+
+/// 一次快门的「待配对早帧」记录（仅 OHOS）。
+///
+/// 原生早帧事件通道只带文件路径、不带 photoId，故 Dart 侧只能按**发起顺序**
+/// 与到达顺序 FIFO 配对。连拍时原生 capture 并发在飞，必须记录每次快门自己的
+/// photoId 与参数快照；用单槽「最新一次快门」配对会把早帧贴到错误的 photoId 上
+/// （表现为预览页先看到的是这一张、成片却换成了另一张）。
+class _PendingEarlyFrame {
+  const _PendingEarlyFrame({
+    required this.photoId,
+    required this.job,
+    required this.issuedAtMs,
+  });
+
+  final String photoId;
+  final _EarlyFrameInterimJob? job;
+  final int issuedAtMs;
 }
 
 class CapturePage extends ConsumerStatefulWidget {
@@ -294,30 +333,64 @@ class _CapturePageState extends ConsumerState<CapturePage>
   bool _animationFlipSource = false;
   VoidCallback? _onAnimationComplete;
 
-  /// 水印动画播放期间用户已手动点缩略图进过预览页：动画结束的自动跳转据此跳过，
-  /// 避免「手动 push 一次 + 动画结束再 push 一次」在路由栈叠出两个拍摄预览页。
-  /// 每次快门开始时复位。
-  bool _previewOpenedDuringAnimation = false;
+  /// 本「连拍批次」是否已经进过拍摄预览页（自动跳转或用户手动点缩略图）。
+  /// 动画结束的自动跳转据此跳过，避免「手动 push 一次 + 动画结束再 push 一次」，
+  /// 也避免连拍期间被反复跳进预览页。每批次第一次快门时复位（见 [_doCapture]）。
+  bool _previewOpenedForBatch = false;
+
+  /// 预览页是否正盖在拍摄页之上。
+  /// 预览页打开期间禁止再启动水印动画：否则动画在预览页背后播放，
+  /// 用户返回拍摄页时会突然看到一次「补播」动画。
+  bool _previewRouteOpen = false;
+
+  /// 本连拍批次是否已经播过水印动画。
+  /// 每批次只播一次：连拍时前几张的成片会陆续返回，若允许它们各自补播
+  /// （用成片兜底的入场动画），就会出现「动画一个接一个，返回拍摄页还在播」。
+  /// 每批次第一次快门时复位（见 [_doCapture]）。
+  bool _batchAnimationPlayed = false;
+
+  /// 本连拍批次的快门总数（>1 视为连拍）。
+  /// 连拍不自动跳预览页，必须等最后一张后处理完成（见 [_goToPreviewWhenReady]）。
+  int _batchShutterCount = 0;
+
+  /// 本批次仍在途（capture 尚未返回、未入后处理队列）的快门数。
+  int _inFlightShutterCount = 0;
 
   /// OHOS 分阶段拍照早帧订阅：一阶段低质量帧（~672ms）先于成片到达，
   /// 收到即提前触发水印动画（无需等待成片 capture() ~1.9s 返回）。
   StreamSubscription<String>? _earlyFrameSub;
   StreamSubscription<String>? _nativeLogSub;
 
-  /// 当前拍摄是否期望 OHOS 早帧（用于忽略上一帧残留事件，避免误触发动画）。
-  bool _expectingEarlyFrame = false;
-
-  /// 先快后真：当前这次快门的 photoId（提前生成，interim→final→DB→预览升级复用）。
+  /// 当前这次快门的 photoId（提前生成，interim→final→DB→预览升级复用）。
   String? _currentShutterPhotoId;
 
-  /// 本次快门的早帧「初版成片」处理上下文（仅 OHOS）：早帧到达时用快门时刻的
-  /// 参数快照走原生 processJpeg 出可见 interim（~800ms 上屏），成片（~2s）就绪后
-  /// 原位替换。null = 本次不适用（横屏/拉腿/自定义裁剪/非 OHOS），早帧退回仅点击预览。
-  _EarlyFrameInterimJob? _earlyFrameJob;
+  /// 待配对的早帧队列（仅 OHOS）：每次快门按发起顺序入队一条记录，
+  /// 早帧到达时 FIFO 出队配对（原生早帧事件不带 photoId，到达顺序 = 发起顺序）。
+  /// 连拍时多张 capture 并发在飞，单槽字段会把早帧错配到最新一次快门上。
+  final List<_PendingEarlyFrame> _earlyFramePending = <_PendingEarlyFrame>[];
 
-  /// 本轮早帧临时文件（原生 cacheDir）：下一次快门时清理，避免残留堆积。
-  String? _earlyFrameRawPath;
-  String? _earlyFrameProcPath;
+  /// OHOS 快门节流闸门：按下快门即关闭，直到**本帧早帧送达**（或安全超时兜底）才重开；
+  /// 关闭期间再按快门直接无反应。
+  ///
+  /// 目的：把连拍节奏绑在「早帧已出」上，避免快门不限速堆积把原生增强交付队列压垮
+  /// （真机日志：1s 内 4 连拍时后段帧的增强请求只能排队，最终被看门狗降级为早帧）。
+  /// 成片仍在后台继续处理，不占用闸门（出早帧后即可拍下一张）。
+  bool _ohosShutterGateOpen = true;
+  Timer? _ohosShutterGateTimer;
+
+  /// 本批次产生的早帧临时文件（原生 cacheDir）：下一批次首次快门时统一清理。
+  /// 连拍中前一张的「初版成片」可能仍是缩略图/预览页正在显示的图，不能像单张
+  /// 那样每次快门就删（删掉会出现空白/解码失败的可见 interim）。
+  final List<String> _earlyFrameTempPaths = <String>[];
+
+  /// 快门冻结帧已作为**可见 interim** 发布时对应的 photoId。
+  ///
+  /// 早帧（相册资产 JPEG 直拷）到达时据此判断：若本快门的快门帧（取景器冻结，
+  /// WYSIWYG、含实时锐化，1920px）已是可见 interim，则跳过「早帧初版成片」的
+  /// 原生处理与发布——静态拍照管线（多帧降噪）观感天然比取景器实时流软，用它
+  /// 顶替快门帧会造成「早帧比水印动画糊很多」的观感降级；直接等成片就绪原位升级。
+  /// 顺带省掉连拍时每张 ~500ms 的原生 processJpeg（含 ArkTS 主线程同步段），减卡顿。
+  String? _shutterFrameVisiblePid;
 
   /// 角标缩略图的 GlobalKey：水印动画淡出后跳预览页之前，
   /// 需要确保后处理落库完成（读取 finalPath/photoId）。
@@ -382,6 +455,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
         .nativeLogs()
         .listen((m) => debugPrint('[native] $m'));
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // 会话边界归零「对焦曝光偏移」：该偏移锚定最近一次对焦触点，只在本次拍摄
+      // 会话内有效（不进模板、不落库）。进入/重回拍摄页必须从 0 起步，避免上一
+      // 会话的临时微调残留。riverpod 禁止在 initState 内直接写 provider，故放这里。
+      ref.read(CaptureState.focusExposureOffsetProvider.notifier).state = 0.0;
       _applyRouteParamsToState();
       ref.read(CaptureState.currentTemplateIdProvider.notifier).state =
           widget.templateId;
@@ -662,6 +739,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
     _earlyFrameSub = null;
     _nativeLogSub?.cancel();
     _nativeLogSub = null;
+    _ohosShutterGateTimer?.cancel();
+    _ohosShutterGateTimer = null;
     // 释放常驻 worker isolate（性能优化 A：避免 isolate 泄漏）
     CaptureWorker.instance.dispose();
     WidgetsBinding.instance.removeObserver(this);
@@ -892,6 +971,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
       _cancelDelayCountdown();
       return;
     }
+    // OHOS 快门节流（性能保护）：上一帧早帧尚未送达 → 本次点击无反应。
+    // 成片仍在后台处理、不阻塞；待上一帧早帧上屏后快门自动恢复。
+    if (_isOhos && !_ohosShutterGateOpen) {
+      debugPrint('[capture] 快门被节流（上一帧早帧未就绪，忽略本次点击）');
+      return;
+    }
     final delay = ref.read(CaptureState.delayTimerProvider);
     if (delay > 0) {
       debugPrint('[capture] _onCapture() start delay: ${delay}s');
@@ -899,6 +984,27 @@ class _CapturePageState extends ConsumerState<CapturePage>
       return;
     }
     await _doCapture();
+  }
+
+  /// 关闭 OHOS 快门闸门：本帧已按下，等早帧送达再开；并挂安全超时兜底放行。
+  void _closeShutterGate() {
+    _ohosShutterGateTimer?.cancel();
+    _ohosShutterGateOpen = false;
+    _ohosShutterGateTimer = Timer(
+      const Duration(milliseconds: _kOhosShutterGateTimeoutMs),
+      () {
+        if (!mounted) return;
+        debugPrint('[capture] 快门闸门安全超时放行（早帧未送达）');
+        _openShutterGate();
+      },
+    );
+  }
+
+  /// 打开 OHOS 快门闸门：早帧已送达（或安全超时兜底）。幂等。
+  void _openShutterGate() {
+    _ohosShutterGateTimer?.cancel();
+    _ohosShutterGateTimer = null;
+    _ohosShutterGateOpen = true;
   }
 
   /// 拍照体：调用 CameraService 拿到原始 JPEG，后处理后显示到角标。
@@ -946,6 +1052,21 @@ class _CapturePageState extends ConsumerState<CapturePage>
     final photoId = 'photo_${DateTime.now().millisecondsSinceEpoch}';
     _currentShutterPhotoId = photoId;
 
+    // === 连拍批次计数 ===
+    // 上一次快门的 capture 已返回（无在途快门）后又按下快门 → 视为新批次：
+    // 复位批次计数与「已进预览页 / 已播动画」标记。在途快门 > 0 则并入当前批次
+    // （连拍），由 [_goToPreviewWhenReady] 等最后一张处理完成才自动进预览页。
+    if (_inFlightShutterCount == 0) {
+      _batchShutterCount = 0;
+      _batchAnimationPlayed = false;
+      _previewOpenedForBatch = false;
+      // 上一批次已结束：清理其残留的早帧临时文件与未配对记录（新批次从零开始）。
+      _cleanupEarlyFrameFiles();
+      _earlyFramePending.clear();
+    }
+    _batchShutterCount++;
+    _inFlightShutterCount++;
+
     // 立即反馈：白闪 + 角标 processing 态
     setState(() => _shutterTrigger++);
     ref.read(captureThumbnailProvider.notifier).startCapture(photoId: photoId);
@@ -961,99 +1082,43 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // OHOS 分阶段拍照：订阅早帧通道（常驻一次）。一阶段低质量帧（~672ms）先于成片
     // capture()（~1.9s）返回到达。
     // 先快后真：早帧经原生 processJpeg 调色后作为「初版成片」可见 interim（~800ms 上屏，
-    // 缩略图/预览立即可见），成片就绪后原位替换；不满足原生快路径条件（横屏/拉腿/
-    // 自定义裁剪）时退回仅点击预览（不进缩略图）。
+    // 缩略图/预览立即可见），成片就绪后原位替换；不满足原生处理条件（拉腿/自定义裁剪）
+    // 时退回仅点击预览（不进缩略图）。方向以早帧实际像素尺寸现场校准（见
+    // _onEarlyFrameArrived），横屏拍摄同样走原生、且按 4:3 正确出横向成片。
     // 水印动画源用快门时刻冻结取景器帧（_captureShutterViewfinderFrame，WYSIWYG）。
-    // _expectingEarlyFrame 标记本次拍摄期望早帧，防止上一帧残留事件误触发 interim。
+    // 每次快门按发起顺序入队一条待配对记录：原生早帧事件不带 photoId，只能靠
+    // 「发起顺序 = 到达顺序」FIFO 配对（见 _onEarlyFrameArrived），连拍并发在飞时
+    // 才不会把早帧贴到别的快门上。
     final isOhos = !isIos && !Platform.isAndroid;
-    _expectingEarlyFrame = isOhos;
-    _previewOpenedDuringAnimation = false;
-    _cleanupEarlyFrameFiles();
-    _earlyFrameJob = isOhos ? _buildEarlyFrameInterimJob() : null;
+    final earlyFrameJob = isOhos ? _buildEarlyFrameInterimJob() : null;
     if (isOhos) {
+      _earlyFramePending.add(_PendingEarlyFrame(
+        photoId: photoId,
+        job: earlyFrameJob,
+        issuedAtMs: DateTime.now().millisecondsSinceEpoch,
+      ));
       try {
-        _earlyFrameSub ??= cameraService.photoEarlyFrames().listen((path) {
-          if (!_expectingEarlyFrame || path.isEmpty) {
-            return;
-          }
-          // 允许连续转场：interim 分支本地判定，避免「残留早帧误触发动画」的历史问题。
-          _expectingEarlyFrame = false;
-          final pid = _currentShutterPhotoId;
-          final swEarly = Stopwatch()..start();
-          debugPrint('[capture] OHOS early frame arrived: $path pid=$pid');
-          _earlyFrameRawPath = path;
-          if (pid != null) {
-            final job = _earlyFrameJob;
-            if (job != null) {
-              // 早帧 → 原生管线出「初版成片」：与成片同一套 C++ 处理器（解码→几何→
-              // 色彩矩阵→锐化→...→硬编码），观感与最终成片一致（仅分辨率低一档）。
-              // 失败回退：把原始早帧挂为仅点击预览的 interim，不阻塞成片链路。
-              OhosImageProcessor.instance
-                  .processJpeg(
-                inputPath: path,
-                outputPath: '$path.proc.jpg',
-                targetRatio: job.targetRatio,
-                isPortrait: job.isPortrait,
-                // fd 早帧=相册 asset 只读 fd 拷贝的原始文件：OHOS takePhoto 虽传
-                // mirror:false，设备/相册管线对前置照片仍做镜像——asset 是镜像画面，
-                // 与 HIGH_QUALITY 增强成片同源同向。原生 isFront 翻一次还原真实
-                // 方向（与取景器一致，见 _captureShutterViewfinderFrame 注释）。
-                isFront: job.isFront,
-                matrix: job.matrix,
-                sharpen: job.sharpen,
-                clarity: job.clarity,
-                smoothStrength: job.smoothStrength,
-                vignette: job.vignette,
-                grain: job.grain,
-                maxDim: _earlyFrameMaxDim,
-              )
-                  .then((ok) {
-                if (!mounted) return;
-                swEarly.stop();
-                debugPrint('[perf] 早帧 processJpeg 初版成片: '
-                    '${swEarly.elapsedMilliseconds}ms ok=$ok');
-                final notifier = ref.read(captureThumbnailProvider.notifier);
-                if (ok) {
-                  _earlyFrameProcPath = '$path.proc.jpg';
-                  notifier.setInterimResult('$path.proc.jpg',
-                      photoId: pid, visible: true);
-                  debugPrint(
-                      '[capture] 早帧初版成片就绪(可见 interim): $path.proc.jpg');
-                } else {
-                  notifier.setInterimResult(path, photoId: pid);
-                  debugPrint('[capture] 早帧原生处理失败，interim 退回仅点击预览');
-                }
-              }).catchError((Object e) {
-                debugPrint('[capture] 早帧初版成片异常: $e');
-                if (mounted) {
-                  ref
-                      .read(captureThumbnailProvider.notifier)
-                      .setInterimResult(path, photoId: pid);
-                }
-              });
-            } else {
-              ref
-                  .read(captureThumbnailProvider.notifier)
-                  .setInterimResult(path, photoId: pid);
-            }
-          }
-        });
+        _earlyFrameSub ??= cameraService.photoEarlyFrames().listen(
+              (path) => _onEarlyFrameArrived(path),
+            );
       } catch (e) {
         debugPrint('[capture] listen OHOS early frame failed: $e');
       }
+      // 快门节流：本帧已按下 → 关闸门，等本帧早帧送达（_onEarlyFrameArrived）再开。
+      _closeShutterGate();
     }
 
     // iOS/OHOS：快门即冻结已合成取景器帧作水印动画源（RepaintBoundary 截图，
     // 含色彩矩阵 + 比例裁切，保证动画内容 = 取景器所见）。
     // 与成片 capture() 并行执行，不阻塞。
-    // 前置翻转仅 iOS/Android 需要：这两端前置预览是系统默认的镜像画面，快门帧
-    // 翻一次才对齐真实方向。OHOS 拍照模式预览镜像从未配置（CameraState.enableMirror
-    // 仅录像模式执行，_mirrorFrontCamera 默认 false 且 app 从未开启，Flutter 侧
-    // 取景器也无 Transform）→ OHOS 前置取景器即真实方向，再翻会成镜像。
+    // 前置翻转仅 Android 需要：Android 取景器是镜像画面，而成片=CameraX 原始
+    // 照片（未镜像）→ 快门帧翻一次才与成片同向。iOS 取景器与成片同源（非闪光
+    // 成片=取景器 video 帧直出，WYSIWYG，同为镜像），OHOS 取景器与成片同为真实
+    // 方向 → 这两端都不能翻，翻了会让水印动画/缩略图 interim 与取景器、成片相反。
     final shutterFrameFuture =
         shouldAnimateNow && flashMode == CaptureFlashMode.off
             ? _captureShutterViewfinderFrame(
-                flipHorizontal: facing == 'front' && !isOhos)
+                flipHorizontal: facing == 'front' && Platform.isAndroid)
             : Future<String?>.value(null);
 
     // 快照当前比例参数（避免连拍中切换比例导致参数不一致）
@@ -1104,13 +1169,30 @@ class _CapturePageState extends ConsumerState<CapturePage>
       // 取景器冻结帧（WYSIWYG，rawRgba+原生硬编码 ~300-400ms 就绪）先行填充
       // 缩略图，几乎无感等待；随后早帧初版成片（~1.2s，全分辨率）与最终成片
       // 原位替换。仅 flash off 且允许动画时才有快门帧，其余场景维持早帧/成片路径。
+      // 注意：冻结帧是「屏幕空间」截图，其取景框方向由**窗口**方向决定；成片方向
+      // 由**设备**方向决定。二者不一致时（OHOS 窗口不跟随旋转：横持拍摄下
+      // MediaQuery 仍判竖屏）冻结帧是竖屏 3:4、成片是 4:3 横屏——若把它当照片
+      // 发布给缩略图/预览页，横屏拍摄点开预览会显示成竖屏。故方向不一致时只把它
+      // 留给水印动画（动画本就是屏幕空间效果，按窗口方向呈现），不发布为可见
+      // interim，等早帧/成片的真实照片上屏（缩略图保持加载态）。
       if (shutterFramePath != null && mounted) {
-        ref.read(captureThumbnailProvider.notifier).setInterimResult(
-              shutterFramePath,
-              photoId: _currentShutterPhotoId,
-              visible: true,
-            );
-        debugPrint('[capture] 快门帧 interim 上屏: $shutterFramePath');
+        final windowIsPortrait = screenRatio < 1;
+        if (isPortrait == windowIsPortrait) {
+          // 记录快门帧已可见：早帧到达时据此跳过「初版成片」顶替（观感降级），
+          /// 见 _shutterFrameVisiblePid 字段注释。
+          _shutterFrameVisiblePid = photoId;
+          ref.read(captureThumbnailProvider.notifier).setInterimResult(
+                shutterFramePath,
+                photoId: photoId,
+                visible: true,
+              );
+          debugPrint('[capture] 快门帧 interim 上屏: $shutterFramePath');
+        } else {
+          debugPrint('[capture] 快门帧与成片方向不一致（窗口'
+              '${windowIsPortrait ? "竖" : "横"}屏 / 设备'
+              '${isPortrait ? "竖" : "横"}屏），不发布为 interim: '
+              '$shutterFramePath');
+        }
       }
 
       // === 水印相框入场动画（动画源帧就绪即触发，不等成片） ===
@@ -1119,13 +1201,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
       // - iOS/OHOS 动画源 = 快门冻结取景器帧（RepaintBoundary 截图，
       //   含色彩矩阵+前置镜像+裁切，WYSIWYG）；
       // 屏幕空间帧（已旋转/已镜像），sourceAligned=true 跳过二次对齐。
-      // 注意：此处不消费 _expectingEarlyFrame——成片未返回前早帧仍应送达
-      // （interim 先快后真），等 capture() 返回后再复位。
+      // 注意：此处不消费待配对早帧——成片未返回前早帧仍应送达
+      //（interim 先快后真），早帧配对与发布由 _onEarlyFrameArrived 负责。
       final earlyAnimSource = shutterFramePath;
       if (shouldAnimateNow &&
           mounted &&
           earlyAnimSource != null &&
-          !_showWatermarkAnimation) {
+          _canStartWatermarkAnimation(photoId)) {
         _startWatermarkAnimation(
           earlyAnimSource,
           wmTemplate,
@@ -1158,21 +1240,20 @@ class _CapturePageState extends ConsumerState<CapturePage>
         }
       }
 
-      // 回退：无动画源帧（闪光模式/取景器帧捕捉失败）且动画尚未启动 →
-      // 用成片启动（成片是原始照片，需要方向对齐，sourceAligned=false）。
+      // 回退：无动画源帧（闪光模式/取景器帧捕捉失败）且本批次/本次快门尚未播过
+      // 动画 → 用成片启动（成片是原始照片，需要方向对齐，sourceAligned=false）。
       // 仅 OHOS 前置需 flipSource 补翻：其回退源=相册 asset（设备/相册管线
       // 镜像），而动画终点应与最终落库成片（真实方向）一致。iOS/Android 回退源
       // 沿用 overlay 原有 isFront&&横屏像素 规则即可。
-      if (shouldAnimateNow && mounted && !_showWatermarkAnimation) {
+      if (shouldAnimateNow &&
+          mounted &&
+          _canStartWatermarkAnimation(photoId)) {
         _startWatermarkAnimation(
           result.filePath,
           wmTemplate,
           sourceAligned: false,
           flipSource: isOhos && facing == 'front',
         );
-      }
-      if (shouldAnimateNow) {
-        _expectingEarlyFrame = false;
       }
 
       // 成品就绪前记录"可点击预览"的 interim：仅 OHOS 需要（原生处理慢），
@@ -1183,21 +1264,21 @@ class _CapturePageState extends ConsumerState<CapturePage>
       // 守卫：已有可见 interim（早帧初版成片/快门帧）就绪后，不再用未做任何
       // 方向/色彩处理的原始相册文件顶替——该文件未经色彩矩阵，顶替会让预览页/
       // 缩略图在成片就绪前（~1.2s-5s 窗口）显示与最终成片色调不一致的原图。
-      // 仍停在 processing（早帧未出图）时正常降级为仅点击预览，保证 preview 可打开。
+      // 另有早帧处理能力（earlyFrameJob != null）时同样不降级：早帧初版成片马上
+      // 就到，用原始文件顶替只会让用户点开预览时看到未裁切/未调色的原图
+      //（横屏拍摄下冻结帧被跳过 interim 时尤其明显）。
+      // 仅当本次快门无早帧处理能力（拉腿/自定义裁剪，早帧只能原图直挂）且仍停在
+      // processing 时，才正常降级为"仅点击预览"，保证 preview 可打开。
       if (isOhos &&
+          earlyFrameJob == null &&
           ref.read(captureThumbnailProvider).status !=
               CaptureThumbnailStatus.interim) {
         ref
             .read(captureThumbnailProvider.notifier)
-            .setInterimResult(result.filePath, photoId: _currentShutterPhotoId);
+            .setInterimResult(result.filePath, photoId: photoId);
       }
 
-      // 【抗手抖-单帧选帧】清晰度评分（拉普拉斯方差）仅用于诊断日志，选帧/锐化
-      // 决策不依赖单帧结果（防糊由系统层解决：OHOS 5MP 档位 + HIGH_QUALITY，
-      // 应用层不据此叠加锐化去模糊）。单帧场景评分移出成片关键路径，后台执行；
-      // 连拍多帧选帧仍走同步评分（burst 流程另行处理）。
-      unawaited(_scoreSingleFrameDiagnostics(result.filePath));
-
+      // 防糊由系统层解决（OHOS 5MP 档位 + HIGH_QUALITY），应用层不叠加锐化去模糊。
       // 仅选中的一帧进入后处理队列（后处理异步执行，不阻塞下次 capture 调用）
       final postProcess = ref.read(CaptureState.effectivePostProcessProvider);
       debugPrint('[capture] postProcess for isolate: '
@@ -1235,6 +1316,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
         '拍照失败：$e',
         duration: const Duration(seconds: 2),
       );
+    } finally {
+      // 本次快门已返回（成功入队 / 失败）：在途计数减一。归零即本批次所有快门
+      // 都已入后处理队列，剩余「是否处理完」由 [_goToPreviewWhenReady] 轮询判断。
+      if (_inFlightShutterCount > 0) _inFlightShutterCount--;
     }
   }
 
@@ -1248,96 +1333,81 @@ class _CapturePageState extends ConsumerState<CapturePage>
     ref.read(recentFillLightColorsProvider.notifier).recordUse(color);
   }
 
-  /// 单帧清晰度评分（纯诊断）：后台解码 240px 小图 + worker 拉普拉斯评分，仅打日志。
-  /// 失败静默——评分结果不参与任何成片决策。
-  Future<void> _scoreSingleFrameDiagnostics(String path) async {
-    try {
-      final swScore = Stopwatch()..start();
-      final smallFrames = await _decodeBurstThumbnails([path]);
-      final scoreResult = await CaptureWorker.instance.scoreFrames(
-        [path],
-        smallRgba: smallFrames?.rgbaList,
-        smallW: smallFrames?.widthList,
-        smallH: smallFrames?.heightList,
-      );
-      debugPrint('[perf] scoreFrames: ${swScore.elapsedMilliseconds}ms '
-          'score=${scoreResult.bestScore}');
-    } catch (e) {
-      debugPrint('[capture] 单帧评分失败（不影响成片）: $e');
-    }
-  }
-
-  static const int _kBurstThumbDim = 240;
-
   /// 读取一张图片的真实像素尺寸（仅解析文件头，不实际解码像素）。
   ///
   /// 用于全屏拍摄时以"捕获帧的实际横竖构图"校准成片方向：加速度计在快门瞬间
   /// 可能尚未翻转（横持误判为竖持），而原始帧的宽高比是可靠的地面真值。
   /// 失败（解码不了）返回 null，调用方沿用原方向。
   Future<Size?> _readCapturedFrameSize(String path) async {
+    // 只读文件前缀解析 SOF 段即可拿到宽高（JPEG 头通常 <64KB），避免把整张原图
+    //（~5MB）读进主 isolate：连拍时每张都要在按下快门与早帧到达两条路径上各读一次，
+    // 整文件读 + ImmutableBuffer/ImageDescriptor 会明显加重 UI 卡顿。
+    const prefixLen = 128 * 1024;
     try {
-      final bytes = await File(path).readAsBytes();
-      final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+      final raf = await File(path).open();
       try {
-        final descriptor = await ui.ImageDescriptor.encoded(buffer);
-        try {
-          return Size(
-            descriptor.width.toDouble(),
-            descriptor.height.toDouble(),
-          );
-        } finally {
-          descriptor.dispose();
-        }
+        final head = await raf.read(prefixLen);
+        final parsed = _parseJpegSize(head);
+        if (parsed != null) return parsed;
       } finally {
-        buffer.dispose();
+        await raf.close();
       }
     } catch (e) {
-      debugPrint('[capture] 读取捕获帧尺寸失败，沿用原方向: $e');
-      return null;
+      debugPrint('[capture] 读取捕获帧尺寸（前缀）失败: $e');
     }
+    // 回退：极少数前缀里没有 SOF 段（异常元数据超长）的文件 → 全量读一次再解析。
+    try {
+      final bytes = await File(path).readAsBytes();
+      final parsed = _parseJpegSize(bytes);
+      if (parsed != null) return parsed;
+    } catch (e) {
+      debugPrint('[capture] 读取捕获帧尺寸失败，沿用原方向: $e');
+    }
+    return null;
   }
 
-  /// 用 dart:ui（OS 加速解码）把连拍帧降到 [_kBurstThumbDim]px 的 rawRgba。
-  /// 返回 null 表示全部解码失败（调用方会回退到 worker 内自行读文件解码）。
-  /// 返回的字节是"紧凑拷贝"（offset 0、长度精确），保证跨 isolate 传递后
-  /// img.Image.fromBytes(bytes: rgba.buffer) 能正确读取。
-  Future<_BurstThumbnails?> _decodeBurstThumbnails(List<String> paths) async {
-    final sw = Stopwatch()..start();
-    final rgbaList = <Uint8List>[];
-    final widthList = <int>[];
-    final heightList = <int>[];
-    for (final p in paths) {
-      try {
-        final bytes = await File(p).readAsBytes();
-        final codec = await ui.instantiateImageCodec(
-          bytes,
-          targetWidth: _kBurstThumbDim,
-          targetHeight: _kBurstThumbDim,
-        );
-        final frame = await codec.getNextFrame();
-        final image = frame.image;
-        final w = image.width, h = image.height;
-        final byteData =
-            await image.toByteData(format: ui.ImageByteFormat.rawRgba);
-        codec.dispose();
-        image.dispose();
-        if (byteData == null) throw StateError('toByteData null');
-        rgbaList.add(Uint8List.fromList(
-          byteData.buffer
-              .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes),
-        ));
-        widthList.add(w);
-        heightList.add(h);
-        debugPrint('[capture] burst thumb $p decoded ${w}x${h}, '
-            'rgbaLen=${byteData.lengthInBytes} (expect ${w * h * 4}) target=$_kBurstThumbDim');
-      } catch (e) {
-        debugPrint('[capture] decode burst thumb $p failed: $e');
+  /// 解析 JPEG 的像素尺寸（扫描 SOFn 段），失败返回 null。
+  /// 纯字节解析、不解码像素，可在主 isolate 上低成本执行。
+  Size? _parseJpegSize(Uint8List bytes) {
+    if (bytes.length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8) return null;
+    var i = 2;
+    while (i + 3 < bytes.length) {
+      if (bytes[i] != 0xFF) {
+        i++;
+        continue;
       }
+      final marker = bytes[i + 1];
+      // 填充字节（连续 0xFF）
+      if (marker == 0xFF) {
+        i++;
+        continue;
+      }
+      // 无长度字段的独立标记：SOI/EOI/RSTn/TEM
+      if (marker == 0xD8 ||
+          marker == 0xD9 ||
+          marker == 0x01 ||
+          (marker >= 0xD0 && marker <= 0xD7)) {
+        i += 2;
+        continue;
+      }
+      final segLen = (bytes[i + 2] << 8) | bytes[i + 3];
+      if (segLen < 2) return null;
+      // SOF0..SOF15（排除 DHT 0xC4 / JPG 0xC8 / DAC 0xCC），语义为帧头。
+      final isSof = marker >= 0xC0 &&
+          marker <= 0xCF &&
+          marker != 0xC4 &&
+          marker != 0xC8 &&
+          marker != 0xCC;
+      if (isSof) {
+        if (i + 8 >= bytes.length) return null;
+        final h = (bytes[i + 5] << 8) | bytes[i + 6];
+        final w = (bytes[i + 7] << 8) | bytes[i + 8];
+        if (w <= 0 || h <= 0) return null;
+        return Size(w.toDouble(), h.toDouble());
+      }
+      i += 2 + segLen;
     }
-    debugPrint(
-        '[perf] decodeBurstThumbnails x${rgbaList.length}: ${sw.elapsedMilliseconds}ms');
-    if (rgbaList.isEmpty || rgbaList.length != paths.length) return null;
-    return _BurstThumbnails(rgbaList, widthList, heightList);
+    return null;
   }
 
   /// 拍照后处理队列（串行消费，避免 isolate 并发创建开销和内存峰值）
@@ -1622,7 +1692,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
       // 便于在 iOS「文件」App 中人工核对黄色从哪一步进入（无需看控制台日志）。
       // 仅 debug 构建：每次拍照整文件拷贝 x2（~5MB）是关键路径纯开销，
       // 且诊断文件暴露在用户文件 App 里，release 不应产出。
-      if (kDebugMode) {
+      // 连拍（本批次快门数 > 1）时跳过：n 张 × ~3.5MB 磁盘拷贝与连拍处理期的
+      // UI 卡顿直接相关（真机报告「处理连拍成品时 UI 与操作非常卡顿」），且
+      // 该诊断本为单张 iOS 偏黄调查工具，连拍场景无诊断价值。
+      if (kDebugMode && _batchShutterCount <= 1) {
         try {
           await _writeColorDiagnostics(
             rawPath: originalPath,
@@ -1722,8 +1795,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
       ref.read(CaptureState.lastPhotoPathProvider.notifier).state = finalPath;
 
       // 诊断：确认最终照片文件的实际像素尺寸（排查横向拉伸）。
-      // 仅 debug：整文件读入 + 软件解码头解析是成片链路末尾的纯诊断开销。
-      if (kDebugMode) {
+      // 仅 debug：整文件读入 + 软件解码头解析是成片链路末尾的纯诊断开销；
+      // 连拍时每张整文件读入同样计入处理期 I/O，一并跳过。
+      if (kDebugMode && _batchShutterCount <= 1) {
         try {
           final fb = await File(finalPath).readAsBytes();
           final decoder = img.findDecoderForData(fb);
@@ -1741,6 +1815,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
       debugPrint(
           '[perf] _processCaptureQueueItem total: ${swTotal.elapsedMilliseconds}ms');
       _isProcessingCapture = false;
+      // 角标连拍进度（「已完成/总数」）取自本页字段而非 provider，此处显式重建一次，
+      // 保证最后一张处理结束时进度归零、进度条即时消失（不依赖 provider 变化的时序）。
+      if (mounted) setState(() {});
       // 队列中还有则继续处理
       if (_processCaptureQueue.isNotEmpty && mounted) {
         _processCaptureQueueItem();
@@ -1755,11 +1832,16 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 仅捕获相机画面本身（filteredCamera），不含构图线/剪影/对焦框等 UI 叠层，
   /// 避免动画源被调试元素污染。
   ///
-  /// [flipHorizontal]：前置时为 true——iOS/Android 前置预览是系统默认的镜像
-  /// 画面，快门帧翻一次对齐真实方向（与最终成片一致）。OHOS 拍照模式预览镜像
-  /// 从未配置（CameraState 的 enableMirror 仅录像模式执行、_mirrorFrontCamera
-  /// 默认 false，Flutter 侧取景器也无 Transform）→ OHOS 前置取景器即真实
-  /// 方向，不翻；翻了反而与成片左右相反。
+  /// [flipHorizontal]：仅 Android 前置为 true。本方法产出的是「屏幕空间取景器
+  /// 截图」，恒与相机预览同向（WYSIWYG）；是否补翻取决于该端成片与取景器是否同向：
+  /// - iOS：非闪光成片=取景器 video 帧直出（iOS 侧 captureVideoFrameToJpegAtPath，
+  ///   FlutterTexture 与成片读的是同一帧 buffer），取景器镜像、成片同为镜像
+  ///   （见 `_alignOrientation` 的 iOS 规则：竖屏前置像素已镜像、不再补翻）
+  ///   → 不翻；翻一次会让水印动画/缩略图 interim 与取景器、成片左右相反。
+  /// - OHOS：拍照模式预览镜像从未配置（CameraState 的 enableMirror 仅录像模式
+  ///   执行、_mirrorFrontCamera 默认 false，Flutter 侧取景器也无 Transform），
+  ///   成片管线已把镜像的相册 asset 翻回真实方向 → 两者同为真实方向，不翻。
+  /// - Android：取景器为镜像画面，成片=CameraX 原始照片（未镜像）→ 补翻一次对齐。
   Future<String?> _captureShutterViewfinderFrame(
       {bool flipHorizontal = false}) async {
     final boundary = _filteredPreviewKey.currentContext?.findRenderObject();
@@ -1784,7 +1866,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
       var uiImage = await boundary.toImage(pixelRatio: pr);
       debugPrint('[perf] shutterFrame toImage: ${sw.elapsedMilliseconds}ms '
           '${uiImage.width}x${uiImage.height}');
-      // 前置：水平翻转对齐成片方向（真实方向），消除 interim→成片镜像闪变。
+      // 前置（仅 Android）：水平翻转对齐成片方向（CameraX 照片未镜像），
+      // 消除 interim→成片镜像闪变。
       if (flipHorizontal) {
         final w = uiImage.width, h = uiImage.height;
         final rec = ui.PictureRecorder();
@@ -1882,19 +1965,20 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
   /// 构造早帧「初版成片」处理快照（仅 OHOS）。
   ///
-  /// 与成片原生快速路径（fastNative）同条件同参数：仅竖屏、无拉腿、无自定义裁剪
-  /// 时启用——早帧与成片走同一套 C++ 处理器（解码→几何→色彩矩阵→锐化→清晰度→
-  /// 颗粒→磨皮→暗角→硬编码），观感与最终成片一致。不满足条件返回 null，
-  /// 早帧退回「仅点击预览」，成片链路不受任何影响。
+  /// 与成片原生快速路径（fastNative）同参数：无拉腿、无自定义裁剪时启用——早帧与
+  /// 成片走同一套 C++ 处理器（解码→几何→色彩矩阵→锐化→清晰度→颗粒→磨皮→暗角→
+  /// 硬编码），观感与最终成片一致。**方向不在此处定论**：此处只记录快门时刻的
+  /// 加速度计判定作初值，真正的横竖以早帧实际像素尺寸为准、在监听器里重算
+  ///（见 _attachEarlyFrameListener 处的方向校准），与成片「capture 后按捕获帧尺寸
+  /// 修正」同规则——横持时加速度计可能尚未翻转，若在此处用竖屏初值出图，早帧会被
+  /// 裁成竖屏。不满足条件返回 null，早帧退回「仅点击预览」，成片链路不受影响。
   _EarlyFrameInterimJob? _buildEarlyFrameInterimJob() {
     if (!_isOhos) return null;
     final screenSize = MediaQuery.of(context).size;
     final isPortrait =
         _devicePortrait ?? (screenSize.height >= screenSize.width);
     final postProcess = ref.read(CaptureState.effectivePostProcessProvider);
-    if (!isPortrait ||
-        postProcess.legStretch != 0 ||
-        postProcess.customCropRect != null) {
+    if (postProcess.legStretch != 0 || postProcess.customCropRect != null) {
       return null;
     }
     final ratioId = ref.read(CaptureState.aspectRatioProvider);
@@ -1903,9 +1987,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
       screenRatio = isPortrait ? 9.0 / 19.5 : 19.5 / 9.0;
     }
     return _EarlyFrameInterimJob(
-      targetRatio:
-          CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio,
+      targetRatio: _earlyFrameTargetRatio(ratioId, isPortrait, screenRatio),
       isPortrait: isPortrait,
+      ratioId: ratioId,
+      screenRatio: screenRatio,
       isFront: ref.read(CaptureState.cameraFacingProvider) == 'front',
       matrix: composePostProcessMatrix(postProcess),
       sharpen: postProcess.sharpen,
@@ -1916,11 +2001,142 @@ class _CapturePageState extends ConsumerState<CapturePage>
     );
   }
 
-  /// 清理上一轮早帧临时文件（原生 cacheDir 的早帧源 + 初版成片），下次快门时调用。
+  /// 按比例与方向算目标宽高比（含 'fullscreen' 的方向自适应），与成片 capture 时
+  /// 的算法同规则，供早帧方向校准复用。
+  double _earlyFrameTargetRatio(
+    String ratioId,
+    bool isPortrait,
+    double screenRatio,
+  ) {
+    if (ratioId == 'fullscreen') {
+      return CaptureState.fullscreenRatio(isPortrait, screenRatio);
+    }
+    return CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
+  }
+
+  /// OHOS 早帧到达处理：把一阶段低质量帧经原生管线做成「初版成片」interim。
+  ///
+  /// 方向按早帧自身像素尺寸校准（与成片 capture 后按捕获帧尺寸修正同规则）：
+  /// 加速度计在快门瞬间可能尚未翻转（横持被误判为竖持），而帧的宽高比是可靠的
+  /// 地面真值——据此重算 isPortrait / targetRatio 后再交原生 processJpeg。
+  /// 原生几何是「居中等比裁窗」，仅当目标与源同向时才是纯裁剪；校准后二者必然
+  /// 同向，故横屏拍摄也能正确转正（此前横屏直接跳过原生、原图直挂 → 裁成竖屏）。
+  Future<void> _onEarlyFrameArrived(String path) async {
+    if (path.isEmpty) return;
+    // FIFO 配对：原生早帧通道不带 photoId，到达顺序 = 快门发起顺序。
+    // 先清掉超过阈值仍没等到早帧的记录（该次快门通常走的是直出/失败路径），
+    // 否则后续早帧会被错配到更早的 photoId 上——那样预览页打开的是这一张、
+    // 成片却升级成另一张（用户报告的"早帧对、成片变成别的画面"）。
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    _earlyFramePending.removeWhere(
+      (pending) => nowMs - pending.issuedAtMs > _kEarlyFramePairTimeoutMs,
+    );
+    if (_earlyFramePending.isEmpty) {
+      debugPrint('[capture] 早帧到达但无待配对快门，丢弃: $path');
+      return;
+    }
+    final pending = _earlyFramePending.removeAt(0);
+    final pid = pending.photoId;
+    // 快门节流：本帧早帧已送达 → 立刻放行下一次快门（成片仍在后台处理，不占用闸门）。
+    // 放在配对成功之后、任何 early return 之前：即使本帧早帧最终不覆盖角标画面
+    //（_isNotOlderThanThumbnail 为 false），快门也必须恢复可用，否则会白白卡住。
+    _openShutterGate();
+    final swEarly = Stopwatch()..start();
+    debugPrint('[capture] OHOS early frame arrived: $path pid=$pid');
+    _earlyFrameTempPaths.add(path);
+    // 连拍时后一次快门已把角标重置为更新的那张：此时不许用更早这张的早帧
+    // 覆盖已上屏的更新画面（否则缩略图/预览会"换片"）。
+    if (!_isNotOlderThanThumbnail(pid)) {
+      debugPrint('[capture] 早帧属于更早的快门($pid)，不覆盖更新的角标画面');
+      return;
+    }
+    // 快门帧已是可见 interim（1920px 取景器冻结帧，WYSIWYG，含实时锐化）：
+    // 跳过早帧「初版成片」——相片资产（多帧降噪管线）观感比取景器实时流软，
+    // 顶替快门帧 = 观感降级（真机报告「早帧比水印动画糊很多」的根因）；
+    /// 快门帧保持 interim 直到成片就绪原位升级。同时省掉每张 ~500ms 原生处理。
+    if (_shutterFrameVisiblePid == pid) {
+      debugPrint('[capture] 快门帧已是可见 interim($pid)，跳过早帧初版成片');
+      return;
+    }
+    final job = pending.job;
+    final notifier = ref.read(captureThumbnailProvider.notifier);
+    if (job == null) {
+      // 拉腿/自定义裁剪等原生未实现的组合：退回仅点击预览的 interim。
+      notifier.setInterimResult(path, photoId: pid);
+      return;
+    }
+
+    // 方向校准：读早帧真实像素尺寸（仅解析文件头，不解码像素）。
+    var isPortrait = job.isPortrait;
+    var targetRatio = job.targetRatio;
+    final frameSize = await _readCapturedFrameSize(path);
+    if (frameSize != null) {
+      final trueIsPortrait = frameSize.height >= frameSize.width;
+      if (trueIsPortrait != isPortrait) {
+        isPortrait = trueIsPortrait;
+        targetRatio = _earlyFrameTargetRatio(
+          job.ratioId,
+          isPortrait,
+          job.screenRatio,
+        );
+        debugPrint('[capture] 早帧方向按实际帧修正: '
+            'frame=${frameSize.width.toStringAsFixed(0)}x'
+            '${frameSize.height.toStringAsFixed(0)} '
+            'isPortrait=$isPortrait '
+            'targetRatio=${targetRatio.toStringAsFixed(4)}');
+      }
+    }
+    if (!mounted) return;
+
+    // 早帧 → 原生管线出「初版成片」：与成片同一套 C++ 处理器（解码→几何→色彩矩阵
+    // →锐化→...→硬编码），观感与最终成片一致（仅分辨率低一档）。
+    // 失败回退：把原始早帧挂为仅点击预览的 interim，不阻塞成片链路。
+    try {
+      final ok = await OhosImageProcessor.instance.processJpeg(
+        inputPath: path,
+        outputPath: '$path.proc.jpg',
+        targetRatio: targetRatio,
+        isPortrait: isPortrait,
+        // fd 早帧=相册 asset 只读 fd 拷贝的原始文件：OHOS takePhoto 虽传
+        // mirror:false，设备/相册管线对前置照片仍做镜像——asset 是镜像画面，
+        // 与 HIGH_QUALITY 增强成片同源同向。原生 isFront 翻一次还原真实方向
+        //（与取景器一致，见 _captureShutterViewfinderFrame 注释）。
+        isFront: job.isFront,
+        matrix: job.matrix,
+        sharpen: job.sharpen,
+        clarity: job.clarity,
+        smoothStrength: job.smoothStrength,
+        vignette: job.vignette,
+        grain: job.grain,
+        maxDim: _earlyFrameMaxDim,
+      );
+      swEarly.stop();
+      debugPrint('[perf] 早帧 processJpeg 初版成片: '
+          '${swEarly.elapsedMilliseconds}ms ok=$ok');
+      if (!mounted) return;
+      if (ok) {
+        _earlyFrameTempPaths.add('$path.proc.jpg');
+        notifier.setInterimResult('$path.proc.jpg', photoId: pid, visible: true);
+        debugPrint('[capture] 早帧初版成片就绪(可见 interim): $path.proc.jpg');
+      } else {
+        notifier.setInterimResult(path, photoId: pid);
+        debugPrint('[capture] 早帧原生处理失败，interim 退回仅点击预览');
+      }
+    } catch (e) {
+      debugPrint('[capture] 早帧初版成片异常: $e');
+      if (mounted) {
+        ref
+            .read(captureThumbnailProvider.notifier)
+            .setInterimResult(path, photoId: pid);
+      }
+    }
+  }
+
+  /// 清理本批次已产生的早帧临时文件（原生 cacheDir 的早帧源 + 初版成片）。
+  /// 新批次首次快门时调用（连拍期间不删：上一张的初版成片可能仍在角标/预览页显示）。
   /// 文件在 cacheDir，系统也可回收；这里主动删除避免连拍场景堆积。
   void _cleanupEarlyFrameFiles() {
-    for (final path in [_earlyFrameRawPath, _earlyFrameProcPath]) {
-      if (path == null) continue;
+    for (final path in _earlyFrameTempPaths) {
       try {
         final f = File(path);
         if (f.existsSync()) f.deleteSync();
@@ -1928,9 +2144,38 @@ class _CapturePageState extends ConsumerState<CapturePage>
         debugPrint('[capture] 早帧临时文件清理失败（忽略）: $path $e');
       }
     }
-    _earlyFrameRawPath = null;
-    _earlyFrameProcPath = null;
+    _earlyFrameTempPaths.clear();
   }
+
+  /// 配对到的早帧是否不比角标当前展示的那张更早。
+  ///
+  /// photoId 形如 `photo_<毫秒时间戳>`，可直接比数值。连拍时早帧只对第一张
+  /// 保证送达（原生 requestEarlyFrameForAnimation 是单槽节流），后到场的早帧若
+  /// 属于更早的快门，就不该把已经上屏的更新画面顶掉。
+  bool _isNotOlderThanThumbnail(String photoId) {
+    final current = ref.read(captureThumbnailProvider).photoId;
+    if (current == null) return true;
+    final incoming = _photoIdMs(photoId);
+    final shown = _photoIdMs(current);
+    if (incoming == null || shown == null) return true;
+    return incoming >= shown;
+  }
+
+  int? _photoIdMs(String photoId) =>
+      int.tryParse(photoId.replaceFirst('photo_', ''));
+
+  /// 本次快门是否允许启动水印动画（连拍 / 预览页守卫）。
+  ///
+  /// - 必须仍是当前最新一次快门：连拍中前面几张的成片会逐个返回，若允许它们补播
+  ///   动画，就会出现「动画一个接一个、返回拍摄页还在播」的问题；
+  /// - 本批次尚未播过动画：每批次只播一次（同一张照片也绝不播第二次）；
+  /// - 当前没有动画在播：避免叠播；
+  /// - 预览页未打开：动画若在预览页背后开播，用户返回拍摄页时会突然看到一次动画。
+  bool _canStartWatermarkAnimation(String photoId) =>
+      photoId == _currentShutterPhotoId &&
+      !_batchAnimationPlayed &&
+      !_showWatermarkAnimation &&
+      !_previewRouteOpen;
 
   /// 触发水印定格动画（用指定「动画内容源帧」路径 + 水印模板）。
   /// 动画淡出后跳转拍摄预览页；后处理为异步，需等最终照片落库完成
@@ -1954,6 +2199,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
     bool flipSource = false,
   }) {
     if (!mounted) return;
+    _batchAnimationPlayed = true;
+    debugPrint('[capture] 水印动画启动: source=$photoPath '
+        'sourceAligned=$sourceAligned flipSource=$flipSource');
     setState(() {
       _showWatermarkAnimation = true;
       _animationPhotoPath = photoPath;
@@ -1972,16 +2220,27 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 后处理（GPU + worker isolate + 水印渲染 + 落库）为异步执行，动画播放期间
   /// 通常已经完成；此处轮询 [captureThumbnailProvider] 直到 photoId 且（finalPath 或
   /// interimPath）就绪——先快后真：interim（早帧，~672ms）即可打开预览，full-res 后原位升级。
+  ///
+  /// 连拍（本批次快门数 > 1）例外：必须等**本批次全部照片后处理完成**才自动进
+  /// 预览页，否则会拿着中间某张的 interim 进预览，且每张成片返回都会再跳一次。
   Future<void> _goToPreviewWhenReady() async {
-    const maxWait = Duration(milliseconds: 3000);
+    final isBurst = _batchShutterCount > 1;
+    final maxWait = isBurst
+        ? const Duration(seconds: 30)
+        : const Duration(milliseconds: 3000);
     final sw = Stopwatch()..start();
     while (mounted && sw.elapsed < maxWait) {
       final state = ref.read(captureThumbnailProvider);
-      if ((state.finalPath != null || state.interimPath != null) &&
-          state.photoId != null) {
-        // 动画期间用户已手动进过预览页并返回 → 不再自动 push，避免路由栈双实例
-        // （手动一次 + 动画结束再一次）。用户想看可再点缩略图。
-        if (_previewOpenedDuringAnimation) return;
+      final hasImage = state.photoId != null &&
+          (state.finalPath != null || state.interimPath != null);
+      final batchProcessed = !isBurst ||
+          (_inFlightShutterCount == 0 &&
+              _processCaptureQueue.isEmpty &&
+              !_isProcessingCapture);
+      if (hasImage && batchProcessed) {
+        // 本批次已进过预览页（自动跳转过 / 用户手动点过）→ 不再 push，
+        // 避免路由栈叠出两个预览页、也避免连拍期间被反复跳转。
+        if (_previewOpenedForBatch) return;
         _onThumbnailTap();
         return;
       }
@@ -2240,6 +2499,17 @@ class _CapturePageState extends ConsumerState<CapturePage>
         widget.challengeId != null && widget.challengeId!.isNotEmpty;
     final captureInProgress =
         thumbState.status == CaptureThumbnailStatus.processing;
+    // 连拍处理进度（角标显示「已完成/总数」）：未完成 = 在途快门 + 队列中 + 正在处理。
+    // 每张完成后 setFinalResult 会刷新 provider → 此处计数重算并上屏，用户能看到
+    // 还剩几张（连拍整批要十几秒，只转圈无法判断进度）。
+    final burstPending = _inFlightShutterCount +
+        _processCaptureQueue.length +
+        (_isProcessingCapture ? 1 : 0);
+    final burstRemaining = _batchShutterCount - burstPending;
+    // 全部完成后不再显示（否则角标会一直挂着「5/5」直到下一次快门）
+    final burstProgress = _batchShutterCount > 1 && burstPending > 0
+        ? '${burstRemaining < 0 ? 0 : burstRemaining}/$_batchShutterCount'
+        : null;
     // 当前套用的模板（null = 自由模式）。用于顶部模板信息卡显示。
     final template = ref.watch(CaptureState.originalTemplateProvider);
     // 模板信息卡是否被用户隐藏（持久化，用户点了隐藏后下次保持隐藏）
@@ -2266,15 +2536,14 @@ class _CapturePageState extends ConsumerState<CapturePage>
       ref.read(cameraServiceProvider).setFlashMode(_mapFlashMode(next));
     });
 
-    // EV 补偿 → 取景器亮度：将 EV [-3, +3] 映射到 brightness [0, 1]
+    // 实际曝光 → 取景器亮度：将 EV [-3, +3] 映射到 brightness [0, 1]
     // EV=0 → brightness=0.5（中性），EV=+3 → brightness=1.0（最亮），EV=-3 → brightness=0.0（最暗）
-    ref.listen<CameraParams>(CaptureState.effectiveCameraProvider,
-        (prev, next) {
-      if (prev?.exposureCompensation != next.exposureCompensation) {
-        final ev = next.exposureCompensation;
-        final brightness = (0.5 + ev / 6.0).clamp(0.0, 1.0);
-        ref.read(cameraServiceProvider).setBrightness(brightness);
-      }
+    // 监听的是**合成值**（参数面板 EV + 对焦框太阳滑块的临时偏移，见
+    // CaptureState.effectiveExposureEvProvider），两个独立来源的变化都会驱动亮度下发。
+    ref.listen<double>(CaptureState.effectiveExposureEvProvider, (prev, next) {
+      if (prev == next) return;
+      final brightness = (0.5 + next / 6.0).clamp(0.0, 1.0);
+      ref.read(cameraServiceProvider).setBrightness(brightness);
     });
 
     // 比例切换时重新下发当前缩放（真实倍数不变，直接下发）
@@ -2617,6 +2886,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
               rawCaptureKey: _viewfinderCaptureKey,
               thumbnailKey: _thumbnailKey,
               paramPanelOverlay: true,
+              burstProgress: burstProgress,
             ),
           ),
 
@@ -2708,12 +2978,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
     final path = state.finalPath ?? state.interimPath;
     final photoId = state.photoId;
     if (path == null || photoId == null) return;
-    // 水印动画播放期间的手动点击（_onAnimationComplete 已先把 _showWatermarkAnimation
-    // 置 false 才会走自动跳转，故此处为 true 必然是用户手动）：置位，动画结束的
-    // 自动跳转据此跳过，防止路由栈叠出两个拍摄预览页。
-    if (_showWatermarkAnimation) {
-      _previewOpenedDuringAnimation = true;
-    }
+    // 本批次已进过预览页（用户手动点缩略图 / 上一步自动跳转）→ 动画结束的
+    // 自动跳转不再 push，避免路由栈叠出两个预览页、连拍期间被反复跳转。
+    _previewOpenedForBatch = true;
     final pendingFinal = state.finalPath == null && state.interimPath != null;
     final aspectRatio = ref.read(CaptureState.aspectRatioProvider);
     if (_returnResult) {
@@ -2729,12 +2996,24 @@ class _CapturePageState extends ConsumerState<CapturePage>
       if (pendingFinal) {
         buf.write('&pendingFinal=1');
       }
+      // 连拍（本批次快门数 > 1）：预览页落库后允许从单张形态升级为图库，
+      // 使用户在等待期进来也能在最后一张落库后左右滑动查看本批次照片。
+      if (_batchShutterCount > 1) {
+        buf.write('&batchCount=$_batchShutterCount');
+      }
       final cid = widget.challengeId;
       if (cid != null && cid.isNotEmpty) {
         buf.write(
             '&${RouteNames.paramChallengeId}=${Uri.encodeComponent(cid)}');
       }
-      GoRouter.of(context).push(buf.toString());
+      // 预览页打开期间禁止再启动水印动画：否则动画在预览页背后播放，
+      // 用户返回拍摄页时会突然看到一次「补播」动画。pop 返回时复位。
+      _previewRouteOpen = true;
+      unawaited(
+        GoRouter.of(context).push(buf.toString()).whenComplete(() {
+          _previewRouteOpen = false;
+        }),
+      );
     }
   }
 }
@@ -3061,14 +3340,6 @@ class _CaptureProcessParams {
   /// true 时后处理**不**做内容自适应白平衡/ISP 校色，仅叠加与取景器相同的
   /// 用户色彩矩阵（见 _applyColorMatrixOnGpu）。
   final bool isWysiwyg;
-}
-
-/// 连拍帧的 240px 降采样 RGBA 小图集合（并行列表，与路径一一对应）。
-class _BurstThumbnails {
-  const _BurstThumbnails(this.rgbaList, this.widthList, this.heightList);
-  final List<Uint8List> rgbaList;
-  final List<int> widthList;
-  final List<int> heightList;
 }
 
 /// 后处理输出/解码尺寸来源说明：

@@ -86,63 +86,72 @@ class CamerawesomeCameraService implements CameraService {
     _cameraState = null;
   }
 
-  @override
-  Future<CaptureResult> capture({required CaptureConfig config}) async {
-    final completer = Completer<CaptureResult>();
+  /// 拍照请求串行闸门（仅 Android/iOS）。
+  ///
+  /// 这两端的 native takePhoto 不支持并发：
+  /// - Android cameraX 在上一张未完成时再次 takePicture 会直接失败；
+  /// - iOS 并发调用会让 native 内部的「本次路径 ↔ 回调」配对错乱；
+  /// 因此按发起顺序串行执行，每个请求一定能拿到**属于自己**的文件。
+  ///
+  /// OHOS 已放开并发（2026-09-26 原生修复①②③，见 docs/future-optimizations.md）：
+  /// - ① ctx 仅在 photoOutput.capture() 受理成功后入队（FIFO = 受理顺序），
+  ///   失败请求不再滞留队列导致后续帧错配；
+  /// - ② capture() 抛 7400102（忙窗口，实测 0.4-0.7s）时原生内部按 300ms 间隔
+  ///   重试排队（≤20 次 ≈6s < Dart 10s 超时），不把错误抛回 Dart；
+  /// - ③ 增强兜底 path/result/ctx 改为 per-ctx 注入，result 必达恰好一次。
+  /// 连拍各帧的 capture 立即发起，帧时刻贴近按快门瞬间（原串行使第 2..n 张的
+  /// capture 推迟 ~1.9s×(n-1)，取到的帧比按快门时刻晚——正是「成片帧不对」根因）。
+  Future<void> _captureChain = Future<void>.value();
 
+  @override
+  Future<CaptureResult> capture({required CaptureConfig config}) {
+    // OHOS：原生已支持并发受理（忙窗口重试 + per-ctx result 必达），直接发起。
+    if (_delegate.platformTag == 'ohos') {
+      return _captureOnce(config);
+    }
+    // Android/iOS：本次请求排在所有已发起请求之后；链上错误不阻断后续请求排队。
+    final result = _captureChain.then((_) => _captureOnce(config));
+    _captureChain = result.then((_) {}, onError: (Object _) {});
+    return result;
+  }
+
+  /// 单次拍照体（Android/iOS 由 [_captureChain] 串行；OHOS 并发，原生保证配对）。
+  Future<CaptureResult> _captureOnce(CaptureConfig config) async {
     if (_cameraState == null) {
       throw StateError('Camera not initialized');
     }
 
-    // 标记 takePhoto 是否已调用：过滤订阅时立即收到的旧事件
-    bool captureInitiated = false;
-
-    StreamSubscription? sub;
-    sub = _cameraState.captureState$.listen((media) {
-      if (media == null) return;
-      final isSuccess = _delegate.platformTag == 'ohos'
-          ? media.status == ohos.MediaCaptureStatus.success
-          : media.status == ca.MediaCaptureStatus.success;
-      if (isSuccess && media.filePath.isNotEmpty) {
-        if (!captureInitiated) return;
-        sub?.cancel();
-        completer.complete(CaptureResult(
-          filePath: media.filePath,
-          sensorWidth: 0,
-          sensorHeight: 0,
-          orientation: SensorOrientation.portrait,
-          // iOS 非闪光模式成片=取景器 video 帧直出（WYSIWYG），与 _mapFlashMode
-          // 的 iOS 映射（off→none→原生 FlashOff）保持一致。
-          isWysiwyg: _delegate.platformTag == 'ios' &&
-              config.flashMode == CameraFlashMode.off,
-        ));
-      }
-    });
-
-    // 关键：等待一个事件循环，让 BehaviorSubject 的微任务先执行完毕。
-    // captureState$ 是 BehaviorSubject，listen 时会在微任务中异步发出上一次的
-    // success 事件。如果立即设置 captureInitiated=true 并调用 takePhoto()，
-    // 微任务执行时 captureInitiated 已为 true，旧事件会被误匹配，导致连续拍照时
-    // 返回前一次的文件路径。这里用 Future.delayed(Duration.zero) 让出执行权，
-    // 使旧事件在 captureInitiated=false 时被过滤，然后再开始本次拍照。
-    await Future.delayed(Duration.zero);
-
-    captureInitiated = true;
-    try {
-      _cameraState.when(
-        onPhotoMode: (photoState) => photoState.takePhoto(),
-      );
-    } catch (e) {
-      sub?.cancel();
-      completer.completeError(e);
+    // 直接 await 本次 takePhoto() 的返回值拿到**本次**文件路径，
+    // 不再订阅共享广播流做事件匹配（并发时会串拍，返回他人的路径）。
+    Future<String>? takePhotoFuture;
+    _cameraState.when(
+      onPhotoMode: (photoState) => takePhotoFuture = photoState.takePhoto(),
+    );
+    final pending = takePhotoFuture;
+    if (pending == null) {
+      throw StateError('Camera not in photo mode');
     }
 
-    return completer.future.timeout(
+    final path = await pending.timeout(
       const Duration(seconds: 10),
-      onTimeout: () {
-        sub?.cancel();
-        throw TimeoutException('Camera capture timed out');
-      },
+      onTimeout: () => throw TimeoutException('Camera capture timed out'),
+    );
+
+    // takePhoto() 无论成败都会返回路径（失败时不落盘），据此判定本次结果。
+    final file = File(path);
+    if (!await file.exists() || await file.length() == 0) {
+      throw StateError('Camera capture failed: $path');
+    }
+
+    return CaptureResult(
+      filePath: path,
+      sensorWidth: 0,
+      sensorHeight: 0,
+      orientation: SensorOrientation.portrait,
+      // iOS 非闪光模式成片=取景器 video 帧直出（WYSIWYG），与 _mapFlashMode
+      // 的 iOS 映射（off→none→原生 FlashOff）保持一致。
+      isWysiwyg: _delegate.platformTag == 'ios' &&
+          config.flashMode == CameraFlashMode.off,
     );
   }
 
@@ -345,21 +354,42 @@ class CamerawesomeCameraService implements CameraService {
     Size? previewSize,
   }) {
     try {
+      // locked=false 时忽略坐标（恢复连续自动对焦/曝光）；locked=true 时做
+      // iOS 前置镜像补偿（理由见 _mapToPreviewPoint）。
+      final mapped = (locked && position != null && previewSize != null)
+          ? _mapToPreviewPoint(
+              _lastBuildFacing ?? 'back', position, previewSize)
+          : position;
       if (_delegate.platformTag == 'ohos') {
         ohos.CamerawesomePlugin.setFocusAndExposureLock(
-            locked: locked, position: position, previewSize: previewSize);
+            locked: locked, position: mapped, previewSize: previewSize);
       } else {
         ca.CamerawesomePlugin.setFocusAndExposureLock(
-            locked: locked, position: position, previewSize: previewSize);
+            locked: locked, position: mapped, previewSize: previewSize);
       }
     } catch (e) {
       debugPrint('[camera] setFocusAndExposureLock failed: $e');
     }
   }
 
+  /// iOS 前置预览层镜像补偿。
+  ///
+  /// iOS 侧 `CameraPreview.m` 对前置传感器设置了 `setVideoMirrored:(Sensor == Front)`，
+  /// 预览画面水平镜像；而 Dart 侧手势触点是按「未镜像」的取景框坐标归一化后下发，
+  /// 直接使用会导致「点左侧、实际对焦到画面右侧」。这里做水平翻转补偿
+  /// （AVCam 官方做法 `devicePoint.x = 1 - devicePoint.x`）。
+  /// Android（TextureView 管线，无 MIRROR_MODE）与 OHOS 预览未镜像，不翻转。
+  Offset _mapToPreviewPoint(String facing, Offset position, Size previewSize) =>
+      (Platform.isIOS && facing == 'front')
+          ? Offset(previewSize.width - position.dx, position.dy)
+          : position;
+
   @override
   void focusOnPoint(Offset flutterPosition, Size flutterPreviewSize) {
     try {
+      // iOS 前置取景器镜像补偿（其余平台原样返回）
+      final position = _mapToPreviewPoint(
+          _lastBuildFacing ?? 'back', flutterPosition, flutterPreviewSize);
       if (_delegate.platformTag == 'ohos') {
         // OHOS: camerawesome_ohos 的 focusOnPoint 需要 pigeon 的 PreviewSize，
         // 不能直接传 Flutter 的 Size，否则抛「type 'Size' is not a subtype of
@@ -371,7 +401,7 @@ class CamerawesomeCameraService implements CameraService {
         );
         _cameraState?.when(
           onPhotoMode: (photoState) => photoState.focusOnPoint(
-            flutterPosition: flutterPosition,
+            flutterPosition: position,
             pixelPreviewSize: ps,
             flutterPreviewSize: ps,
           ),
@@ -379,7 +409,7 @@ class CamerawesomeCameraService implements CameraService {
       } else {
         _cameraState?.when(
           onPhotoMode: (photoState) => photoState.focusOnPoint(
-            flutterPosition: flutterPosition,
+            flutterPosition: position,
             pixelPreviewSize: flutterPreviewSize,
             flutterPreviewSize: flutterPreviewSize,
           ),

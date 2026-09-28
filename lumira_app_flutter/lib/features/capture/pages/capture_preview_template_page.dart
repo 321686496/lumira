@@ -108,6 +108,12 @@ class _CapturePreviewTemplatePageState
       }
     });
     _loadTemplate();
+    // 会话边界归零「对焦曝光偏移」（锚定对焦触点的临时微调，不进模板、不落库）。
+    // riverpod 禁止在 initState 内直接写 provider，故放到 post-frame。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(CaptureState.focusExposureOffsetProvider.notifier).state = 0.0;
+    });
   }
 
   @override
@@ -416,13 +422,12 @@ class _CapturePreviewTemplatePageState
       ref.read(cameraServiceProvider).setFlashMode(_mapFlashMode(next));
     });
 
-    // EV 补偿 → 取景器亮度（[−3,+3] → brightness [0,1]）
-    ref.listen<CameraParams>(CaptureState.effectiveCameraProvider, (prev, next) {
-      if (prev?.exposureCompensation != next.exposureCompensation) {
-        final ev = next.exposureCompensation;
-        final brightness = (0.5 + ev / 6.0).clamp(0.0, 1.0);
-        ref.read(cameraServiceProvider).setBrightness(brightness);
-      }
+    // 实际曝光 → 取景器亮度（[−3,+3] → brightness [0,1]）
+    // 监听合成值（参数面板 EV + 对焦框太阳滑块偏移），与拍摄页同源。
+    ref.listen<double>(CaptureState.effectiveExposureEvProvider, (prev, next) {
+      if (prev == next) return;
+      final brightness = (0.5 + next / 6.0).clamp(0.0, 1.0);
+      ref.read(cameraServiceProvider).setBrightness(brightness);
     });
 
     // 比例切换时重新下发当前缩放（取景器容器变 + cover 裁切自动实现视觉切换）

@@ -11,8 +11,13 @@ import '../data/capture_thumbnail_state.dart';
 
 /// 底部角标缩略图。四态：idle(空)/processing(灰块)/preview(近似图)/final(最终图)
 class CaptureThumbnail extends ConsumerWidget {
-  const CaptureThumbnail({super.key, this.onTap});
+  const CaptureThumbnail({super.key, this.onTap, this.burstProgress});
   final VoidCallback? onTap;
+
+  /// 连拍处理进度（形如「3/5」；null = 非连拍，不显示）。
+  /// 连拍整批要等十几秒（拍照串行 + 后处理串行），角标只转圈用户不知道还剩几张，
+  /// 故在角标底部叠一条进度，每完成一张刷新一次。
+  final String? burstProgress;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -43,7 +48,37 @@ class CaptureThumbnail extends ConsumerWidget {
           color: visual.background,
         ),
         clipBehavior: Clip.antiAlias,
-        child: _buildContent(state, visual),
+        child: burstProgress == null
+            ? _buildContent(state, visual)
+            : Stack(
+                fit: StackFit.expand,
+                children: [
+                  _buildContent(state, visual),
+                  // 连拍进度条：贴角标底边，颜色跟随当前风格/主题（不硬编码）
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: ColoredBox(
+                      color: visual.background,
+                      child: SizedBox(
+                        height: 14,
+                        child: Center(
+                          child: Text(
+                            burstProgress!,
+                            style: TextStyle(
+                              fontSize: 9,
+                              height: 1.0,
+                              fontWeight: FontWeight.w600,
+                              color: visual.foreground,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }

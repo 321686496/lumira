@@ -171,17 +171,13 @@ class CameraPreview extends ConsumerWidget {
               onReady: () => _onCameraReady(ref, flashMode, facing),
               onTapFocus: (position, previewSize) {
                 final overlay = _focusKey.currentState;
-                // 诊断：真机确认为何点击对焦不生效（F4）
-                debugPrint('[capture] onTapFocus tapped pos=$position '
-                    'size=$previewSize overlayLocked=${overlay?.isLocked} '
-                    'platform=${Platform.operatingSystem}');
                 // 锁定状态下单击其他位置 → 先解除锁定，再对新触点重新对焦（iPhone 行为）
                 if (overlay?.isLocked == true) {
                   cameraService.setFocusAndExposureLock(locked: false);
                   overlay?.unlock();
                 }
                 cameraService.focusOnPoint(position, previewSize);
-                overlay?.showFocus(position);
+                overlay?.showFocus(position, previewSize);
               },
             ),
           ),
@@ -205,6 +201,7 @@ class CameraPreview extends ConsumerWidget {
     // 从当前倍数出发按比例缩放并真正下发到相机（替代 camerawesome 内置的
     // 仅更新状态、不下发相机的 onPreviewScale 流程）。
     final filteredCamera = _PinchZoomCamera(
+      focusKey: _focusKey,
       onLongPressStart: (localPosition, previewSize) {
         _focusKey.currentState?.showLock(localPosition);
         cameraService.setFocusAndExposureLock(
@@ -342,11 +339,10 @@ class CameraPreview extends ConsumerWidget {
     // 应用闪光灯模式
     cameraService.setFlashMode(_mapFlashMode(flashMode));
 
-    // 应用初始 EV 补偿（从 effectiveCameraProvider 读取）
-    final cam = ref.read(CaptureState.effectiveCameraProvider);
-    final ev = cam.exposureCompensation;
-    final brightness = (0.5 + ev / 6.0).clamp(0.0, 1.0);
-    cameraService.setBrightness(brightness);
+    // 应用初始 EV 补偿：实际 EV = 参数 EV（模板/会话基准）+ 对焦曝光偏移
+    //（见 CaptureState.effectiveExposureEvProvider），映射 brightness ∈ [0,1]
+    final ev = ref.read(CaptureState.effectiveExposureEvProvider);
+    cameraService.setBrightness((0.5 + ev / 6.0).clamp(0.0, 1.0));
 
     // 异步查询设备缩放能力（不阻塞相机就绪）
     _queryZoomCapabilities(ref, cameraService);
@@ -416,11 +412,16 @@ final cameraPreviewOverrideProvider = Provider<Widget?>((ref) => null);
 class _PinchZoomCamera extends ConsumerStatefulWidget {
   const _PinchZoomCamera({
     required this.child,
+    this.focusKey,
     this.onLongPressStart,
     this.onLongPressEnd,
   });
 
   final Widget child;
+
+  /// 对焦反馈层的状态 key：读取对焦框可见性（可见期间启用纵向拖动调曝光）
+  /// 与 AE/AF 锁定态，并驱动太阳滑块位置更新。
+  final GlobalKey<_FocusOverlayState>? focusKey;
 
   /// 长按开始（约 500ms 无位移按下）：[localPosition] 为取景器内本地坐标，
   /// [previewSize] 为取景器当前尺寸（用于原生 AE/AF 锁定坐标换算）。
@@ -446,11 +447,43 @@ class _PinchZoomCameraState extends ConsumerState<_PinchZoomCamera> {
   /// 上一次实际下发到相机的倍数（用于节流）
   double? _lastAppliedMultiplier;
 
+  /// 纵向拖动调曝光的起始「对焦偏移」（未在拖动时为 null）
+  double? _exposureStartOffset;
+
+  /// 纵向拖动调曝光的起始 Y 坐标（未在拖动时为 null）
+  double? _exposureStartY;
+
   void _resetGesture() {
     _lastScale = 1.0;
     _currentMultiplier = 1.0;
     _lastPointerCount = 0;
     _lastAppliedMultiplier = null;
+    _exposureStartOffset = null;
+    _exposureStartY = null;
+  }
+
+  /// 对焦框可见期间的单指纵向拖动：向上拖动增大对焦曝光、向下减小
+  /// （模仿 iOS 原相机：轻点对焦后即可上下拖动太阳滑块，无需先长按锁定）。
+  ///
+  /// 只改 [CaptureState.focusExposureOffsetProvider]（锚定当前对焦点的临时微调），
+  /// **不动**参数面板 / 胶囊的 `exposureCompensation`（模板/会话曝光基准）。
+  /// 150px 位移 ≈ 3 EV；与当前值差 < 0.05 时不下发，避免每帧刷 provider。
+  void _applyExposureDrag(ScaleUpdateDetails details) {
+    final startY = _exposureStartY;
+    final startOffset = _exposureStartOffset;
+    if (startY == null || startOffset == null) return;
+    final dy = details.localFocalPoint.dy - startY;
+    // 偏移量上限取「参数 EV 基准到 ±3 档满量程的余量」，保证太阳滑块位置
+    // 与实际下发的曝光始终一致（基准越接近满量程，可偏移区间越窄）
+    final baseEv = ref
+        .read(CaptureState.effectiveCameraProvider)
+        .exposureCompensation
+        .clamp(-3.0, 3.0);
+    final offset = (startOffset - dy / 150).clamp(-3.0 - baseEv, 3.0 - baseEv);
+    final current = ref.read(CaptureState.focusExposureOffsetProvider);
+    if ((offset - current).abs() < 0.05) return;
+    ref.read(CaptureState.focusExposureOffsetProvider.notifier).state = offset;
+    widget.focusKey?.currentState?.updateExposure(offset);
   }
 
   /// 将目标倍数 clamp 到设备范围后更新状态并下发相机。
@@ -480,13 +513,33 @@ class _PinchZoomCameraState extends ConsumerState<_PinchZoomCamera> {
         onLongPressStart: (details) => widget.onLongPressStart
             ?.call(details.localPosition, previewSize),
         onLongPressEnd: (_) => widget.onLongPressEnd?.call(),
-        onScaleStart: (_) => _resetGesture(),
+        onScaleStart: (details) {
+          _resetGesture();
+          // 对焦框可见期间（轻点对焦 / AE-AF 锁定）单指纵向拖动用于调曝光：
+          // 记录起始偏移与起始 Y，并让对焦框+太阳滑块在拖动期间挂住不淡出
+          final overlay = widget.focusKey?.currentState;
+          if (overlay?.isFocusActive == true) {
+            final startOffset =
+                ref.read(CaptureState.focusExposureOffsetProvider);
+            _exposureStartOffset = startOffset;
+            _exposureStartY = details.localFocalPoint.dy;
+            overlay?.beginExposureDrag();
+          }
+        },
         onScaleUpdate: (details) {
           final pc = details.pointerCount;
           if (pc < 2) {
-            // 单指/点击不干扰（点击对焦仍由相机组件处理）
+            // 单指/点击不干扰缩放（点击对焦仍由相机组件处理）；
+            // 对焦框可见期间则用于纵向拖动调曝光。
+            _applyExposureDrag(details);
             _lastPointerCount = pc;
             return;
+          }
+          // 双指落下：退出曝光拖动，恢复对焦框的自动淡出，只走原有缩放逻辑
+          if (_exposureStartY != null) {
+            _exposureStartOffset = null;
+            _exposureStartY = null;
+            widget.focusKey?.currentState?.endExposureDrag();
           }
           // 指针数从 <2 变为 >=2（新捏合或手指重新落下），重新锚定起始倍数，
           // 防止 Flutter 重置初始跨度后 scale 跳变导致倍数突变
@@ -505,14 +558,27 @@ class _PinchZoomCameraState extends ConsumerState<_PinchZoomCamera> {
           _currentMultiplier *= ratio;
           _applyZoom(_currentMultiplier);
         },
-        onScaleEnd: (_) => _resetGesture(),
+        onScaleEnd: (_) {
+          _resetGesture();
+          widget.focusKey?.currentState?.endExposureDrag();
+        },
         child: widget.child,
       );
     });
   }
 }
 
-/// 对焦反馈层：渲染金色四角对焦框（单击对焦）与「AE/AF 锁定」标签（长按锁定）。
+/// 叠照片浮层通用金色（金色对焦框 / 曝光太阳图标共用）。
+/// 属叠照片叠加视觉：跨风格固定金色，不随主题变化（硬编码主题色的唯一合法例外）。
+const Color _focusGold = Color(0xE6FFCA28); // Colors.amber.shade400 @ 0.9
+
+/// 将 [value] 钳制到 [min, max]；区间非法（max < min，即取景框过小）时取中点，
+/// 避免 `num.clamp` 在 lowerLimit > upperLimit 时抛 ArgumentError。
+double _clampInto(double value, double min, double max) =>
+    max < min ? (min + max) / 2 : value.clamp(min, max);
+
+/// 对焦反馈层：渲染金色四角对焦框（单击对焦）、框右侧太阳滑块（上下拖动调曝光，
+/// 单击对焦即出现）与「AE/AF 锁定」标签（长按锁定）。
 ///
 /// 自管理显示状态，由外部通过 [_FocusOverlayState]（`GlobalKey`）驱动，
 /// 不污染任何 provider。切换前后摄像头时由外层 KeyedSubtree(ValueKey(facing))
@@ -528,44 +594,126 @@ class _FocusOverlay extends ConsumerStatefulWidget {
 }
 
 class _FocusOverlayState extends ConsumerState<_FocusOverlay> {
+  /// 对焦框尺寸（与 [_FocusFrameState._size] 一致，用于边界钳制）
+  static const double _frameSize = 70.0;
+  /// 「AE/AF 锁定」徽标尺寸估算（用于边界钳制）
+  static const double _badgeWidth = 70.0;
+  static const double _badgeHeight = 36.0;
+  /// 徽标与对焦框的默认间距
+  static const double _badgeGap = 56.0;
+  /// 太阳滑块尺寸（细竖线轨道 2×88 + 太阳图标 16）
+  static const double _exposureTrackHeight = 88.0;
+  static const double _exposureIconSize = 16.0;
+  /// 对焦框（含太阳滑块）可见时长：模仿 iOS 原相机，轻点后约 2.5s 淡出；
+  /// 拖动调曝光期间挂住不淡出，松手后重新计时
+  static const Duration _focusDisplayDuration = Duration(milliseconds: 2500);
+  /// 取景框内安全边距
+  static const double _edgeMargin = 8.0;
+
   Offset? _point;
   bool _locked = false;
   bool _visible = false;
   Timer? _hideTimer;
 
+  /// 单击对焦 5s 后恢复连续自动对焦/曝光的定时器（统一三端行为）
+  Timer? _autoRecoverTimer;
+
+  /// 最近一次单击对焦时的取景框尺寸（5s 恢复连续自动对焦时回传原生）
+  Size? _lastPreviewSize;
+
+  /// 当前对焦曝光偏移（相对参数 EV 基准；0 = 太阳图标停在竖线中点）
+  double _exposureOffset = 0.0;
+
   bool get isLocked => _locked;
 
-  /// 单击对焦：显示金色对焦框，约 1.5s 后自动消失。
-  void showFocus(Offset point) {
+  /// 对焦框（含太阳滑块）是否可见。可见期间单指纵向拖动即可调曝光
+  /// ——模仿 iOS 原相机「轻点屏幕显示自动对焦区域和曝光设置（太阳图标）」。
+  bool get isFocusActive => _visible;
+
+  /// 单击对焦：显示金色对焦框 + 右侧太阳滑块（模仿 iOS 原相机：轻点即同时
+  /// 显示对焦区域与曝光设置），约 2.5s 后一起淡出；
+  /// 同时（重置）起 5s 定时器，到点恢复连续自动对焦/曝光——此前 iOS/OHOS
+  /// 单击对焦后会停在「单次对焦」，与 Android 的 5s 自动恢复不一致。
+  void showFocus(Offset point, Size previewSize) {
     _hideTimer?.cancel();
+    _autoRecoverTimer?.cancel();
+    // 换点重新测光：对焦曝光偏移归零（对齐 iPhone，太阳图标回到中点）。
+    // 只归零临时偏移，不动参数面板/模板里的 EV 基准。
+    ref.read(CaptureState.focusExposureOffsetProvider.notifier).state = 0.0;
     setState(() {
       _point = point;
+      _lastPreviewSize = previewSize;
       _locked = false;
       _visible = true;
+      _exposureOffset = 0.0;
     });
-    _hideTimer = Timer(const Duration(milliseconds: 1500), () {
-      if (!mounted) return;
-      setState(() => _visible = false);
+    _restartHideTimer();
+    _autoRecoverTimer = Timer(const Duration(seconds: 5), () {
+      final p = _point;
+      final s = _lastPreviewSize;
+      if (!mounted || p == null || s == null) return;
+      // locked=false 时原生忽略坐标，仅恢复到连续自动对焦/曝光
+      ref.read(cameraServiceProvider).setFocusAndExposureLock(
+            locked: false,
+            position: p,
+            previewSize: s,
+          );
     });
   }
 
-  /// 长按锁定：显示金色对焦框 + 「AE/AF 锁定」标签，常驻不消失。
+  /// 长按锁定：显示金色对焦框 + 「AE/AF 锁定」标签 + 太阳滑块，常驻不消失
+  /// （对齐原相机：锁定后太阳图标一直挂在框边，可随时再上下拖动拉曝光）。
+  /// 锁定同样是一次新的测光（在新触点上），故对焦曝光偏移一并归零。
   void showLock(Offset point) {
     _hideTimer?.cancel();
+    _autoRecoverTimer?.cancel();
+    ref.read(CaptureState.focusExposureOffsetProvider.notifier).state = 0.0;
     setState(() {
       _point = point;
       _locked = true;
       _visible = true;
+      _exposureOffset = 0.0;
     });
   }
 
   /// 解除锁定并隐藏（用于「锁定后单击其他位置」的解锁阶段）。
   void unlock() {
     _hideTimer?.cancel();
+    _autoRecoverTimer?.cancel();
     if (!mounted) return;
     setState(() {
       _locked = false;
       _visible = false;
+    });
+  }
+
+  /// 开始纵向拖动调曝光：拖动期间对焦框与太阳滑块挂住不淡出
+  /// （模仿 iOS：手指按住拖动时对焦区域与太阳图标保持可见）。
+  void beginExposureDrag() {
+    if (!mounted || !_visible) return;
+    _hideTimer?.cancel();
+  }
+
+  /// 拖动过程中更新太阳图标在竖线上的位置（[offset] 为对焦曝光偏移）。
+  void updateExposure(double offset) {
+    if (!mounted || !_visible) return;
+    _hideTimer?.cancel();
+    if ((_exposureOffset - offset).abs() < 0.001) return;
+    setState(() => _exposureOffset = offset);
+  }
+
+  /// 结束纵向拖动：未锁定则重新计时淡出；锁定态常驻不淡出。
+  void endExposureDrag() {
+    if (!mounted || !_visible || _locked) return;
+    _restartHideTimer();
+  }
+
+  /// （重新）起「对焦框 + 太阳滑块」淡出定时器。
+  void _restartHideTimer() {
+    _hideTimer?.cancel();
+    _hideTimer = Timer(_focusDisplayDuration, () {
+      if (!mounted) return;
+      setState(() => _visible = false);
     });
   }
 
@@ -575,16 +723,72 @@ class _FocusOverlayState extends ConsumerState<_FocusOverlay> {
     // 兜底：facing 变化时复位（正常路径由外层 KeyedSubtree 重建完成）。
     if (widget.facing != oldWidget.facing) {
       _hideTimer?.cancel();
+      _autoRecoverTimer?.cancel();
       _point = null;
+      _lastPreviewSize = null;
       _locked = false;
       _visible = false;
+      // 对焦偏移锚定的是上一个摄像头的对焦点，换摄后该点已不存在，连同对焦框
+      // 一起归零，否则会留下用户看不见、也无法复位的残余曝光。
+      // riverpod 禁止在 didUpdateWidget 内直接写 provider，故用 post-frame。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(CaptureState.focusExposureOffsetProvider.notifier).state = 0.0;
+      });
+      _exposureOffset = 0.0;
     }
   }
 
   @override
   void dispose() {
     _hideTimer?.cancel();
+    _autoRecoverTimer?.cancel();
     super.dispose();
+  }
+
+  /// 对焦框中心安全钳制，保证 70×70 完整可见。
+  Offset _clampFocusCenter(Offset point, Size bounds) {
+    const half = _frameSize / 2;
+    return Offset(
+      _clampInto(
+          point.dx, _edgeMargin + half, bounds.width - _edgeMargin - half),
+      _clampInto(
+          point.dy, _edgeMargin + half, bounds.height - _edgeMargin - half),
+    );
+  }
+
+  /// 「AE/AF 锁定」徽标：默认在对焦框下方（56px），下方空间不足时翻到对焦框
+  /// 上方；左右/上下均钳制在取景框内，避免贴边溢出。
+  Widget _buildLockBadge(Offset center, Size bounds, ThemeTokens tokens) {
+    final centerX = _clampInto(
+      center.dx,
+      _edgeMargin + _badgeWidth / 2,
+      bounds.width - _edgeMargin - _badgeWidth / 2,
+    );
+    final belowTop = center.dy + _badgeGap;
+    final fitsBelow = belowTop + _badgeHeight <= bounds.height - _edgeMargin;
+    final rawTop = fitsBelow ? belowTop : center.dy - _badgeGap - _badgeHeight;
+    final top = _clampInto(
+      rawTop,
+      _edgeMargin,
+      bounds.height - _edgeMargin - _badgeHeight,
+    );
+    return _LockBadge(centerX: centerX, top: top, tokens: tokens);
+  }
+
+  /// 太阳滑块：贴在金色对焦框右侧，钳制在取景框内避免贴边溢出。
+  Widget _buildExposureSlider(Offset center, Size bounds) {
+    final left = _clampInto(
+      center.dx + _frameSize / 2 + _edgeMargin,
+      _edgeMargin,
+      bounds.width - _edgeMargin - _exposureIconSize,
+    );
+    final top = _clampInto(
+      center.dy - _exposureTrackHeight / 2,
+      _edgeMargin,
+      bounds.height - _edgeMargin - _exposureTrackHeight,
+    );
+    return _ExposureSlider(offset: _exposureOffset, left: left, top: top);
   }
 
   @override
@@ -592,11 +796,20 @@ class _FocusOverlayState extends ConsumerState<_FocusOverlay> {
     if (!_visible || _point == null) return const SizedBox.shrink();
     final tokens = ref.watch(appThemeProvider).tokens;
     return IgnorePointer(
-      child: Stack(
-        children: [
-          _FocusFrame(point: _point!),
-          if (_locked) _LockBadge(point: _point!, tokens: tokens),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final bounds = Size(constraints.maxWidth, constraints.maxHeight);
+          final center = _clampFocusCenter(_point!, bounds);
+          return Stack(
+            children: [
+              _FocusFrame(point: center),
+              // 太阳滑块与对焦框同生共灭：轻点对焦即出现（模仿 iOS 原相机），
+              // 上下拖动即在两者可见期间调整曝光
+              _buildExposureSlider(center, bounds),
+              if (_locked) _buildLockBadge(center, bounds, tokens),
+            ],
+          );
+        },
       ),
     );
   }
@@ -652,8 +865,7 @@ class _FocusFrameState extends State<_FocusFrame>
 
   @override
   Widget build(BuildContext context) {
-    // 金色：跨风格叠加视觉，透明度 0.9
-    final borderColor = Colors.amber.shade400.withOpacity(0.9);
+    // 金色：叠照片叠加视觉，跨风格固定金色（与曝光条共用 _focusGold）
     return Positioned(
       left: widget.point.dx - _size / 2,
       top: widget.point.dy - _size / 2,
@@ -667,11 +879,11 @@ class _FocusFrameState extends State<_FocusFrame>
             child: Transform.scale(scale: _scale.value, child: child),
           );
         },
-        child: CustomPaint(
-          key: const Key('focus_frame'),
-          size: const Size(_size, _size),
+        child: const CustomPaint(
+          key: Key('focus_frame'),
+          size: Size(_size, _size),
           painter: _FocusFramePainter(
-            color: borderColor,
+            color: _focusGold,
             strokeWidth: _stroke,
             cornerLength: _cornerLength,
           ),
@@ -724,21 +936,32 @@ class _FocusFramePainter extends CustomPainter {
       oldDelegate.cornerLength != cornerLength;
 }
 
-/// 「AE/AF 锁定」胶囊标签：对焦框正下方（约 56px）居中显示。
+/// 「AE/AF 锁定」胶囊标签：默认对焦框正下方（约 56px）居中显示，
+/// 由 [_FocusOverlayState] 传入已钳制的水平中心 [centerX] 与 [top]
+/// （下方空间不足时会翻到对焦框上方）。
 ///
 /// 实心 `tokens.surface` + 细边 `tokens.divider` + `tokens.textPrimary` 文字，
 /// 跨风格通用叠照片浮层：不使用 BackdropFilter / 阴影 / 玻璃。
 class _LockBadge extends StatelessWidget {
-  const _LockBadge({required this.point, required this.tokens});
+  const _LockBadge({
+    required this.centerX,
+    required this.top,
+    required this.tokens,
+  });
 
-  final Offset point;
+  /// 已钳制在取景框内的水平中心（配合 FractionalTranslation 居中渲染）
+  final double centerX;
+
+  /// 已钳制在取景框内的顶部位置
+  final double top;
+
   final ThemeTokens tokens;
 
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      left: point.dx,
-      top: point.dy + 56,
+      left: centerX,
+      top: top,
       child: FractionalTranslation(
         // 以对焦框中心为轴水平居中
         translation: const Offset(-0.5, 0),
@@ -761,6 +984,76 @@ class _LockBadge extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 曝光补偿太阳滑块（模仿 iOS 原相机：金色对焦框右侧一条细竖线，
+/// 太阳图标沿竖线上下滑动，向上 = 加曝光 / 向下 = 减曝光）。
+///
+/// 位置反映的是**对焦曝光偏移**（相对参数 EV 基准的临时微调），
+/// 0 表示本次测光点无补偿 —— 与参数面板/胶囊显示的 EV 基准是两回事。
+///
+/// - 轨道：2×88 细竖线，白色半透明（叠照片叠加视觉，跨风格固定，不随主题变化）
+/// - 太阳图标：金色（与对焦框同色），偏移 0 时停在竖线中点，±3 档滑到两端
+/// 无阴影、无模糊、无玻璃（叠照片浮层铁律）。
+class _ExposureSlider extends StatelessWidget {
+  const _ExposureSlider({
+    required this.offset,
+    required this.left,
+    required this.top,
+  });
+
+  /// 当前对焦曝光偏移（-3..3，0 = 无补偿）
+  final double offset;
+
+  /// 已钳制在取景框内的左侧位置
+  final double left;
+
+  /// 已钳制在取景框内的顶部位置
+  final double top;
+
+  static const double _trackWidth = 2.0;
+  static const double _trackHeight = 88.0;
+  static const double _iconSize = 16.0;
+  /// 太阳图标自轨道中点起可达的最大位移（留出图标半径，避免贴出两端）
+  static const double _maxTravel = _trackHeight / 2 - _iconSize / 2;
+  /// 与 [CaptureState.effectiveExposureEvProvider] 的满量程一致：±3 档
+  static const double _maxOffset = 3.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = (offset / _maxOffset).clamp(-1.0, 1.0);
+    return Positioned(
+      left: left,
+      top: top,
+      child: SizedBox(
+        width: _iconSize,
+        height: _trackHeight,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              key: const Key('focus_exposure_bar'),
+              width: _trackWidth,
+              height: _trackHeight,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.35),
+                borderRadius: BorderRadius.circular(_trackWidth / 2),
+              ),
+            ),
+            Transform.translate(
+              // 向上（正 EV）为负向位移
+              offset: Offset(0, -ratio * _maxTravel),
+              child: const Icon(
+                Icons.wb_sunny,
+                size: _iconSize,
+                color: _focusGold,
+              ),
+            ),
+          ],
         ),
       ),
     );

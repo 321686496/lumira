@@ -54,13 +54,6 @@ export enum ConstantsPreview {
   PREVIEW_2448 = 2448
 }
 
-// photoAvailable 直出写盘所需的路径与结果回调。
-// ArkTS 强制对象类型必须显式声明为 class/interface，禁止匿名对象字面量类型。
-export interface PhotoPathResult {
-  path: string
-  result: Result<boolean>
-}
-
 // 单次拍照请求的连拍安全上下文（FIFO 队列元素）。
 // 原单槽位状态（_photoPath/_photoResult/_photoDirectDone）在连拍时会被后一次
 // takePhoto 覆盖：photoAvailable 帧写错路径、photoAssetAvailable 与错误的
@@ -70,7 +63,48 @@ export interface PhotoCaptureContext {
   path: string
   result: Result<boolean>
   // photoAvailable 已直出写盘成功标记，同帧 photoAssetAvailable 据此跳过增强回退
+  // （避免增强图覆盖原始 JPEG）。注意它只表达「直出成功」，不表达「result 已回调」
+  // ——后者由 settled 承担（直出失败时 directDone 会被复位为 false，但 result 已回）。
   directDone: boolean
+  // 本帧早帧 fd 直拷落盘的原始 JPEG 路径（见 deliverEarlyFrameFromAsset）。
+  // 本设备 photoAvailable 不触发，该文件即「未经相册增强的原始全尺寸 JPEG」；
+  // 增强交付看门狗超时时据此把成片降级为原始 JPEG，避免 Dart 侧 10s 超时。
+  earlyFramePath?: string
+  // result 是否已回调（恰好一次收口）。所有回调路径统一走 settleCaptureCtx：
+  // 注意 directDone 不能在「失败」场景兼任该语义——photoAvailable 写盘失败时会
+  // 把 directDone 复位为 false 并已回调 success(false)，若只看 directDone，
+  // 随后的增强兜底会再次回调 result（Pigeon 二次 reply）。
+  settled?: boolean
+}
+
+/**
+ * 本帧 result 恰好一次的收口：所有成功/失败/兜底路径统一经此回调。
+ * 首次调用生效，后续调用静默忽略，杜绝 Pigeon Result 二次 success/error。
+ */
+function settleCaptureCtx(ctx: PhotoCaptureContext, ok: boolean): void {
+  if (ctx.settled === true) {
+    return
+  }
+  ctx.settled = true
+  ctx.result.success(ok)
+}
+
+// 增强兜底交付的串行队列元素（一次仅一个在飞，见 drainEnhancedQueue）。
+export interface EnhancedDeliveryItem {
+  photoAsset: photoAccessHelper.PhotoAsset
+  path: string
+  result: Result<boolean>
+  ctx: PhotoCaptureContext | undefined
+  // result 是否已结算（交付成功 / 看门狗兜底 / 跳过覆盖）：守卫 result 恰好一次。
+  settled: boolean
+  // 看门狗定时器 id。修复⑥：不再「入队即起算 7s 固定值」，而是在请求真正开始
+  // （离开排队、进入在飞）时按「在飞预算」重挂，同时受「入队绝对截止时间」约束。
+  watchdogId: number | undefined
+  // 入队时刻（ms）。用于算「入队绝对截止时间」：无论排队多久，入队→交付都不许超过它，
+  // 否则会撞上 Dart 侧 10s 超时。
+  enqueuedAtMs: number
+  // 在飞请求的 handler 引用：必须被持有到交付结束，避免被回收后 onDataPrepared 丢失。
+  handler?: MediaDataHandler
 }
 
 const TAG: string = 'CameraState'
@@ -102,6 +136,11 @@ export class CameraState implements StreamHandler {
   private _aspectRatio: string = AspectRatio.RATIO_4_3
   private zoom: number = 0
   private _mirrorFrontCamera: boolean = false
+  // AE 锁定（长按 AE/AF）状态与锁定时的测光点：
+  // OHOS 在 EXPOSURE_MODE_LOCKED 下 setExposureBias 不生效，锁定后用户拖动曝光
+  // 需按「回 AUTO 应用新 EV → 用同一测光点重新锁定」处理（见 setExposureBias）。
+  private _aeLocked: boolean = false
+  private _aeLockPoint: camera.Point | undefined = undefined
   private enablePhysicalButton: boolean = false
   private flashMode: string = 'AUTO'
   private isRecording: boolean = false;
@@ -113,8 +152,9 @@ export class CameraState implements StreamHandler {
   private _imageAnalysisBuilder: ImageAnalysisBuilder | undefined = undefined
   // 拍照结果监听（photoAssetAvailable 增强兜底时调用，按队列配对的本帧
   // path/result 落盘，不由注入方闭包捕获——连拍时闭包会被后一次调用覆盖）。
-  // ctx 透传本帧请求上下文：saveCameraPhoto 在途期间若 photoAvailable 直出完成
-  // （directDone 置位），MediaDataHandler 据此跳过增强图写盘，防止覆盖原始 JPEG。
+  // ctx 透传本帧请求上下文：增强交付在途期间若 photoAvailable 直出完成
+  // （directDone 置位），onEnhancedDataPrepared 据此跳过增强图写盘、且不重复回调
+  // result，防止覆盖原始 JPEG / Pigeon Result 二次回调。
   private _handlePhotoCb: (photoAsset: photoAccessHelper.PhotoAsset, path: string, result: Result<boolean>, ctx?: PhotoCaptureContext) => void = () => {
   }
   // 连拍安全的拍照请求队列（替代原单槽位 _photoPath/_photoResult/_photoDirectDone）：
@@ -123,6 +163,21 @@ export class CameraState implements StreamHandler {
   // 两通道各自按拍照发起顺序保序，与框架事件到达的交错顺序无关。
   private _photoDirectQueue: PhotoCaptureContext[] = []
   private _photoAssetQueue: PhotoCaptureContext[] = []
+  // 增强兜底交付串行闸门（修复④）：实测本机 MediaAssetManager.requestImageData
+  // 仅在「单请求在飞」时回调 onDataPrepared——单张时 2.1s 交付成功，多个并发在飞
+  // 时全部不交付（连拍 5 张全部 10s 超时的直接原因）。修复③ 移除单槽位
+  // photoRequestId 守卫后，增强交付从「单发」退化为「并发」，故在此显式恢复：
+  // FIFO 队列 + 一次仅一个 requestImageData 在飞。
+  private _enhancedQueue: EnhancedDeliveryItem[] = []
+  private _enhancedInFlightItem: EnhancedDeliveryItem | undefined = undefined
+  // 单帧交付看门狗（ms），自「请求真正开始（进入在飞）」起算——修复⑥。
+  // 修复⑤真机日志证明：入队即起算会被「排队等待」白吃掉预算（4 连拍时第 4 帧的请求
+  // 刚发出 64ms 就被看门狗开火，而它的 onDataPrepared 在 3.35s 后才到达、本可成功）。
+  // 改为在飞起算后，排队多久都不影响单帧的在飞预算。
+  private _enhancedWatchdogMs: number = 7000
+  // 入队绝对截止（ms）：自入队起算。无论排队 + 在飞多久，都必须在此之前回 result，
+  // 否则撞上 Dart 侧 10s 超时（实测兜底拷贝仅 ~30ms，故 9s 留足余量）。
+  private _enhancedQueueDeadlineMs: number = 9000
   // 分阶段拍照：一阶段低质量帧（水印动画源）数据请求 id 与早帧监听器引用。
   // 每次拍照复位，防止上一帧残留导致本帧早帧请求被误跳过。
   private _earlyFrameRequestId: string | undefined = undefined
@@ -445,6 +500,13 @@ export class CameraState implements StreamHandler {
     }
     Logger.info(TAG, `photoConfig photoProfile=${photoProfile.size.width}x${photoProfile.size.height} ` +
       `preview=${previewW}x${previewH} total=${photoProfilesArray.length} maxPixels=${maxPixels}`);
+    // 诊断（桥接日志）：真机档位阶梯 + 最终选中档。用于判定「成片分辨率上限」是否还能提高
+    // （真机现状：成片恒为 1440x1920，早帧与成片同源同尺寸，故成片无分辨率级升级空间）。
+    const photoLadder = photoProfilesArray
+      .map((p: camera.Profile) => `${p.size.width}x${p.size.height}`)
+      .join(',')
+    bridgeNativeLog(`[perf-cam] photoProfile chosen=${photoProfile.size.width}x${photoProfile.size.height} ` +
+      `preview=${previewW}x${previewH} maxPixels=${maxPixels} ladder=[${photoLadder}]`)
 
     // 创建预览流输出。
     // 取景器实时特效 GPU 管线：预览流写入 FX 消费端（OH_NativeImage），渲染线程
@@ -975,8 +1037,19 @@ export class CameraState implements StreamHandler {
       if (pendingCtx.size > 0) {
         Logger.info(TAG, `releaseCamera: fail ${pendingCtx.size} pending capture(s)`);
         for (const c of pendingCtx) {
-          c.result.success(false)
+          settleCaptureCtx(c, false)
         }
+      }
+
+      // 增强交付串行队列同样必须在释放时收敛：否则排队中的帧要白等到看门狗
+      // （最长 7s）才回 result，表现为「切镜头/退出后卡一会儿才报拍照失败」。
+      const inFlight = this._enhancedInFlightItem
+      this._enhancedInFlightItem = undefined
+      if (inFlight !== undefined) {
+        this.settleEnhancedItem(inFlight, false)
+      }
+      while (this._enhancedQueue.length > 0) {
+        this.settleEnhancedItem(this._enhancedQueue.shift()!!, false)
       }
 
       await this.photoOutput?.release();
@@ -1065,17 +1138,25 @@ export class CameraState implements StreamHandler {
   }
 
   /**
-   * 以指定参数触发一次拍照
+   * 以指定参数触发一次拍照。
+   *
+   * 修复①：ctx 入队时机后移——仅在 photoOutput.capture() 被框架受理（Promise
+   * resolve）后才 push 进两通道队列。此前「先入队再 capture」时，capture() 抛
+   * 7400102（忙窗口拒绝，实测连拍忙窗口 0.4-0.7s）会让 ctx 滞留队列，后续帧按
+   * FIFO 出队时错配到滞留 ctx（照片写错路径、回错 result）。
+   * 修复②：capture() 抛 7400102 时在原生内部按 ~300ms 间隔排队重试（≤20 次
+   * ≈6s，小于 Dart 侧 10s 超时），不丢帧、不把错误抛回调用方。
+   * 全程保证 result 恰好回调一次：受理成功后由 photoAvailable/photoAssetAvailable
+   * 链路回调；受理失败/相机已释放由本方法直接 success(false)。
    */
-  async takePhoto(): Promise<void> {
+  async takePhoto(path: string, result: Result<boolean>): Promise<void> {
     const degree = await this.getCurrentDeviceDegree();
     let photoSettings: camera.PhotoCaptureSetting = {
       quality: camera.QualityLevel.QUALITY_LEVEL_HIGH, // 官方推荐高画质，降低JPEG压缩对清晰度的影响
       mirror: this.cameraPosition === camera.CameraPosition.CAMERA_POSITION_FRONT ? this._mirrorFrontCamera : false,
       rotation: this.getPhotoRotation(degree)
     };
-    // 直出标记改为 per-capture（photoPathResult 入队的 ctx.directDone），
-    // 连拍时各帧互不干扰，无需在每次拍摄前复位单槽位标记。
+    // 直出标记 per-capture：directDone 记录在本帧 ctx 上，连拍时各帧互不干扰。
     // 复位分阶段拍照早帧请求 id，允许本帧重新发起 FAST_MODE 早帧交付。
     this._earlyFrameRequestId = undefined
 
@@ -1090,10 +1171,54 @@ export class CameraState implements StreamHandler {
       }
     }
     takePhotoStartAt = Date.now()
-    await this.photoOutput?.capture(photoSettings);
-    bridgeNativeLog(`[perf-cam] takePhoto capture() returned after ${Date.now() - takePhotoStartAt}ms`);
-    Logger.info(TAG, 'takePicture end');
-    // [性能拆解] 快照后 JPEG 交付是否为主要耗时：对比本行与 photoAvailable saved 的 elapsed。
+    const ctx: PhotoCaptureContext = { path: path, result: result, directDone: false }
+    // capture() 忙窗口（7400102）重试参数：实测忙窗口 0.4-0.7s，300ms 间隔 ≤20 次
+    //（最长 ~6s）足够覆盖，且小于 Dart 侧 takePhoto 的 10s 超时。
+    const captureRetryMax = 20
+    const captureRetryIntervalMs = 300
+    for (let attempt = 1; attempt <= captureRetryMax; attempt++) {
+      if (this.photoOutput === undefined) {
+        // releaseCamera 已释放输出：本 ctx 尚未入队（修复①），不会走 releaseCamera
+        // 的队列 drain 回调，必须在此回 result，否则 Dart 侧悬挂至 10s 超时。
+        bridgeNativeLog(`[probe] capture() attempt#${attempt} abort: photoOutput released +${Date.now() - takePhotoStartAt}ms`)
+        settleCaptureCtx(ctx, false)
+        return
+      }
+      try {
+        await this.photoOutput!!.capture(photoSettings);
+        // 受理成功：框架按提交顺序交付本帧（photoAvailable/photoAssetAvailable），
+        // 入队顺序 = 受理顺序 = 帧交付顺序，FIFO 配对成立。
+        this._photoDirectQueue.push(ctx)
+        this._photoAssetQueue.push(ctx)
+        bridgeNativeLog(`[probe] capture() attempt#${attempt} accepted after ${Date.now() - takePhotoStartAt}ms directQ=${this._photoDirectQueue.length} assetQ=${this._photoAssetQueue.length}`)
+        Logger.info(TAG, 'takePicture end');
+        // [性能拆解] 快照后 JPEG 交付是否为主要耗时：对比本行与 photoAvailable saved 的 elapsed。
+        return
+      } catch (e) {
+        // ArkTS 限制：throw 只接受 Error（类）派生类型；此处不再向上抛——所有失败
+        // 路径都在本方法内收敛并保证 result 恰好回调一次。
+        const be = e as BusinessError
+        // 忙窗口判定：真机实测该错误可能 code=undefined、错误号只出现在 message
+        // 文本里（'capture() failed code=7400102 msg=Operation not allowed.'），
+        // 原严格等号 be?.code === 7400102 会恒判 false → 重试从未触发（日志
+        // retry=false），受理失败帧直接 success(false) 表现为「拍照失败」。
+        // 故按 number 与 message 文本双路判定。
+        const busyByCode = Number(be?.code) === 7400102
+        const busyByMsg = be?.message !== undefined && String(be.message).indexOf('7400102') >= 0
+        const busy = busyByCode || busyByMsg
+        const willRetry = busy && attempt < captureRetryMax
+        bridgeNativeLog(`[probe] capture() attempt#${attempt} THREW after ${Date.now() - takePhotoStartAt}ms code=${be?.code} msg=${be?.message} retry=${willRetry}`)
+        if (willRetry) {
+          const wait: Promise<void> = new Promise((resolve) => {
+            setTimeout(() => { resolve() }, captureRetryIntervalMs)
+          })
+          await wait
+          continue
+        }
+        settleCaptureCtx(ctx, false)
+        return
+      }
+    }
   }
 
   /**
@@ -1106,21 +1231,28 @@ export class CameraState implements StreamHandler {
         (err: BusinessError, captureStartInfo: camera.CaptureStartInfo): void => {
           Logger.info(TAG,
             `photoOutputCallBack captureStartWithInfo success: ${JSON.stringify(captureStartInfo)}`);
+          bridgeNativeLog(`[probe] captureStart id=${captureStartInfo?.captureId}`);
         });
       // 监听拍照帧输出捕获
       this.photoOutput!!.on('frameShutter',
         (err: BusinessError, frameShutterInfo: camera.FrameShutterInfo): void => {
           Logger.info(TAG, `photoOutputCallBack frameShutter captureId:
           ${frameShutterInfo.captureId}, timestamp: ${frameShutterInfo.timestamp}`);
+          // [probe] 决定性信号：传感器是否真的出了这帧。并发发起两次若此处只打一行，
+          // 说明第 2 次压根没被框架抓帧（属 (a) 被丢弃）；若打两行说明抓了帧，
+          // 缺失的只是后续交付回调（属 (b) 回调被吞）。
+          bridgeNativeLog(`[probe] frameShutter id=${frameShutterInfo?.captureId} ts=${frameShutterInfo?.timestamp}`);
         });
       // 监听拍照结束
       this.photoOutput!!.on('captureEnd', (err: BusinessError, captureEndInfo: camera.CaptureEndInfo): void => {
         Logger.info(TAG, `photoOutputCallBack captureEnd captureId:
           ${captureEndInfo.captureId}, frameCount: ${captureEndInfo.frameCount}`);
+        bridgeNativeLog(`[probe] captureEnd id=${captureEndInfo?.captureId} frameCount=${captureEndInfo?.frameCount}`);
       });
       // 监听拍照异常
       this.photoOutput!!.on('error', (data: BusinessError): void => {
         Logger.info(TAG, `photoOutPut data: ${JSON.stringify(data)}`);
+        bridgeNativeLog(`[probe] photoOutput error code=${data?.code} msg=${data?.message}`);
       });
       // 拍照原始帧直出（绕过系统相册增强管线，避免"取景器正常、拍照偏黄"）。
       // photoAvailable 返回相机原始 JPEG buffer，直接写盘，不经过相册色彩增强。
@@ -1133,16 +1265,18 @@ export class CameraState implements StreamHandler {
           const ctx = this._photoDirectQueue.shift()
           if (ctx === undefined) {
             Logger.error(TAG, 'photoAvailable: no pending capture request, skip');
+            bridgeNativeLog(`[probe] photoAvailable DROPPED: no pending request`)
             return
           }
+          bridgeNativeLog(`[probe] photoAvailable shift path=${ctx.path} directQLeft=${this._photoDirectQueue.length}`)
           if (err && err.code !== 0) {
             Logger.error(TAG, `photoAvailable error: ${err.code}`);
-            ctx.result.success(false)
+            settleCaptureCtx(ctx, false)
             return
           }
           if (!photo || !photo.main) {
             Logger.error(TAG, 'photoAvailable: photo or photo.main is null');
-            ctx.result.success(false)
+            settleCaptureCtx(ctx, false)
             return
           }
           const imageObj = photo.main
@@ -1159,16 +1293,16 @@ export class CameraState implements StreamHandler {
                   const written = fileIo.writeSync(file.fd, buffer)
                   fileIo.closeSync(file)
                   bridgeNativeLog(`[perf-cam] photoAvailable: saved raw JPEG bytes=${written} elapsed=${Date.now() - takePhotoStartAt}ms to ${ctx.path}`)
-                  ctx.result.success(true)
+                  settleCaptureCtx(ctx, true)
                 } catch (e) {
                   Logger.error(TAG, `photoAvailable save failed: ${JSON.stringify(e)}`)
                   ctx.directDone = false
-                  ctx.result.success(false)
+                  settleCaptureCtx(ctx, false)
                 }
               } else {
                 Logger.error(TAG, `photoAvailable getComponent failed: code=${errCode?.code}, path=${ctx.path}`)
                 ctx.directDone = false
-                ctx.result.success(false)
+                settleCaptureCtx(ctx, false)
               }
               imageObj.release()
             });
@@ -1178,15 +1312,20 @@ export class CameraState implements StreamHandler {
         (err: BusinessError, photoAsset: photoAccessHelper.PhotoAsset) => {
           Logger.info(TAG, 'photoAssetAvailable begin');
           bridgeNativeLog(`[perf-cam] photoAssetAvailable begin elapsed=${Date.now() - takePhotoStartAt}ms`);
-          if (err) {
-            Logger.error(TAG, 'photo is err');
-            return;
-          }
           // 连拍安全：从 assetQueue 出队本帧的请求上下文（与 photoAvailable 的
           // directQueue 各自保序），直出/增强判定与本帧 ctx 配对。
+          // 出队必须先于 err 判定：原实现 err 时直接 return，该帧 ctx 既不回 result
+          // 也不出队，Dart 侧 future 悬挂至 10s 超时。
           const ctx = this._photoAssetQueue.shift()
           if (ctx === undefined) {
             Logger.error(TAG, 'photoAssetAvailable: no pending capture request, skip');
+            bridgeNativeLog(`[probe] photoAssetAvailable DROPPED: no pending request`)
+            return;
+          }
+          bridgeNativeLog(`[probe] photoAssetAvailable shift path=${ctx.path} directDone=${ctx.directDone} assetQLeft=${this._photoAssetQueue.length}`)
+          if (err) {
+            Logger.error(TAG, `photo is err: ${err.code}`);
+            settleCaptureCtx(ctx, false)
             return;
           }
           // 若 photoAvailable 已直出写盘（原始 JPEG，绕过相册色彩增强），
@@ -1206,10 +1345,13 @@ export class CameraState implements StreamHandler {
           // 缩略图/初版成片提前上屏）。本设备无分段式拍照能力（photoAvailable 与
           // FAST_MODE requestImageData 均不回调），photoAssetAvailable 时原始文件
           // 已落盘，直接读文件是唯一 ~1s 内的早帧来源。
-          // 后真：成片仍由 _handlePhotoCb(HIGH_QUALITY_MODE) 增强交付（~2.4s），质量不变。
+          // 后真：成片仍由 _handlePhotoCb(HIGH_QUALITY_MODE) 增强交付（实测单发明发
+          // ~2.1s，质量不变）。注意该交付在原生侧被串行化成「一次仅一个在飞」，并挂
+          // 看门狗——本机并发在飞时 requestImageData 完全不回调，串行+看门狗兜底
+          // （降级用上面已落盘的原始 JPEG）才能保证每帧都在 Dart 10s 超时前回 result。
           Logger.info(TAG, 'photoAssetAvailable: enhanced path, fd early frame + HIGH_QUALITY final');
           bridgeNativeLog(`[perf-cam] fallback: fd early frame + HIGH_QUALITY deliver elapsed=${Date.now() - takePhotoStartAt}ms`);
-          this.deliverEarlyFrameFromAsset(photoAsset);
+          this.deliverEarlyFrameFromAsset(photoAsset, ctx);
           this._handlePhotoCb(photoAsset, ctx.path, ctx.result, ctx);
         });
     } catch (err) {
@@ -1217,32 +1359,285 @@ export class CameraState implements StreamHandler {
     }
   }
 
-  async saveCameraPhoto(path: string, photoAsset: photoAccessHelper.PhotoAsset, result: Result<boolean>, ctx?: PhotoCaptureContext) {
-    Logger.info(TAG, 'saveCameraPhoto');
-    if (photoRequestId) {
-      Logger.debug(TAG, 'saveCameraPhoto has photoRequestId = ' + photoRequestId);
+  /**
+   * 增强兜底交付入口（由 _handlePhotoCb 调用）：把本帧加入串行队列并挂看门狗。
+   *
+   * 修复④定案（修复①②③真机验证失败后）：本机 requestImageData 仅在「单请求在飞」
+   * 时交付，并发在飞时全部不回调——修复③ 移除单槽 photoRequestId 后增强交付退化为
+   * 并发，连拍 2 张以上全部 10s 超时（真机日志：5 个请求在飞，无一条 onDataPrepared）。
+   * 因此这里不再依赖「单槽守卫」这种隐式单发，而是显式串行化：FIFO + 一次仅一个
+   * 在飞；并挂看门狗，超时（含排队积压、本机饿死）时降级用同帧已落盘的原始 JPEG
+   * 交付，保证每帧 result 恰好回调一次且必然早于 Dart 侧 10s 超时。
+   */
+  async saveCameraPhoto(path: string, photoAsset: photoAccessHelper.PhotoAsset,
+    result: Result<boolean>, ctx?: PhotoCaptureContext) {
+    const item: EnhancedDeliveryItem = {
+      photoAsset: photoAsset,
+      path: path,
+      result: result,
+      ctx: ctx,
+      settled: false,
+      watchdogId: undefined,
+      enqueuedAtMs: Date.now()
+    }
+    this._enhancedQueue.push(item)
+    bridgeNativeLog(`[perf-cam] enhanced: enqueue path=${path} qLen=${this._enhancedQueue.length}`)
+    // 入队先挂「绝对截止」看门狗：排队等待中的帧同样受保护，入队→交付绝不超过
+    // _enhancedQueueDeadlineMs（防撞 Dart 10s）。请求真正开始时会改挂「在飞预算」。
+    this.armEnhancedWatchdog(item, this._enhancedQueueDeadlineMs)
+    this.drainEnhancedQueue()
+  }
+
+  /**
+   * 重挂看门狗（修复⑥）。调用方给期望预算，但结果绝不越过「入队绝对截止时间」：
+   * - 入队时传 _enhancedQueueDeadlineMs（只受绝对截止约束）；
+   * - 请求进入在飞时传 _enhancedWatchdogMs（把排队时间还给本帧，但仍不越绝对截止）。
+   */
+  private armEnhancedWatchdog(item: EnhancedDeliveryItem, budgetMs: number): void {
+    if (item.watchdogId !== undefined) {
+      clearTimeout(item.watchdogId)
+      item.watchdogId = undefined
+    }
+    const deadlineLeft = item.enqueuedAtMs + this._enhancedQueueDeadlineMs - Date.now()
+    const effective = Math.max(1, Math.min(budgetMs, deadlineLeft))
+    item.watchdogId = setTimeout(() => {
+      this.onEnhancedWatchdog(item)
+    }, effective)
+  }
+
+  /** 串行 drain：一次仅放行一个增强交付请求（单发是本机 requestImageData 可用前提）。 */
+  private drainEnhancedQueue(): void {
+    if (this._enhancedInFlightItem !== undefined) {
       return
     }
-    try {
+    while (this._enhancedQueue.length > 0) {
+      const item = this._enhancedQueue.shift()!!
+      if (item.settled) {
+        // 排队期间看门狗已兜底结算，跳过（其 result 已回调）。
+        continue
+      }
+      this._enhancedInFlightItem = item
+      bridgeNativeLog(`[perf-cam] enhanced: start requestImageData(HIGH_QUALITY) path=${item.path} qLeft=${this._enhancedQueue.length}`)
+      // 修复⑥：请求真正开始 → 改挂「在飞预算」，把此前排队等待的时间还给本帧
+      // （仍受入队绝对截止约束）。这是修复⑤日志中第 2/4 帧被误杀的唯一原因。
+      this.armEnhancedWatchdog(item, this._enhancedWatchdogMs)
+      const handler = new MediaDataHandler(this, item)
+      // 持有 handler 引用至交付结束（随 item 一起被队列/看门狗引用），
+      // 防止 ArkTS 回收该对象导致 onDataPrepared 永不回调。
+      item.handler = handler
       let requestOptions: photoAccessHelper.RequestOptions = {
         // 兜底路径也需要全质量图：FAST_MODE 仅接收一阶段低质量图会导致成片模糊，
         // 改 HIGH_QUALITY_MODE 接收二阶段全质量图。正常拍照仍以 photoAvailable 原始帧直出为主，
         // 此路径仅在 photoAvailable 未触发时兜底。
         deliveryMode: photoAccessHelper.DeliveryMode.HIGH_QUALITY_MODE,
       }
-      savePhotoPath = path
-      savePhotoCtx = ctx
-      takePhotoResult = result
-
-      let handler = new MediaDataHandler();
-      photoRequestId =
-        await photoAccessHelper.MediaAssetManager.requestImageData(this.uiAbility?.context, photoAsset,
-          requestOptions, handler);
-    } catch (err) {
-      let error = err as BusinessError
-      Logger.error(TAG, `apply saveCameraPhoto failed with error: ${error.code}, ${error.message}`);
-      result.success(false)
+      photoAccessHelper.MediaAssetManager.requestImageData(this.uiAbility?.context, item.photoAsset,
+        requestOptions, handler)
+        .then((id: string) => {
+          bridgeNativeLog(`[perf-cam] enhanced: requestId=${id} path=${item.path}`)
+        })
+        .catch((err: BusinessError) => {
+          Logger.error(TAG, `enhanced requestImageData failed: ${err.code}, ${err.message}`)
+          bridgeNativeLog(`[perf-cam] enhanced: requestImageData FAILED code=${err.code} msg=${err.message}`)
+          this.settleEnhancedFromFallback(item)
+        })
+      return
     }
+  }
+
+  /** 增强图数据到达：写盘并结算；已结算 / 已直出 / 数据异常均按「跳过或兜底」收敛。 */
+  // 注意：由 MediaDataHandler（独立类）转交调用，不能声明为 private，否则 ArkTS 编译报
+  // 「Property 'onEnhancedDataPrepared' is private and only accessible within class」。
+  async onEnhancedDataPrepared(item: EnhancedDeliveryItem, data: ArrayBuffer): Promise<void> {
+    try {
+      if (item.settled) {
+        // 看门狗已兜底并回过 result：晚到数据不得再覆盖已交付文件、更不得二次回调。
+        bridgeNativeLog(`[perf-cam] enhanced: late data skipped (settled) path=${item.path}`)
+        return
+      }
+      if (data === undefined) {
+        Logger.error('Error occurred when preparing data');
+        bridgeNativeLog(`[perf-cam] enhanced: data undefined, fallback path=${item.path}`)
+        await this.settleEnhancedFromFallback(item)
+        return
+      }
+      if (item.ctx?.directDone === true) {
+        // 同帧 photoAvailable 已直出写盘并回调过 result：跳过增强覆盖（否则原始 JPEG
+        // 被相册增强管线二次处理），且不得重复回调 result，只静默结算释放闸门。
+        Logger.info(TAG, 'enhanced: skip overwrite, direct JPEG already saved')
+        bridgeNativeLog(`[perf-cam] enhanced: skip overwrite (directDone) path=${item.path}`)
+        item.settled = true
+        return
+      }
+      // 直接落盘全质量 JPEG buffer，不做 createPixelMap + effectKit 重编码：
+      // 避免在主线程逐像素处理后阻塞拍照（速度），也避免二次压缩损失清晰度（质量）。
+      // 成片颜色由应用内 Dart 处理器统一处理，无需在原生层二次上色。
+      // TRUNC：兜底路径可能已写入更大的原始 JPEG，不截断会残留尾部字节。
+      const file = await fileIo.open(item.path,
+        fileIo.OpenMode.CREATE | fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.TRUNC)
+      const written = fileIo.writeSync(file.fd, data);
+      fileIo.closeSync(file);
+      Logger.info(TAG, `enhanced delivered bytes=${written}`);
+      bridgeNativeLog(`[perf-cam] enhanced: saved bytes=${written} to ${item.path}`)
+      this.settleEnhancedItem(item, true)
+    } catch (error) {
+      Logger.error(`Failed to write the photo file.code ${error.code},message is ${error.message}`);
+      bridgeNativeLog(`[perf-cam] enhanced: write FAILED code=${error.code} msg=${error.message}`)
+      await this.settleEnhancedFromFallback(item)
+    } finally {
+      // 正常交付 / 跳过覆盖 / 兜底失败都要释放串行闸门（幂等：非在飞项时无副作用）。
+      this.finishEnhancedItem(item)
+    }
+  }
+
+  /** 看门狗：在飞交付未按时回调（本机并发饿死、卡片异常）时兜底，避免 10s 超时。 */
+  private onEnhancedWatchdog(item: EnhancedDeliveryItem): void {
+    if (item.settled) {
+      return
+    }
+    bridgeNativeLog(`[perf-cam] enhanced: WATCHDOG fired path=${item.path}`)
+    this.settleEnhancedFromFallback(item)
+  }
+
+  /**
+   * 兜底结算（看门狗超时 / requestImageData reject / 写盘失败）。
+   *
+   * 修复⑤：不再拿「早帧文件」当成品来源。真机日志证明原实现把早帧原样拷成成片
+   * （`fallback raw JPEG bytes=2573382` 与同帧 `earlyFrameFd: copied bytes=2573382`
+   * 逐字节相同）→ 成片与早帧完全一样，与「先快后真」契约冲突。
+   * 现改为「现取一次 asset 只读 fd 直拷」：这是媒体库当前真实落盘版本，可能已被
+   * 升级为二阶段全清图（早帧副本是 ~0.6s 时点的版本）；本次拷贝字节数与早帧字节数
+   * 一并打日志，便于判定媒体库是否升级了磁盘文件。
+   * 仅当连 asset 原文件都读不到时，才退回早帧副本（内容同源、仅版本可能更早），
+   * 避免丢照片；全都失败才 success(false)，让 Dart 立即报错而不是悬挂 10s。
+   */
+  private async settleEnhancedFromFallback(item: EnhancedDeliveryItem): Promise<void> {
+    if (item.settled || item.ctx?.directDone === true) {
+      // 已结算，或同帧 photoAvailable 已直出（不得用兜底图覆盖原始 JPEG）：
+      // 统一走 settleEnhancedItem 静默收口并释放闸门（result 已回过则不再重复回调）。
+      this.settleEnhancedItem(item, true)
+      return
+    }
+    bridgeNativeLog(`[perf-cam] enhanced: fallback -> fresh asset read ` +
+      `earlyFrameBytes=${this.earlyFrameSize(item)} path=${item.path}`)
+    this.settleEnhancedFromAssetFd(item, 1)
+  }
+
+  /** 同帧早帧副本字节数（无早帧返回 -1）：仅作日志对照，判定媒体库是否升级了原文件。 */
+  private earlyFrameSize(item: EnhancedDeliveryItem): number {
+    const earlyPath = item.ctx?.earlyFramePath
+    if (earlyPath === undefined) {
+      return -1
+    }
+    try {
+      return fileIo.statSync(earlyPath).size
+    } catch (e) {
+      return -1
+    }
+  }
+
+  /** 兜底首选：直接取 asset 只读 fd 直拷到目标路径（带一次重试，覆盖 14000011 抖动）。 */
+  private settleEnhancedFromAssetFd(item: EnhancedDeliveryItem, attempt: number): void {
+    item.photoAsset.getReadOnlyFd().then((fd: number) => {
+      // 注意：fd 必须等 copyFile 真正完成后再 close——不能用 finally 同步关闭，
+      // 否则会在异步拷贝在飞时把源 fd 关掉（拷贝失败/截断）。
+      let destFd: number = -1
+      try {
+        destFd = fileIo.openSync(item.path,
+          fileIo.OpenMode.CREATE | fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.TRUNC).fd
+      } catch (e) {
+        bridgeNativeLog(`[perf-cam] enhanced: fallback fd open FAILED ${JSON.stringify(e)}`)
+        item.photoAsset.close(fd).catch(() => {
+        })
+        this.settleEnhancedItem(item, false)
+        return
+      }
+      fileIo.copyFile(fd, destFd).then(() => {
+        fileIo.closeSync(destFd)
+        item.photoAsset.close(fd).catch(() => {
+        })
+        const size = fileIo.statSync(item.path).size
+        bridgeNativeLog(`[perf-cam] enhanced: fallback asset copy bytes=${size} ` +
+          `earlyFrameBytes=${this.earlyFrameSize(item)} attempt=${attempt}`)
+        this.settleEnhancedItem(item, size > 20 * 1024)
+      }).catch((e: BusinessError) => {
+        fileIo.closeSync(destFd)
+        item.photoAsset.close(fd).catch(() => {
+        })
+        bridgeNativeLog(`[perf-cam] enhanced: fallback fd copy FAILED code=${e.code}`)
+        this.settleEnhancedFromEarlyFrame(item)
+      })
+    }).catch((err: BusinessError) => {
+      if (attempt < 2) {
+        bridgeNativeLog(`[perf-cam] enhanced: fallback getReadOnlyFd FAILED code=${err.code} attempt=${attempt}, retry`)
+        setTimeout(() => {
+          this.settleEnhancedFromAssetFd(item, attempt + 1)
+        }, 150)
+      } else {
+        bridgeNativeLog(`[perf-cam] enhanced: fallback getReadOnlyFd FAILED after ${attempt} attempts code=${err.code}`)
+        this.settleEnhancedFromEarlyFrame(item)
+      }
+    })
+  }
+
+  /**
+   * 最后手段：连 asset 原文件都读不到时，退回同帧早帧副本（内容与成片同源、
+   * 仅版本可能更早），以免丢照片；早帧不可用才 success(false)。
+   * 该分支只在 fd 直读彻底失败时触发，正常兜底不会走到这里。
+   */
+  private settleEnhancedFromEarlyFrame(item: EnhancedDeliveryItem): void {
+    const earlyPath = item.ctx?.earlyFramePath
+    if (earlyPath !== undefined) {
+      try {
+        if (fileIo.statSync(earlyPath).size > 20 * 1024) {
+          const src = fileIo.openSync(earlyPath, fileIo.OpenMode.READ_ONLY)
+          const dest = fileIo.openSync(item.path,
+            fileIo.OpenMode.CREATE | fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.TRUNC)
+          try {
+            fileIo.copyFileSync(src.fd, dest.fd)
+          } finally {
+            fileIo.closeSync(src)
+            fileIo.closeSync(dest)
+          }
+          const size = fileIo.statSync(item.path).size
+          bridgeNativeLog(`[perf-cam] enhanced: LAST-RESORT early frame copy bytes=${size} to ${item.path}`)
+          this.settleEnhancedItem(item, true)
+          return
+        }
+        bridgeNativeLog(`[perf-cam] enhanced: LAST-RESORT early frame too small`)
+      } catch (e) {
+        bridgeNativeLog(`[perf-cam] enhanced: LAST-RESORT early frame FAILED ${JSON.stringify(e)}`)
+      }
+    }
+    this.settleEnhancedItem(item, false)
+  }
+
+  /** 结算一帧增强交付：result 恰好回调一次，并释放串行闸门放行下一帧。 */
+  private settleEnhancedItem(item: EnhancedDeliveryItem, ok: boolean): void {
+    if (!item.settled) {
+      // ctx 存在时统一经 settleCaptureCtx 收口（它自带「恰好一次」守卫，可安全
+      // 覆盖「photoAvailable 已直出并回过分」的场景，不再重复 success）。
+      const ctx = item.ctx
+      if (ctx !== undefined) {
+        settleCaptureCtx(ctx, ok)
+      } else {
+        item.result.success(ok)
+      }
+    }
+    item.settled = true
+    this.finishEnhancedItem(item)
+  }
+
+  /** 释放串行闸门（仅当结算的确实是在飞项）并继续 drain 下一帧。 */
+  private finishEnhancedItem(item: EnhancedDeliveryItem): void {
+    if (item.watchdogId !== undefined) {
+      clearTimeout(item.watchdogId)
+      item.watchdogId = undefined
+    }
+    if (this._enhancedInFlightItem === item) {
+      this._enhancedInFlightItem = undefined
+    }
+    this.drainEnhancedQueue()
   }
 
   /**
@@ -1300,8 +1695,9 @@ export class CameraState implements StreamHandler {
    * （分段/增强只影响 requestImageData 的交付时机，不影响磁盘文件），
    * fd 直读绕开 MediaAssetManager 请求队列，~100ms 内完成拷贝。
    * 仅作早帧（初版成片/缩略图），成片仍走 HIGH_QUALITY 增强交付，互不影响。
+   * ctx.earlyFramePath 记录该文件：增强交付看门狗超时时以它作为成片兜底来源。
    */
-  private deliverEarlyFrameFromAsset(photoAsset: photoAccessHelper.PhotoAsset): void {
+  private deliverEarlyFrameFromAsset(photoAsset: photoAccessHelper.PhotoAsset, ctx?: PhotoCaptureContext): void {
     const sink = this._photoEarlyFrameListener?.events ?? null
     if (!sink) {
       Logger.info(TAG, 'deliverEarlyFrameFromAsset: early-frame sink not ready, skip');
@@ -1313,7 +1709,7 @@ export class CameraState implements StreamHandler {
       return
     }
     const earlyPath = `${context.cacheDir}/anim_early_${Date.now()}.jpg`
-    this.tryEarlyFrameFd(photoAsset, sink, earlyPath, 1)
+    this.tryEarlyFrameFd(photoAsset, sink, earlyPath, 1, ctx)
   }
 
   /**
@@ -1322,7 +1718,7 @@ export class CameraState implements StreamHandler {
    * 共 3 次，均失败则放弃早帧（成片路径不受影响）。
    */
   private tryEarlyFrameFd(photoAsset: photoAccessHelper.PhotoAsset,
-    sink: EventSink, earlyPath: string, attempt: number): void {
+    sink: EventSink, earlyPath: string, attempt: number, ctx?: PhotoCaptureContext): void {
     photoAsset.getReadOnlyFd().then(async (fd: number) => {
       try {
         const dest = fileIo.openSync(earlyPath,
@@ -1331,6 +1727,10 @@ export class CameraState implements StreamHandler {
         fileIo.closeSync(dest)
         const size = fileIo.statSync(earlyPath).size
         if (size > 20 * 1024) {
+          // 记录本帧原始 JPEG 落盘路径：增强交付看门狗超时时据此降级交付成片。
+          if (ctx !== undefined) {
+            ctx.earlyFramePath = earlyPath
+          }
           bridgeNativeLog(`[perf-cam] earlyFrameFd: copied bytes=${size} ` +
             `elapsed=${Date.now() - takePhotoStartAt}ms attempt=${attempt} to ${earlyPath}`)
           sink.success(earlyPath)
@@ -1349,7 +1749,7 @@ export class CameraState implements StreamHandler {
         bridgeNativeLog(`[perf-cam] earlyFrameFd: getReadOnlyFd FAILED code=${err.code} ` +
           `attempt=${attempt}, retry in 150ms`)
         setTimeout(() => {
-          this.tryEarlyFrameFd(photoAsset, sink, earlyPath, attempt + 1)
+          this.tryEarlyFrameFd(photoAsset, sink, earlyPath, attempt + 1, ctx)
         }, 150)
       } else {
         bridgeNativeLog(`[perf-cam] earlyFrameFd: getReadOnlyFd FAILED after ${attempt} ` +
@@ -1395,6 +1795,15 @@ export class CameraState implements StreamHandler {
     // OHOS setExposureBias 的单位即 EV（stops），必须把 [0,1] 解码成真实 EV，
     // 否则原字面 [0,1] 会被当成 [0,1]EV，导致 -3 曝光仍是中性（等效原相机 0 曝光）。
     const ev = (brightness - 0.5) * 6.0;
+    // AE 锁定态下 bias 不生效（对齐原相机「锁定后拖动拉曝光」）：
+    // 先回 AUTO 让新 EV 生效，再用锁定时的测光点重新锁定，保持 AE 语义不变。
+    if (this._aeLocked && this._aeLockPoint !== undefined) {
+      this.session?.setExposureMode(camera.ExposureMode.EXPOSURE_MODE_AUTO)
+      this.session?.setExposureBias(ev)
+      this.session?.setMeteringPoint(this._aeLockPoint)
+      this.session?.setExposureMode(camera.ExposureMode.EXPOSURE_MODE_LOCKED)
+      return
+    }
     this.session?.setExposureBias(ev)
   }
 
@@ -1409,10 +1818,16 @@ export class CameraState implements StreamHandler {
       this.setFocusPoint(previewSize, x, y)
       // 曝光：锁定模式 + 测光点
       if (this.session?.isExposureModeSupported(camera.ExposureMode.EXPOSURE_MODE_LOCKED)) {
-        this.session?.setMeteringPoint({ x: y / previewSize.getHeight(), y: 1 - x / previewSize.getWidth() })
+        const meteringPoint: camera.Point = { x: y / previewSize.getHeight(), y: 1 - x / previewSize.getWidth() }
+        this.session?.setMeteringPoint(meteringPoint)
         this.session?.setExposureMode(camera.ExposureMode.EXPOSURE_MODE_LOCKED)
+        // 记下锁定状态与测光点：锁定后拖动曝光需用同一测光点重新锁定
+        this._aeLocked = true
+        this._aeLockPoint = meteringPoint
       }
     } else {
+      this._aeLocked = false
+      this._aeLockPoint = undefined
       if (this.session?.isExposureModeSupported(camera.ExposureMode.EXPOSURE_MODE_AUTO)) {
         this.session?.setExposureMode(camera.ExposureMode.EXPOSURE_MODE_AUTO)
       }
@@ -1719,15 +2134,6 @@ export class CameraState implements StreamHandler {
     this._handlePhotoCb = value
   }
 
-  public set photoPathResult(value: PhotoPathResult) {
-    // 连拍安全：每次拍照入队独立的请求上下文（两通道共享同一引用），
-    // photoAvailable / photoAssetAvailable 各自从对应队列按序消费，
-    // 后一次 takePhoto 不再覆盖前一次的路径/回调。
-    const ctx: PhotoCaptureContext = { path: value.path, result: value.result, directDone: false }
-    this._photoDirectQueue.push(ctx)
-    this._photoAssetQueue.push(ctx)
-  }
-
   // 分阶段拍照早帧监听器引用（由插件在 initCamera 时注入，Dart 订阅通道后才非空）
   public set photoEarlyFrameListener(value: PhotoEarlyFrameStreamListener | null) {
     this._photoEarlyFrameListener = value
@@ -1887,46 +2293,33 @@ export class CameraState implements StreamHandler {
   }
 }
 
-let savePhotoPath: string | undefined = undefined
-let takePhotoResult: Result<boolean> | undefined = undefined
-let photoRequestId: string | undefined = undefined
 let takePhotoStartAt: number = 0
-// 在途增强兜底请求的本帧上下文：MediaDataHandler.onDataPrepared 据此判断
-// photoAvailable 直出是否已在请求在途期间完成（directDone），完成则跳过写盘。
-let savePhotoCtx: PhotoCaptureContext | undefined = undefined
 
+// 增强兜底交付 handler（修复④）：仅作适配层——数据到达即转交 CameraState
+// onEnhancedDataPrepared 统一处理（写盘 / 兜底 / 结算 / 释放串行闸门），
+// 自身不持有 path/result/ctx 单槽位，连拍时多个在途请求互不覆盖。
+//
+// 修复⑤（关键，根因）：`onDataPrepared` 必须是**箭头函数属性**，不能写成类方法。
+// 框架回调不保证按 `handler.onDataPrepared(...)` 绑定调用；一旦 unbound 调用，
+// 类方法里的 `this` 为 undefined，回调在取成员时抛错并被框架静默吞掉 →
+// onDataPrepared 永不生效（真机表现：`requestId` 正常返回、7/7 帧零回调、
+// 只能等看门狗兜底）。旧实现用模块级全局、完全不依赖 this，反而能正常交付。
+// 官方示例同样注明「使用箭头函数确保 this 引用不会丢失」。
 class MediaDataHandler implements photoAccessHelper.MediaAssetDataHandler<ArrayBuffer> {
-  async onDataPrepared(data: ArrayBuffer) {
-    if (data === undefined || savePhotoPath === undefined || takePhotoResult === undefined) {
-      Logger.error('Error occurred when preparing data');
-      return;
-    }
-    // directDone 防护：请求在途期间 photoAvailable 已直出写盘成功（同帧 ctx.directDone
-    // 置位）时，此处晚到/交错的增强图必须跳过——否则会覆盖已直出的原始 JPEG，
-    // 成片被相册增强管线二次处理（破坏「原始直出、色彩与取景器一致」契约）。
-    // 正常时序下增强兜底仅在直出失败时发起；此防护覆盖任意事件交错场景。
-    if (savePhotoCtx?.directDone) {
-      Logger.info(`photoAssetAvailable: skip enhanced overwrite (direct JPEG saved) elapsed=${Date.now() - takePhotoStartAt}ms`);
-      photoRequestId = undefined;
-      savePhotoCtx = undefined;
-      return;
-    }
-    // 直接落盘全质量 JPEG buffer，不做 createPixelMap + effectKit 重编码：
-    // 避免在主线程逐像素处理后阻塞拍照（速度），也避免二次压缩损失清晰度（质量）。
-    // 成片颜色由应用内 Dart 处理器统一处理，无需在原生层二次上色。
-    try {
-      const file = await fileIo.open(savePhotoPath, fileIo.OpenMode.CREATE | fileIo.OpenMode.READ_WRITE);
-      const written = fileIo.writeSync(file.fd, data);
-      fileIo.closeSync(file);
-      Logger.info(`photoAssetAvailable: saved bytes=${written} elapsed=${Date.now() - takePhotoStartAt}ms`);
-      takePhotoResult.success(true);
-    } catch (error) {
-      Logger.error(`Failed to write the photo file.code ${error.code},message is ${error.message}`);
-      takePhotoResult?.success(false);
-    } finally {
-      photoRequestId = undefined;
-      savePhotoCtx = undefined;
-    }
+  private owner: CameraState
+  private item: EnhancedDeliveryItem
+
+  constructor(owner: CameraState, item: EnhancedDeliveryItem) {
+    this.owner = owner
+    this.item = item
+  }
+
+  onDataPrepared = async (data: ArrayBuffer, map?: Map<string, string>): Promise<void> => {
+    // 首行只依赖闭包（不取 this.owner）之外的最小状态：即使后续处理抛错，
+    // 这一行也能证明「回调确实到达」。
+    bridgeNativeLog(`[perf-cam] enhanced: onDataPrepared enter bytes=${data === undefined ? -1 : data.byteLength} ` +
+      `quality=${map?.get('quality') ?? 'n/a'} path=${this.item.path}`)
+    await this.owner.onEnhancedDataPrepared(this.item, data)
   }
 }
 
@@ -1943,7 +2336,8 @@ class EarlyFrameHandler implements photoAccessHelper.MediaAssetDataHandler<Array
     this.sink = sink
   }
 
-  async onDataPrepared(data: ArrayBuffer) {
+  // 同 MediaDataHandler：必须以箭头函数属性声明，避免框架 unbound 调用时丢 this。
+  onDataPrepared = async (data: ArrayBuffer, map?: Map<string, string>): Promise<void> => {
     if (data === undefined || data.byteLength === 0) {
       Logger.error('EarlyFrameHandler: data is empty');
       return;

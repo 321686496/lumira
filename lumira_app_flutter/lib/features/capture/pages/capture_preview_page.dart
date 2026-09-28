@@ -61,10 +61,17 @@ class CapturePreviewPage extends ConsumerStatefulWidget {
     this.aspectRatio,
     this.challengeId,
     this.pendingFinal = false,
+    this.batchCount = 1,
   });
 
   /// 路由参数：photoUrl（拍摄后的照片 URL）
   final String? photoUrl;
+
+  /// 路由参数：本「连拍批次」的快门总数（单张拍摄 = 1）。
+  /// 连拍时最后一张落库最晚（拍照串行 ~1.9s/张 + 后处理串行），用户在等待期
+  /// 点缩略图进来时 DB 里还没有这张记录；此时必须允许「落库后把单张形态升级为
+  /// 图库」，否则会被永久锁在单张、无法左右滑动查看本批次其它照片。
+  final int batchCount;
 
   /// 先快后真：本次以 early 早帧（低质量）打开、full-res 后台完成后需原位升级。
   /// true 时预览页监听 [captureThumbnailProvider] 从 interim→final，替换 _photoUrl。
@@ -152,11 +159,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 打开时的 early 早帧路径（升级后 evict 其 FileImage 缓存）。
   String? _interimUrl;
 
-  /// 先快后真舞台形态锁定：以 pendingFinal 早帧打开时当前照片尚未落库，
-  /// 首次加载退化为单张 PhotoView；full-res 落库后若切换为 PhotoViewGallery，
-  /// 组件树类型变化会重建 PhotoView → 用户正在查看的缩放/位移被重置。
-  /// 故锁定单张形态直到本页销毁（重新打开预览恢复完整历史滑动）。
-  bool _singleStageLocked = false;
+  String? _pendingPhotoId;
 
   /// 监听 captureThumbnailProvider 从 interim→final 的升级订阅。
   ProviderSubscription<CaptureThumbnailState>? _upgradeSub;
@@ -224,6 +227,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     _localPostProcess =
         PostProcess(color: const PostProcessColor(), cropRatio: captureRatio);
     _currentPhotoId = widget.photoId;
+    _pendingPhotoId = widget.photoId;
     _pageController = PageController(initialPage: 0);
     _loadHistoryPhotos(); // fire-and-forget; loads DB history + original path
     // 先快后真：以 early 早帧打开时，监听 full-res 完成 → 原位升级 _photoUrl。
@@ -234,6 +238,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         captureThumbnailProvider,
         (prev, next) {
           if (!_isPendingFinal) return;
+          if (_pendingPhotoId != null && next.photoId != _pendingPhotoId) return;
           if (next.status == CaptureThumbnailStatus.final_ &&
               next.finalPath != null &&
               !_isEdited) {
@@ -314,19 +319,40 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       }
 
       // 定位当前照片在历史列表中的索引
-      final idx = allPhotos.indexWhere((p) => p.id == widget.photoId);
+      final targetId = _currentPhotoId ?? widget.photoId;
+      final idx = allPhotos.indexWhere((p) => p.id == targetId);
       if (idx < 0) {
-        // 当前照片不在 DB 中（可能尚未落库）：退化为单张预览，并锁定舞台
-        // 形态（见 _singleStageLocked 注释）——full-res 落库后再次进入时不再
-        // 切换为 Gallery，保住用户缩放查看中的缩放/位移状态。
-        _singleStageLocked = true;
+        // 成片尚未落库（早帧已可见）：把这张作为「挂起页」插到列表最前，让舞台
+        // 从第一帧起就是可左右滑动的 PhotoViewGallery——早帧期间也能滑动，且
+        // 成片落库后列表长度/顺序不变，PageView 与用户当前的缩放/位移全部保留
+        //（不再退化成单张 PhotoView，避免升级时整棵子树重建导致缩放丢失）。
+        final stubId = targetId ?? '';
+        final hasStub =
+            _historyPhotos.isNotEmpty && _historyPhotos.first.id == stubId;
+        final stub = GalleryItemRecord(
+          id: stubId,
+          filePath: _photoUrl,
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+        );
+        setState(() {
+          _historyPhotos = [
+            stub,
+            ...(hasStub ? _historyPhotos.skip(1) : allPhotos),
+          ];
+          if (!hasStub) _currentIndex = 0;
+        });
         _loadOriginalPath();
         return;
       }
-      if (_singleStageLocked) {
-        // 已锁定单张形态：仅恢复当前照片落库后的状态（路径/后期参数/变换），
-        // 不重建历史列表（组件树不变化 → PhotoView 缩放状态延续）。
-        _applyPhotoFromHistory(allPhotos[idx]);
+      if (_historyPhotos.isNotEmpty) {
+        final keepIndex = _currentIndex.clamp(0, allPhotos.length - 1);
+        setState(() {
+          _historyPhotos = allPhotos;
+          _currentIndex = keepIndex;
+        });
+        if (allPhotos[keepIndex].id == _currentPhotoId) {
+          _applyPhotoFromHistory(allPhotos[keepIndex]);
+        }
         return;
       }
 
@@ -384,6 +410,11 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   void _onPageChanged(int index) {
     if (index < 0 || index >= _historyPhotos.length) return;
     _currentIndex = index;
+    if (_isPendingFinal && _historyPhotos[index].id == _pendingPhotoId) {
+      // 挂起页（早帧尚未落库）：保持当前视图状态，不按 DB 记录重置，
+      // 否则会被误判为「原图未保留」而弹出只读横幅。
+      return;
+    }
     _applyPhotoFromHistory(_historyPhotos[index]);
   }
 
@@ -1490,7 +1521,10 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
             ),
           ),
           // 2. 底部编辑 dock：心情/场景 pill 行 + 工具条 + 滑出面板
-          if (_uiVisible) _buildEditDock(tokens, isThemed),
+          Offstage(
+            offstage: !_uiVisible,
+            child: _buildEditDock(tokens, isThemed),
+          ),
         ],
       ),
     );

@@ -102,10 +102,15 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
   @override
   void didUpdateWidget(covariant TemplateInfoCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // 切换模板（id 变化）时重置为展开
+    // 切换模板（id 变化）时重置为展开。
+    // Riverpod 禁止在 didUpdateWidget 等 widget 生命周期内直接改 provider，
+    // 故先取好容器，延后到帧末再写入。
     if (oldWidget.template.meta.id != widget.template.meta.id) {
-      ref.read(CaptureState.templateInfoCardExpandedProvider.notifier).state =
-          true;
+      final container = ProviderScope.containerOf(context, listen: false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        container.read(CaptureState.templateInfoCardExpandedProvider.notifier)
+            .state = true;
+      });
     }
   }
 
@@ -166,6 +171,12 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
       if (pose.description.trim().isNotEmpty) _InfoTab.pose,
     ];
   }
+
+  /// 解析最终选中的分区：持久化值在当前模板有内容时沿用，否则回落到默认优先级。
+  _InfoTab? _resolveSelected(_InfoTab? persisted, List<_InfoTab> available) =>
+      (persisted != null && available.contains(persisted))
+          ? persisted
+          : _defaultTab(available);
 
   /// 默认选中优先级：姿势描述 > 场景指南 > 道具信息（取第一个可用的）。
   _InfoTab? _defaultTab(List<_InfoTab> available) {
@@ -255,11 +266,10 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
     final pose = poses.isEmpty ? const Pose() : poses[poseIndex];
 
     final available = _availableTabs(pose);
-    final persisted =
-        _InfoTab.fromKey(ref.watch(CaptureState.templateInfoCardTabProvider));
-    final selected = (persisted != null && available.contains(persisted))
-        ? persisted
-        : _defaultTab(available);
+    final selected = _resolveSelected(
+      _InfoTab.fromKey(ref.watch(CaptureState.templateInfoCardTabProvider)),
+      available,
+    );
     final selectedIndex =
         selected == null ? -1 : available.indexOf(selected);
 
@@ -273,6 +283,24 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
       );
     }
     _lastAvailable = available;
+
+    // 让内容区当前页始终跟随「选中的 tab」（控制器只在 pageKey 变化时重建，
+    // 故以下两种情况下它与选中态会不一致，需在此主动同步）：
+    // 1) 持久化 tab 异步载入：首帧先按默认分区建控制器，载入完成后要回到持久化分区；
+    // 2) 折叠会移除 PageView，再展开时滚动位置回到创建时的 initialPage，要回到当前分区。
+    // 回调内用 ref.read 取「最新」选中态（而非本次 build 的闭包值），且滚动中不同步，
+    // 避免与左右滑动 / tab 切换动画互相打断。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_pageController.hasClients) return;
+      if (_pageController.position.isScrollingNotifier.value) return;
+      final wanted = _resolveSelected(
+        _InfoTab.fromKey(ref.read(CaptureState.templateInfoCardTabProvider)),
+        _lastAvailable,
+      );
+      final idx = wanted == null ? -1 : _lastAvailable.indexOf(wanted);
+      if (idx < 0 || _pageController.page?.round() == idx) return;
+      _pageController.jumpToPage(idx);
+    });
 
     final radius = BorderRadius.circular(expanded ? 14 : 24);
 

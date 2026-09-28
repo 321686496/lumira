@@ -145,12 +145,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           final aspectRatio = state.queryParams['aspectRatio'];
           final challengeId = state.queryParams[RouteNames.paramChallengeId];
           final pendingFinal = state.queryParams['pendingFinal'] == '1';
+          // batchCount：本连拍批次快门总数（>1 时预览页允许落库后从单张升级为图库）
+          final batchCount =
+              int.tryParse(state.queryParams['batchCount'] ?? '') ?? 1;
           return CapturePreviewPage(
             photoUrl: photoUrl,
             photoId: photoId,
             aspectRatio: aspectRatio,
             challengeId: challengeId,
             pendingFinal: pendingFinal,
+            batchCount: batchCount,
           );
         },
       ),

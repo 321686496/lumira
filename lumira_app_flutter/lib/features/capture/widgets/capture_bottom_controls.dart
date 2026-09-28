@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/capture_appearance.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/effects/color_picker.dart';
 import '../../../shared/widgets/lumira/_internal/lumira_theme_resolver.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/capture_state.dart';
@@ -90,6 +91,7 @@ class CaptureBottomBar extends ConsumerWidget {
     this.onHeightChanged,
     this.paramPanelOverlay = false,
     this.hideTemplatesTool = false,
+    this.burstProgress,
   });
 
   final bool isFullscreen;
@@ -107,6 +109,9 @@ class CaptureBottomBar extends ConsumerWidget {
 
   /// true 时隐藏「模板」工具栏（供模板预览页使用：预览只调参数，不选模板）。
   final bool hideTemplatesTool;
+
+  /// 连拍处理进度（形如「3/5」；null = 非连拍）→ 透传给角标缩略图显示。
+  final String? burstProgress;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -166,6 +171,7 @@ class CaptureBottomBar extends ConsumerWidget {
                 onThumbnailTap: onThumbnailTap,
                 thumbnailKey: thumbnailKey,
                 locked: isTrialMode,
+                burstProgress: burstProgress,
               ),
             ],
           ),
@@ -923,202 +929,6 @@ class _SavedColorActionSheet extends ConsumerWidget {
 
 /// 色环展开状态（仅 capture_page 内部使用）
 final _ringExpandedProvider = StateProvider<bool>((ref) => false);
-
-/// 方形 HSV 取色盘（色相 + 饱和度/亮度二维面板）
-/// 下方为紧凑横向色相条，色相选择保留足够拖动范围。
-class SquareColorPicker extends StatefulWidget {
-  const SquareColorPicker({required this.onColorChanged});
-  final ValueChanged<Color> onColorChanged;
-
-  @override
-  State<SquareColorPicker> createState() => SquareColorPickerState();
-}
-
-class SquareColorPickerState extends State<SquareColorPicker> {
-  static const _panelSize = 118.0;
-  static const _hueBarWidth = 140.0;
-
-  double _hue = 40.0; // 默认暖白附近
-  double _saturation = 0.6;
-  double _value = 1.0;
-
-  @override
-  Widget build(BuildContext context) {
-    const panelSize = _panelSize;
-    const hueBarWidth = _hueBarWidth;
-    const hueBarHeight = 10.0;
-    final currentColor =
-        HSVColor.fromAHSV(1.0, _hue, _saturation, _value).toColor();
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          width: _hueBarWidth,
-          height: panelSize,
-          child: GestureDetector(
-            onPanDown: (d) => _handleSv(d.localPosition, panelSize),
-            onPanUpdate: (d) => _handleSv(d.localPosition, panelSize),
-            child: CustomPaint(
-              painter: SvPanelPainter(
-                hue: _hue,
-                saturation: _saturation,
-                value: _value,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: hueBarWidth,
-          height: hueBarHeight,
-          child: GestureDetector(
-            onPanDown: (d) => _handleHue(d.localPosition),
-            onPanUpdate: (d) => _handleHue(d.localPosition),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(hueBarHeight / 2),
-              child: CustomPaint(painter: HueBarPainter(hue: _hue)),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        // 当前色预览
-        Container(
-          width: panelSize,
-          height: 28,
-          decoration: BoxDecoration(
-            color: currentColor,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: Colors.white24, width: 1),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            '#${currentColor.red.toRadixString(16).padLeft(2, '0').toUpperCase()}'
-            '${currentColor.green.toRadixString(16).padLeft(2, '0').toUpperCase()}'
-            '${currentColor.blue.toRadixString(16).padLeft(2, '0').toUpperCase()}',
-            style: TextStyle(
-              color: _value > 0.5 ? Colors.black54 : Colors.white70,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _handleSv(Offset localPos, double size) {
-    final s = (localPos.dx / size).clamp(0.0, 1.0);
-    // Y 轴反向：顶部=亮度1.0，底部=亮度0.0
-    final v = (1.0 - localPos.dy / size).clamp(0.0, 1.0);
-    setState(() {
-      _saturation = s;
-      _value = v;
-    });
-    widget.onColorChanged(
-        HSVColor.fromAHSV(1.0, _hue, _saturation, _value).toColor());
-  }
-
-  void _handleHue(Offset localPos) {
-    final h = (localPos.dx / _hueBarWidth * 360.0).clamp(0.0, 360.0);
-    setState(() => _hue = h);
-    widget.onColorChanged(
-        HSVColor.fromAHSV(1.0, _hue, _saturation, _value).toColor());
-  }
-}
-
-/// SV 面板绘制器：横向饱和度，纵向亮度
-class SvPanelPainter extends CustomPainter {
-  const SvPanelPainter({
-    required this.hue,
-    required this.saturation,
-    required this.value,
-  });
-  final double hue;
-  final double saturation;
-  final double value;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    // 基色：当前色相的纯色
-    final baseColor = HSVColor.fromAHSV(1.0, hue, 1.0, 1.0).toColor();
-
-    // 横向：白→纯色（饱和度）
-    final saturatePaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-        colors: [Colors.white, baseColor],
-      ).createShader(rect);
-    canvas.drawRect(rect, saturatePaint);
-
-    // 纵向：透明→黑（亮度）
-    final valuePaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Colors.transparent, Colors.black],
-      ).createShader(rect);
-    canvas.drawRect(rect, valuePaint);
-
-    // 指示器圆圈
-    final cx = saturation * size.width;
-    final cy = (1.0 - value) * size.height;
-    final indicator = Offset(cx, cy);
-    canvas.drawCircle(indicator, 8, Paint()..color = Colors.white);
-    canvas.drawCircle(
-        indicator,
-        8,
-        Paint()
-          ..color = Colors.black38
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5);
-  }
-
-  @override
-  bool shouldRepaint(covariant SvPanelPainter old) =>
-      old.hue != hue || old.saturation != saturation || old.value != value;
-}
-
-/// 色相条绘制器
-class HueBarPainter extends CustomPainter {
-  const HueBarPainter({required this.hue});
-  final double hue;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final paint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-        colors: [
-          for (var h = 0; h <= 360; h += 30)
-            HSVColor.fromAHSV(1.0, h.toDouble(), 1.0, 1.0).toColor(),
-        ],
-      ).createShader(rect);
-    canvas.drawRect(rect, paint);
-
-    // 指示器
-    final x = (hue / 360.0) * size.width;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromCenter(
-            center: Offset(x, size.height / 2),
-            width: 6,
-            height: size.height + 4),
-        const Radius.circular(3),
-      ),
-      Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.fill,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant HueBarPainter old) => old.hue != hue;
-}
 
 /// 保存当前自定义补光色的输入区（保存结果显示在补光主行）。
 class SaveColorsRow extends ConsumerStatefulWidget {
@@ -1992,6 +1802,7 @@ class CaptureButtonRow extends ConsumerWidget {
     required this.onThumbnailTap,
     this.thumbnailKey,
     this.locked = false,
+    this.burstProgress,
   });
 
   final VoidCallback onCapture;
@@ -2001,6 +1812,9 @@ class CaptureButtonRow extends ConsumerWidget {
 
   /// 试用模式：快门替换为锁定态，点击提示解锁
   final bool locked;
+
+  /// 连拍处理进度（形如「3/5」；null = 非连拍）→ 角标缩略图底部进度条
+  final String? burstProgress;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -2021,7 +1835,11 @@ class CaptureButtonRow extends ConsumerWidget {
           // thumbnailKey：水印动画 Phase 4 通过此 key 读取角标全局 Rect
           // 试用模式隐藏缩略图（不产生照片）
           if (!locked)
-            CaptureThumbnail(key: thumbnailKey, onTap: onThumbnailTap),
+            CaptureThumbnail(
+              key: thumbnailKey,
+              onTap: onThumbnailTap,
+              burstProgress: burstProgress,
+            ),
           // 拍摄按钮（中）：试用模式替换为锁定快门
           locked
               ? LockedCaptureButton(visual: visual)
