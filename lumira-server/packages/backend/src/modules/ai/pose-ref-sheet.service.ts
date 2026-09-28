@@ -1,5 +1,5 @@
 // lumira-server/packages/backend/src/modules/ai/pose-ref-sheet.service.ts
-// T3 姿势参考面片服务（Task 6）：textChat 生成「shared 共享锚点 + perPose 差异项」姿势参考面片
+// T3 姿势参考面片服务（Task 6）：textChatJson 生成「shared 共享锚点 + perPose 差异项」姿势参考面片
 // 设计文档：docs/superpowers/specs/2026-09-21-ai-template-trend-orchestrator-design.md T3
 //
 // 跨姿势一致性铁律：同模板多姿势共享 shared.outfit/scene/light/aspectRatio/mood/palette，

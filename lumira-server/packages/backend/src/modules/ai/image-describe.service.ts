@@ -1,5 +1,5 @@
 // lumira-server/packages/backend/src/modules/ai/image-describe.service.ts
-// T2 穷尽式图像识别服务（Task 5）：visionChat 穷尽识别 → 解析 ImageDescription（字段兜底）
+// T2 穷尽式图像识别服务（Task 5）：visionChatJson 穷尽识别（jsonMode + 有界重试）→ 解析 ImageDescription（字段兜底）
 // 设计文档：docs/superpowers/specs/2026-09-21-ai-template-trend-orchestrator-design.md T2
 
 import { Injectable } from '@nestjs/common';

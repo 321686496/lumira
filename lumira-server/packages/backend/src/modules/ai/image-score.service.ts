@@ -3,7 +3,7 @@
 // 设计文档：docs/superpowers/specs/2026-09-21-ai-template-trend-orchestrator-design.md T6
 //
 // 评分维度：与参考/意图逐项一致性、风格成熟度、审美、物理合理性、参数与图像自洽、
-// 可实拍复现度、姿势间区分度、元数据质量。textChat(jsonMode:true) 解析 → 分数 clamp [0,1]。
+// 可实拍复现度、姿势间区分度、元数据质量。textChatJson（jsonMode + 有界重试）解析 → 分数 clamp [0,1]。
 // 低分/非法 JSON → 保守 retry（不抛），闸门阈值见 SCORE_PASS_THRESHOLD。
 
 import { Injectable } from '@nestjs/common';

@@ -2,8 +2,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { AiConfigService } from './ai-config.service';
-import { textChat } from './llm-client';
-import { extractJson } from './normalize';
+import { textChatJson, LlmJsonError } from './llm-json';
 import {
   defaultStyleProfile,
   normalizeStyleProfile,
@@ -92,21 +91,11 @@ export class StyleProfileService {
           note: 'fail: 未配置文本模型，使用默认档案（随拍松弛/人像）',
         };
       }
-      const raw = await textChat(cfg.text, {
-        systemPrompt: STYLE_RESOLVE_SYSTEM_PROMPT,
-        userText,
-        temperature: 0.3,
-        jsonMode: true,
-        timeoutMs: 60_000,
-      });
-      const json = extractJson(raw);
-      if (!json) {
-        return {
-          profile: defaultStyleProfile(),
-          source: 'fallback',
-          note: 'fail: 风格定位输出无法解析为 JSON，使用默认档案（随拍松弛/人像）',
-        };
-      }
+      const json = await textChatJson(
+        cfg.text,
+        { systemPrompt: STYLE_RESOLVE_SYSTEM_PROMPT, userText, temperature: 0.3 },
+        cfg.runtime,
+      );
       const profile = normalizeStyleProfile(json);
       return {
         profile,
@@ -114,12 +103,10 @@ export class StyleProfileService {
         note: `${STYLE_ARCHETYPE_LABELS[profile.archetype]}/${profile.category}/${profile.retouchLevel}`,
       };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return {
-        profile: defaultStyleProfile(),
-        source: 'fallback',
-        note: `fail: 风格定位失败（${msg.slice(0, 120)}），使用默认档案（随拍松弛/人像）`,
-      };
+      const note = err instanceof LlmJsonError
+        ? 'fail: 风格定位输出无法解析为 JSON（重试用尽），使用默认档案（随拍松弛/人像）'
+        : `fail: 风格定位失败（${(err instanceof Error ? err.message : String(err)).slice(0, 120)}），使用默认档案（随拍松弛/人像）`;
+      return { profile: defaultStyleProfile(), source: 'fallback', note };
     }
   }
 }

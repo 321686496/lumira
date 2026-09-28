@@ -1,6 +1,6 @@
 // lumira-server/packages/backend/src/modules/ai/ai-analyze.service.ts
 // AI 识别编排（Task 5，Task 3 多输入增强）：示例图（可选）+ 文字描述（可选）→
-// 有图走 visionChat（文字作补充要求）/ 仅文字走 textChat → extractJson → normalizeDraft
+// 有图走 visionChatJson（文字作补充要求）/ 仅文字走 textChatJson → normalizeDraft
 // 设计文档：docs/specs/2026-09-09-ai-template-one-click-creation-design.md 第三节/第五节
 
 import { Injectable, BadRequestException, Optional } from '@nestjs/common';
@@ -36,7 +36,7 @@ export interface AiAnalyzeResult {
   warnings: string[];
   /** 研究管线开启时由 orchestrator 返回；未开启/未接入时为 []（向后兼容） */
   trace: OrchestratorTraceEntry[];
-  /** LLM 直接吐出的原始结构化 JSON（extractJson 后、normalizeDraft 前） */
+  /** LLM 直接吐出的原始结构化 JSON（wrapper 解析后、normalizeDraft 前） */
   raw: Record<string, unknown>;
   /** 趋势研究阶段命中的来源（含 url） */
   research: ResearchItem[];
@@ -57,7 +57,7 @@ export class AiAnalyzeService {
   /**
    * 示例图（可选）+ 文字描述（可选）+ Step1 附加输入 → 模板草稿：
    * 校验（至少一项；text ≤ 1500 字；poseCount 1~6）→ 读活跃分类树 → 取启用配置（未配置 503）→
-   * 图存在走 visionChat（extras 注入识别指令）/ 仅文字走 textChat → JSON 容错提取 → 归一化
+   * 图存在走 visionChatJson（extras 注入识别指令）/ 仅文字走 textChatJson → JSON 容错提取 → 归一化
    */
   async analyze(
     image: UploadFile | undefined,
