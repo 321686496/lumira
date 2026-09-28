@@ -243,6 +243,13 @@ final todayRecommendationItemsProvider =
   final ranked = await ref.watch(recommendedBuiltinTemplatesProvider.future);
   if (ranked.isEmpty) return const [];
 
+  // 先等分类同步完成再解析分类中文名：否则线上新增/改名的分类在本地尚未落库，
+  // 下面 nameOf 解析不到中文名，推荐理由会退化成英文分类 key（如 mirror_home_oot）。
+  // 网络失败时静默降级本地分类缓存（与模板同步口径一致）。
+  try {
+    await ref.watch(remoteCategoriesSyncProvider.future);
+  } catch (_) {}
+
   // 画像（用于命中判定，复用与 ranking provider 相同的读取方式）
   final interestsDao = await ref.watch(userInterestsDaoProvider.future);
   final portrait = <String, double>{};
@@ -264,7 +271,8 @@ final todayRecommendationItemsProvider =
   }
   String nameOf(String key, String? parentKey) {
     final list = byKey[key] ?? const <TemplateCategoryRecord>[];
-    if (list.isEmpty) return key;
+    // 解析不到中文名时返回空串（由调用方过滤），绝不回退成英文 key 泄漏到 UI。
+    if (list.isEmpty) return '';
     if (parentKey == null) return list.first.name;
     final byParent = list.where((c) => c.parentKey == parentKey);
     return (byParent.isNotEmpty ? byParent.first : list.first).name;
@@ -288,7 +296,7 @@ final todayRecommendationItemsProvider =
       if (maj.isNotEmpty) nameOf(maj, r.category),
       if (sub.isNotEmpty) nameOf(sub, maj.isEmpty ? null : maj),
       if (method.isNotEmpty) nameOf(method, maj.isEmpty ? null : maj),
-    ];
+    ]..removeWhere((s) => s.isEmpty);
     out.add(TemplateRecommendation(
       id: base.id,
       name: base.name,

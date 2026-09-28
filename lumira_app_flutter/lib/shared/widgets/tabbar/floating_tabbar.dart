@@ -206,12 +206,20 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
                 ),
               ),
               // 顶层：悬浮 capture button（可超出 tab bar 范围，不被剪切）
+              // 性能(Forced fix): 女性美学的呼吸光晕是常驻 repeat 动画，逐帧改 BoxShadow
+              //（markNeedsPaint）。此处若不做边界隔离，重绘会一路上溯到最近的重绘边界
+              //（本按钮是 Stack 的兄弟层，下面 tab bar 的 RepaintBoundary 罩不住它），
+              // 每帧把这整块区域乃至整个页面的图层重新光栅。加一层 RepaintBoundary 后，
+              // 逐帧重绘被框在这 50dp 按钮内，视觉与功能完全不变。
               Positioned(
                 top: 0,
                 left: 0,
                 right: 0,
-                child: Center(
-                  child: _CenterCaptureButton(tokens: tokens, isFemale: isFemale),
+                child: RepaintBoundary(
+                  child: Center(
+                    child:
+                        _CenterCaptureButton(tokens: tokens, isFemale: isFemale),
+                  ),
                 ),
               ),
             ],

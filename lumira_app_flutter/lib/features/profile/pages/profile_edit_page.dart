@@ -26,6 +26,10 @@ import '../widgets/pref_selector.dart';
 /// 视觉规格来源：Task 6 brief，页面骨架沿用 profile 页的
 /// GlassBackground(profile) + 径向渐变 + SafeArea + SingleChildScrollView。
 /// 数据来源：profileDataProvider（本地资料），保存走 ProfileSyncService（离线优先）。
+///
+/// 性能：标题栏不透明（`LumiraNav.transparent = false`）；背景层与滚动内容各自
+/// 套 [RepaintBoundary]，滚动时不重绘渐变/光斑背景；顶部让位由 [_TopInsetPadding]
+/// 单独消费 `MediaQuery`，避免键盘弹出时整页重建；输入只在「是否有改动」翻转时重建。
 class ProfileEditPage extends ConsumerStatefulWidget {
   const ProfileEditPage({super.key});
 
@@ -49,6 +53,9 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
   String? _selectedShootFrequency;
   String? _avatarUrl; // 自定义头像 URL（null/空 表示用内置 seed）
   bool _uploadingAvatar = false;
+
+  /// 上一次 build 时的「是否有改动」结果，供 [_refreshDirty] 做翻转判断。
+  bool _lastDirty = false;
 
   @override
   void initState() {
@@ -120,6 +127,17 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
             expChanged ||
             sceneChanged ||
             avatarChanged);
+  }
+
+  /// 输入框内容变化时只同步「保存按钮可用态」。
+  ///
+  /// 之前是 `onChanged: (_) => setState(() {})`，每敲一个字都会重建整页
+  /// （3 张卡片 + 37 个偏好胶囊的 Wrap 重新构建/布局），输入明显卡顿。
+  /// 这里只在「是否有改动」真正翻转时重建一次，其余按键零重建。
+  void _refreshDirty() {
+    final dirty = _dirty;
+    if (dirty == _lastDirty) return;
+    setState(() => _lastDirty = dirty);
   }
 
   /// 集合语义比较两个 List<String>（忽略顺序），供 _dirty 判断偏好是否变化。
@@ -329,21 +347,29 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
+    // _lastDirty 用于输入时只做「翻转判断」，这里回写本次 build 的结果
+    final dirty = _dirty;
+    _lastDirty = dirty;
 
     return Scaffold(
       backgroundColor: tokens.canvas,
       extendBodyBehindAppBar: true,
-      appBar: const LumiraNav(title: '编辑资料'),
+      // 标题栏不透明：本页内容长、顶部又有渐变/光斑装饰，透明栏会让内容
+      // 从状态栏与标题下方穿过，观感脏且标题可读性差。固定用主题画布色实底。
+      appBar: const LumiraNav(title: '编辑资料', transparent: false),
       // 保存栏固定吸底：页面较长，滚到底才能保存的路径太远
       bottomNavigationBar: _SaveBar(
         tokens: tokens,
-        onSave: (_dirty && !_saving) ? _save : null,
+        onSave: (dirty && !_saving) ? _save : null,
       ),
       body: Stack(
         children: [
           // glass 风格彩色斑点背景（沿用 profile 页变体）
+          // 独立 RepaintBoundary：滚动时只重绘内容层，背景光斑/渐变不参与重绘
           const Positioned.fill(
-            child: GlassBackground(variant: GlassBackgroundVariant.profile),
+            child: RepaintBoundary(
+              child: GlassBackground(variant: GlassBackgroundVariant.profile),
+            ),
           ),
           // 主内容层
           Container(
@@ -358,141 +384,178 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                 ],
               ),
             ),
-            child: SafeArea(
-              top: false,
-              bottom: false,
-              child: SingleChildScrollView(
-                // extendBodyBehindAppBar=true 时 body 从 y=0 开始，
-                // 用 viewPadding.top + nav 内容高度 48dp 精确占位（与 profile 页一致）
-                padding: EdgeInsets.fromLTRB(
-                  24,
-                  MediaQuery.of(context).viewPadding.top + 48,
-                  24,
-                  24,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _SectionTitle(text: '基本信息', tokens: tokens),
-                    const SizedBox(height: 12),
-                    NeuCard(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
-                      child: _BasicInfoHeader(
-                        seed: _selectedSeed,
-                        avatarUrl: _avatarUrl,
-                        tokens: tokens,
-                        onAvatarTap: _showAvatarSheet,
-                        controller: _usernameController,
-                        random: _randomUsername,
-                        onChanged: (_) => setState(() {}),
-                      ),
+            // 顶部让出「状态栏 + 标题栏」48dp（extendBodyBehindAppBar=true 时
+            // body 从 y=0 开始）。状态栏高度由 _TopInsetPadding 单独读 MediaQuery，
+            // 避免键盘弹出时整页重建。
+            child: _TopInsetPadding(
+              topExtra: 48,
+              // 内容层单独成层：滚动只重绘视口内内容，不牵连背景
+              child: RepaintBoundary(
+                child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _SectionTitle(text: '基本信息', tokens: tokens),
+                        const SizedBox(height: 12),
+                        // 每张卡片独立成层：滚动时未变动的卡片直接复用图层，
+                        // 不再重绘卡片阴影 / 胶囊凹陷内影（37 个胶囊是主要绘制成本）
+                        RepaintBoundary(
+                          child: NeuCard(
+                            padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+                            child: _BasicInfoHeader(
+                              seed: _selectedSeed,
+                              avatarUrl: _avatarUrl,
+                              tokens: tokens,
+                              onAvatarTap: _showAvatarSheet,
+                              controller: _usernameController,
+                              random: _randomUsername,
+                              // 只同步保存按钮可用态，不再每敲一个字重建整页
+                              onChanged: (_) => _refreshDirty(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 28),
+                        _SectionTitle(text: '你的情况', tokens: tokens),
+                        const SizedBox(height: 12),
+                        RepaintBoundary(
+                          child: NeuCard(
+                            padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                PrefSingleSelector(
+                                  title: '性别',
+                                  options: PrefOptions.gender,
+                                  value: _selectedGender,
+                                  onChanged: (v) =>
+                                      setState(() => _selectedGender = v),
+                                  tokens: tokens,
+                                ),
+                                const SizedBox(height: 24),
+                                PrefSingleSelector(
+                                  title: '摄影水平',
+                                  options: PrefOptions.skillLevel,
+                                  value: _selectedSkillLevel,
+                                  onChanged: (v) =>
+                                      setState(() => _selectedSkillLevel = v),
+                                  tokens: tokens,
+                                ),
+                                const SizedBox(height: 24),
+                                PrefSingleSelector(
+                                  title: '拍摄频率',
+                                  options: PrefOptions.shootFrequency,
+                                  value: _selectedShootFrequency,
+                                  onChanged: (v) => setState(
+                                      () => _selectedShootFrequency = v),
+                                  tokens: tokens,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 28),
+                        _SectionTitle(text: '拍摄偏好', tokens: tokens),
+                        const SizedBox(height: 12),
+                        RepaintBoundary(
+                          child: NeuCard(
+                            padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                PrefMultiSelector(
+                                  title: '喜欢拍什么',
+                                  hint: '可多选',
+                                  options: PrefOptions.favoriteCategories,
+                                  selected: _favoriteCategories,
+                                  onToggle: (v) => setState(() {
+                                    _favoriteCategories.contains(v)
+                                        ? _favoriteCategories.remove(v)
+                                        : _favoriteCategories.add(v);
+                                  }),
+                                  tokens: tokens,
+                                ),
+                                const SizedBox(height: 24),
+                                PrefMultiSelector(
+                                  title: '拍摄烦恼',
+                                  hint: '可多选',
+                                  options: PrefOptions.painPoints,
+                                  selected: _painPoints,
+                                  onToggle: (v) => setState(() {
+                                    _painPoints.contains(v)
+                                        ? _painPoints.remove(v)
+                                        : _painPoints.add(v);
+                                  }),
+                                  tokens: tokens,
+                                ),
+                                const SizedBox(height: 24),
+                                PrefMultiSelector(
+                                  title: '拍摄期望',
+                                  hint: '可多选',
+                                  options: PrefOptions.expectations,
+                                  selected: _expectations,
+                                  onToggle: (v) => setState(() {
+                                    _expectations.contains(v)
+                                        ? _expectations.remove(v)
+                                        : _expectations.add(v);
+                                  }),
+                                  tokens: tokens,
+                                ),
+                                const SizedBox(height: 24),
+                                PrefMultiSelector(
+                                  title: '常用场景',
+                                  hint: '可多选',
+                                  options: PrefOptions.commonScenes,
+                                  selected: _commonScenes,
+                                  onToggle: (v) => setState(() {
+                                    _commonScenes.contains(v)
+                                        ? _commonScenes.remove(v)
+                                        : _commonScenes.add(v);
+                                  }),
+                                  tokens: tokens,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 28),
-                    _SectionTitle(text: '你的情况', tokens: tokens),
-                    const SizedBox(height: 12),
-                    NeuCard(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          PrefSingleSelector(
-                            title: '性别',
-                            options: PrefOptions.gender,
-                            value: _selectedGender,
-                            onChanged: (v) =>
-                                setState(() => _selectedGender = v),
-                            tokens: tokens,
-                          ),
-                          const SizedBox(height: 24),
-                          PrefSingleSelector(
-                            title: '摄影水平',
-                            options: PrefOptions.skillLevel,
-                            value: _selectedSkillLevel,
-                            onChanged: (v) =>
-                                setState(() => _selectedSkillLevel = v),
-                            tokens: tokens,
-                          ),
-                          const SizedBox(height: 24),
-                          PrefSingleSelector(
-                            title: '拍摄频率',
-                            options: PrefOptions.shootFrequency,
-                            value: _selectedShootFrequency,
-                            onChanged: (v) =>
-                                setState(() => _selectedShootFrequency = v),
-                            tokens: tokens,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    _SectionTitle(text: '拍摄偏好', tokens: tokens),
-                    const SizedBox(height: 12),
-                    NeuCard(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          PrefMultiSelector(
-                            title: '喜欢拍什么',
-                            hint: '可多选',
-                            options: PrefOptions.favoriteCategories,
-                            selected: _favoriteCategories,
-                            onToggle: (v) => setState(() {
-                                  _favoriteCategories.contains(v)
-                                      ? _favoriteCategories.remove(v)
-                                      : _favoriteCategories.add(v);
-                                }),
-                            tokens: tokens,
-                          ),
-                          const SizedBox(height: 24),
-                          PrefMultiSelector(
-                            title: '拍摄烦恼',
-                            hint: '可多选',
-                            options: PrefOptions.painPoints,
-                            selected: _painPoints,
-                            onToggle: (v) => setState(() {
-                                  _painPoints.contains(v)
-                                      ? _painPoints.remove(v)
-                                      : _painPoints.add(v);
-                                }),
-                            tokens: tokens,
-                          ),
-                          const SizedBox(height: 24),
-                          PrefMultiSelector(
-                            title: '拍摄期望',
-                            hint: '可多选',
-                            options: PrefOptions.expectations,
-                            selected: _expectations,
-                            onToggle: (v) => setState(() {
-                                  _expectations.contains(v)
-                                      ? _expectations.remove(v)
-                                      : _expectations.add(v);
-                                }),
-                            tokens: tokens,
-                          ),
-                          const SizedBox(height: 24),
-                          PrefMultiSelector(
-                            title: '常用场景',
-                            hint: '可多选',
-                            options: PrefOptions.commonScenes,
-                            selected: _commonScenes,
-                            onToggle: (v) => setState(() {
-                                  _commonScenes.contains(v)
-                                      ? _commonScenes.remove(v)
-                                      : _commonScenes.add(v);
-                                }),
-                            tokens: tokens,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 顶部占位容器：给内容让出「状态栏 + 标题栏 48dp」的高度。
+///
+/// 为什么单独抽一个组件：本页 `extendBodyBehindAppBar=true`，body 从 y=0 开始，
+/// 需要自己让出状态栏高度。若在页面 build 里直接读 `MediaQuery.of(context)`，
+/// 键盘弹出时 viewInsets 每帧变化会让整页重建（37 个偏好胶囊白白重建一轮）。
+/// 把 MediaQuery 依赖收敛在这里后，键盘弹出只重建这个 Padding，且它的 child
+/// 实例不变（由页面 build 一次性构造），不会连带重建整页内容。
+///
+/// 取 `viewPadding` 而非 `padding`：Scaffold 在有 appBar 时会把 body 的
+/// padding.top 移除（MediaQuery.removePadding），只有 viewPadding 保留状态栏高度。
+class _TopInsetPadding extends StatelessWidget {
+  const _TopInsetPadding({
+    required this.child,
+    required this.topExtra,
+  });
+
+  final Widget child;
+
+  /// 状态栏之外还需要让出的额外高度（本页 = nav 内容高度 48dp）。
+  final double topExtra;
+
+  @override
+  Widget build(BuildContext context) {
+    final top = MediaQuery.of(context).viewPadding.top;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(24, top + topExtra, 24, 24),
+      child: child,
     );
   }
 }
