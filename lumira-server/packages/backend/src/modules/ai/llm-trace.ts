@@ -266,3 +266,14 @@ export function traceSearchCall(input: {
 }): TraceCallHandle | null {
   return startCall({ type: 'search', title: input.title, model: input.model, userPrompt: input.query });
 }
+
+/** 记录一次网页爬取（工具执行器内调用）；host 作为事件标题便于后台时间线识别 */
+export function traceCrawlCall(input: { url: string }): TraceCallHandle | null {
+  let host = input.url;
+  try {
+    host = new URL(input.url).host;
+  } catch {
+    // 非法 URL 保留原值（失败会由 crawlUrl 抛错并记 fail）
+  }
+  return startCall({ type: 'search', title: `网页爬取 · ${host}`, userPrompt: input.url });
+}
