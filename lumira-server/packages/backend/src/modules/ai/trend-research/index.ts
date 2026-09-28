@@ -14,3 +14,20 @@ export { normalizeBrief, renderResearchBrief, briefHasContent } from './research
 export type { ResearchBrief } from './research-brief';
 export { buildResearchDigest, buildResearchLines, selectResearchItems } from './research-digest';
 export { LruCache } from './lru-cache';
+export { ResearchImageService } from './research-image.service';
+export { ResearchVisionService } from './research-vision.service';
+export {
+  DEFAULT_RESEARCH_IMAGES_CONFIG,
+  toTraceImage,
+  toTraceImages,
+} from './research-image';
+export type {
+  ResearchImage,
+  ResearchImagesResult,
+  ResearchImagesConfig,
+  ResearchImageLayer,
+  ImageCandidate,
+  TraceImage,
+} from './research-image';
+export { normalizeVision, renderResearchVision, visionHasContent } from './research-vision';
+export type { ResearchVision } from './research-vision';

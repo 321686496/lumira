@@ -16,6 +16,11 @@ import { textChat } from '../llm-client';
 import { extractJson } from '../normalize';
 import { describeTodayUtc8 } from '../../../common/utils/date.util';
 import { traceStep } from '../llm-trace';
+import { ResearchImageService } from './research-image.service';
+import { ResearchVisionService } from './research-vision.service';
+import { DEFAULT_RESEARCH_IMAGES_CONFIG, toTraceImages } from './research-image';
+import type { ResearchImage, ResearchImagesConfig } from './research-image';
+import type { ResearchVision } from './research-vision';
 
 /** 把重组后的长关键词串按空格拆成多组短查询（默认 ≤3 词/组，最多 4 组），避免单请求载荷过大超时。 */
 export function splitQueries(query: string, groupSize = 3, maxGroups = 4): string[] {
@@ -42,12 +47,18 @@ export interface SearchSourceConfig {
   model?: string;
   /** 厂商联网检索端点（provider=vendor 时必填） */
   vendorEndpoint?: unknown;
+  /** 检索结果类别（缺省综合网页；'images' 走图片搜索） */
+  categories?: string;
 }
 
 /** search 运行时配置（由 ai-config.service 提供；Task 10 接线 read） */
 export interface SearchConfig {
   enabled: boolean;
   sources: SearchSourceConfig[];
+  /** 参考图抓取配置（缺省视为关闭） */
+  images?: ResearchImagesConfig;
+  /** 第三层图片搜索来源（缺省则不启用图片搜索兜底） */
+  imageSource?: SearchSourceConfig | null;
 }
 
 /** 工厂类型：按来源配置创建搜索适配器 */
@@ -69,6 +80,12 @@ export interface ResearchResult {
   sourceErrors?: { name: string; error: string }[];
   /** 文本模型二次整理后的结构化结论；未命中条目 / 整理失败 → null（下游回退规则摘要） */
   brief?: ResearchBrief | null;
+  /** 抓取落盘的参考图（总开关关闭时为空数组） */
+  images?: ResearchImage[];
+  /** 参考图抓取的单条失败原因 */
+  imageErrors?: { name: string; error: string }[];
+  /** 参考图多模态解读结论（未启用/无图/失败 → null） */
+  vision?: ResearchVision | null;
 }
 
 @Injectable()
@@ -79,6 +96,8 @@ export class TrendResearchService {
   constructor(
     private readonly aiConfigService: AiConfigService,
     private readonly researchDigest: ResearchDigestService,
+    private readonly researchImages: ResearchImageService,
+    private readonly researchVision: ResearchVisionService,
   ) {}
 
   /**
@@ -186,6 +205,54 @@ export class TrendResearchService {
     // 二次整理：把原始条目交给文本模型提炼成结构化结论（内部以 traceStep 记录为「趋势研究」的
     // 子步骤「资料整理」）。失败/无有效内容 → null，由调用方回退规则摘要 buildResearchDigest。
     const brief = out.length ? await this.researchDigest.summarize(topic, out) : null;
-    return { items: out, sourceErrors, brief };
+
+    // ===== 参考图支路：抓取（三层递进）→ 多模态解读 =====
+    // 两阶段都包在 traceStep 内，因 research() 自身已在 traceStep('research') 上下文里，
+    // 它们的 parentStep 天然为 'research'，后台时间线自动渲染为子阶段。
+    const imagesCfg = cfg.images ?? DEFAULT_RESEARCH_IMAGES_CONFIG;
+    let images: ResearchImage[] = [];
+    let imageErrors: { name: string; error: string }[] = [];
+    let vision: ResearchVision | null = null;
+    if (imagesCfg.enabled) {
+      // 第三层图片搜索：由本服务按 imageSource 配置构建（缺省不启用该层）
+      const imageSource = cfg.imageSource;
+      const imagesSearch = imageSource
+        ? async (q: string): Promise<ResearchItem[]> => {
+            const provider = this.factory(imageSource.name, imageSource);
+            return cacheableSearch(provider, { query: q, limit, categories: 'images' } as WebSearchQuery);
+          }
+        : null;
+      try {
+        const r = await traceStep(
+          'researchImages',
+          '参考图抓取',
+          () => this.researchImages.collect({ items: out, queries, imagesSearch, cfg: imagesCfg }),
+          (res) => (res.images.length ? `抓取 ${res.images.length} 张参考图${res.errors.length ? `（${res.errors.length} 处失败）` : ''}` : '未抓到参考图'),
+          (res) => ({ images: toTraceImages(res.images) }),
+        );
+        images = r.images;
+        imageErrors = r.errors;
+      } catch (err) {
+        imageErrors.push({ name: 'collect', error: err instanceof Error ? err.message : String(err) });
+      }
+
+      if (imagesCfg.vision && images.length) {
+        try {
+          const loaded = (
+            await Promise.all(
+              images.map(async (image) => {
+                const data = await this.researchImages.readBase64(image.id);
+                return data ? { image, base64: data.base64, mime: data.mime } : null;
+              }),
+            )
+          ).filter((v): v is { image: ResearchImage; base64: string; mime: string } => v !== null);
+          vision = await this.researchVision.interpret(topic, loaded);
+        } catch {
+          vision = null;
+        }
+      }
+    }
+
+    return { items: out, sourceErrors, brief, images, imageErrors, vision };
   }
 }
