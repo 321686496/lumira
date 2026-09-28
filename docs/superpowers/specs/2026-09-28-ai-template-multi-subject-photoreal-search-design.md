@@ -26,13 +26,13 @@
 - 支持 1 / 2 / 3+ 人物场景，AI 自动推断 + 可在 Step3 手动覆盖。
 - 彻底移除提示词中的噪点/颗粒/瑕疵要求，转向高清干净写实。
 - 把结构化趋势结论（`ResearchBrief`）透传到姿势图生成提示词，并接入社交平台站点限定检索。
-- （期2）从社交平台检索图片，做纯视觉识别转文字，反哺姿势图生成；用后删除临时图片。
+- （期2）从社交平台检索图片，做纯视觉识别转文字，反哺姿势图生成；图片改为短 TTL 缓存（本 spec 的期 2 章节已被新 spec 取代，见下）。
 
 ### 非目标
 
 - 不改动 Flutter 端。
 - 不把平台图片作为 img2img 参考图（规避版权/相似风险）。
-- 不新增第三方图片存储；期2 只用临时目录且必删。
+- 不新增第三方图片存储；期2 图片落盘到本地 uploads 的短 TTL 缓存（默认 7 天自动清理），见取代本 spec 第 4 章的新 spec。
 - 不重构 orchestrator 主流程骨架。
 
 ---
@@ -198,7 +198,7 @@ Photorealistic photograph taken with a real camera: highly detailed realistic sk
 
 ## 4. 期 2：平台图片 → 视觉识别转文字 → 反哺姿势图
 
-> 期2 是新增子系统，待期1 验证后再单独出实现计划。
+> **本章已被取代**：改由 `2026-09-28-ai-research-reference-images-design.md` 实现（增强为三层抓图 + 多模态结构化转述 + 识别流程可视化，图片改为短 TTL 缓存）。以下内容仅保留为历史设计记录，实施以新 spec 为准。
 
 ### 4.1 检索图片
 
@@ -253,7 +253,7 @@ Photorealistic photograph taken with a real camera: highly detailed realistic sk
 - `trend-research.service.spec.ts`：`site` 限定来源并行 + 单源失败降级。
 - `ai-analyze.service.spec.ts`：返回体含 `brief`。
 - `ai-generate-image.service.spec.ts`：`research` 既支持数组也支持 `{items, brief}`。
-- （期2）`image-fetcher.spec.ts`：体积/MIME/超时拦截、临时文件清理。
+- （期2）测试策略见取代本 spec 第 4 章的新 spec `2026-09-28-ai-research-reference-images-design.md` 第 10 章。
 
 admin：`pnpm --filter @lumira/admin build` 类型校验通过。
 backend：`pnpm --filter @lumira/backend test` + typecheck 通过。
@@ -261,10 +261,10 @@ backend：`pnpm --filter @lumira/backend test` + typecheck 通过。
 ## 7. 分期与实施顺序
 
 - **期1**（本 spec 的实现范围）：3.1 多人物 → 3.2 去噪写实 → 3.3 搜索落地 + 社交检索。纯提示词与数据流改动，风险低、见效快。
-- **期2**（待期1 验证后单独出实现计划）：4.x 图片子系统。
+- **期2**（已另出 spec）：图片子系统改由 `2026-09-28-ai-research-reference-images-design.md` 承载。
 
 ## 8. 风险与登记
 
 - 社交站点限定检索可能因搜索引擎收录变化导致命中下降 → 保留无 site 综合来源兜底；效果不理想时登记 `docs/future-optimizations.md`。
 - 「高清干净写实」为全局取向，可能弱化部分胶片/复古风格档案的颗粒观感 → 若后续需要，按风格档案分档重新引入（登记为后续优化，不在本期实现）。
-- 期2 平台图片识别涉及第三方内容，仅转文字不落地图片、用后即删，规避版权与存储风险。
+- 期2 平台图片识别涉及第三方内容，仅转文字不把图片作 img2img 底图；图片落本地短 TTL 缓存（默认 7 天）自动清理，规避版权与存储风险。
