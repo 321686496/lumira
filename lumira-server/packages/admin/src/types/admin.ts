@@ -455,6 +455,12 @@ export interface AiProviderConfigView {
   crawlEnabled: boolean;
   /** 网页爬取：单会话最大调用次数（1~6） */
   crawlMaxPerSession: number;
+  /** 爬取静态失败时是否降级到无头渲染 */
+  crawlRenderEnabled: boolean;
+  /** 单次无头渲染超时（毫秒，5000~60000） */
+  crawlRenderTimeoutMs: number;
+  /** 已配置 cookie 的域名列表（只回显域名，值不回传） */
+  crawlCookieDomains: string[];
   /** 搜索服务商：'general'（通用搜索 API）| 'vendor'（厂商联网检索）| 'qwen'（三方 MaaS）| 'qwen-official'（官方百炼）| null（未启用） */
   searchProvider: 'general' | 'vendor' | 'qwen' | 'qwen-official' | null;
   /** 通用搜索 API baseUrl（searchProvider=general 时使用） */
@@ -529,6 +535,12 @@ export interface UpdateAiConfigPayload {
   crawlEnabled?: boolean;
   /** 网页爬取：单会话最大调用次数（1~6，缺省沿用原值） */
   crawlMaxPerSession?: number;
+  /** 是否降级到无头渲染；缺省 = 沿用原值 */
+  crawlRenderEnabled?: boolean;
+  /** 无头渲染超时（毫秒，5000~60000）；缺省 = 沿用原值 */
+  crawlRenderTimeoutMs?: number;
+  /** 按域名隔离的 cookie；缺省 = 保留存量，传入对象 = 整体覆盖 */
+  crawlCookies?: Record<string, string>;
   /** 搜索服务商：'general' | 'vendor' | 'qwen' | 'qwen-official' | 'off'（关闭） */
   searchProvider?: string;
   searchBaseUrl?: string;

@@ -96,6 +96,10 @@ interface FormState {
   // 网页爬取（文本通用工具循环，spec 2026-09-28）
   webCrawl: boolean;
   crawlMaxPerSession: number; // 单会话最大爬取次数 1~6
+  crawlRenderEnabled: boolean;
+  crawlRenderTimeoutMs: number;
+  /** 域名 / cookie 行列表（value 留空 = 沿用存量） */
+  crawlCookies: Array<{ domain: string; value: string }>;
   // 参考图抓取（spec 2026-09-28 参考图）
   researchImagesEnabled: boolean;
   researchImagesMax: number;
@@ -224,6 +228,9 @@ export function AiConfigForm({
           maxIterations: initial.maxIterations,
           webCrawl: initial.crawlEnabled === true,
           crawlMaxPerSession: initial.crawlMaxPerSession ?? 3,
+          crawlRenderEnabled: initial.crawlRenderEnabled ?? false,
+          crawlRenderTimeoutMs: initial.crawlRenderTimeoutMs ?? 20000,
+          crawlCookies: (initial.crawlCookieDomains ?? []).map((d) => ({ domain: d, value: '' })),
           researchImagesEnabled: initial.researchImagesEnabled,
           researchImagesMax: initial.researchImagesMax,
           researchImagesPageFetch: initial.researchImagesPageFetch,
@@ -256,6 +263,9 @@ export function AiConfigForm({
           maxIterations: 2,
           webCrawl: false,
           crawlMaxPerSession: 3,
+          crawlRenderEnabled: false,
+          crawlRenderTimeoutMs: 20000,
+          crawlCookies: [],
           researchImagesEnabled: false,
           researchImagesMax: 6,
           researchImagesPageFetch: true,
@@ -523,6 +533,16 @@ export function AiConfigForm({
       payload.searchEnabled = form.searchMode !== 'off';
       payload.crawlEnabled = form.webCrawl;
       payload.crawlMaxPerSession = Number(form.crawlMaxPerSession) || 3;
+      payload.crawlRenderEnabled = form.crawlRenderEnabled;
+      payload.crawlRenderTimeoutMs = Number(form.crawlRenderTimeoutMs) || 20000;
+      // 只提交填了值的行（value 留空 = 沿用存量）；一行都没填则不发该字段（保留存量）
+      const filledCookies = Object.fromEntries(
+        form.crawlCookies
+          .map((r) => ({ domain: r.domain.trim(), value: r.value.trim() }))
+          .filter((r) => r.domain && r.value)
+          .map((r) => [r.domain, r.value]),
+      );
+      if (Object.keys(filledCookies).length > 0) payload.crawlCookies = filledCookies;
       payload.maxIterations = form.maxIterations;
       payload.llmRetryCount = form.llmRetryCount;
       payload.llmTimeoutMs = Math.round(form.llmTimeoutSeconds * 1000);
@@ -1193,6 +1213,81 @@ export function AiConfigForm({
               <p className="text-xs text-muted-foreground">
                 1~6，默认 3。单次会话内模型最多调用该次数，超限后仍会产出最终结果。
               </p>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label htmlFor="ai-crawl-render-enabled" className="text-sm font-medium text-foreground">
+                静态抓取失败时用无头浏览器渲染
+              </label>
+              <Switch
+                id="ai-crawl-render-enabled"
+                checked={form.crawlRenderEnabled}
+                disabled={!form.webCrawl}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, crawlRenderEnabled: v }))}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              需后端配置 RENDERER_WS_ENDPOINT 才生效；关闭时仅做静态抓取。
+            </p>
+
+            <div className="space-y-2 md:max-w-xs">
+              <Label htmlFor="ai-crawl-render-timeout">渲染超时（毫秒）</Label>
+              <Input
+                id="ai-crawl-render-timeout"
+                type="number"
+                min={5000}
+                max={60000}
+                value={form.crawlRenderTimeoutMs}
+                disabled={!form.webCrawl || !form.crawlRenderEnabled}
+                onChange={(e) => setForm((f) => ({ ...f, crawlRenderTimeoutMs: Number(e.target.value) || 20000 }))}
+              />
+              <p className="text-xs text-muted-foreground">5000~60000，默认 20000。</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>登录态 Cookie（按域名隔离）</Label>
+              <p className="text-xs text-muted-foreground">
+                仅对匹配的域名发送（含其子域）。保存后只显示域名，值不会回传；值留空 = 沿用已保存的值。
+              </p>
+              {form.crawlCookies.map((row, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input
+                    placeholder="zhihu.com"
+                    value={row.domain}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        crawlCookies: f.crawlCookies.map((r, j) => (j === i ? { ...r, domain: e.target.value } : r)),
+                      }))
+                    }
+                  />
+                  <Input
+                    type="password"
+                    placeholder="z_c0=..."
+                    value={row.value}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        crawlCookies: f.crawlCookies.map((r, j) => (j === i ? { ...r, value: e.target.value } : r)),
+                      }))
+                    }
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setForm((f) => ({ ...f, crawlCookies: f.crawlCookies.filter((_, j) => j !== i) }))}
+                  >
+                    删除
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setForm((f) => ({ ...f, crawlCookies: [...f.crawlCookies, { domain: '', value: '' }] }))}
+              >
+                添加域名 Cookie
+              </Button>
             </div>
           </Card>
 
