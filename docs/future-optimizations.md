@@ -1177,3 +1177,51 @@
 - **背景/动机**：本轮 T4 用例表（亦为实施计划所定）未列这三项；功能正确性已由循环层 spec 间接覆盖，但回归防护不足。
 - **目标状态**：至少补「rethrow 分支」与「合法值原样透传」两条用例；trace 落库路径可结合既有 trace 测试基建补验。
 - **状态**：⏳ 待优化
+
+### P8 · 渲染次数上限为常量，未做成后台可配
+
+- **模块**：后端 AI 爬取工具（`lumira-server/packages/backend/src/modules/ai/tools/crawl-url.ts` 的 `CRAWL_RENDER_MAX_PER_SESSION = 2`）
+- **优化点**：单会话渲染次数固定为 2，未开放为配置列，运营无法按站点调整。
+- **背景/动机**：`maxPerSession`（默认 3）配合 20s 渲染超时，最坏会把单次会话拖到 60s+；本轮先固定常量以避免新增配置面。
+- **目标状态**：与渲染超时一起并入「网页爬取」配置卡片，并在后端做「次数 × 超时 ≤ 会话总预算」的联合夹紧。
+- **状态**：⏳ 待优化
+
+### P9 · 渲染容器以 `--no-sandbox` 运行
+
+- **模块**：部署（`deploy/renderer/Dockerfile`）
+- **优化点**：容器内 Chromium 以 `--no-sandbox` 启动（否则需要 `SYS_ADMIN`），削弱了浏览器自身的进程隔离。
+- **背景/动机**：渲染容器只入 `renderer-net`，且渲染目标由后端在 CDP 请求拦截层做 DNS 私网拦截，因此本轮接受该取舍。
+- **目标状态**：评估改用自带用户命名空间的 seccomp/AppArmor profile，或在宿主机层面为渲染容器单独收紧权限。
+- **状态**：⏳ 待优化
+
+### P10 · renderer 与 backend 同处 renderer-net（renderer 可反向访问 backend）
+
+- **模块**：部署（`deploy/docker-compose.prod.yml` 的 `renderer-net`）
+- **优化点**：backend 需接入 `renderer-net` 才能连 CDP，因此 renderer 容器理论上可访问 `lumira-backend:3000`。
+- **背景/动机**：缓解手段是渲染期的 CDP 请求拦截——`lumira-backend` 解析到 Docker 私网地址会被私网判定拦下；但这是「拦截」而非「网络不可达」。
+- **目标状态**：评估用 Docker 网络 + iptables 规则（或 egress 策略）在 renderer 出方向上显式阻断到 `lumira-*` 网段的流量，做到网络层不可达。
+- **状态**：⏳ 待优化
+
+### P11 · 后台 cookie 只能新增/覆盖，无法单独清空
+
+- **模块**：后台（`lumira-server/packages/admin/src/components/ai-config-form.tsx`）
+- **优化点**：表单只在「至少一行填了值」时才提交 `crawlCookies`，因此「删掉所有行并保存」不会清空已保存的域名 cookie；后端 API 传 `{}` 才能清空。
+- **背景/动机**：值不回传（只回显域名）导致「留空 = 沿用」与「留空 = 清空」语义冲突，本轮先保证「不会误清空」这一安全侧。
+- **目标状态**：为每个域名行提供显式的「清除」动作，提交一个包含域名但值为空的对象（后端按 `{}` 语义处理），或在表单侧维护「已删除域名」集合并拼出最终对象。
+- **状态**：⏳ 待优化
+
+### P12 · 渲染 cookie 注入为尽力而为，无回读校验
+
+- **模块**：后端渲染驱动（`lumira-server/packages/backend/src/modules/ai/tools/render-fetch.ts`）
+- **优化点**：`page.setCookie` 仅按 `{name, value, domain, path:'/'}` 设置，未回读校验是否被浏览器接受，也未处理 `HttpOnly`/`Secure`/`SameSite` 等属性的差异；部分站点可能因属性缺失而不认会话。
+- **背景/动机**：cookie 原始串不携带属性（后台只保存字符串），无法还原属性；本轮以求链路可跑通为先。
+- **目标状态**：支持按域名保存结构化 cookie（含属性），渲染后回读 `page.cookies()` 做校验，并在失败时给出「cookie 未被接受」的可读提示。
+- **状态**：⏳ 待优化
+
+### P13 · 渲染降级无 trace 级成功率观测
+
+- **模块**：后端 AI（`lumira-server/packages/backend/src/modules/ai/llm-trace.ts` 与 `tools/crawl-url.ts`）
+- **优化点**：渲染命中仅在既有 `traceCrawlCall` 的 `resultBrief` 里追加「（渲染）」后缀，没有独立的成功/失败计数，无法在后台面板回答「渲染到底救回了多少页面」。
+- **背景/动机**：本轮明确不新增 trace 事件类型（避免改动后台流程面板渲染层）。
+- **目标状态**：在后台流程面板增加「网页爬取」聚合统计（静态命中 / 渲染命中 / 渲染失败 / 403 未取到），用于评估 renderer 的投入产出。
+- **状态**：⏳ 待优化
