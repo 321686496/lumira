@@ -24,3 +24,8 @@ engines:
     disabled: false
   - name: bing
     disabled: false
+  # 图片搜索（AI 参考图抓取）：sogou_images 为 SearXNG 内置图片引擎，国内可用
+  - name: sogou images
+    engine: sogou_images
+    categories: [images]
+    disabled: false
