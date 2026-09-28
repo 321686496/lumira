@@ -6,12 +6,19 @@
 
 import type { ToolDef } from '../llm-client';
 import { traceCrawlCall } from '../llm-trace';
-import { crawlUrl } from './crawl-url';
+import { crawlUrl, CRAWL_RENDER_MAX_PER_SESSION } from './crawl-url';
+import type { CrawlOptions } from './crawl-url';
 import type { TextToolContext } from './text-tool-loop';
 
 export interface CrawlToolConfig {
   enabled: boolean;
   maxPerSession: number;
+  /** 静态失败时是否降级到无头渲染；缺省 false */
+  renderEnabled?: boolean;
+  /** 单次渲染超时（毫秒）；缺省 20000 */
+  renderTimeoutMs?: number;
+  /** 按域隔离的 cookie（已在 ai-config 解密，仅内存传递） */
+  cookies?: Record<string, string>;
 }
 
 export const CRAWL_TOOL_NAME = 'crawl_website';
@@ -46,7 +53,10 @@ function parseArgs(argsJson: string): Record<string, unknown> {
 }
 
 /** 工具执行器：把 crawlUrl 的异常留给循环层回填为 error 文本 */
-export function createToolExecutor(): TextToolContext['execute'] {
+export function createToolExecutor(
+  opts: CrawlOptions = {},
+  renderBudget?: { used: number; max: number },
+): TextToolContext['execute'] {
   return async (name: string, argsJson: string): Promise<string> => {
     if (name !== CRAWL_TOOL_NAME) throw new Error(`未知工具：${name}`);
     const args = parseArgs(argsJson);
@@ -55,9 +65,9 @@ export function createToolExecutor(): TextToolContext['execute'] {
 
     const handle = traceCrawlCall({ url });
     try {
-      const r = await crawlUrl(url);
+      const r = await crawlUrl(url, { ...opts, renderBudget });
       handle?.done(r.text.slice(0, 200), {
-        resultBrief: `抓取 ${r.chars} 字${r.truncated ? '（已截断）' : ''}`,
+        resultBrief: `抓取 ${r.chars} 字${r.usedRender ? '（渲染）' : ''}${r.truncated ? '（已截断）' : ''}`,
       });
       return JSON.stringify({ url: r.url, text: r.text, truncated: r.truncated });
     } catch (err) {
@@ -70,11 +80,18 @@ export function createToolExecutor(): TextToolContext['execute'] {
 /**
  * 开关入口：cfg.crawl.enabled !== true → undefined（文本调用退回旧行为）。
  * maxPerSession 夹紧到 1~6，防止后台异常值。
+ * 每次调用新建独立的会话级渲染预算（跨本次工具会话内多次 crawl 调用累计）。
  */
 export function resolveTextTools(cfg: { crawl?: CrawlToolConfig } | undefined | null): TextToolContext | undefined {
   const crawl = cfg?.crawl;
   if (!crawl?.enabled) return undefined;
   const raw = Math.floor(Number(crawl.maxPerSession));
   const maxToolCalls = Math.min(Math.max(Number.isFinite(raw) ? raw : MAX_TOOL_CALLS_LOWER, MAX_TOOL_CALLS_LOWER), MAX_TOOL_CALLS_UPPER);
-  return { tools: [buildCrawlToolDef()], execute: createToolExecutor(), maxToolCalls };
+  const renderBudget = { used: 0, max: CRAWL_RENDER_MAX_PER_SESSION };
+  const execOpts: CrawlOptions = {
+    renderEnabled: crawl.renderEnabled === true,
+    renderTimeoutMs: crawl.renderTimeoutMs,
+    cookies: crawl.cookies ?? {},
+  };
+  return { tools: [buildCrawlToolDef()], execute: createToolExecutor(execOpts, renderBudget), maxToolCalls };
 }
