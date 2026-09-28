@@ -2,7 +2,12 @@
 // renderCategoryTree 环安全单测：分类树中存在「key 等于其父 key」的自环节点（seed 005 中 food/overhead/overhead，见 005_category_hierarchy.sql）时，
 // walk 不得无限递归导致 Maximum call stack。e.g. 纯文字描述触发构建系统提示词时必现。
 
-import { buildTextOnlySystemPrompt, buildAnalyzeSystemPrompt } from './analyze.prompt';
+import {
+  buildTextOnlySystemPrompt,
+  buildAnalyzeSystemPrompt,
+  buildAnalyzeUserPrompt,
+  inferSubjectCountHint,
+} from './analyze.prompt';
 import { CategoryNode } from './normalize';
 import { type StyleProfile } from './style-profile.presets';
 
@@ -117,5 +122,37 @@ describe('analyze.prompt 风格档案分流', () => {
     expect(p).toContain('第一人称');
     expect(p).toContain('一臂');
     expect(p).toContain('不出现手机');
+  });
+});
+
+const CATEGORIES: CategoryNode[] = [{ key: 'portrait', name: '人像', parentKey: null, level: 1 }];
+
+describe('多人物支持', () => {
+  it('inferSubjectCountHint：命中多人关键词返回 2，否则 1', () => {
+    expect(inferSubjectCountHint('帮朋友拍一组情侣照')).toBe(2);
+    expect(inferSubjectCountHint('一家人的全家福')).toBe(2);
+    expect(inferSubjectCountHint('一个人的街拍')).toBe(1);
+    expect(inferSubjectCountHint(undefined, null, '')).toBe(1);
+  });
+
+  it('系统提示：多人提示档要求保持人物数量与互动关系', () => {
+    const single = buildAnalyzeSystemPrompt(CATEGORIES, PORTRAIT_PROFILE, 1);
+    const multi = buildAnalyzeSystemPrompt(CATEGORIES, PORTRAIT_PROFILE, 2);
+    expect(single).toContain('不得改变人物长相');
+    expect(multi).toContain('同一组人物');
+    expect(multi).toContain('不得改变人物数量');
+    expect(multi).not.toContain('体型、场景、道具、光线或整体风格。仅当用户明确要求');
+  });
+
+  it('系统提示：契约示例含 meta.subjectCount', () => {
+    expect(buildAnalyzeSystemPrompt(CATEGORIES)).toContain('"subjectCount"');
+  });
+
+  it('用户提示：显式指定人数输出硬约束', () => {
+    expect(buildAnalyzeUserPrompt({ subjectCount: 2 })).toContain('meta.subjectCount 必须为 2');
+  });
+
+  it('用户提示：未指定人数时输出推断口径', () => {
+    expect(buildAnalyzeUserPrompt({})).toContain('请根据用户描述与示例图中实际可见的人物数量给出 meta.subjectCount');
   });
 });

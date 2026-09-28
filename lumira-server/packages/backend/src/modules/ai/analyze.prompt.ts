@@ -114,11 +114,24 @@ function styleProfileBlock(styleProfile?: StyleProfile): string {
   return `\n\n${renderStyleProfileBlock(styleProfile)}\n\n以上档案是本模板的美学基准，所有字段（meta / camera / pose / sceneGuide / composition / postProcess）都必须与它一致。\n`;
 }
 
+/** 多人场景关键词（仅用于系统提示词的措辞分档，不写入草稿） */
+const MULTI_SUBJECT_PATTERN =
+  /(情侣|恋人|夫妻|结婚|婚纱|婚礼|双人|两人|二人|一对|闺蜜|姐妹|兄弟|全家福|一家人|家庭|合影|合照|团体|多人|三五好友|朋友|聚餐|聚会|亲子|母子|母女|父子|父女|毕业照)/;
+
+/** 从用户输入预判主体人数档位：命中多人关键词 → 2，否则 1。仅用于提示词措辞分档，最终值以模型输出为准。 */
+export function inferSubjectCountHint(...texts: Array<string | null | undefined>): number {
+  for (const t of texts) {
+    if (typeof t === 'string' && MULTI_SUBJECT_PATTERN.test(t)) return 2;
+  }
+  return 1;
+}
+
 /** 输出 JSON 契约示例（设计文档第四节草稿 JSON，jsonc 注释保留作字段说明） */
 const DRAFT_JSON_EXAMPLE = `{
   "meta": {
     "name": "晴空田园少女人像侧拍",          // 场景+主体+风格+角度，12~30字（硬约束）
     "category": "portrait",                 // 必须命中分类树一级 key
+    "subjectCount": 1,                      // 画面主体人数：1=单人；2=情侣/双人；3+=全家福/合影/聚餐；按参考图与用户描述推断
     "shortDesc": "把夏天拍进眼睛里",          // 情绪化文案，≤20字
     "description": "午后四点的斜阳从右后方照进田野，女孩侧身站在没过膝盖的草丛里回头，浅金色逆光在发梢勾出轮廓光；三分法构图，人物落在左三分线上，右侧留出大片天空作呼吸空间，前景草叶虚化、远景田野层叠。",
     "tags": ["日系", "田园", "清新"],
@@ -150,18 +163,30 @@ const DRAFT_JSON_EXAMPLE = `{
     "perPose": [{ "name": "侧身回眸", "differentiationNote": "身体右转45度。" }] }  // 姿势参考面片（Task9）
 }`;
 
-/** 系统提示词公共主体：分类树 + 枚举表 + 输出 JSON 契约 + 硬约束（视觉/纯文字版共用） */
-function buildSystemPromptBody(categories: CategoryNode[], styleProfile?: StyleProfile): string {
-  const category = styleProfile?.category ?? 'portrait';
-  const portrait = isPortraitCategory(category);
-  const poseConsistencyLine = portrait
-    ? '多姿势模板默认视为同一套连续拍摄：每个 pose.description 只描述动作、身体角度、重心、手部和视线差异，\n' +
-      '  但每一个姿势都要独立满足上述「姿势质量」要求（线条、重心、手部落点、视线），不能因为是第 2、3 张就写得更粗略；\n' +
-      '  不得改变人物长相、服装、发型、体型、场景、道具、光线或整体风格。仅当用户明确要求不同场景 / 人物 /\n' +
-      '  造型时，才允许对应要素变化；'
-    : '多姿势模板默认视为同一套连续拍摄：每个 pose.description 只描述机位 / 取景 / 参数差异，\n' +
+/** 多姿势一致性硬约束：非人像 / 人像单人 / 人像多人三档措辞 */
+function poseConsistencyLineOf(portrait: boolean, subjectCountHint: number): string {
+  if (!portrait) {
+    return '多姿势模板默认视为同一套连续拍摄：每个 pose.description 只描述机位 / 取景 / 参数差异，\n' +
       '  但每一个画面都要独立满足上述「拍摄方案」要求（构图落位、层次、光线、参数），不能因为是第 2、3 张就写得更粗略；\n' +
       '  不得改变主体、场景、道具、光线或整体风格。仅当用户明确要求不同场景 / 主体 / 造型时，才允许对应要素变化；';
+  }
+  if (subjectCountHint >= 2) {
+    return '多姿势模板默认视为同一组人物的同一套连续拍摄：每个 pose.description 只描述动作、身体角度、重心、手部、视线，\n' +
+      '  以及人物之间的相对位置与互动关系差异；但每一个姿势都要独立满足上述「姿势质量」要求（线条、重心、手部落点、视线），\n' +
+      '  不能因为是第 2、3 张就写得更粗略；不得改变每位人物的长相、服装、发型，也不得改变人物数量、身高差与互动关系。\n' +
+      '  仅当用户明确要求不同场景 / 人物 / 造型时，才允许对应要素变化；';
+  }
+  return '多姿势模板默认视为同一套连续拍摄：每个 pose.description 只描述动作、身体角度、重心、手部和视线差异，\n' +
+    '  但每一个姿势都要独立满足上述「姿势质量」要求（线条、重心、手部落点、视线），不能因为是第 2、3 张就写得更粗略；\n' +
+    '  不得改变人物长相、服装、发型、体型、场景、道具、光线或整体风格。仅当用户明确要求不同场景 / 人物 /\n' +
+    '  造型时，才允许对应要素变化；';
+}
+
+/** 系统提示词公共主体：分类树 + 枚举表 + 输出 JSON 契约 + 硬约束（视觉/纯文字版共用） */
+function buildSystemPromptBody(categories: CategoryNode[], styleProfile?: StyleProfile, subjectCountHint = 1): string {
+  const category = styleProfile?.category ?? 'portrait';
+  const portrait = isPortraitCategory(category);
+  const poseConsistencyLine = poseConsistencyLineOf(portrait, subjectCountHint);
   return `## 分类树（meta.category 取一级 key；meta.classification.majorStyle/style/method 按层级逐级选择，只能从下列 key 中选择，禁止编造 key）
 ${renderCategoryTree(categories)}
 
@@ -194,8 +219,8 @@ ${qualityRequirements(category)}
 - meta.shortDesc 只描述整体氛围与情绪（≤20 字），不得包含「N张」「N个姿势」「连拍」「多宫格」「不同姿势」等数量或多图指令；
 - meta.description 概述光线 / 氛围 / 主体 / 背景 / 构图；composition.description 专写构图（构图法则 + 主体位置与占比 + 留白与层次），
   两者都不包含数量或多图指令；
-- pose 数组中的每个 description 必须是单张单人可独立生成的姿势，
-  不要把多个姿势合并到同一个 description 里；
+- pose 数组中的每个 description 必须是「单张画面内可独立生成」的姿势，不要把多个姿势合并到同一个 description 里；
+- meta.subjectCount 必须给出 1~8 的整数：按用户描述与参考图中实际可见的人物数量填写；出现「情侣 / 结婚 / 婚纱 / 闺蜜 / 全家福 / 合影 / 多人 / 聚餐 / 聚会」等场景时不得写 1；
 - ${poseConsistencyLine}
 - 自拍模板（cameraDirection="front"）的 composition.description、sceneGuide.shootingDistance、tips 也必须按第一人称自拍口径写：
   机位在面部一臂之内、景别为近景 / 半身 / 特写，画面中不出现手机、相机、三脚架、自拍杆等拍摄设备与举着设备的手臂；
@@ -212,13 +237,13 @@ ${qualityRequirements(category)}
 }
 
 /** 视觉识别版系统提示词（现状行为不变，仅结构拆分） */
-export function buildAnalyzeSystemPrompt(categories: CategoryNode[], styleProfile?: StyleProfile): string {
-  return `你是资深摄影/视觉模板编辑（按风格档案作业），分析用户上传的示例图，产出可直接上线的摄影模板表单数据。\n\n${buildSystemPromptBody(categories, styleProfile)}`;
+export function buildAnalyzeSystemPrompt(categories: CategoryNode[], styleProfile?: StyleProfile, subjectCountHint = 1): string {
+  return `你是资深摄影/视觉模板编辑（按风格档案作业），分析用户上传的示例图，产出可直接上线的摄影模板表单数据。\n\n${buildSystemPromptBody(categories, styleProfile, subjectCountHint)}`;
 }
 
 /** 纯文字构思版系统提示词（无示例图，基于文字描述构思模板） */
-export function buildTextOnlySystemPrompt(categories: CategoryNode[], styleProfile?: StyleProfile): string {
-  return `你是资深摄影/视觉模板编辑（按风格档案作业）。用户将提供一段风格描述或创作要求（没有示例图），请据此构思一个可直接上线的摄影模板，产出模板表单数据。描述未提及的字段，给出符合该风格的合理建议值（相机参数为复现该风格的估算值）。\n\n${buildSystemPromptBody(categories, styleProfile)}`;
+export function buildTextOnlySystemPrompt(categories: CategoryNode[], styleProfile?: StyleProfile, subjectCountHint = 1): string {
+  return `你是资深摄影/视觉模板编辑（按风格档案作业）。用户将提供一段风格描述或创作要求（没有示例图），请据此构思一个可直接上线的摄影模板，产出模板表单数据。描述未提及的字段，给出符合该风格的合理建议值（相机参数为复现该风格的估算值）。\n\n${buildSystemPromptBody(categories, styleProfile, subjectCountHint)}`;
 }
 
 /** 识别用户提示词附加输入：Step1 文字描述 / 创作要求 / 姿势个数（均可选） */
@@ -229,6 +254,8 @@ export interface AnalyzeUserPromptInput {
   creationReq?: string | null;
   /** 姿势个数：1~6 固定指定；空/undefined = AI 自动判断 */
   poseCount?: number | null;
+  /** 主体人数：1~8 显式指定；空/undefined = AI 自动推断 */
+  subjectCount?: number | null;
   /** 趋势研究摘要（识别前已搜索命中；结构化数据构思时贴合当下流行趋势） */
   researchDigest?: string | null;
   /** 已开启联网搜索但本次未取到任何来源/摘要 → 提示词显式声明，禁止凭训练知识编造时效信息 */
@@ -243,6 +270,17 @@ function poseCountLine(poseCount: number | null | undefined): string {
   return (
     '请根据用户文字描述与创作要求（包括示例图中可见的文字要求，如「三连拍」等）判断需要多少个姿势，' +
     '在 1~6 个范围内输出，每个姿势有独立的 name / description / position / cameraDirection；无明确要求时输出 1 个。'
+  );
+}
+
+/** 构造主体人数指令行（vision / text-only 共用） */
+function subjectCountLine(subjectCount: number | null | undefined): string {
+  if (typeof subjectCount === 'number' && Number.isInteger(subjectCount) && subjectCount >= 1 && subjectCount <= 8) {
+    return `meta.subjectCount 必须为 ${subjectCount}：画面中要有 ${subjectCount} 位人物，姿势描述需体现人物之间的相对位置与互动关系。`;
+  }
+  return (
+    '请根据用户描述与示例图中实际可见的人物数量给出 meta.subjectCount（1~8 整数）：' +
+    '单人写 1；情侣 / 双人 / 闺蜜写 2；全家福 / 合影 / 多人聚餐写 3 及以上；无明确线索时写 1。'
   );
 }
 
@@ -274,6 +312,7 @@ function extrasLines(input: AnalyzeUserPromptInput): string[] {
 export function buildAnalyzeUserPrompt(input: AnalyzeUserPromptInput = {}): string {
   const lines: string[] = ['请分析这张示例图，按系统提示给出的输出 JSON 契约返回模板草稿。'];
   lines.push(...extrasLines(input));
+  lines.push(subjectCountLine(input.subjectCount));
   lines.push(poseCountLine(input.poseCount));
   return lines.join('\n');
 }
@@ -286,6 +325,7 @@ export function buildTextOnlyUserPrompt(input: AnalyzeUserPromptInput = {}): str
     textDesc || '（用户未提供具体描述，请按创作要求构思）',
   ];
   lines.push(...extrasLines(input));
+  lines.push(subjectCountLine(input.subjectCount));
   lines.push(poseCountLine(input.poseCount));
   return lines.join('\n');
 }

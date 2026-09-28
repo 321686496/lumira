@@ -27,11 +27,12 @@ export class AiTemplatesController {
    */
   @Post('ai-analyze')
   async analyze(@Req() req: FastifyRequest) {
-    const { image, text, textDesc, creationReq, poseCount } = await parseAiMultipart(req);
+    const { image, text, textDesc, creationReq, poseCount, subjectCount } = await parseAiMultipart(req);
     return this.aiAnalyzeTaskService.submit(image, text ?? textDesc ?? undefined, {
       textDesc,
       creationReq,
       poseCount,
+      subjectCount,
     });
   }
 
@@ -163,6 +164,8 @@ export interface ParsedAiMultipart {
   creationReq: string | null;
   /** Step1 姿势个数（可选：'1'~'6' 固定指定；空 = AI 自动判断） */
   poseCount: string | null;
+  /** Step1 主体人数（可选：'1'~'8' 固定指定；空 = AI 自动推断） */
+  subjectCount: string | null;
   /** Step3 附加提示词（可选，拼接到封面生图提示词末尾） */
   extraPrompt: string | null;
   /** 识别阶段研究结果 JSON（可选，ResearchItem[]；透传给生图提示词组织器） */
@@ -172,7 +175,7 @@ export interface ParsedAiMultipart {
 }
 
 /** 文本字段名集合（multipart 循环内按字段名收集） */
-const TEXT_FIELDS = ['meta', 'text', 'textDesc', 'creationReq', 'poseCount', 'extraPrompt', 'research'] as const;
+const TEXT_FIELDS = ['meta', 'text', 'textDesc', 'creationReq', 'poseCount', 'subjectCount', 'extraPrompt', 'research'] as const;
 
 /**
  * 解析 AI 端点 multipart 请求，提取文本字段（meta / textDesc / creationReq / poseCount / extraPrompt）
@@ -180,7 +183,7 @@ const TEXT_FIELDS = ['meta', 'text', 'textDesc', 'creationReq', 'poseCount', 'ex
  * 使用 @fastify/multipart 的 request.parts() 异步迭代器（同 admin-templates.controller）。
  */
 export async function parseAiMultipart(req: FastifyRequest): Promise<ParsedAiMultipart> {
-  const result: ParsedAiMultipart = { meta: null, textDesc: null, creationReq: null, poseCount: null, extraPrompt: null, research: null };
+  const result: ParsedAiMultipart = { meta: null, textDesc: null, creationReq: null, poseCount: null, subjectCount: null, extraPrompt: null, research: null };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const reqAny = req as any;
   if (typeof reqAny.parts !== 'function') {

@@ -58,7 +58,7 @@ export class AiAnalyzeTaskService implements OnModuleDestroy {
   async submit(
     image: UploadFile | undefined,
     text: string | undefined,
-    extra: { textDesc?: string | null; creationReq?: string | null; poseCount?: string | null } = {},
+    extra: { textDesc?: string | null; creationReq?: string | null; poseCount?: string | null; subjectCount?: string | null } = {},
   ): Promise<{ taskId: string }> {
     if (!image && !(text ?? '').trim()) {
       throw new BadRequestException('请至少提供示例图或文字描述之一');
@@ -75,7 +75,7 @@ export class AiAnalyzeTaskService implements OnModuleDestroy {
     id: string,
     image: UploadFile | undefined,
     text: string | undefined,
-    extra: { textDesc?: string | null; creationReq?: string | null; poseCount?: string | null },
+    extra: { textDesc?: string | null; creationReq?: string | null; poseCount?: string | null; subjectCount?: string | null },
   ): Promise<void> {
     const task = this.tasks.get(id);
     if (!task) return;

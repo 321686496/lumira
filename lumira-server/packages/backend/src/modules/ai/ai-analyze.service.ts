@@ -15,6 +15,7 @@ import {
   buildAnalyzeUserPrompt,
   buildTextOnlySystemPrompt,
   buildTextOnlyUserPrompt,
+  inferSubjectCountHint,
 } from './analyze.prompt';
 import { extractJson, normalizeDraft, CategoryNode } from './normalize';
 import { AiOrchestratorService } from './ai-orchestrator.service';
@@ -58,7 +59,7 @@ export class AiAnalyzeService {
   async analyze(
     image: UploadFile | undefined,
     text: string | undefined,
-    extra: { textDesc?: string | null; creationReq?: string | null; poseCount?: string | null } = {},
+    extra: { textDesc?: string | null; creationReq?: string | null; poseCount?: string | null; subjectCount?: string | null } = {},
   ): Promise<AiAnalyzeResult> {
     // 0. 姿势个数：'1'~'6' 整数字符串合法；其余（空/非法）= AI 自动判断
     let poseCount: number | null = null;
@@ -70,8 +71,21 @@ export class AiAnalyzeService {
       poseCount = n;
     }
 
-    // 1. 输入校验：至少一项；text 长度；图 mimetype / 大小
     const trimmedText = (text ?? '').trim();
+
+    // 0.5 主体人数：'1'~'8' 整数字符串合法；其余（空/非法）= AI 自动推断
+    let subjectCount: number | null = null;
+    if (extra.subjectCount !== null && extra.subjectCount !== undefined && extra.subjectCount !== '') {
+      const n = Number(extra.subjectCount);
+      if (!Number.isInteger(n) || n < 1 || n > 8) {
+        throw new BadRequestException('subjectCount 必须是 1~8 的整数（留空则由 AI 自动推断）');
+      }
+      subjectCount = n;
+    }
+    // 系统提示的措辞分档：显式指定优先，否则从用户输入预判（情侣/全家福等关键词）
+    const subjectCountHint = subjectCount ?? inferSubjectCountHint(extra.creationReq, extra.textDesc, trimmedText);
+
+    // 1. 输入校验：至少一项；text 长度；图 mimetype / 大小
     if (!image && !trimmedText) {
       throw new BadRequestException('请至少提供示例图或文字描述之一');
     }
@@ -148,11 +162,12 @@ export class AiAnalyzeService {
         '识图生成模板草稿',
         () =>
           visionChat(cfg.vision, {
-            systemPrompt: buildAnalyzeSystemPrompt(categories, styleProfile),
+            systemPrompt: buildAnalyzeSystemPrompt(categories, styleProfile, subjectCountHint),
             userText: buildAnalyzeUserPrompt({
               textDesc: extra.textDesc?.trim() || trimmedText || undefined,
               creationReq: extra.creationReq,
               poseCount,
+              subjectCount,
               researchDigest,
               researchUnavailable,
             }),
@@ -169,11 +184,12 @@ export class AiAnalyzeService {
         '文字构思模板草稿',
         () =>
           textChat(cfg.text, {
-            systemPrompt: buildTextOnlySystemPrompt(categories, styleProfile),
+            systemPrompt: buildTextOnlySystemPrompt(categories, styleProfile, subjectCountHint),
             userText: buildTextOnlyUserPrompt({
               textDesc: trimmedText,
               creationReq: extra.creationReq,
               poseCount,
+              subjectCount,
               researchDigest,
               researchUnavailable,
             }),
