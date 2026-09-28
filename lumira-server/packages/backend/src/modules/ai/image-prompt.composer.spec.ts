@@ -274,6 +274,28 @@ describe('多人物与系统角色', () => {
   });
 });
 
+describe('趋势要点落地', () => {
+  it('brief 非空时输出【趋势要点】区块', () => {
+    const material = buildPromptMaterial({
+      draft: { meta: { category: 'portrait' } },
+      research: [],
+      brief: { summary: '', themes: [], styles: [], colorLight: ['暖调侧逆光'], visualElements: [], seasons: [], poseIdeas: ['侧身回眸，手扶帽檐'], sources: [] },
+    });
+    expect(material).toContain('【趋势要点（结构化）】');
+    expect(material).toContain('侧身回眸，手扶帽檐');
+    expect(material).toContain('暖调侧逆光');
+  });
+
+  it('brief 为空时不输出该区块', () => {
+    const material = buildPromptMaterial({ draft: { meta: { category: 'portrait' } }, research: [] });
+    expect(material).not.toContain('【趋势要点（结构化）】');
+  });
+
+  it('系统规则要求姿势灵感逐条落实', () => {
+    expect(buildComposeSystemPrompt()).toContain('姿势灵感');
+  });
+});
+
 describe('去噪写实', () => {
   it('带 grain 也不再输出颗粒感', () => {
     const material = buildPromptMaterial({

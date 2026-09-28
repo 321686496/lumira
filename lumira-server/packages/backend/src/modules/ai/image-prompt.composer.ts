@@ -7,6 +7,8 @@ import { textChat } from './llm-client';
 import type { LlmEndpoint } from './llm-client';
 import { isSelfieDraft, subjectCountOfDraft, describeSubjectCount } from './image-prompt.builder';
 import type { ResearchItem } from './trend-research/research-item';
+import { renderResearchBrief } from './trend-research/research-brief';
+import type { ResearchBrief } from './trend-research/research-brief';
 import { buildResearchLines } from './trend-research/research-digest';
 import {
   LUT_LABELS,
@@ -42,7 +44,7 @@ const COMPOSE_SYSTEM_PROMPT = `${COMPOSE_ROLE_DEFAULT}用户将提供一份结�
    c. 人物的质感写成高清写实的细节：皮肤纹理清晰不糊（毛孔与绒毛可辨、肤色过渡自然、不做美颜磨皮），发丝分明有层次，衣物布料纤维与褶皱纹理可辨；
    d. 精修档与档案一致：none → 不过度修饰、保留环境真实感；light → 干净通透、光比克制、皮肤保留毛孔与绒毛；polished → 布光与质感考究、调色讲究，但材质仍真实。
 5. 风格词必须转译后再用：「新中式」「氛围感」「少女」「千金风」等高风格化标签要落成具体的穿着、场景、人物特征（如「穿着新中式盘扣上衣的二十多岁普通女孩」），不得直接堆砌风格词，防止画面滑向唯美插画风。
-6. 网络趋势参考中的有效信息（当下流行题材、风格、视觉元素）要转化为具体可见的画面描述融入提示词，让画面贴合当下审美；与创作要求冲突、明显无效或只是排版残留（标题符号 / 表格 / 来源域名）的忽略。
+6. 网络趋势参考与【趋势要点】中的有效信息要转化为具体可见的画面描述融入提示词，让画面贴合当下审美：【趋势要点】的「姿势灵感」必须逐条落实为本张姿势可见的身体朝向、重心、手部落点与视线；「视觉元素」落实为服装 / 道具 / 场景的可见细节；与创作要求冲突、明显无效或只是排版残留（标题符号 / 表格 / 来源域名）的忽略。
 7. 严格保留素材中的硬约束：画幅比例、单姿势要求、人物一致性要求、用户额外要求（权重最高，置于提示词末尾附近强调）。
 8. 自拍视角（素材出现「拍摄方式：自拍 / 相机方向：前置」时强制生效）：必须按第一人称自拍写——画面的视点就是人物本人的眼睛，镜头距面部约一臂之内，只呈现上半身或近景 / 特写，视线看向镜头；成片里不得出现手机、相机、三脚架、自拍杆等拍摄设备，不得出现举着设备的手臂，也不得出现镜中反射的拍摄者。素材里若还带着「2-3 米 / 七分身 / 全身」等第三人称景别，一律按自拍口径改写为近景或半身，不得照抄。
 9. 可在风格档案允许范围内补足审美细节（表情、穿搭与褶皱、肢体线条、光线层次、前景层次、色调统一），使画面更好看；但不得引入与档案冲突的风格取向（例如档案为随拍松弛时不得写成影棚布光大‌片），也不得新增现实中拍不出来的元素；不输出任何解释，只输出整理后的提示词本身。`;
@@ -62,6 +64,8 @@ export interface PromptComposeInput {
   draft: Record<string, unknown>;
   research: ResearchItem[];
   extraPrompt?: string | null;
+  /** 趋势研究结构化结论（识别阶段透传；姿势灵感/视觉元素须落实到画面） */
+  brief?: ResearchBrief | null;
   /** 本次风格档案（缺省时从 draft.styleProfile 兜底读取） */
   styleProfile?: StyleProfile;
 }
@@ -212,6 +216,7 @@ function describeCamera(camera: Record<string, unknown>): string[] {
 /** 把结构化素材组织成「带分节标签的素材文本」，交给文本模型整理 */
 export function buildPromptMaterial(input: PromptComposeInput): string {
   const { draft, extraPrompt } = input;
+  const brief = input.brief ?? null;
   const research = Array.isArray(input.research) ? input.research : [];
   const profile = input.styleProfile ?? styleProfileOfDraft(draft);
   const meta = isPlainObject(draft.meta) ? draft.meta : {};
@@ -295,6 +300,16 @@ export function buildPromptMaterial(input: PromptComposeInput): string {
     const trendLines = buildResearchLines(research).map((l) => `- ${l}`);
     if (trendLines.length) {
       sections.push(`【网络趋势参考】（识别阶段实时搜索命中的当下流行素材，提炼为可见的视觉元素）\n${trendLines.join('\n')}`);
+    }
+  }
+
+  // ④.5 趋势要点（结构化）：二次整理结论，姿势灵感与视觉元素必须落到本张画面
+  if (brief) {
+    const briefText = renderResearchBrief(brief);
+    if (briefText) {
+      sections.push(
+        `【趋势要点（结构化）】（识别阶段联网检索的二次整理结论；姿势灵感必须逐条落实为本张姿势，视觉元素落到服装/道具/场景）\n${briefText}`,
+      );
     }
   }
 

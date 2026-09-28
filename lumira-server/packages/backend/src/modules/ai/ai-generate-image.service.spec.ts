@@ -15,6 +15,8 @@ import {
 import { AiConfigService } from './ai-config.service';
 import { generateImage } from './image-client';
 import { buildImagePrompt } from './image-prompt.builder';
+import * as composerModule from './image-prompt.composer';
+import type { PromptComposeInput } from './image-prompt.composer';
 import { UploadFile } from '../templates/admin-templates.service';
 
 // generateImage mock（网络层）；mapSize / buildImagePrompt 纯函数保留真实实现
@@ -261,5 +263,34 @@ describe('hardenPhotoRealism 去噪', () => {
     expect(out).not.toContain('自然噪点');
     expect(out).toContain('高清干净');
     expect(out).toContain('禁止颗粒与噪点');
+  });
+});
+
+describe('research 两种形态解析', () => {
+  it('对象形态 {items, brief} 时 brief 透传到组织器', async () => {
+    const { service } = buildService();
+    generateImageMock.mockResolvedValueOnce({ base64: 'aGVsbG8=', mimeType: 'image/png' });
+    const composeSpy = jest.spyOn(composerModule, 'composeImagePrompt');
+
+    await service.generate(undefined, JSON.stringify({ meta: { category: 'portrait' } }), null, JSON.stringify({
+      items: [{ source: 'searxng', title: 't', snippet: 's', keywords: [] }],
+      brief: { summary: '', themes: [], styles: [], colorLight: [], visualElements: [], seasons: [], poseIdeas: ['p'], sources: [] },
+    }));
+
+    expect(composeSpy.mock.calls[0][1]).toMatchObject({ brief: { poseIdeas: ['p'] } });
+    expect(composeSpy.mock.calls[0][1]).toMatchObject({ research: [{ title: 't' }] });
+    composeSpy.mockRestore();
+  });
+
+  it('数组形态（旧前端）兼容为 items 且 brief 为 null', async () => {
+    const { service } = buildService();
+    generateImageMock.mockResolvedValueOnce({ base64: 'aGVsbG8=', mimeType: 'image/png' });
+    const composeSpy = jest.spyOn(composerModule, 'composeImagePrompt');
+
+    await service.generate(undefined, JSON.stringify({ meta: { category: 'portrait' } }), null, JSON.stringify([{ source: 'x', title: 't', snippet: 's', keywords: [] }]));
+
+    expect((composeSpy.mock.calls[0][1] as PromptComposeInput).brief).toBeNull();
+    expect(composeSpy.mock.calls[0][1]).toMatchObject({ research: [{ title: 't' }] });
+    composeSpy.mockRestore();
   });
 });

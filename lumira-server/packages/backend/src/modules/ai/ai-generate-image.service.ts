@@ -12,6 +12,7 @@ import { buildImagePrompt, isSelfieDraft, retouchLevelOfDraft } from './image-pr
 import type { RetouchLevel } from './style-profile.presets';
 import { composeImagePrompt } from './image-prompt.composer';
 import type { ResearchItem } from './trend-research/research-item';
+import type { ResearchBrief } from './trend-research/research-brief';
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -142,23 +143,28 @@ export class AiGenerateImageService {
       }
     }
 
-    // 2.5 解析研究结果 JSON（识别阶段透传；非法/非数组静默降级为空，不阻断生图）
+    // 2.5 解析研究结果 JSON：兼容旧前端（数组）与新前端（{ items, brief }）；非法静默降级，不阻断生图
     let research: ResearchItem[] = [];
+    let researchBrief: ResearchBrief | null = null;
     if (researchJson) {
       try {
-        const parsed = JSON.parse(researchJson);
-        if (Array.isArray(parsed)) research = parsed as ResearchItem[];
+        const parsed: unknown = JSON.parse(researchJson);
+        if (Array.isArray(parsed)) {
+          research = parsed as ResearchItem[];
+        } else if (isPlainObject(parsed)) {
+          if (Array.isArray(parsed.items)) research = parsed.items as ResearchItem[];
+          researchBrief = (parsed.brief ?? null) as ResearchBrief | null;
+        }
       } catch {
         // 非法 JSON → 无研究参考，走纯草稿素材
       }
     }
 
     // 3. 机械拼接 prompt 作为兜底；结构化素材交文本模型整理为最终生图提示词（失败回退拼接值）
-    //    + 按厂商映射尺寸 → 生图（有参考图时 doubao/openai 走图生图）
     const fallbackPrompt = buildImagePrompt(draft, extraPrompt);
     const { prompt } = await composeImagePrompt(
       cfg.text,
-      { draft, research, extraPrompt },
+      { draft, research, brief: researchBrief, extraPrompt },
       fallbackPrompt,
     );
     // 网络生图（含 qwen 异步轮询/结果下载）纳入全局并发闸门，避免并发打爆上游厂商
