@@ -33,6 +33,8 @@ describe('assertCrawlableUrl', () => {
     ['http://10.0.0.5/x', '私有网段'],
     ['http://172.20.3.4/x', '私有网段'],
     ['http://foo.internal/x', '内网域名'],
+    ['http://8.8.8.8/x', '裸 IP'],
+    ['http://[2001:4860:4860::8888]/x', '裸 IPv6'],
   ])('拒绝 %s', (url) => {
     expect(() => assertCrawlableUrl(url)).toThrow();
   });

@@ -2,7 +2,7 @@
 // 网页正文抓取：仅抓公开静态 HTML，清洗为纯文本供文本模型阅读。
 // 设计文档：docs/superpowers/specs/2026-09-28-ai-text-tool-web-crawl-design.md 第二节
 //
-// 安全：仅 http/https、拦内网/本机、限体积（1MB）与超时（8s）、限长度（6000 字）。
+// 安全：仅 http/https、拦内网/本机/裸 IP、限体积（1MB）与超时（8s）、限长度（6000 字）。
 // 不做 JS 渲染，不引入第三方解析库（正则 + 原生字符串处理）。
 
 import { LruCache } from '../trend-research/lru-cache';
@@ -22,6 +22,9 @@ const ALLOWED_MIME = ['text/html', 'application/xhtml+xml', 'text/plain'];
 
 /** 成功结果进程内缓存（key = 归一化 URL） */
 const cache = new LruCache<CrawlResult>(100);
+
+/** 裸 IP 字面量（IPv4 点分十进制 / IPv6 带方括号）一律拒绝（防 SSRF） */
+const IP_LITERAL = /^\d{1,3}(\.\d{1,3}){3}$|^\[/;
 
 /** 内网 / 本机 / 保留地址（防 SSRF） */
 const BLOCKED_HOST_PATTERNS = [
@@ -47,6 +50,9 @@ export function assertCrawlableUrl(raw: string): URL {
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new Error(`仅支持 http/https 网址：${raw}`);
+  }
+  if (IP_LITERAL.test(url.hostname)) {
+    throw new Error(`不允许抓取裸 IP 地址：${raw}`);
   }
   if (BLOCKED_HOST_PATTERNS.some((p) => p.test(url.hostname))) {
     throw new Error(`不允许抓取内网/本机地址：${raw}`);
