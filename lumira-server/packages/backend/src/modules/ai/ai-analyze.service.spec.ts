@@ -321,6 +321,51 @@ describe('AiAnalyzeService', () => {
 
     expect(r.brief?.poseIdeas).toEqual(['侧身回眸']);
   });
+
+  it('识别结果回传参考图 images 与视觉结论 vision（原单次路径）', async () => {
+    const select = jest.fn(() => chainable(CATEGORY_ROWS));
+    const dbService = { getDb: () => ({ select }) } as unknown as DatabaseService;
+    const cfgWithSearch = { ...ACTIVE_CFG, search: { enabled: true } };
+    const getActiveConfig = jest.fn(async () => cfgWithSearch);
+    const images = [
+      {
+        id: 'img-1',
+        url: 'https://cdn.example.com/1.jpg',
+        sourceUrl: 'https://example.com/1.jpg',
+        source: 'searxng',
+        layer: 'search',
+        width: 800,
+        height: 600,
+        bytes: 12345,
+      },
+    ];
+    const vision = {
+      summary: '暖调逆光为主流',
+      styles: ['新中式'],
+      colorLight: ['暖调逆光'],
+      composition: [],
+      wardrobe: [],
+      scene: [],
+      adopted: [{ id: 'img-1', reason: '色彩贴合主题' }],
+    };
+    const researchMock = jest.fn(async () => ({
+      items: [{ source: 'searxng', title: 't', snippet: 's', keywords: [] }],
+      images,
+      vision,
+      sourceErrors: [],
+    }));
+    const service = new AiAnalyzeService(
+      dbService,
+      { getActiveConfig } as unknown as AiConfigService,
+      { research: researchMock } as unknown as TrendResearchService,
+    );
+    textChatJsonMock.mockResolvedValueOnce(RAW_DRAFT);
+
+    const r = await service.analyze(undefined, '秋日人像模板', {});
+
+    expect(r.researchImages).toEqual(images);
+    expect(r.researchVision).toEqual(vision);
+  });
 });
 
 describe('AiAnalyzeService — 多输入', () => {

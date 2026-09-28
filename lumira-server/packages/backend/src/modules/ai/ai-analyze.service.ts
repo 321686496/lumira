@@ -23,6 +23,8 @@ import type { OrchestratorInput, OrchestratorTraceEntry } from './ai-orchestrato
 import type { ResearchItem } from './trend-research/research-item';
 import type { ResearchBrief } from './trend-research/research-brief';
 import { renderResearchBrief } from './trend-research/research-brief';
+import type { ResearchImage } from './trend-research/research-image';
+import type { ResearchVision } from './trend-research/research-vision';
 import { buildResearchDigest } from './trend-research/research-digest';
 import { TrendResearchService } from './trend-research/trend-research.service';
 import { StyleProfileService, type StyleProfileResolveResult } from './style-profile.service';
@@ -42,6 +44,10 @@ export interface AiAnalyzeResult {
   research: ResearchItem[];
   /** 趋势研究二次整理后的结构化结论（供生图阶段复用）；未启用/未命中 → null */
   brief?: ResearchBrief | null;
+  /** 抓取落盘的参考图（供后台时间线/结果弹窗展示；未启用为空数组） */
+  researchImages?: ResearchImage[];
+  /** 参考图多模态解读结论（未启用/失败为 null） */
+  researchVision?: ResearchVision | null;
 }
 
 @Injectable()
@@ -136,6 +142,9 @@ export class AiAnalyzeService {
     let research: ResearchItem[] = [];
     let researchBrief: ResearchBrief | null = null;
     let researchDigest = '';
+    /** 抓取落盘的参考图 + 多模态解读结论（搜索/图片/解读任一未启用 → 空数组 / null） */
+    let researchImages: ResearchImage[] = [];
+    let researchVision: ResearchVision | null = null;
     /** 搜索开启且主题非空、但本次没取到任何条目（失败或空结果）→ 下游禁止编造时效信息 */
     let researchUnavailable = false;
     if (cfg.search?.enabled) {
@@ -150,6 +159,8 @@ export class AiAnalyzeService {
           );
           research = r.items;
           researchBrief = r.brief ?? null;
+          researchImages = r.images ?? [];
+          researchVision = r.vision ?? null;
           researchDigest = researchBrief ? renderResearchBrief(researchBrief) : buildResearchDigest(r.items);
         } catch {
           // 搜索失败 → 无摘要，草稿生成回到无研究参考的原路径
@@ -235,10 +246,19 @@ export class AiAnalyzeService {
         poseCount: poseCount ?? undefined,
       };
       const r = await this.orchestrator.run(input, { categories, draft: json, research, styleProfile: styleResolve });
-      return { draft: r.draft, warnings: r.warnings, trace: r.trace, raw: json, research: r.research ?? [], brief: researchBrief };
+      return {
+        draft: r.draft,
+        warnings: r.warnings,
+        trace: r.trace,
+        raw: json,
+        research: r.research ?? [],
+        brief: researchBrief,
+        researchImages,
+        researchVision,
+      };
     }
 
     traceNote('finalize', '定稿归一化', `草稿就绪；修正提示 ${normalized.warnings.length} 条`);
-    return { ...normalized, trace: [], raw: json, research, brief: researchBrief };
+    return { ...normalized, trace: [], raw: json, research, brief: researchBrief, researchImages, researchVision };
   }
 }
