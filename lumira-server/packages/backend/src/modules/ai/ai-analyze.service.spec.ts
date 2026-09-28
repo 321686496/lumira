@@ -10,15 +10,16 @@ import { DatabaseService } from '../../database/database.service';
 import { AiConfigService } from './ai-config.service';
 import type { TrendResearchService } from './trend-research/trend-research.service';
 import { MAX_IMAGE_BYTES, UploadFile } from '../templates/admin-templates.service';
-import { visionChat, textChat } from './llm-client';
+import { LlmJsonError, visionChatJson, textChatJson } from './llm-json';
 
-jest.mock('./llm-client', () => ({
-  visionChat: jest.fn(),
-  textChat: jest.fn(),
+jest.mock('./llm-json', () => ({
+  visionChatJson: jest.fn(),
+  textChatJson: jest.fn(),
+  LlmJsonError: class LlmJsonError extends Error {},
 }));
 
-const visionChatMock = visionChat as jest.MockedFunction<typeof visionChat>;
-const textChatMock = textChat as jest.MockedFunction<typeof textChat>;
+const visionChatJsonMock = visionChatJson as jest.MockedFunction<typeof visionChatJson>;
+const textChatJsonMock = textChatJson as jest.MockedFunction<typeof textChatJson>;
 
 /** 可 await 的 drizzle 查询链 mock：select().from().where() 链式后 resolve 出 rows */
 function chainable(rows: unknown) {
@@ -59,6 +60,7 @@ const ACTIVE_CFG = {
     model: 'qwen-max',
   },
   hasCustomTextModel: true,
+  runtime: { retryCount: 0, timeoutMs: 300_000, maxTokens: 8192 },
 };
 
 /** 模型 RAW 输出夹具（成功路径与多输入用例共用；经 normalize 后 category 命中分类树） */
@@ -93,20 +95,20 @@ function imageFile(opts: { mimetype?: string; size?: number } = {}): UploadFile 
 }
 
 beforeEach(() => {
-  visionChatMock.mockReset();
-  textChatMock.mockReset();
+  visionChatJsonMock.mockReset();
+  textChatJsonMock.mockReset();
 });
 
 describe('AiAnalyzeService', () => {
-  it('成功路径：visionChat 收到分类树提示词 + base64 图 + jsonMode，返回归一化结果', async () => {
+  it('成功路径：visionChatJson 收到分类树提示词 + base64 图 + runtime，返回归一化结果', async () => {
     const { service } = buildService();
-    visionChatMock.mockResolvedValueOnce(JSON.stringify(RAW_DRAFT));
+    visionChatJsonMock.mockResolvedValueOnce(RAW_DRAFT);
 
     const image = imageFile();
     const res = await service.analyze(image, undefined);
 
-    expect(visionChatMock).toHaveBeenCalledTimes(1);
-    const [cfg, input] = visionChatMock.mock.calls[0];
+    expect(visionChatJsonMock).toHaveBeenCalledTimes(1);
+    const [cfg, input, runtime] = visionChatJsonMock.mock.calls[0];
     expect(cfg).toEqual(ACTIVE_CFG.vision);
     // 系统提示词注入：分类树（按层级缩进）+ 枚举中文标签 + JSON 契约示例
     expect(input.systemPrompt).toContain('- portrait 人像');
@@ -118,14 +120,14 @@ describe('AiAnalyzeService', () => {
     expect(input.imageBase64).toBe(image.buffer.toString('base64'));
     expect(input.imageMime).toBe('image/jpeg');
     expect(input.temperature).toBe(0.3);
-    expect(input.jsonMode).toBe(true);
+    expect(runtime).toEqual(ACTIVE_CFG.runtime);
     // 返回为归一化结果（六段结构 + 默认姿势骨架）
     expect((res.draft.meta as any).category).toBe('portrait');
     expect(Array.isArray(res.draft.pose)).toBe(true);
     expect(res.warnings).toEqual([]);
   });
 
-  it('编排顺序：分类查询 → 取配置 → visionChat', async () => {
+  it('编排顺序：分类查询 → 取配置 → visionChatJson', async () => {
     const order: string[] = [];
     const select = jest.fn(() => {
       order.push('categories');
@@ -141,9 +143,9 @@ describe('AiAnalyzeService', () => {
       { getActiveConfig } as unknown as AiConfigService,
       { research: jest.fn() } as unknown as TrendResearchService,
     );
-    visionChatMock.mockImplementationOnce(async () => {
+    visionChatJsonMock.mockImplementationOnce(async () => {
       order.push('visionChat');
-      return '{}';
+      return {};
     });
 
     await service.analyze(imageFile(), undefined);
@@ -160,7 +162,7 @@ describe('AiAnalyzeService', () => {
 
     expect(select).not.toHaveBeenCalled();
     expect(getActiveConfig).not.toHaveBeenCalled();
-    expect(visionChatMock).not.toHaveBeenCalled();
+    expect(visionChatJsonMock).not.toHaveBeenCalled();
   });
 
   it('图片超过 8MB → 400（assertFileSize 风格文案），不调用模型', async () => {
@@ -169,7 +171,7 @@ describe('AiAnalyzeService', () => {
     await expect(service.analyze(imageFile({ size: MAX_IMAGE_BYTES + 1 }), undefined))
       .rejects.toThrow('示例图不能超过 8MB');
 
-    expect(visionChatMock).not.toHaveBeenCalled();
+    expect(visionChatJsonMock).not.toHaveBeenCalled();
   });
 
   it('未配置/未启用（getActiveConfig 503）→ 异常透传，不调用模型', async () => {
@@ -178,19 +180,19 @@ describe('AiAnalyzeService', () => {
     });
 
     await expect(service.analyze(imageFile(), undefined)).rejects.toBeInstanceOf(ServiceUnavailableException);
-    expect(visionChatMock).not.toHaveBeenCalled();
+    expect(visionChatJsonMock).not.toHaveBeenCalled();
   });
 
   it('模型输出经 normalize 后：非法枚举丢弃 + 数值夹取，warnings 透传', async () => {
     const { service } = buildService();
-    visionChatMock.mockResolvedValueOnce(JSON.stringify({
+    visionChatJsonMock.mockResolvedValueOnce({
       meta: {
         name: '晴空田园少女人像侧拍逆光清新风格模板',
         category: 'portrait',
         classification: { majorStyle: 'fresh_healing', style: 'japanese' },
       },
       composition: { overlayType: 'bogus_overlay', opacity: 2 },
-    }));
+    });
 
     const res = await service.analyze(imageFile(), undefined);
 
@@ -204,11 +206,15 @@ describe('AiAnalyzeService', () => {
     expect(joined).toContain('composition.opacity');
   });
 
-  it('模型输出无法解析为 JSON → 400「模型输出无法解析为 JSON，请重试识别」', async () => {
+  it('模型输出无法解析为 JSON（重试用尽 → LlmJsonError）→ 400「模型输出无法解析为 JSON，请重试识别」', async () => {
     const { service } = buildService();
-    visionChatMock.mockResolvedValueOnce('抱歉，这张图片我无法分析。');
+    visionChatJsonMock.mockRejectedValueOnce(
+      new LlmJsonError('AI 输出无法解析为 JSON（已重试 2 次）：输出不是合法 JSON'),
+    );
 
-    await expect(service.analyze(imageFile(), undefined)).rejects.toThrow('模型输出无法解析为 JSON，请重试识别');
+    const p = service.analyze(imageFile(), undefined);
+    await expect(p).rejects.toBeInstanceOf(BadRequestException);
+    await expect(p).rejects.toThrow('模型输出无法解析为 JSON，请重试识别');
   });
 
   it('搜索开启且主题非空：先搜后写草稿——研究摘要注入提示词、research 随结果透出', async () => {
@@ -227,14 +233,14 @@ describe('AiAnalyzeService', () => {
       { getActiveConfig } as unknown as AiConfigService,
       { research: researchMock } as unknown as TrendResearchService,
     );
-    textChatMock.mockResolvedValueOnce(JSON.stringify(RAW_DRAFT));
+    textChatJsonMock.mockResolvedValueOnce(RAW_DRAFT);
 
     const res = await service.analyze(undefined, '千金小姐他拍风格');
 
     // 主题口径 = 创作要求 ?? 文字描述；先搜后写草稿
     expect(researchMock).toHaveBeenCalledWith('千金小姐他拍风格', expect.anything());
     // 研究摘要注入用户提示词（结构性数据构思贴合当下趋势）
-    const userText = textChatMock.mock.calls[0][1].userText as string;
+    const userText = textChatJsonMock.mock.calls[0][1].userText as string;
     expect(userText).toContain('网络趋势参考');
     expect(userText).toContain('秋日千金风大片');
     // 原单次路径（无 orchestrator）也透出 research，供前端生图透传
@@ -253,12 +259,12 @@ describe('AiAnalyzeService', () => {
       { getActiveConfig } as unknown as AiConfigService,
       { research: researchMock } as unknown as TrendResearchService,
     );
-    textChatMock.mockResolvedValueOnce(JSON.stringify(RAW_DRAFT));
+    textChatJsonMock.mockResolvedValueOnce(RAW_DRAFT);
 
     const res = await service.analyze(undefined, '千金小姐他拍风格');
 
-    expect(textChatMock).toHaveBeenCalledTimes(1);
-    const userText = textChatMock.mock.calls[0][1].userText as string;
+    expect(textChatJsonMock).toHaveBeenCalledTimes(1);
+    const userText = textChatJsonMock.mock.calls[0][1].userText as string;
     expect(userText).not.toContain('网络趋势参考');
     expect(userText).toContain('本次未取到任何联网来源');
     expect(userText).toContain('禁止凭训练记忆编造节日名称');
@@ -276,11 +282,11 @@ describe('AiAnalyzeService', () => {
       { getActiveConfig } as unknown as AiConfigService,
       { research: researchMock } as unknown as TrendResearchService,
     );
-    textChatMock.mockResolvedValueOnce(JSON.stringify(RAW_DRAFT));
+    textChatJsonMock.mockResolvedValueOnce(RAW_DRAFT);
 
     const res = await service.analyze(undefined, '最近的节日 三种姿势');
 
-    const userText = textChatMock.mock.calls[0][1].userText as string;
+    const userText = textChatJsonMock.mock.calls[0][1].userText as string;
     expect(userText).toContain('本次未取到任何联网来源');
     expect(res.research).toEqual([]);
   });
@@ -309,7 +315,7 @@ describe('AiAnalyzeService', () => {
       { getActiveConfig } as unknown as AiConfigService,
       { research: researchMock } as unknown as TrendResearchService,
     );
-    textChatMock.mockResolvedValueOnce(JSON.stringify(RAW_DRAFT));
+    textChatJsonMock.mockResolvedValueOnce(RAW_DRAFT);
 
     const r = await service.analyze(undefined, '秋日人像模板', {});
 
@@ -335,36 +341,36 @@ describe('AiAnalyzeService — 多输入', () => {
 
   it('仅文字 → 走 textChat（visionChat 不被调），返回归一化草稿', async () => {
     const { service } = buildService();
-    visionChatMock.mockResolvedValue(JSON.stringify(RAW_DRAFT));
-    textChatMock.mockResolvedValue(JSON.stringify(RAW_DRAFT));
+    visionChatJsonMock.mockResolvedValue(RAW_DRAFT);
+    textChatJsonMock.mockResolvedValue(RAW_DRAFT);
     const res = await service.analyze(undefined, '日系田园风，午后侧逆光');
-    expect(textChatMock).toHaveBeenCalledTimes(1);
-    expect(visionChatMock).not.toHaveBeenCalled();
+    expect(textChatJsonMock).toHaveBeenCalledTimes(1);
+    expect(visionChatJsonMock).not.toHaveBeenCalled();
     expect((res.draft.meta as any).category).toBe('portrait');
     // textChat 入参：收到文本模态端点（model = 有效文本模型）、userPrompt 含用户文字
-    const cfg = textChatMock.mock.calls[0][0];
+    const cfg = textChatJsonMock.mock.calls[0][0];
     expect(cfg).toEqual(ACTIVE_CFG.text);
-    expect(textChatMock.mock.calls[0][1].userText).toContain('日系田园风');
+    expect(textChatJsonMock.mock.calls[0][1].userText).toContain('日系田园风');
   });
 
   it('图 + 文 → visionChat 的 userText 注入「用户文字描述」（text 无 textDesc 时回退）', async () => {
     const { service } = buildService();
-    visionChatMock.mockResolvedValue(JSON.stringify(RAW_DRAFT));
+    visionChatJsonMock.mockResolvedValue(RAW_DRAFT);
     await service.analyze(imageFile(), '要侧拍');
-    expect(visionChatMock).toHaveBeenCalledTimes(1);
-    expect(visionChatMock.mock.calls[0][1].userText).toContain('用户文字描述：要侧拍');
+    expect(visionChatJsonMock).toHaveBeenCalledTimes(1);
+    expect(visionChatJsonMock.mock.calls[0][1].userText).toContain('用户文字描述：要侧拍');
   });
 
   it('仅图（无文字）→ userText 不含附加输入段（现状不变）', async () => {
     const { service } = buildService();
-    visionChatMock.mockResolvedValue(JSON.stringify(RAW_DRAFT));
+    visionChatJsonMock.mockResolvedValue(RAW_DRAFT);
     await service.analyze(imageFile(), undefined);
-    expect(visionChatMock.mock.calls[0][1].userText).not.toContain('用户文字描述：');
+    expect(visionChatJsonMock.mock.calls[0][1].userText).not.toContain('用户文字描述：');
   });
 
   it('附加输入注入：文字描述 / 创作要求 / 固定姿势个数注入 userText', async () => {
     const { service } = buildService();
-    visionChatMock.mockResolvedValueOnce('{}');
+    visionChatJsonMock.mockResolvedValueOnce({});
 
     await service.analyze(imageFile(), undefined, {
       textDesc: '三连拍姿势，适合闺蜜出游',
@@ -372,7 +378,7 @@ describe('AiAnalyzeService — 多输入', () => {
       poseCount: '3',
     });
 
-    const [, input] = visionChatMock.mock.calls[0];
+    const [, input] = visionChatJsonMock.mock.calls[0];
     expect(input.userText).toContain('用户文字描述：三连拍姿势，适合闺蜜出游');
     expect(input.userText).toContain('创作要求：偏胶片感');
     expect(input.userText).toContain('pose 数组必须恰好输出 3 个姿势');
@@ -380,11 +386,11 @@ describe('AiAnalyzeService — 多输入', () => {
 
   it('姿势个数缺省/自动：userText 含自动判断指令而非固定数量', async () => {
     const { service } = buildService();
-    visionChatMock.mockResolvedValueOnce('{}');
+    visionChatJsonMock.mockResolvedValueOnce({});
 
     await service.analyze(imageFile(), undefined, { textDesc: '', creationReq: '', poseCount: '' });
 
-    const [, input] = visionChatMock.mock.calls[0];
+    const [, input] = visionChatJsonMock.mock.calls[0];
     expect(input.userText).toContain('判断需要多少个姿势');
     expect(input.userText).not.toContain('恰好输出');
   });
@@ -395,7 +401,7 @@ describe('AiAnalyzeService — 多输入', () => {
     for (const bad of ['0', '7', '2.5', 'abc']) {
       await expect(service.analyze(imageFile(), undefined, { poseCount: bad })).rejects.toThrow('poseCount');
     }
-    expect(visionChatMock).not.toHaveBeenCalled();
+    expect(visionChatJsonMock).not.toHaveBeenCalled();
   });
 });
 
@@ -413,7 +419,7 @@ describe('AiAnalyzeService — 风格定位接线', () => {
   }
 
   it('注入 styleProfileService：档案段落进入系统提示词，且透传给 orchestrator', async () => {
-    textChatMock.mockResolvedValueOnce(JSON.stringify(RAW_DRAFT));
+    textChatJsonMock.mockResolvedValueOnce(RAW_DRAFT);
     const styleProfileService = {
       resolve: jest.fn().mockResolvedValue({
         profile: {
@@ -432,7 +438,7 @@ describe('AiAnalyzeService — 风格定位接线', () => {
     await svc.analyze(undefined, '秋冬时尚大片人像', { poseCount: '1' });
 
     expect(styleProfileService.resolve).toHaveBeenCalledTimes(1);
-    const systemPrompt = String(textChatMock.mock.calls[0][1].systemPrompt);
+    const systemPrompt = String(textChatJsonMock.mock.calls[0][1].systemPrompt);
     expect(systemPrompt).toContain('本次风格档案');
     expect(systemPrompt).toContain('驼色大衣');
     expect(orchestrator.run).toHaveBeenCalledWith(
@@ -442,7 +448,7 @@ describe('AiAnalyzeService — 风格定位接线', () => {
   });
 
   it('未注入 styleProfileService 时链路不报错（向后兼容）', async () => {
-    textChatMock.mockResolvedValueOnce(JSON.stringify(RAW_DRAFT));
+    textChatJsonMock.mockResolvedValueOnce(RAW_DRAFT);
     const { service } = buildService();
     await expect(service.analyze(undefined, '奶油风人像', { poseCount: '1' })).resolves.toBeDefined();
   });

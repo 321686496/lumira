@@ -9,7 +9,7 @@ import { DatabaseService } from '../../database/database.service';
 import { templateCategories } from '../../database/schema';
 import { MAX_IMAGE_BYTES, UploadFile } from '../templates/admin-templates.service';
 import { AiConfigService } from './ai-config.service';
-import { visionChat, textChat } from './llm-client';
+import { visionChatJson, textChatJson, LlmJsonError } from './llm-json';
 import {
   buildAnalyzeSystemPrompt,
   buildAnalyzeUserPrompt,
@@ -17,7 +17,7 @@ import {
   buildTextOnlyUserPrompt,
   inferSubjectCountHint,
 } from './analyze.prompt';
-import { extractJson, normalizeDraft, CategoryNode } from './normalize';
+import { normalizeDraft, CategoryNode } from './normalize';
 import { AiOrchestratorService } from './ai-orchestrator.service';
 import type { OrchestratorInput, OrchestratorTraceEntry } from './ai-orchestrator.service';
 import type { ResearchItem } from './trend-research/research-item';
@@ -158,56 +158,64 @@ export class AiAnalyzeService {
       }
     }
 
-    // 4. 按输入组合分叉：有图走视觉模型（extras 注入识别指令），仅文字走文本模型
-    let content: string;
-    if (image) {
-      content = await traceStep(
-        'analyze',
-        '识图生成模板草稿',
-        () =>
-          visionChat(cfg.vision, {
-            systemPrompt: buildAnalyzeSystemPrompt(categories, styleProfile, subjectCountHint),
-            userText: buildAnalyzeUserPrompt({
-              textDesc: extra.textDesc?.trim() || trimmedText || undefined,
-              creationReq: extra.creationReq,
-              poseCount,
-              subjectCount,
-              researchDigest,
-              researchUnavailable,
-            }),
-            imageBase64: image.buffer.toString('base64'),
-            imageMime: image.mimetype,
-            temperature: 0.3,
-            jsonMode: true,
-          }),
-        (c) => `模型输出 ${c.length} 字`,
-      );
-    } else {
-      content = await traceStep(
-        'analyze',
-        '文字构思模板草稿',
-        () =>
-          textChat(cfg.text, {
-            systemPrompt: buildTextOnlySystemPrompt(categories, styleProfile, subjectCountHint),
-            userText: buildTextOnlyUserPrompt({
-              textDesc: trimmedText,
-              creationReq: extra.creationReq,
-              poseCount,
-              subjectCount,
-              researchDigest,
-              researchUnavailable,
-            }),
-            temperature: 0.3,
-            jsonMode: true,
-          }),
-        (c) => `模型输出 ${c.length} 字`,
-      );
-    }
-
-    // 5. 容错提取 JSON（失败 → 400 引导重试识别）
-    const json = extractJson(content);
-    if (!json) {
-      throw new BadRequestException('模型输出无法解析为 JSON，请重试识别');
+    // 4. 按输入组合分叉：有图走视觉模型，仅文字走文本模型；两者均带 JSON 有界重试
+    let json: Record<string, unknown>;
+    try {
+      if (image) {
+        json = await traceStep(
+          'analyze',
+          '识图生成模板草稿',
+          () =>
+            visionChatJson(
+              cfg.vision,
+              {
+                systemPrompt: buildAnalyzeSystemPrompt(categories, styleProfile, subjectCountHint),
+                userText: buildAnalyzeUserPrompt({
+                  textDesc: extra.textDesc?.trim() || trimmedText || undefined,
+                  creationReq: extra.creationReq,
+                  poseCount,
+                  subjectCount,
+                  researchDigest,
+                  researchUnavailable,
+                }),
+                imageBase64: image.buffer.toString('base64'),
+                imageMime: image.mimetype,
+                temperature: 0.3,
+              },
+              cfg.runtime,
+            ),
+          (r) => `模型输出 ${Object.keys(r).length} 个字段`,
+        );
+      } else {
+        json = await traceStep(
+          'analyze',
+          '文字构思模板草稿',
+          () =>
+            textChatJson(
+              cfg.text,
+              {
+                systemPrompt: buildTextOnlySystemPrompt(categories, styleProfile, subjectCountHint),
+                userText: buildTextOnlyUserPrompt({
+                  textDesc: trimmedText,
+                  creationReq: extra.creationReq,
+                  poseCount,
+                  subjectCount,
+                  researchDigest,
+                  researchUnavailable,
+                }),
+                temperature: 0.3,
+              },
+              cfg.runtime,
+            ),
+          (r) => `模型输出 ${Object.keys(r).length} 个字段`,
+        );
+      }
+    } catch (err) {
+      // 重试用尽仍无法解析 → 保持原 400 引导重试语义
+      if (err instanceof LlmJsonError) {
+        throw new BadRequestException('模型输出无法解析为 JSON，请重试识别');
+      }
+      throw err;
     }
 
     // 6. 归一化（枚举校验 / 分类链校验 / 数值夹取，非法值丢弃并收集 warnings）

@@ -8,9 +8,9 @@
 
 import { Injectable } from '@nestjs/common';
 import { AiConfigService } from './ai-config.service';
-import { textChat } from './llm-client';
 import type { LlmEndpoint } from './llm-client';
-import { extractJson, clampNumber } from './normalize';
+import { textChatJson } from './llm-json';
+import { clampNumber } from './normalize';
 import type { ImageDescription } from './image-describe.service';
 import type { PoseRefSheet } from './pose-ref-sheet.service';
 import type { ResearchItem } from './trend-research/research-item';
@@ -191,15 +191,21 @@ export class ImageScoreService {
     const endpoint = input.judgeModel ?? cfg.text;
     const profile = input.styleProfile ? normalizeStyleProfile(input.styleProfile) : undefined;
 
-    const content = await textChat(endpoint, {
-      systemPrompt: buildScoreSystemPrompt(profile),
-      userText: buildScoreUserText(input),
-      temperature: 0.3,
-      jsonMode: true,
-      timeoutMs: 120_000,
-    });
-
-    const json = extractJson(content);
+    let json: Record<string, unknown> | null = null;
+    try {
+      json = await textChatJson(
+        endpoint,
+        {
+          systemPrompt: buildScoreSystemPrompt(profile),
+          userText: buildScoreUserText(input),
+          temperature: 0.3,
+        },
+        cfg.runtime,
+      );
+    } catch {
+      // 重试用尽 → 保守回退（既有语义：不抛，交给编排再判）
+      json = null;
+    }
     if (!json) {
       return { score: 0, verdict: 'retry', reasons: ['评分为空'], suggests: [] };
     }

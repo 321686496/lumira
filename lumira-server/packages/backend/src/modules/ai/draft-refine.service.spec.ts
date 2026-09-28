@@ -2,13 +2,19 @@
 // 草稿细化单测：按评审未达标维度逐项整改的系统提示词（含真实底线与风格档案约束）。
 
 import { DraftRefineService } from './draft-refine.service';
-import { textChat } from './llm-client';
+import { textChatJson } from './llm-json';
 import type { LlmEndpoint } from './llm-client';
 import type { AiConfigService } from './ai-config.service';
 import type { StyleProfile } from './style-profile.presets';
 
-jest.mock('./llm-client', () => ({ textChat: jest.fn() }));
-const textChatMock = textChat as jest.MockedFunction<typeof textChat>;
+jest.mock('./llm-json', () => ({
+  visionChatJson: jest.fn(),
+  textChatJson: jest.fn(),
+  LlmJsonError: class LlmJsonError extends Error {},
+}));
+const textChatJsonMock = textChatJson as jest.MockedFunction<typeof textChatJson>;
+
+const RUNTIME = { retryCount: 0, timeoutMs: 300_000, maxTokens: 8192 };
 
 const TEXT: LlmEndpoint = { provider: 'qwen', baseUrl: 'x', apiKey: 'sk', model: 'qwen-plus' };
 
@@ -27,15 +33,15 @@ const PROFILE: StyleProfile = {
 };
 
 function buildService() {
-  const aiConfigService = { getActiveConfig: async () => ({ text: TEXT }) } as unknown as AiConfigService;
+  const aiConfigService = { getActiveConfig: async () => ({ text: TEXT, runtime: RUNTIME }) } as unknown as AiConfigService;
   return new DraftRefineService(aiConfigService);
 }
 
 describe('DraftRefineService.refine', () => {
-  beforeEach(() => textChatMock.mockReset());
+  beforeEach(() => textChatJsonMock.mockReset());
 
   it('按未达标维度逐项整改：提示词含逐项整改要求与 styleProfile 段落', async () => {
-    textChatMock.mockResolvedValueOnce(JSON.stringify({ draft: { meta: { name: '改进稿' } } }));
+    textChatJsonMock.mockResolvedValueOnce({ draft: { meta: { name: '改进稿' } } });
     const svc = buildService();
 
     const out = await svc.refine({
@@ -54,7 +60,7 @@ describe('DraftRefineService.refine', () => {
     });
 
     expect(out).toMatchObject({ meta: { name: '改进稿' } });
-    const systemPrompt = String(textChatMock.mock.calls[0][1].systemPrompt);
+    const systemPrompt = String(textChatJsonMock.mock.calls[0][1].systemPrompt);
     expect(systemPrompt).toContain('逐项整改');
     expect(systemPrompt).toContain('不得破坏真实底线');
     expect(systemPrompt).toContain('styleProfile');

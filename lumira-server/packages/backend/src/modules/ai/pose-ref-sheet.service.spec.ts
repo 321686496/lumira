@@ -2,20 +2,26 @@
 // T3 姿势参考面片服务（Task 6，TDD）：mock textChat(jsonMode) → PoseRefSheet；shared 锚点 + perPose 长度/差异项校验
 
 import { PoseRefSheetService } from './pose-ref-sheet.service';
-import { textChat } from './llm-client';
+import { LlmJsonError, textChatJson } from './llm-json';
 import type { LlmEndpoint } from './llm-client';
 import type { ImageDescription } from './image-describe.service';
 import type { AiConfigService } from './ai-config.service';
 import { type StyleProfile } from './style-profile.presets';
 
-jest.mock('./llm-client', () => ({ textChat: jest.fn() }));
+jest.mock('./llm-json', () => ({
+  visionChatJson: jest.fn(),
+  textChatJson: jest.fn(),
+  LlmJsonError: class LlmJsonError extends Error {},
+}));
 
-const textChatMock = textChat as jest.MockedFunction<typeof textChat>;
+const textChatJsonMock = textChatJson as jest.MockedFunction<typeof textChatJson>;
+
+const RUNTIME = { retryCount: 0, timeoutMs: 300_000, maxTokens: 8192 };
 
 const TEXT: LlmEndpoint = { provider: 'qwen', baseUrl: 'https://x.example/v1', apiKey: 'sk', model: 'qwen-plus' };
 
 function buildService() {
-  const aiConfigService = { getActiveConfig: async () => ({ text: TEXT }) } as unknown as AiConfigService;
+  const aiConfigService = { getActiveConfig: async () => ({ text: TEXT, runtime: RUNTIME }) } as unknown as AiConfigService;
   return new PoseRefSheetService(aiConfigService);
 }
 
@@ -39,21 +45,21 @@ const PROFILE: StyleProfile = {
   extraNotes: '',
 };
 
-function legalSheet(): string {
-  return JSON.stringify({
+function legalSheet(): Record<string, unknown> {
+  return {
     shared: { outfit: '针织衫', scene: '飘窗', light: '侧逆窗光', aspectRatio: '3:4', mood: '清冷慵懒', palette: '#d2b48c' },
     perPose: [
       { name: '侧身回眸', subjectPose: { torso: '侧4/3' }, camera: { angle: '平视' }, frame: { subjectFrame: {} }, lightOnPose: {}, differentiationNote: '回眸看镜头，身体更侧' },
       { name: '俯身微笑', subjectPose: { torso: '俯身' }, camera: { angle: '俯拍' }, frame: { subjectFrame: {} }, lightOnPose: {}, differentiationNote: '重心前移，表情更甜' },
     ],
-  });
+  };
 }
 
 describe('PoseRefSheetService.generate', () => {
-  beforeEach(() => textChatMock.mockReset());
+  beforeEach(() => textChatJsonMock.mockReset());
 
   it('合法 JSON → 解析成 PoseRefSheet：shared 五锚点齐全、perPose 长度==poseCount、diffNote 非空', async () => {
-    textChatMock.mockResolvedValueOnce(legalSheet());
+    textChatJsonMock.mockResolvedValueOnce(legalSheet());
     const svc = buildService();
 
     const sheet = await svc.generate(DESC, 2);
@@ -63,33 +69,33 @@ describe('PoseRefSheetService.generate', () => {
     }
     expect(sheet.perPose).toHaveLength(2);
     expect(sheet.perPose[0].differentiationNote.trim().length).toBeGreaterThan(0);
-    // textChat 走 text 端点 + jsonMode
-    const [cfg, input] = textChatMock.mock.calls[0];
+    // textChatJson 走 text 端点 + runtime
+    const [cfg, input, runtime] = textChatJsonMock.mock.calls[0];
     expect(cfg).toEqual(TEXT);
-    expect(input.jsonMode).toBe(true);
     expect(input.userText).toContain('姿势');
+    expect(runtime).toEqual(RUNTIME);
   });
 
   it('perPose 超出 poseCount → 截断为 poseCount（跨姿势一致性护栏）', async () => {
-    textChatMock.mockResolvedValueOnce(legalSheet());
+    textChatJsonMock.mockResolvedValueOnce(legalSheet());
     const svc = buildService();
     const sheet = await svc.generate(DESC, 1);
     expect(sheet.perPose).toHaveLength(1);
   });
 
-  it('非法 JSON → 抛可读错误（含「无法解析」）', async () => {
-    textChatMock.mockResolvedValueOnce('没有姿势');
+  it('非法 JSON（重试用尽 → LlmJsonError）→ 抛可读错误（含「无法解析为 JSON」）', async () => {
+    textChatJsonMock.mockRejectedValueOnce(
+      new LlmJsonError('AI 输出无法解析为 JSON（已重试 2 次）：输出不是合法 JSON'),
+    );
     const svc = buildService();
-    await expect(svc.generate(DESC, 2)).rejects.toThrow('无法解析');
+    await expect(svc.generate(DESC, 2)).rejects.toThrow(/无法解析为 JSON/);
   });
 
   it('subjectPose 字段级契约：缺失键被补齐为指定默认值', async () => {
-    textChatMock.mockResolvedValueOnce(
-      JSON.stringify({
-        shared: { outfit: '米色针织', scene: '飘窗', light: '窗光', aspectRatio: '3:4', mood: '清冷', palette: '暖棕', styling: '针织开衫 + 细金链', expressionMood: '平静微松' },
-        perPose: [{ name: '坐姿侧靠', differentiationNote: '侧靠偏左', subjectPose: { headFraming: '下巴略收、视窗外', armAndHand: '左手扶窗台、右手搭膝' } }],
-      }),
-    );
+    textChatJsonMock.mockResolvedValueOnce({
+      shared: { outfit: '米色针织', scene: '飘窗', light: '窗光', aspectRatio: '3:4', mood: '清冷', palette: '暖棕', styling: '针织开衫 + 细金链', expressionMood: '平静微松' },
+      perPose: [{ name: '坐姿侧靠', differentiationNote: '侧靠偏左', subjectPose: { headFraming: '下巴略收、视窗外', armAndHand: '左手扶窗台、右手搭膝' } }],
+    });
     const svc = buildService();
     const sheet = await svc.generate(DESC, 1, '秋冬清冷感人像');
 
@@ -108,11 +114,11 @@ describe('PoseRefSheetService.generate', () => {
   });
 
   it('注入 styleProfile：系统提示词含档案段落与姿势线条要求', async () => {
-    textChatMock.mockResolvedValueOnce(JSON.stringify({ shared: {}, perPose: [{ name: 'A', differentiationNote: 'x' }] }));
+    textChatJsonMock.mockResolvedValueOnce({ shared: {}, perPose: [{ name: 'A', differentiationNote: 'x' }] });
     const svc = buildService();
     await svc.generate(DESC, 1, '时尚大片', PROFILE);
 
-    const systemPrompt = String(textChatMock.mock.calls[0][1].systemPrompt);
+    const systemPrompt = String(textChatJsonMock.mock.calls[0][1].systemPrompt);
     expect(systemPrompt).toContain('本次风格档案');
     expect(systemPrompt).toContain('时尚大片');
     expect(systemPrompt).toContain('双手对称');

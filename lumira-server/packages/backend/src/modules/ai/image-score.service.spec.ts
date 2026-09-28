@@ -4,7 +4,7 @@
 // / 分数 clamp 到 [0,1] / judgeModel 缺省走 cfg.text。
 
 import { ImageScoreService, SCORE_PASS_THRESHOLD } from './image-score.service';
-import { textChat } from './llm-client';
+import { LlmJsonError, textChatJson } from './llm-json';
 import type { LlmEndpoint } from './llm-client';
 import type { AiModalityEndpoint } from './ai-config.service';
 import type { AiConfigService } from './ai-config.service';
@@ -12,9 +12,15 @@ import type { ImageDescription } from './image-describe.service';
 import type { PoseRefSheet } from './pose-ref-sheet.service';
 import type { ResearchItem } from './trend-research/research-item';
 
-jest.mock('./llm-client', () => ({ textChat: jest.fn() }));
+jest.mock('./llm-json', () => ({
+  visionChatJson: jest.fn(),
+  textChatJson: jest.fn(),
+  LlmJsonError: class LlmJsonError extends Error {},
+}));
 
-const textChatMock = textChat as jest.MockedFunction<typeof textChat>;
+const textChatJsonMock = textChatJson as jest.MockedFunction<typeof textChatJson>;
+
+const RUNTIME = { retryCount: 0, timeoutMs: 300_000, maxTokens: 8192 };
 
 const TEXT: AiModalityEndpoint = {
   provider: 'qwen',
@@ -31,7 +37,7 @@ const JUDGE: LlmEndpoint = {
 };
 
 function buildService() {
-  const aiConfigService = { getActiveConfig: async () => ({ text: TEXT }) } as unknown as AiConfigService;
+  const aiConfigService = { getActiveConfig: async () => ({ text: TEXT, runtime: RUNTIME }) } as unknown as AiConfigService;
   return new ImageScoreService(aiConfigService);
 }
 
@@ -74,12 +80,11 @@ function input(overrides: Record<string, unknown> = {}) {
   return { desc: DESC, poseSheet: POSE_SHEET, research: RESEARCH, draft: DRAFT, ...overrides };
 }
 
-beforeEach(() => textChatMock.mockReset());
+beforeEach(() => textChatJsonMock.mockReset());
 
 describe('ImageScoreService.score', () => {
-  it('总分与分项全达标 → verdict pass，且 textChat 收到 text 端点 + jsonMode:true', async () => {
-    textChatMock.mockResolvedValueOnce(
-      JSON.stringify({
+  it('总分与分项全达标 → verdict pass，且 textChatJson 收到 text 端点 + runtime', async () => {
+    textChatJsonMock.mockResolvedValueOnce({
         aesthetics: { composition: 0.9, pose: 0.88, styling: 0.9, expression: 0.86, lighting: 0.9, styleHit: 0.92 },
         realism: { anatomy: 0.95, material: 0.9, physical: 0.92 },
         consistency: 0.9,
@@ -88,22 +93,21 @@ describe('ImageScoreService.score', () => {
         score: 0.9,
         reasons: [],
         suggests: [],
-      }),
-    );
+      });
     const svc = buildService();
 
     const res = await svc.score(input());
 
     expect(res.verdict).toBe('pass');
     expect(res.score).toBeCloseTo(0.9, 5);
-    const [cfg, chatInput] = textChatMock.mock.calls[0];
+    const [cfg, chatInput, runtime] = textChatJsonMock.mock.calls[0];
     expect(cfg).toEqual(TEXT);
-    expect(chatInput.jsonMode).toBe(true);
     expect(chatInput.userText).toContain('飘窗清冷少女人像模板'); // draft 注入
+    expect(runtime).toEqual(RUNTIME);
   });
 
   it('低分 0.6 → verdict retry 且保留 LLM 给出的 reasons/suggests', async () => {
-    textChatMock.mockResolvedValueOnce(JSON.stringify({ score: 0.6, reasons: ['姿势不一致'], suggests: ['重跑姿势面片'] }));
+    textChatJsonMock.mockResolvedValueOnce({ score: 0.6, reasons: ['姿势不一致'], suggests: ['重跑姿势面片'] });
     const svc = buildService();
 
     const res = await svc.score(input());
@@ -114,8 +118,10 @@ describe('ImageScoreService.score', () => {
     expect(res.suggests).toContain('重跑姿势面片');
   });
 
-  it('非法 JSON → 保守 {score:0, verdict:retry, reasons:["评分为空"]} 不抛', async () => {
-    textChatMock.mockResolvedValueOnce('抱歉，我评不了');
+  it('非法 JSON（重试用尽 → LlmJsonError）→ 保守 {score:0, verdict:retry, reasons:["评分为空"]} 不抛', async () => {
+    textChatJsonMock.mockRejectedValueOnce(
+      new LlmJsonError('AI 输出无法解析为 JSON（已重试 2 次）：输出不是合法 JSON'),
+    );
     const svc = buildService();
 
     const res = await svc.score(input());
@@ -125,7 +131,7 @@ describe('ImageScoreService.score', () => {
 
   it('分数 clamp 到 [0,1]：1.4 → 1、-0.2 → 0', async () => {
     const svc = buildService();
-    textChatMock.mockResolvedValueOnce(JSON.stringify({ score: 1.4 })).mockResolvedValueOnce(JSON.stringify({ score: -0.2 }));
+    textChatJsonMock.mockResolvedValueOnce({ score: 1.4 }).mockResolvedValueOnce({ score: -0.2 });
 
     const hi = await svc.score(input());
     const lo = await svc.score(input());
@@ -134,12 +140,12 @@ describe('ImageScoreService.score', () => {
   });
 
   it('传入 judgeModel 时使用独立评审端点而非 cfg.text', async () => {
-    textChatMock.mockResolvedValueOnce(JSON.stringify({ score: 0.5, reasons: [] }));
+    textChatJsonMock.mockResolvedValueOnce({ score: 0.5, reasons: [] });
     const svc = buildService();
 
     await svc.score(input({ judgeModel: JUDGE }));
 
-    const [cfg] = textChatMock.mock.calls[0];
+    const [cfg] = textChatJsonMock.mock.calls[0];
     expect(cfg).toEqual(JUDGE);
   });
 
@@ -156,15 +162,13 @@ const OK_REALISM = { anatomy: 0.95, material: 0.9, physical: 0.92 };
 
 describe('ImageScoreService.score 三段闸门', () => {
   it('总分够但审美分项不够（composition 0.6）→ retry，reasons 指明维度', async () => {
-    textChatMock.mockResolvedValueOnce(
-      JSON.stringify({
+    textChatJsonMock.mockResolvedValueOnce({
         aesthetics: { ...OK_AESTHETICS, composition: 0.6 },
         realism: OK_REALISM,
         score: 0.9,
         reasons: [],
         suggests: [],
-      }),
-    );
+      });
     const svc = buildService();
 
     const res = await svc.score(input());
@@ -174,15 +178,13 @@ describe('ImageScoreService.score 三段闸门', () => {
   });
 
   it('审美够但真实分项不够（anatomy 0.6）→ retry，reasons 指明真实底线', async () => {
-    textChatMock.mockResolvedValueOnce(
-      JSON.stringify({
+    textChatJsonMock.mockResolvedValueOnce({
         aesthetics: OK_AESTHETICS,
         realism: { ...OK_REALISM, anatomy: 0.6 },
         score: 0.9,
         reasons: [],
         suggests: [],
-      }),
-    );
+      });
     const svc = buildService();
 
     const res = await svc.score(input());
@@ -192,7 +194,7 @@ describe('ImageScoreService.score 三段闸门', () => {
   });
 
   it('分项缺失 → 保守 retry', async () => {
-    textChatMock.mockResolvedValueOnce(JSON.stringify({ score: 0.9, reasons: [], suggests: [] }));
+    textChatJsonMock.mockResolvedValueOnce({ score: 0.9, reasons: [], suggests: [] });
     const svc = buildService();
 
     const res = await svc.score(input());
@@ -203,15 +205,13 @@ describe('ImageScoreService.score 三段闸门', () => {
   });
 
   it('无参考图（textOnly）→ 阈值放宽：aesthetics min 0.70 / score 0.8 即可 pass', async () => {
-    textChatMock.mockResolvedValueOnce(
-      JSON.stringify({
+    textChatJsonMock.mockResolvedValueOnce({
         aesthetics: { ...OK_AESTHETICS, composition: 0.72 },
         realism: OK_REALISM,
         score: 0.82,
         reasons: [],
         suggests: [],
-      }),
-    );
+      });
     const svc = buildService();
 
     const res = await svc.score(input({ textOnly: true }));
@@ -220,15 +220,13 @@ describe('ImageScoreService.score 三段闸门', () => {
   });
 
   it('无参考图但真实底线不够（anatomy 0.8）→ 仍 retry（真实底线不豁免）', async () => {
-    textChatMock.mockResolvedValueOnce(
-      JSON.stringify({
+    textChatJsonMock.mockResolvedValueOnce({
         aesthetics: OK_AESTHETICS,
         realism: { ...OK_REALISM, anatomy: 0.8 },
         score: 0.9,
         reasons: [],
         suggests: [],
-      }),
-    );
+      });
     const svc = buildService();
 
     const res = await svc.score(input({ textOnly: true }));
@@ -238,14 +236,12 @@ describe('ImageScoreService.score 三段闸门', () => {
   });
 
   it('suggests 硬要求写入系统提示词：落到具体字段与补法', async () => {
-    textChatMock.mockResolvedValueOnce(
-      JSON.stringify({ aesthetics: OK_AESTHETICS, realism: OK_REALISM, score: 0.9 }),
-    );
+    textChatJsonMock.mockResolvedValueOnce({ aesthetics: OK_AESTHETICS, realism: OK_REALISM, score: 0.9 });
     const svc = buildService();
 
     await svc.score(input());
 
-    const prompt = String(textChatMock.mock.calls[0][1].systemPrompt);
+    const prompt = String(textChatJsonMock.mock.calls[0][1].systemPrompt);
     expect(prompt).toContain('pose[0].description');
     expect(prompt).toContain('补：');
     expect(prompt).toContain('styleHit');
@@ -253,9 +249,7 @@ describe('ImageScoreService.score 三段闸门', () => {
   });
 
   it('trace 分项：返回 result 含结构化 aesthetics / realism', async () => {
-    textChatMock.mockResolvedValueOnce(
-      JSON.stringify({ aesthetics: OK_AESTHETICS, realism: OK_REALISM, score: 0.9 }),
-    );
+    textChatJsonMock.mockResolvedValueOnce({ aesthetics: OK_AESTHETICS, realism: OK_REALISM, score: 0.9 });
     const svc = buildService();
 
     const res = await svc.score(input());
@@ -265,16 +259,14 @@ describe('ImageScoreService.score 三段闸门', () => {
   });
 
   it('有风格档案时系统提示词注入档案约束块', async () => {
-    textChatMock.mockResolvedValueOnce(
-      JSON.stringify({ aesthetics: OK_AESTHETICS, realism: OK_REALISM, score: 0.9 }),
-    );
+    textChatJsonMock.mockResolvedValueOnce({ aesthetics: OK_AESTHETICS, realism: OK_REALISM, score: 0.9 });
     const svc = buildService();
 
     await svc.score(
       input({ styleProfile: { archetype: 'fashion_editorial', retouchLevel: 'polished' } }),
     );
 
-    const prompt = String(textChatMock.mock.calls[0][1].systemPrompt);
+    const prompt = String(textChatJsonMock.mock.calls[0][1].systemPrompt);
     expect(prompt).toContain('本次风格档案（必须遵守）');
     expect(prompt).toContain('时尚大片');
   });

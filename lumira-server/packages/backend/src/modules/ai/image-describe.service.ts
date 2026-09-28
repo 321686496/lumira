@@ -4,9 +4,8 @@
 
 import { Injectable } from '@nestjs/common';
 import { AiConfigService } from './ai-config.service';
-import { visionChat } from './llm-client';
+import { visionChatJson } from './llm-json';
 import { buildExhaustiveSystemPrompt } from './image-describe.prompt';
-import { extractJson } from './normalize';
 
 // ===== ImageDescription 契约（全字段双引号，缺失以 unknown 兜底）=====
 
@@ -201,22 +200,20 @@ export function normalizeImageDescription(raw: unknown): ImageDescription {
 export class ImageDescribeService {
   constructor(private readonly aiConfigService: AiConfigService) {}
 
-  /** 穷尽式识别：visionChat(jsonMode) → extractJson → normalizeImageDescription（缺字段兜底） */
+  /** 穷尽式识别：visionChatJson（jsonMode + 有界重试）→ normalizeImageDescription（缺字段兜底） */
   async describe(image: { base64: string; mime: string }): Promise<ImageDescription> {
     const cfg = await this.aiConfigService.getActiveConfig();
-    const content = await visionChat(cfg.vision, {
-      systemPrompt: buildExhaustiveSystemPrompt(),
-      userText: '请对这张图片做穷尽式识别：按九宫格逐格描述，并输出 JSON。',
-      imageBase64: image.base64,
-      imageMime: image.mime,
-      temperature: 0.4,
-      jsonMode: true,
-      timeoutMs: 120_000,
-    });
-    const json = extractJson(content);
-    if (!json) {
-      throw new Error('图像识别结果无法解析为 JSON，请重试');
-    }
+    const json = await visionChatJson(
+      cfg.vision,
+      {
+        systemPrompt: buildExhaustiveSystemPrompt(),
+        userText: '请对这张图片做穷尽式识别：按九宫格逐格描述，并输出 JSON。',
+        imageBase64: image.base64,
+        imageMime: image.mime,
+        temperature: 0.4,
+      },
+      cfg.runtime,
+    );
     return normalizeImageDescription(json);
   }
 }

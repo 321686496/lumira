@@ -7,8 +7,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { AiConfigService } from './ai-config.service';
-import { textChat } from './llm-client';
-import { extractJson } from './normalize';
+import { textChatJson } from './llm-json';
 import type { ImageDescription } from './image-describe.service';
 import { renderStyleProfileBlock, type StyleProfile } from './style-profile.presets';
 
@@ -131,7 +130,7 @@ export class PoseRefSheetService {
 
   /**
    * 基于穷尽识别描述 + 用户姿势要求，生成 poseCount 个姿势的参考面片。
-   * textChat(jsonMode) → extractJson → normalizePoseRefSheet。
+   * textChatJson（jsonMode + 有界重试）→ normalizePoseRefSheet。
    */
   async generate(desc: ImageDescription, poseCount: number, userReq?: string, styleProfile?: StyleProfile): Promise<PoseRefSheet> {
     const cfg = await this.aiConfigService.getActiveConfig();
@@ -164,17 +163,11 @@ export class PoseRefSheetService {
       '请按系统提示的 PoseRefSheet 结构输出，每姿势含不同 differentiationNote，且 subjectPose 六项写全。',
     ].filter(Boolean).join('\n');
 
-    const content = await textChat(cfg.text, {
-      systemPrompt,
-      userText,
-      temperature: 0.4,
-      jsonMode: true,
-      timeoutMs: 120_000,
-    });
-    const json = extractJson(content);
-    if (!json) {
-      throw new Error('姿势参考面片无法解析为 JSON，请重试');
-    }
+    const json = await textChatJson(
+      cfg.text,
+      { systemPrompt, userText, temperature: 0.4 },
+      cfg.runtime,
+    );
     return normalizePoseRefSheet(json, poseCount);
   }
 }

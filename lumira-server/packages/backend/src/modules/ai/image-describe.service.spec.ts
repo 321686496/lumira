@@ -3,13 +3,19 @@
 
 import { ImageDescribeService } from './image-describe.service';
 import { buildExhaustiveSystemPrompt } from './image-describe.prompt';
-import { visionChat } from './llm-client';
+import { LlmJsonError, visionChatJson } from './llm-json';
 import type { LlmEndpoint } from './llm-client';
 import type { AiConfigService } from './ai-config.service';
 
-jest.mock('./llm-client', () => ({ visionChat: jest.fn() }));
+jest.mock('./llm-json', () => ({
+  visionChatJson: jest.fn(),
+  textChatJson: jest.fn(),
+  LlmJsonError: class LlmJsonError extends Error {},
+}));
 
-const visionChatMock = visionChat as jest.MockedFunction<typeof visionChat>;
+const visionChatJsonMock = visionChatJson as jest.MockedFunction<typeof visionChatJson>;
+
+const RUNTIME = { retryCount: 0, timeoutMs: 300_000, maxTokens: 8192 };
 
 const VISION: LlmEndpoint = {
   provider: 'qwen',
@@ -19,7 +25,7 @@ const VISION: LlmEndpoint = {
 };
 
 function buildService() {
-  const aiConfigService = { getActiveConfig: async () => ({ vision: VISION }) } as unknown as AiConfigService;
+  const aiConfigService = { getActiveConfig: async () => ({ vision: VISION, runtime: RUNTIME }) } as unknown as AiConfigService;
   return new ImageDescribeService(aiConfigService);
 }
 
@@ -50,10 +56,10 @@ describe('image-describe.prompt', () => {
 });
 
 describe('ImageDescribeService.describe', () => {
-  beforeEach(() => visionChatMock.mockReset());
+  beforeEach(() => visionChatJsonMock.mockReset());
 
   it('合法 JSON → 解析成 ImageDescription，global/people/scene/cameraLike 齐全', async () => {
-    visionChatMock.mockResolvedValueOnce(JSON.stringify(LEGAL_DESC));
+    visionChatJsonMock.mockResolvedValueOnce(LEGAL_DESC as Record<string, unknown>);
     const svc = buildService();
 
     const desc = await svc.describe({ base64: 'aGk=', mime: 'image/jpeg' });
@@ -63,16 +69,16 @@ describe('ImageDescribeService.describe', () => {
     expect(desc.people[0].role).toBe('主体');
     expect(desc.scene.location).toBe('室内飘窗');
     expect(desc.cameraLike.wbSuggestion).toBe('daylight');
-    // visionChat 收到 vision 端点 + jsonMode
-    const [cfg, input] = visionChatMock.mock.calls[0];
+    // visionChatJson 收到 vision 端点 + 图字段 + runtime
+    const [cfg, input, runtime] = visionChatJsonMock.mock.calls[0];
     expect(cfg).toEqual(VISION);
     expect(input.imageBase64).toBe('aGk=');
     expect(input.imageMime).toBe('image/jpeg');
-    expect(input.jsonMode).toBe(true);
+    expect(runtime).toEqual(RUNTIME);
   });
 
   it('缺字段时兜底：people 缺 → []、cameraLike 缺 → unknown 结构，不抛错', async () => {
-    visionChatMock.mockResolvedValueOnce(JSON.stringify({ global: { subject: '景' } }));
+    visionChatJsonMock.mockResolvedValueOnce({ global: { subject: '景' } });
     const svc = buildService();
 
     const desc = await svc.describe({ base64: 'aGk=', mime: 'image/png' });
@@ -82,21 +88,21 @@ describe('ImageDescribeService.describe', () => {
     expect(desc.cameraLike).toBeDefined();
   });
 
-  it('非法 JSON → 抛可读错误（含「无法解析」）', async () => {
-    visionChatMock.mockResolvedValueOnce('抱歉，我识别不了');
+  it('非法 JSON（重试用尽 → LlmJsonError）→ 抛可读错误（含「无法解析为 JSON」）', async () => {
+    visionChatJsonMock.mockRejectedValueOnce(
+      new LlmJsonError('AI 输出无法解析为 JSON（已重试 2 次）：输出不是合法 JSON'),
+    );
     const svc = buildService();
 
-    await expect(svc.describe({ base64: 'aGk=', mime: 'image/jpeg' })).rejects.toThrow('无法解析');
+    await expect(svc.describe({ base64: 'aGk=', mime: 'image/jpeg' })).rejects.toThrow(/无法解析为 JSON/);
   });
 
   it('新契约：people[].expression/styling 与 global.styleRead 可解析，缺失时不崩', async () => {
-    visionChatMock.mockResolvedValueOnce(
-      JSON.stringify({
-        ...LEGAL_DESC,
-        global: { ...LEGAL_DESC.global, styleRead: '小红书网感、轻精修' },
-        people: [{ ...LEGAL_DESC.people[0], expression: '嘴角微松、眼神看侧前方', styling: '米色针织开衫 + 细金链' }],
-      }),
-    );
+    visionChatJsonMock.mockResolvedValueOnce({
+      ...LEGAL_DESC,
+      global: { ...LEGAL_DESC.global, styleRead: '小红书网感、轻精修' },
+      people: [{ ...LEGAL_DESC.people[0], expression: '嘴角微松、眼神看侧前方', styling: '米色针织开衫 + 细金链' }],
+    });
     const desc = await buildService().describe({ base64: 'aGk=', mime: 'image/jpeg' });
     expect(desc.global.styleRead).toBe('小红书网感、轻精修');
     expect(desc.people[0].expression).toBe('嘴角微松、眼神看侧前方');
@@ -104,7 +110,7 @@ describe('ImageDescribeService.describe', () => {
   });
 
   it('新契约缺失：styleRead 非字符串 → 空串兜底，不抛错', async () => {
-    visionChatMock.mockResolvedValueOnce(JSON.stringify(LEGAL_DESC));
+    visionChatJsonMock.mockResolvedValueOnce(LEGAL_DESC as Record<string, unknown>);
     const desc = await buildService().describe({ base64: 'aGk=', mime: 'image/png' });
     expect(typeof desc.global.styleRead).toBe('string');
     expect(typeof desc.people[0].expression).toBe('string');

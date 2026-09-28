@@ -8,9 +8,8 @@
 
 import { Injectable } from '@nestjs/common';
 import { AiConfigService } from './ai-config.service';
-import { textChat } from './llm-client';
 import type { LlmEndpoint } from './llm-client';
-import { extractJson } from './normalize';
+import { textChatJson } from './llm-json';
 import { describeTodayUtc8 } from '../../common/utils/date.util';
 import type { ImageDescription } from './image-describe.service';
 import type { PoseRefSheet } from './pose-ref-sheet.service';
@@ -84,21 +83,22 @@ export class DraftRefineService {
     const cfg = await this.aiConfigService.getActiveConfig();
     const endpoint = input.judgeModel ?? cfg.text;
 
-    let content: string;
+    let json: Record<string, unknown> | null = null;
     try {
-      content = await textChat(endpoint, {
-        systemPrompt: buildRefineSystemPrompt(input.styleProfile),
-        userText: buildRefineUserText(input),
-        temperature: 0.5,
-        jsonMode: true,
-        timeoutMs: 120_000,
-      });
+      json = await textChatJson(
+        endpoint,
+        {
+          systemPrompt: buildRefineSystemPrompt(input.styleProfile),
+          userText: buildRefineUserText(input),
+          temperature: 0.5,
+        },
+        cfg.runtime,
+      );
     } catch {
-      return null;
+      return null; // 重试用尽 → 编排层保留原稿（既有语义）
     }
 
-    const json = extractJson(content);
-    const inner = json?.draft;
+    const inner = json.draft;
     if (!inner || typeof inner !== 'object' || Array.isArray(inner)) return null;
     return inner as Record<string, unknown>;
   }
