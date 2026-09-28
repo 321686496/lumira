@@ -236,6 +236,68 @@ export async function visionChat(cfg: LlmEndpoint, input: VisionChatInput): Prom
   }
 }
 
+/** 多图输入的一项 */
+export interface VisionMessageImage {
+  /** 不含 data: 前缀的 base64 */
+  base64: string;
+  /** image/jpeg | image/png | image/webp */
+  mime: string;
+}
+
+export interface VisionChatMultiInput {
+  systemPrompt: string;
+  userText: string;
+  /** 一次调用携带的多张图（建议 ≤6 张，避免载荷与 token 过大） */
+  images: VisionMessageImage[];
+  temperature?: number;
+  jsonMode?: boolean;
+  timeoutMs?: number;
+  maxTokens?: number;
+}
+
+/**
+ * 多图 chat：一次 user 消息携带文本 + 多张 image_url。
+ * 复用 chatRequest（fetch + 错误映射 + jsonMode 降级），trace 记录总图片字节数。
+ * images 为空时直接抛错（调用方应先判空）。
+ */
+export async function visionChatMulti(cfg: LlmEndpoint, input: VisionChatMultiInput): Promise<string> {
+  if (!input.images.length) throw new Error('多图调用缺少图片');
+  const messages = [
+    { role: 'system', content: input.systemPrompt },
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: input.userText },
+        ...input.images.map((img) => ({
+          type: 'image_url',
+          image_url: { url: `data:${img.mime};base64,${img.base64}` },
+        })),
+      ],
+    },
+  ];
+  const handle = traceLlmCall({
+    model: cfg.model,
+    systemPrompt: input.systemPrompt,
+    userPrompt: `${input.userText}（附 ${input.images.length} 张参考图）`,
+    imageBytes: input.images.reduce((sum, img) => sum + Math.round(img.base64.length * 0.75), 0),
+  });
+  try {
+    const { content, rawText, attempts } = await chatRequest(cfg, {
+      model: cfg.model,
+      messages,
+      temperature: input.temperature ?? DEFAULT_TEMPERATURE,
+      jsonMode: input.jsonMode ?? false,
+      timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      maxTokens: input.maxTokens,
+    });
+    handle?.done(content, { rawResponse: rawText, attempts });
+    return content;
+  } catch (err) {
+    handle?.fail(err);
+    throw err;
+  }
+}
+
 /** 纯文本 chat：model 取 cfg.model（textModel → visionModel 回退由 getActiveConfig 负责）；识别流程采集中会记录提示词与响应 */
 export async function textChat(cfg: LlmEndpoint, input: TextChatInput): Promise<string> {
   const messages = [
