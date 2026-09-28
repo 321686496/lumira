@@ -5,7 +5,7 @@
 // 用例 14~16 为 Task 2（textChat）追加：纯文本请求形状 / model 取值 / jsonMode 降级
 // （textModel → visionModel 回退已上移至 getActiveConfig，客户端只取 cfg.model）
 
-import { LlmEndpoint, VisionChatInput, textChat, visionChat, toolChat, extractToolCalls, ToolDef } from './llm-client';
+import { LlmEndpoint, VisionChatInput, textChat, visionChat, toolChat, extractToolCalls, ToolDef, buildChatBody } from './llm-client';
 import { runWithTrace } from './llm-trace';
 import type { AiTraceEvent } from './llm-trace';
 
@@ -71,7 +71,7 @@ describe('visionChat', () => {
     const body = parseBody(init);
     expect(body.model).toBe('qwen-vl-max');
     expect(body.temperature).toBe(0.3);
-    expect(body.max_tokens).toBe(4096);
+    expect(body.max_tokens).toBe(8192);
     expect(body.response_format).toBeUndefined();
     expect(body.messages).toEqual([
       { role: 'system', content: '你是摄影模板录入助手' },
@@ -437,5 +437,18 @@ describe('实时采集：LLM 事件带原始响应体', () => {
     });
 
     expect(out.content).toBe('没有工具调用');
+  });
+});
+
+// ===== buildChatBody — max_tokens 参数化（Task 3 追加）=====
+describe('buildChatBody — max_tokens 参数化', () => {
+  const base = { model: 'm', messages: [], temperature: 0.3, jsonMode: false, timeoutMs: 1000 };
+
+  it('未传 maxTokens → 默认 8192', () => {
+    expect(buildChatBody(base).max_tokens).toBe(8192);
+  });
+
+  it('传 maxTokens → 原样使用', () => {
+    expect(buildChatBody({ ...base, maxTokens: 2048 }).max_tokens).toBe(2048);
   });
 });

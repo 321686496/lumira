@@ -25,6 +25,7 @@ export interface VisionChatInput {
   temperature?: number;     // 默认 0.3
   jsonMode?: boolean;       // 默认 false；true 时带 response_format json_object，400/404 时自动降级重试一次
   timeoutMs?: number;       // 默认 90_000
+  maxTokens?: number;       // 单次输出 token 上限；默认 8192
 }
 
 export interface TextChatInput {
@@ -33,6 +34,7 @@ export interface TextChatInput {
   temperature?: number;     // 默认 0.3
   jsonMode?: boolean;       // 同 visionChat
   timeoutMs?: number;       // 默认 90_000
+  maxTokens?: number;       // 单次输出 token 上限；默认 8192
 }
 
 // ===== 函数调用往返（Task 1：工具调用基建）=====
@@ -74,7 +76,8 @@ export interface ToolChatInput {
 
 const DEFAULT_TEMPERATURE = 0.3;
 const DEFAULT_TIMEOUT_MS = 300_000;
-const MAX_TOKENS = 4096;
+/** 单次输出 token 默认上限（调用方可经 maxTokens 覆盖；后台「识别稳定性」可配） */
+const MAX_TOKENS = 8192;
 
 /** 网络层错误 → 运营可读 message：AbortError/TimeoutError 视为超时，其余视为连接失败 */
 function mapNetworkError(err: unknown): never {
@@ -110,6 +113,7 @@ interface ChatRequestBase {
   temperature: number;
   jsonMode: boolean;
   timeoutMs: number;
+  maxTokens?: number;
 }
 
 /**
@@ -120,7 +124,7 @@ export function buildChatBody(input: ChatRequestBase, opts: { tools?: ToolDef[];
   const body: Record<string, unknown> = {
     model: input.model,
     temperature: input.temperature,
-    max_tokens: MAX_TOKENS,
+    max_tokens: input.maxTokens ?? MAX_TOKENS,
     messages: input.messages,
   };
   if (opts.jsonMode ?? input.jsonMode) body.response_format = { type: 'json_object' };
@@ -222,6 +226,7 @@ export async function visionChat(cfg: LlmEndpoint, input: VisionChatInput): Prom
       temperature: input.temperature ?? DEFAULT_TEMPERATURE,
       jsonMode: input.jsonMode ?? false,
       timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      maxTokens: input.maxTokens,
     });
     handle?.done(content, { rawResponse: rawText, attempts });
     return content;
@@ -249,6 +254,7 @@ export async function textChat(cfg: LlmEndpoint, input: TextChatInput): Promise<
       temperature: input.temperature ?? DEFAULT_TEMPERATURE,
       jsonMode: input.jsonMode ?? false,
       timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      maxTokens: input.maxTokens,
     });
     handle?.done(content, { rawResponse: rawText, attempts });
     return content;
