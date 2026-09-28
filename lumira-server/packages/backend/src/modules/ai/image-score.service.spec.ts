@@ -129,6 +129,17 @@ describe('ImageScoreService.score', () => {
     expect(res).toEqual({ score: 0, verdict: 'retry', reasons: ['评分为空'], suggests: [] });
   });
 
+  it('非 LlmJsonError 的硬错误（如鉴权失败）→ 原样上抛，不降级为评分 0', async () => {
+    textChatJsonMock.mockRejectedValueOnce(
+      new Error('AI 服务认证失败（apiKey 无效或无权限/欠费），请到后台「AI 设置」检查'),
+    );
+    const svc = buildService();
+
+    await expect(svc.score(input())).rejects.toThrow(
+      'AI 服务认证失败（apiKey 无效或无权限/欠费），请到后台「AI 设置」检查',
+    );
+  });
+
   it('分数 clamp 到 [0,1]：1.4 → 1、-0.2 → 0', async () => {
     const svc = buildService();
     textChatJsonMock.mockResolvedValueOnce({ score: 1.4 }).mockResolvedValueOnce({ score: -0.2 });

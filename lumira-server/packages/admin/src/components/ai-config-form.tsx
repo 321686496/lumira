@@ -1049,7 +1049,7 @@ export function AiConfigForm({
                     min={0}
                     max={3}
                     value={form.llmRetryCount}
-                    onChange={(e) => setForm((f) => ({ ...f, llmRetryCount: Number(e.target.value) }))}
+                    onChange={(e) => setForm((f) => ({ ...f, llmRetryCount: Number(e.target.value) || 2 }))}
                   />
                   <p className="text-xs text-muted-foreground">0~3，默认 2。总调用次数 ≤ 次数 + 1。</p>
                 </div>
@@ -1061,7 +1061,7 @@ export function AiConfigForm({
                     min={10}
                     max={600}
                     value={form.llmTimeoutSeconds}
-                    onChange={(e) => setForm((f) => ({ ...f, llmTimeoutSeconds: Number(e.target.value) }))}
+                    onChange={(e) => setForm((f) => ({ ...f, llmTimeoutSeconds: Number(e.target.value) || 300 }))}
                   />
                   <p className="text-xs text-muted-foreground">10~600，默认 300（5 分钟）。含图识别建议不低于 120。</p>
                 </div>
@@ -1073,7 +1073,7 @@ export function AiConfigForm({
                     min={1024}
                     max={16384}
                     value={form.llmMaxTokens}
-                    onChange={(e) => setForm((f) => ({ ...f, llmMaxTokens: Number(e.target.value) }))}
+                    onChange={(e) => setForm((f) => ({ ...f, llmMaxTokens: Number(e.target.value) || 8192 }))}
                   />
                   <p className="text-xs text-muted-foreground">1024~16384，默认 8192。穷尽式识别输出大，过低会导致 JSON 被截断。</p>
                 </div>

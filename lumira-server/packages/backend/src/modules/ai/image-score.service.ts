@@ -9,7 +9,7 @@
 import { Injectable } from '@nestjs/common';
 import { AiConfigService } from './ai-config.service';
 import type { LlmEndpoint } from './llm-client';
-import { textChatJson } from './llm-json';
+import { textChatJson, LlmJsonError } from './llm-json';
 import { clampNumber } from './normalize';
 import type { ImageDescription } from './image-describe.service';
 import type { PoseRefSheet } from './pose-ref-sheet.service';
@@ -202,9 +202,11 @@ export class ImageScoreService {
         },
         cfg.runtime,
       );
-    } catch {
-      // 重试用尽 → 保守回退（既有语义：不抛，交给编排再判）
-      json = null;
+    } catch (err) {
+      // 仅「解析失败/重试用尽」走保守回退；鉴权等硬错误原样上抛（与 style-profile 对齐），
+      // 交由编排层 wrapStep 记为 fail，trace 可见。
+      if (err instanceof LlmJsonError) json = null;
+      else throw err;
     }
     if (!json) {
       return { score: 0, verdict: 'retry', reasons: ['评分为空'], suggests: [] };
