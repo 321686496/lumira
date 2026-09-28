@@ -105,6 +105,7 @@ export function AiCreateWizard({
   /** Step1 附加输入：创作要求 / 姿势个数（'auto' = AI 自动判断）；主文字描述复用 inputText（同时作为 textDesc 附加输入） */
   const [creationReq, setCreationReq] = useState('');
   const [poseCount, setPoseCount] = useState('auto');
+  const [subjectCount, setSubjectCount] = useState('auto');
   /** Step1「高级设置」折叠区是否展开（低频参数：补充创作要求 / 姿势个数） */
   const [advancedOpen, setAdvancedOpen] = useState(false);
   /** AI 剪影可用性（配置且启用）：Step4 默认引擎 + 全自动流程剪影 engine */
@@ -141,7 +142,8 @@ export function AiCreateWizard({
   const busy = analyzing || Boolean(autoState?.running);
   const hasInput = Boolean(exampleFile) || inputText.trim() !== '';
   /** 高级设置已填项数（用于折叠态提示） */
-  const advancedFilledCount = (creationReq.trim() !== '' ? 1 : 0) + (poseCount !== 'auto' ? 1 : 0);
+  const advancedFilledCount =
+    (creationReq.trim() !== '' ? 1 : 0) + (poseCount !== 'auto' ? 1 : 0) + (subjectCount !== 'auto' ? 1 : 0);
 
   /** 挂载时读 AI 配置：Step4 默认引擎、全自动剪影 engine、模型名展示 */
   useEffect(() => {
@@ -228,6 +230,7 @@ export function AiCreateWizard({
     if (text) fd.set('textDesc', text);
     if (req) fd.set('creationReq', req);
     if (poseCount !== 'auto') fd.set('poseCount', poseCount);
+    if (subjectCount !== 'auto') fd.set('subjectCount', subjectCount);
   };
 
   /** 手动识别：成功后草稿回填 + 示例图作默认封面候选（纯文模式候选为空）→ Step2 */
@@ -697,6 +700,21 @@ export function AiCreateWizard({
                       <p className="text-xs text-muted-foreground">
                         选「AI 自动判断」时，将结合文字描述 / 补充创作要求（含示例图中可见的文字要求）在 1~6 个范围内决定姿势数量
                       </p>
+                    </div>
+
+                    <div className="space-y-2 md:max-w-xs">
+                      <Label>人物数量</Label>
+                      <Select value={subjectCount} onValueChange={setSubjectCount} disabled={busy}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="AI 自动判断" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">AI 自动判断</SelectItem>
+                          <SelectItem value="1">1 人</SelectItem>
+                          <SelectItem value="2">2 人（情侣 / 双人）</SelectItem>
+                          <SelectItem value="3">3 人以上（全家福 / 合影）</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 )}
