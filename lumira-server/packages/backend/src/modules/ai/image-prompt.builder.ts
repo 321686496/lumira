@@ -55,6 +55,23 @@ export function retouchLevelOfDraft(draft: unknown): RetouchLevel {
   return level !== undefined && (RETOUCH_LEVELS as readonly string[]).includes(level) ? level : 'none';
 }
 
+/** 画面主体人数（1~8，缺省 1）：从草稿 meta.subjectCount 读取，缺失/非法回退 1 */
+export function subjectCountOfDraft(draft: unknown): number {
+  if (!isPlainObject(draft)) return 1;
+  const meta = isPlainObject(draft.meta) ? draft.meta : {};
+  const n = toNum(meta.subjectCount);
+  if (n === undefined) return 1;
+  const rounded = Math.round(n);
+  return rounded < 1 ? 1 : rounded > 8 ? 8 : rounded;
+}
+
+/** 主体人数描述（生图硬约束行；builder 与 composer 共用同一口径） */
+export function describeSubjectCount(n: number): string {
+  if (n <= 1) return '画面中只有一位人物';
+  if (n === 2) return '画面中有两位人物（如情侣 / 同伴），注意两人之间的距离与互动关系';
+  return `画面中有 ${n} 位人物（如全家福 / 朋友合影），注意人物之间的站位层次与相互呼应`;
+}
+
 const INCONSISTENT_POSE_PROMPT_PATTERN = /(不同场景|不同人物|不同造型|不同风格|不需要保持一致|可以不一致|允许不一致)/;
 
 // ===== 基础工具（与 normalize.ts 同款口径，模块私有） =====
@@ -229,10 +246,9 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
   }
 
   if (isSinglePose) {
+    const subjectCount = describeSubjectCount(subjectCountOfDraft(draft));
     segments.push(
-      posePhrase
-        ? `画面中只有一个人物，只呈现姿势${posePhrase}`
-        : '画面中只有一个人物，只呈现一个姿势',
+      posePhrase ? `${subjectCount}，只呈现姿势${posePhrase}` : `${subjectCount}，只呈现一个姿势`,
     );
     segments.push('不要合并多个姿势，不要生成连拍、多宫格或姿势对比图');
   }

@@ -5,7 +5,7 @@
 
 import { textChat } from './llm-client';
 import type { LlmEndpoint } from './llm-client';
-import { isSelfieDraft } from './image-prompt.builder';
+import { isSelfieDraft, subjectCountOfDraft, describeSubjectCount } from './image-prompt.builder';
 import type { ResearchItem } from './trend-research/research-item';
 import { buildResearchLines } from './trend-research/research-digest';
 import {
@@ -24,7 +24,9 @@ import {
   type StyleProfile,
 } from './style-profile.presets';
 
-const COMPOSE_SYSTEM_PROMPT = `你是顶级人像摄影艺术指导兼生图提示词工程师。用户将提供一份结构化素材（模板基本信息 / 构图与机位 / 本张姿势 / 网络趋势参考 / 照片参数 / 生图要求），请把它们整理成一段高质量的中文生图提示词，最终喂给文生图模型。
+const COMPOSE_ROLE_DEFAULT = '你是顶级人像摄影艺术指导兼生图提示词工程师。';
+
+const COMPOSE_SYSTEM_PROMPT = `${COMPOSE_ROLE_DEFAULT}用户将提供一份结构化素材（模板基本信息 / 构图与机位 / 本张姿势 / 网络趋势参考 / 照片参数 / 生图要求），请把它们整理成一段高质量的中文生图提示词，最终喂给文生图模型。
 
 ## 整理规则
 1. 输出一段连贯的中文描述（约 200~350 字），按「主体与形象 → 姿势 → 构图与机位 → 光线 → 背景与道具 → 相机参数 → 色调质感 → 情绪」的顺序组织，以下信息必须写到可照做：
@@ -45,9 +47,14 @@ const COMPOSE_SYSTEM_PROMPT = `你是顶级人像摄影艺术指导兼生图提�
 8. 自拍视角（素材出现「拍摄方式：自拍 / 相机方向：前置」时强制生效）：必须按第一人称自拍写——画面的视点就是人物本人的眼睛，镜头距面部约一臂之内，只呈现上半身或近景 / 特写，视线看向镜头；成片里不得出现手机、相机、三脚架、自拍杆等拍摄设备，不得出现举着设备的手臂，也不得出现镜中反射的拍摄者。素材里若还带着「2-3 米 / 七分身 / 全身」等第三人称景别，一律按自拍口径改写为近景或半身，不得照抄。
 9. 可在风格档案允许范围内补足审美细节（表情、穿搭与褶皱、肢体线条、光线层次、前景层次、色调统一），使画面更好看；但不得引入与档案冲突的风格取向（例如档案为随拍松弛时不得写成影棚布光大‌片），也不得新增现实中拍不出来的元素；不输出任何解释，只输出整理后的提示词本身。`;
 
-/** 供测试与调用方读取最终系统提示词（规则文本随风格档案分档演进） */
-export function buildComposeSystemPrompt(): string {
-  return COMPOSE_SYSTEM_PROMPT;
+/** 供测试与调用方读取最终系统提示词（角色按一级大类派生；人像/未知保持默认） */
+export function buildComposeSystemPrompt(categoryKey?: string): string {
+  const subject = categoryKey !== undefined ? CATEGORY_SUBJECT_LABELS[categoryKey] : undefined;
+  if (!subject || subject === '人像') return COMPOSE_SYSTEM_PROMPT;
+  return COMPOSE_SYSTEM_PROMPT.replace(
+    COMPOSE_ROLE_DEFAULT,
+    `你是顶级${subject}摄影艺术指导兼生图提示词工程师。`,
+  );
 }
 
 /** 组织器输入：草稿 + 本张姿势已并入 draft（singlePose 模式）+ 研究结果 + 用户附加提示词 */
@@ -228,6 +235,8 @@ export function buildPromptMaterial(input: PromptComposeInput): string {
   const categoryKey = toStr(classification.type) ?? toStr(meta.category);
   const subject = categoryKey !== undefined ? CATEGORY_SUBJECT_LABELS[categoryKey] : undefined;
   if (subject) infoLines.push(`- 主体类型：${subject}`);
+  const subjectCount = subjectCountOfDraft(draft);
+  infoLines.push(`- 画面主体人数：${subjectCount}`);
   const name = toStr(meta.name);
   if (name) infoLines.push(`- 模板名称：${name}`);
   if (selfie) infoLines.push('- 拍摄方式：自拍（第一人称前置摄像头视角，镜头即人物本人视点）');
@@ -350,13 +359,15 @@ export function buildPromptMaterial(input: PromptComposeInput): string {
     reqLines.push('- 禁止：动漫、二次元、漫画、插画、CG、3D 渲染；禁止磨皮过度均匀、塑料或镜面质感、完美对称脸、锥子脸、高饱和炫彩、精致摆拍；禁止无源光、不可能透视与姿势、肢体与面部畸变');
   }
   if (isSinglePose) {
-    reqLines.push('- 画面中只有一个人物，只呈现上述「本张姿势」；不要合并多个姿势，不要生成连拍、多宫格或姿势对比图');
+    reqLines.push(`- ${describeSubjectCount(subjectCount)}，只呈现上述「本张姿势」；不要合并多个姿势，不要生成连拍、多宫格或姿势对比图`);
     const allowInconsistent = consistency.mode === 'loose';
     if (!allowInconsistent) {
       reqLines.push(
-        consistency.anchor === 'first'
-          ? '- 参考图是同一套模板的第一张姿势图：严格复用参考图中的同一人物长相、服装、发型、体型，以及场景、道具、光线和摄影风格；本张只改变姿势'
-          : '- 同一套模板的连续拍摄：保持同一人物的长相、服装、发型、体型，以及场景、道具、光线和摄影风格一致；本张只改变姿势',
+        subjectCount >= 2
+          ? '- 参考图是同一组人物的同一套模板：严格复用参考图中每位人物的长相、服装、发型，以及人物之间的相对位置与互动关系，还有场景、道具、光线和摄影风格；本张只改变姿势'
+          : consistency.anchor === 'first'
+            ? '- 参考图是同一套模板的第一张姿势图：严格复用参考图中的同一人物长相、服装、发型、体型，以及场景、道具、光线和摄影风格；本张只改变姿势'
+            : '- 同一套模板的连续拍摄：保持同一人物的长相、服装、发型、体型，以及场景、道具、光线和摄影风格一致；本张只改变姿势',
       );
     }
   }
@@ -381,8 +392,11 @@ export async function composeImagePrompt(
   fallbackPrompt: string,
 ): Promise<ComposeResult> {
   try {
+    const meta = isPlainObject(input.draft.meta) ? input.draft.meta : {};
+    const classification = isPlainObject(meta.classification) ? meta.classification : {};
+    const categoryKey = toStr(classification.type) ?? toStr(meta.category);
     const out = await textChat(textEndpoint, {
-      systemPrompt: COMPOSE_SYSTEM_PROMPT,
+      systemPrompt: buildComposeSystemPrompt(categoryKey),
       userText: buildPromptMaterial(input),
       temperature: 0.4,
       timeoutMs: 300_000,

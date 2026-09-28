@@ -4,7 +4,7 @@
 // 断言关键词覆盖 task-6-brief.md 要求：画幅 3:4、人像、日系、田野与天空、
 // 侧逆光、午后4-6点、日系清新（LUT 标签）、氛围关键词（把夏天拍进眼睛里）。
 
-import { buildImagePrompt, RETOUCH_TEXTURE_LINES } from './image-prompt.builder';
+import { buildImagePrompt, describeSubjectCount, subjectCountOfDraft, RETOUCH_TEXTURE_LINES } from './image-prompt.builder';
 
 /** 设计文档第四节完整草稿示例（pose/camera 等不参与 prompt 的字段保留，验证多余字段被忽略） */
 function fullDraft(): Record<string, unknown> {
@@ -195,7 +195,7 @@ describe('buildImagePrompt', () => {
     const prompt = buildImagePrompt(draft);
     expect(prompt).toContain('侧身回眸');
     expect(prompt).toContain('身体微侧45度');
-    expect(prompt).toContain('画面中只有一个人物');
+    expect(prompt).toContain('画面中只有一位人物');
     expect(prompt).toContain('不要合并多个姿势，不要生成连拍、多宫格或姿势对比图');
     expect(prompt).not.toContain('三个不同姿势');
   });
@@ -305,5 +305,28 @@ describe('buildImagePrompt', () => {
     expect(p).toContain('驼色大衣');
     expect(p).toContain('冷峻直视');
     expect(p).toContain('线条有张力');
+  });
+});
+
+describe('多人物', () => {
+  it('describeSubjectCount：三档措辞', () => {
+    expect(describeSubjectCount(1)).toBe('画面中只有一位人物');
+    expect(describeSubjectCount(2)).toContain('两位人物');
+    expect(describeSubjectCount(4)).toContain('4 位人物');
+  });
+
+  it('subjectCountOfDraft：缺省 1，超范围夹取', () => {
+    expect(subjectCountOfDraft({})).toBe(1);
+    expect(subjectCountOfDraft({ meta: { subjectCount: 3 } })).toBe(3);
+    expect(subjectCountOfDraft({ meta: { subjectCount: 99 } })).toBe(8);
+  });
+
+  it('单姿势人像：双人草稿不再写「只有一个人物」', () => {
+    const draft = fullDraft();
+    (draft.meta as any).subjectCount = 2;
+    draft.singlePose = true;
+    const prompt = buildImagePrompt(draft);
+    expect(prompt).toContain('画面中有两位人物');
+    expect(prompt).not.toContain('画面中只有一个人物');
   });
 });

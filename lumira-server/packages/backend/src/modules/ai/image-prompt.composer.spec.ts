@@ -251,3 +251,25 @@ describe('composeImagePrompt', () => {
     expect(res).toEqual({ prompt: 'fallback', composed: false });
   });
 });
+
+describe('多人物与系统角色', () => {
+  it('素材含主体人数行', () => {
+    const material = buildPromptMaterial({ draft: { meta: { subjectCount: 2, category: 'portrait' } }, research: [] });
+    expect(material).toContain('画面主体人数：2');
+  });
+
+  it('双人单姿势不再写「只有一个人物」', () => {
+    const material = buildPromptMaterial({
+      draft: { meta: { subjectCount: 2, category: 'portrait' }, singlePose: true, pose: { name: '并肩', description: '并肩站立' } },
+      research: [],
+    });
+    expect(material).toContain('画面中有两位人物');
+    expect(material).not.toContain('画面中只有一个人物');
+  });
+
+  it('系统角色按大类派生，人像保持默认', () => {
+    expect(buildComposeSystemPrompt('portrait')).toContain('顶级人像摄影艺术指导');
+    expect(buildComposeSystemPrompt('landscape')).toContain('顶级风景摄影艺术指导');
+    expect(buildComposeSystemPrompt(undefined)).toContain('顶级人像摄影艺术指导');
+  });
+});
