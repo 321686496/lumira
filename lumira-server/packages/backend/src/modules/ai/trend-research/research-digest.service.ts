@@ -7,7 +7,8 @@
 
 import { Injectable } from '@nestjs/common';
 import { AiConfigService } from '../ai-config.service';
-import { textChat } from '../llm-client';
+import { chatWithTools } from '../tools/text-tool-loop';
+import { resolveTextTools } from '../tools/text-tools';
 import { extractJson } from '../normalize';
 import { describeTodayUtc8 } from '../../../common/utils/date.util';
 import { traceStep } from '../llm-trace';
@@ -94,13 +95,17 @@ export class ResearchDigestService {
         'researchDigest',
         '资料整理',
         async () => {
-          const content = await textChat(cfg.text, {
-            systemPrompt: SYSTEM_PROMPT,
-            userText: `${describeTodayUtc8()}\n创作意图：${(topic || '').trim() || '（未提供）'}\n\n检索条目（共 ${items.length} 条）：\n${renderSourceItems(items)}`,
-            temperature: 0.3,
-            jsonMode: true,
-            timeoutMs: 30_000,
-          });
+          const content = await chatWithTools(
+            cfg.text,
+            {
+              systemPrompt: SYSTEM_PROMPT,
+              userText: `${describeTodayUtc8()}\n创作意图：${(topic || '').trim() || '（未提供）'}\n\n检索条目（共 ${items.length} 条）：\n${renderSourceItems(items)}`,
+              temperature: 0.3,
+              jsonMode: true,
+              timeoutMs: 30_000,
+            },
+            resolveTextTools(cfg),
+          );
           return normalizeBrief(extractJson(content));
         },
         (b) => (b ? `整理出 ${b.summary ? '结论 + ' : ''}${b.themes.length + b.styles.length + b.colorLight.length + b.visualElements.length + b.seasons.length + b.poseIdeas.length} 条要点` : '整理失败（回退规则摘要）'),

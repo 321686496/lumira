@@ -3,8 +3,9 @@
 // 本张姿势 / 网络趋势参考 / 照片参数 / 生图要求）交给文本模型，由它整理成最终生图提示词。
 // 文本模型失败/超时/空白输出 → 静默回退到调用方传入的机械拼接 prompt（不阻塞生图）。
 
-import { textChat } from './llm-client';
 import type { LlmEndpoint } from './llm-client';
+import { chatWithTools } from './tools/text-tool-loop';
+import type { TextToolContext } from './tools/text-tool-loop';
 import { isSelfieDraft, subjectCountOfDraft, describeSubjectCount } from './image-prompt.builder';
 import type { ResearchItem } from './trend-research/research-item';
 import { renderResearchBrief } from './trend-research/research-brief';
@@ -411,17 +412,23 @@ export async function composeImagePrompt(
   textEndpoint: LlmEndpoint,
   input: PromptComposeInput,
   fallbackPrompt: string,
+  /** 文本模型工具上下文（可选；缺省 = 无工具，行为与旧版一致） */
+  ctx?: TextToolContext,
 ): Promise<ComposeResult> {
   try {
     const meta = isPlainObject(input.draft.meta) ? input.draft.meta : {};
     const classification = isPlainObject(meta.classification) ? meta.classification : {};
     const categoryKey = toStr(classification.type) ?? toStr(meta.category);
-    const out = await textChat(textEndpoint, {
-      systemPrompt: buildComposeSystemPrompt(categoryKey),
-      userText: buildPromptMaterial(input),
-      temperature: 0.4,
-      timeoutMs: 300_000,
-    });
+    const out = await chatWithTools(
+      textEndpoint,
+      {
+        systemPrompt: buildComposeSystemPrompt(categoryKey),
+        userText: buildPromptMaterial(input),
+        temperature: 0.4,
+        timeoutMs: 300_000,
+      },
+      ctx,
+    );
     const trimmed = out.trim();
     if (!trimmed) return { prompt: fallbackPrompt, composed: false };
     return { prompt: trimmed, composed: true };

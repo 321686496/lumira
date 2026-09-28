@@ -12,7 +12,8 @@ import type { WebSearchProvider, WebSearchQuery } from './web-search.provider';
 import type { ResearchItem } from './research-item';
 import type { ResearchBrief } from './research-brief';
 import { ResearchDigestService } from './research-digest.service';
-import { textChat } from '../llm-client';
+import { chatWithTools } from '../tools/text-tool-loop';
+import { resolveTextTools } from '../tools/text-tools';
 import { extractJson } from '../normalize';
 import { describeTodayUtc8 } from '../../../common/utils/date.util';
 import { traceStep } from '../llm-trace';
@@ -113,27 +114,31 @@ export class TrendResearchService {
         'reorganize',
         '查询词重组',
         () =>
-          textChat(cfg.text, {
-            systemPrompt: [
-              '你负责把"照片模板创作的意图描述"改写成搜索引擎上能命中优质摄影/人像/姿势灵感的关键词查询。',
-              describeTodayUtc8(),
-              '## 规则',
-              '1. 提取可检索的核心名词短语：风格、场景、光线、机位、姿势、氛围、模特类型等，最多 6 个关键词组；'
-                + '并补充社交平台（小红书 / 抖音）常见语感词（如「穿搭」「拍照姿势」「出片」「氛围感」「怎么拍」），提高在平台图文内容中的命中率。',
-              '2. 保留创作者明确的硬约束（如竖构图/横构图、16:9、三种姿势、他拍/自拍），用通俗、SEO 可命中的说法表达。',
-              '3. 时间/节日/时令/档期类约束必须换算成具体可检索词，绝不允许丢弃：先按今天的日期推算具体节日名与其所在的年份月份',
-              '（示例：「距离当前时间最近节日」→「2026年10月 中秋节 国庆节」；「最近一周热点」→「2026年9月 摄影 热门」），',
-              '再写入查询串。远景节日也要写年份，不要用「最近」「当前」「即将到来」这类无法检索的相对说法。',
-              '4. 去掉废话、口语连接词、感叹词；不要编造事实，不要加入原意图没有的卖点。',
-              '5. 一份创作意图只需输出一组查询。',
-              '## 输出',
-              '只输出 JSON：{"query": "空格分隔的关键词串"}，不要 markdown 或解释；无法改写时返回 {"query": null}。',
-            ].join('\n'),
-            userText: `${describeTodayUtc8()}\n创作意图：${trimmed}`,
-            temperature: 0.3,
-            jsonMode: true,
-            timeoutMs: 30_000,
-          }),
+          chatWithTools(
+            cfg.text,
+            {
+              systemPrompt: [
+                '你负责把"照片模板创作的意图描述"改写成搜索引擎上能命中优质摄影/人像/姿势灵感的关键词查询。',
+                describeTodayUtc8(),
+                '## 规则',
+                '1. 提取可检索的核心名词短语：风格、场景、光线、机位、姿势、氛围、模特类型等，最多 6 个关键词组；'
+                  + '并补充社交平台（小红书 / 抖音）常见语感词（如「穿搭」「拍照姿势」「出片」「氛围感」「怎么拍」），提高在平台图文内容中的命中率。',
+                '2. 保留创作者明确的硬约束（如竖构图/横构图、16:9、三种姿势、他拍/自拍），用通俗、SEO 可命中的说法表达。',
+                '3. 时间/节日/时令/档期类约束必须换算成具体可检索词，绝不允许丢弃：先按今天的日期推算具体节日名与其所在的年份月份',
+                '（示例：「距离当前时间最近节日」→「2026年10月 中秋节 国庆节」；「最近一周热点」→「2026年9月 摄影 热门」），',
+                '再写入查询串。远景节日也要写年份，不要用「最近」「当前」「即将到来」这类无法检索的相对说法。',
+                '4. 去掉废话、口语连接词、感叹词；不要编造事实，不要加入原意图没有的卖点。',
+                '5. 一份创作意图只需输出一组查询。',
+                '## 输出',
+                '只输出 JSON：{"query": "空格分隔的关键词串"}，不要 markdown 或解释；无法改写时返回 {"query": null}。',
+              ].join('\n'),
+              userText: `${describeTodayUtc8()}\n创作意图：${trimmed}`,
+              temperature: 0.3,
+              jsonMode: true,
+              timeoutMs: 30_000,
+            },
+            resolveTextTools(cfg),
+          ),
         (c) => `查询词：${(extractJson(c)?.query as string | undefined) ?? trimmed}`,
       );
       const json = extractJson(content);
