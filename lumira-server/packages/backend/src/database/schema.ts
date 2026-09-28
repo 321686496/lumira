@@ -404,6 +404,19 @@ export const aiProviderConfig = mysqlTable('ai_provider_config', {
   searchQwenOfficialApiKey: varchar('search_qwen_official_api_key', { length: 255 }),
   /** Qwen 官方百炼搜索模型（默认 qwen-plus） */
   searchQwenOfficialModel: varchar('search_qwen_official_model', { length: 64 }),
+  /** ===== 参考图抓取配置（spec 2026-09-28 参考图设计）===== */
+  /** 参考图抓取总开关：1=启用 */
+  researchImagesEnabled: int('research_images_enabled').notNull().default(0),
+  /** 每主题最多保留张数 */
+  researchImagesMax: int('research_images_max').notNull().default(6),
+  /** 是否启用第二层（抓页面 og:image） */
+  researchImagesPageFetch: int('research_images_page_fetch').notNull().default(1),
+  /** 是否启用第三层（图片搜索兜底） */
+  researchImagesSearchFallback: int('research_images_search_fallback').notNull().default(1),
+  /** 是否启用多模态解读 */
+  researchImagesVision: int('research_images_vision').notNull().default(1),
+  /** 落盘图片保留天数 */
+  researchImagesTtlDays: int('research_images_ttl_days').notNull().default(7),
   createdAt: int('created_at').notNull(),
   updatedAt: int('updated_at').notNull(),
 });

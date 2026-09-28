@@ -188,4 +188,40 @@ export class UpdateAiConfigDto {
   @IsString()
   @MaxLength(64)
   searchQwenOfficialModel?: string;
+
+  // ===== 参考图抓取配置（spec 2026-09-28 参考图设计）=====
+
+  /** 参考图抓取总开关；缺省 = 沿用原值 */
+  @IsOptional()
+  @IsBoolean()
+  researchImagesEnabled?: boolean;
+
+  /** 每主题最多保留张数（1~12）；缺省 = 沿用原值 */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  researchImagesMax?: number;
+
+  /** 是否启用第二层（抓页面 og:image）；缺省 = 沿用原值 */
+  @IsOptional()
+  @IsBoolean()
+  researchImagesPageFetch?: boolean;
+
+  /** 是否启用第三层（图片搜索兜底）；缺省 = 沿用原值 */
+  @IsOptional()
+  @IsBoolean()
+  researchImagesSearchFallback?: boolean;
+
+  /** 是否启用多模态解读；缺省 = 沿用原值 */
+  @IsOptional()
+  @IsBoolean()
+  researchImagesVision?: boolean;
+
+  /** 落盘图片保留天数（1~90）；缺省 = 沿用原值 */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(90)
+  researchImagesTtlDays?: number;
 }

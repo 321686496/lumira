@@ -901,3 +901,121 @@ describe('AiConfigService — 识别稳定性（runtime / retryCount / timeout /
     expect(insertValues).toHaveBeenCalledWith(expect.objectContaining({ llmRetryCount: 2, llmTimeoutMs: 300_000, llmMaxTokens: 8192 }));
   });
 });
+
+describe('AiConfigService — researchImages 配置', () => {
+  it('行缺 6 列（老数据 / 未选列）→ getSearchConfig().images 回退默认值', async () => {
+    const service = new AiConfigService(readonlyDb(row({
+      enabled: 1,
+      searchEnabled: 1,
+      searchProvider: 'general',
+      searchBaseUrl: 'http://lumira-searxng:8080',
+      searchSources: JSON.stringify(['searxng']),
+    })));
+    const cfg = await service.getSearchConfig();
+    expect(cfg?.images).toEqual({
+      enabled: false,
+      max: 6,
+      pageFetch: true,
+      searchFallback: true,
+      vision: true,
+      ttlDays: 7,
+    });
+  });
+
+  it('searxng 来源 → getSearchConfig().imageSource 复用 baseUrl/apiKey 且 categories=images', async () => {
+    const service = new AiConfigService(readonlyDb(row({
+      enabled: 1,
+      searchEnabled: 1,
+      searchProvider: 'general',
+      searchBaseUrl: 'http://lumira-searxng:8080',
+      searchApiKey: 'sk-searxng',
+      searchSources: JSON.stringify(['searxng']),
+    })));
+    const cfg = await service.getSearchConfig();
+    expect(cfg?.imageSource).toMatchObject({
+      name: 'searxng-images',
+      provider: 'searxng',
+      baseUrl: 'http://lumira-searxng:8080',
+      apiKey: 'sk-searxng',
+      categories: 'images',
+    });
+  });
+
+  it('行含 6 列 → getSearchConfig().images 原样映射；非 searxng 来源 imageSource=null', async () => {
+    const service = new AiConfigService(readonlyDb(row({
+      enabled: 1,
+      searchEnabled: 1,
+      searchProvider: 'qwen',
+      searchSources: JSON.stringify(['qwen']),
+      searchQwenBaseUrl: 'https://qw.cn/v1',
+      searchQwenApiKey: 'sk-qwen',
+      researchImagesEnabled: 1,
+      researchImagesMax: 9,
+      researchImagesPageFetch: 0,
+      researchImagesSearchFallback: 0,
+      researchImagesVision: 0,
+      researchImagesTtlDays: 30,
+    })));
+    const cfg = await service.getSearchConfig();
+    expect(cfg?.images).toEqual({ enabled: true, max: 9, pageFetch: false, searchFallback: false, vision: false, ttlDays: 30 });
+    expect(cfg?.imageSource).toBeNull();
+  });
+
+  it('save() 更新未传 6 字段 → 保留存量值（不覆盖为默认）', async () => {
+    const { service, updateSet } = writableDb(row({
+      researchImagesEnabled: 1,
+      researchImagesMax: 9,
+      researchImagesPageFetch: 0,
+      researchImagesSearchFallback: 0,
+      researchImagesVision: 0,
+      researchImagesTtlDays: 30,
+    }));
+    await service.save({ provider: 'qwen', baseUrl: 'https://x.example', visionModel: 'qwen-vl-max', imageModel: 'wanx2.1-t2i-turbo', enabled: true });
+    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({
+      researchImagesEnabled: 1,
+      researchImagesMax: 9,
+      researchImagesPageFetch: 0,
+      researchImagesSearchFallback: 0,
+      researchImagesVision: 0,
+      researchImagesTtlDays: 30,
+    }));
+  });
+
+  it('save() 更新传 6 字段 → update set 收到 1/0 与数值', async () => {
+    const { service, updateSet } = writableDb(row());
+    await service.save({
+      provider: 'qwen',
+      baseUrl: 'https://x.example',
+      visionModel: 'qwen-vl-max',
+      imageModel: 'wanx2.1-t2i-turbo',
+      enabled: true,
+      researchImagesEnabled: true,
+      researchImagesMax: 12,
+      researchImagesPageFetch: false,
+      researchImagesSearchFallback: false,
+      researchImagesVision: false,
+      researchImagesTtlDays: 90,
+    });
+    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({
+      researchImagesEnabled: 1,
+      researchImagesMax: 12,
+      researchImagesPageFetch: 0,
+      researchImagesSearchFallback: 0,
+      researchImagesVision: 0,
+      researchImagesTtlDays: 90,
+    }));
+  });
+
+  it('save() 首次保存缺 6 字段 → insert values 收到默认值', async () => {
+    const { service, insertValues } = writableDb(undefined);
+    await service.save({ provider: 'qwen', baseUrl: 'https://x.example', apiKey: 'sk-1', visionModel: 'qwen-vl-max', imageModel: 'wanx2.1-t2i-turbo', enabled: true });
+    expect(insertValues).toHaveBeenCalledWith(expect.objectContaining({
+      researchImagesEnabled: 0,
+      researchImagesMax: 6,
+      researchImagesPageFetch: 1,
+      researchImagesSearchFallback: 1,
+      researchImagesVision: 1,
+      researchImagesTtlDays: 7,
+    }));
+  });
+});

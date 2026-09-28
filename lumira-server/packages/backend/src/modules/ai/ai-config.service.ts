@@ -10,6 +10,9 @@ import { visionChat, textChat } from './llm-client';
 import { generateImage, mapSize } from './image-client';
 import { UpdateAiConfigDto } from './dto/update-ai-config.dto';
 import type { SearchConfig, SearchSourceConfig } from './trend-research';
+// 从叶子模块直接引入：research-image.ts 无任何依赖，避免 ai-config ↔ trend-research.service 的循环导入
+import { DEFAULT_RESEARCH_IMAGES_CONFIG } from './trend-research/research-image';
+import type { ResearchImagesConfig } from './trend-research/research-image';
 
 /** 脱敏后的配置视图（GET/PUT 返回；apiKey 永不回传明文） */
 export interface AiConfigView {
@@ -64,6 +67,18 @@ export interface AiConfigView {
   llmTimeoutMs: number;
   /** 识别稳定性：单次 LLM 输出 token 上限（默认 8192） */
   llmMaxTokens: number;
+  /** 参考图抓取总开关 */
+  researchImagesEnabled: boolean;
+  /** 每主题最多保留参考图张数 */
+  researchImagesMax: number;
+  /** 是否启用抓页面 og:image */
+  researchImagesPageFetch: boolean;
+  /** 是否启用图片搜索兜底 */
+  researchImagesSearchFallback: boolean;
+  /** 是否启用多模态解读 */
+  researchImagesVision: boolean;
+  /** 落盘参考图保留天数 */
+  researchImagesTtlDays: number;
 }
 
 /** 单模态运行时端点（含明文 apiKey） */
@@ -217,6 +232,12 @@ export class AiConfigService {
       llmRetryCount: row.llmRetryCount ?? DEFAULT_LLM_RETRY_COUNT,
       llmTimeoutMs: row.llmTimeoutMs ?? DEFAULT_LLM_TIMEOUT_MS,
       llmMaxTokens: row.llmMaxTokens ?? DEFAULT_LLM_MAX_TOKENS,
+      researchImagesEnabled: (row.researchImagesEnabled ?? 0) === 1,
+      researchImagesMax: row.researchImagesMax ?? DEFAULT_RESEARCH_IMAGES_CONFIG.max,
+      researchImagesPageFetch: (row.researchImagesPageFetch ?? 1) === 1,
+      researchImagesSearchFallback: (row.researchImagesSearchFallback ?? 1) === 1,
+      researchImagesVision: (row.researchImagesVision ?? 1) === 1,
+      researchImagesTtlDays: row.researchImagesTtlDays ?? DEFAULT_RESEARCH_IMAGES_CONFIG.ttlDays,
     };
   }
 
@@ -300,6 +321,21 @@ export class AiConfigService {
     const searchQwenOfficialBaseUrl = dto.searchQwenOfficialBaseUrl?.trim() || existing?.searchQwenOfficialBaseUrl || null;
     const resolvedSearchQwenOfficialApiKey = dto.searchQwenOfficialApiKey?.trim() || existing?.searchQwenOfficialApiKey || null;
     const searchQwenOfficialModel = dto.searchQwenOfficialModel?.trim() || existing?.searchQwenOfficialModel || null;
+    // 参考图抓取配置：缺省沿用存量；首次保存回退默认值（与迁移 048 DEFAULT 一致）
+    const researchImagesEnabled = dto.researchImagesEnabled != null
+      ? (dto.researchImagesEnabled ? 1 : 0)
+      : existing?.researchImagesEnabled ?? 0;
+    const researchImagesMax = dto.researchImagesMax ?? existing?.researchImagesMax ?? DEFAULT_RESEARCH_IMAGES_CONFIG.max;
+    const researchImagesPageFetch = dto.researchImagesPageFetch != null
+      ? (dto.researchImagesPageFetch ? 1 : 0)
+      : existing?.researchImagesPageFetch ?? 1;
+    const researchImagesSearchFallback = dto.researchImagesSearchFallback != null
+      ? (dto.researchImagesSearchFallback ? 1 : 0)
+      : existing?.researchImagesSearchFallback ?? 1;
+    const researchImagesVision = dto.researchImagesVision != null
+      ? (dto.researchImagesVision ? 1 : 0)
+      : existing?.researchImagesVision ?? 1;
+    const researchImagesTtlDays = dto.researchImagesTtlDays ?? existing?.researchImagesTtlDays ?? DEFAULT_RESEARCH_IMAGES_CONFIG.ttlDays;
     if (searchEnabled === 1 && searchProvider === 'general') {
       // SearXNG 自建搜索免费且无需 Key，仅要求 baseUrl
       if (!searchBaseUrl) throw new BadRequestException('通用搜索 API 必须填写 baseUrl');
@@ -352,6 +388,12 @@ export class AiConfigService {
         searchQwenOfficialBaseUrl,
         searchQwenOfficialApiKey: resolvedSearchQwenOfficialApiKey,
         searchQwenOfficialModel,
+        researchImagesEnabled,
+        researchImagesMax,
+        researchImagesPageFetch,
+        researchImagesSearchFallback,
+        researchImagesVision,
+        researchImagesTtlDays,
         createdAt: now,
         updatedAt: now,
       });
@@ -391,6 +433,12 @@ export class AiConfigService {
           searchQwenOfficialBaseUrl,
           searchQwenOfficialApiKey: dto.searchQwenOfficialApiKey?.trim() ? resolvedSearchQwenOfficialApiKey : existing?.searchQwenOfficialApiKey,
           searchQwenOfficialModel,
+          researchImagesEnabled,
+          researchImagesMax,
+          researchImagesPageFetch,
+          researchImagesSearchFallback,
+          researchImagesVision,
+          researchImagesTtlDays,
           apiKey: dto.apiKey ? dto.apiKey : existing.apiKey, // 留空 = 不改
           updatedAt: now,
         })
@@ -471,6 +519,19 @@ export class AiConfigService {
 
     const names = parseSearchSources(row.searchSources);
     const sources: SearchSourceConfig[] = [];
+    // 参考图抓取配置（老数据 / 未选列 → 回退默认值，与迁移 048 DEFAULT 一致）
+    const images: ResearchImagesConfig = {
+      enabled: (row.researchImagesEnabled ?? 0) === 1,
+      max: row.researchImagesMax ?? DEFAULT_RESEARCH_IMAGES_CONFIG.max,
+      pageFetch: (row.researchImagesPageFetch ?? 1) === 1,
+      searchFallback: (row.researchImagesSearchFallback ?? 1) === 1,
+      vision: (row.researchImagesVision ?? 1) === 1,
+      ttlDays: row.researchImagesTtlDays ?? DEFAULT_RESEARCH_IMAGES_CONFIG.ttlDays,
+    };
+    // 第三层图片搜索来源：仅 searxng 配置提供（复用其 baseUrl/apiKey，类别固定 images）
+    const imageSource: SearchSourceConfig | null = names.includes('searxng')
+      ? { name: 'searxng-images', provider: 'searxng', baseUrl: row.searchBaseUrl ?? undefined, apiKey: row.searchApiKey ?? undefined, categories: 'images' }
+      : null;
     // 搜索方式 = qwen-official（Qwen 官方百炼）：用官方端点 + Key；缺任一 → sources 空（研究跑 0 条）
     // 注意：sources 空时编排层仍会记 skip-research（凭据缺失与未配置未区分）→ 见 docs/future-optimizations.md
     if (row.searchProvider === 'qwen-official') {
@@ -486,6 +547,8 @@ export class AiConfigService {
               model: (row.searchQwenOfficialModel ?? '').trim() || 'qwen-plus',
             }]
           : [],
+        images,
+        imageSource: null,
       };
     }
     // 搜索方式 = qwen（Qwen 三方 MaaS）：用独立 Qwen 端点 + Key；缺任一 → sources 空（研究跑 0 条）
@@ -503,6 +566,8 @@ export class AiConfigService {
               model: (row.searchQwenModel ?? '').trim() || 'qwen-plus',
             }]
           : [],
+        images,
+        imageSource: null,
       };
     }
     for (const name of names) {
@@ -541,7 +606,7 @@ export class AiConfigService {
       // baidu 适配器（web-search-baidu.ts）尚未实现，跳过避免 factory 抛错
     }
 
-    return { enabled: row.searchEnabled === 1, sources };
+    return { enabled: row.searchEnabled === 1, sources, images, imageSource };
   }
 
   /** 未配置/未启用 → 503；供 ai-analyze 等业务端点复用 */
