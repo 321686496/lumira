@@ -187,4 +187,20 @@ describe('TrendResearchService', () => {
     expect(userText).toContain(describeTodayUtc8());
     expect(systemPrompt).toContain('时间/节日/时令/档期类约束必须换算成具体可检索词');
   });
+
+  it('reorganizeQuery 提示词要求补充社交平台语感词（小红书 / 抖音）', async () => {
+    const { textChat } = jest.requireMock('../llm-client') as { textChat: jest.Mock };
+    textChat.mockResolvedValueOnce(JSON.stringify({ query: '秋日 情侣照 出片' }));
+    const aiConfig = {
+      getSearchConfig: async () => ({ enabled: true, sources: [{ name: 'qwen', provider: 'qwen' }] }),
+      getActiveConfig: async () => ({ text: { provider: 'test', baseUrl: 'http://x', apiKey: 'k', model: 'm' } }),
+    } as unknown as AiConfigService;
+    const svc = new TrendResearchService(aiConfig, digestStub);
+
+    await svc.reorganizeQuery('秋天的情侣照');
+
+    const { systemPrompt } = textChat.mock.calls[0][1] as { systemPrompt: string };
+    expect(systemPrompt).toContain('小红书');
+    expect(systemPrompt).toContain('出片');
+  });
 });

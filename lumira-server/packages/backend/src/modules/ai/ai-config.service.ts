@@ -486,13 +486,25 @@ export class AiConfigService {
             : { provider: row.provider, baseUrl: row.baseUrl, apiKey: row.apiKey, model: hasCustomTextModel ? (row.textModel as string) : row.visionModel },
         });
       } else if (name === 'searxng') {
-        sources.push({
-          name,
-          provider: 'searxng',
-          baseUrl: row.searchBaseUrl ?? undefined,
-          apiKey: row.searchApiKey ?? undefined,
-          site: row.searchSite?.trim() || undefined,
-        });
+        const baseUrl = row.searchBaseUrl ?? undefined;
+        const apiKey = row.searchApiKey ?? undefined;
+        const explicitSite = row.searchSite?.trim();
+        if (explicitSite) {
+          // 显式指定站点：保持单来源（向后兼容旧配置）
+          sources.push({ name, provider: 'searxng', baseUrl, apiKey, site: explicitSite });
+        } else {
+          // 未指定站点：默认走社交平台来源集（小红书为主，抖音/微博/知乎补充）+ 全站兜底，并行检索、单源失败降级
+          const platforms: { name: string; site: string }[] = [
+            { name: 'searxng-xhs', site: 'xiaohongshu.com' },
+            { name: 'searxng-douyin', site: 'douyin.com' },
+            { name: 'searxng-weibo', site: 'weibo.com' },
+            { name: 'searxng-zhihu', site: 'zhihu.com' },
+          ];
+          for (const p of platforms) {
+            sources.push({ name: p.name, provider: 'searxng', baseUrl, apiKey, site: p.site });
+          }
+          sources.push({ name: 'searxng-all', provider: 'searxng', baseUrl, apiKey });
+        }
       }
       // baidu 适配器（web-search-baidu.ts）尚未实现，跳过避免 factory 抛错
     }

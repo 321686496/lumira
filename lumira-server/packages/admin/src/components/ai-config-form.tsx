@@ -991,7 +991,7 @@ export function AiConfigForm({
                     placeholder="xiaohongshu.com / v.douyin.com，留空 = 全站搜索"
                   />
                   <p className="text-xs text-muted-foreground">
-                    用于把小红书/抖音等被搜索引擎收录的公开页面作为自媒体趋势信号源。
+                    留空则默认检索小红书、抖音、微博、知乎等社交平台（小红书为主）并辅以全站兜底；填写后仅检索该站点。
                   </p>
                 </div>
               </div>

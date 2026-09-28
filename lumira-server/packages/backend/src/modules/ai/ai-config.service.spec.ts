@@ -587,7 +587,7 @@ describe('AiConfigService — search qwen', () => {
     expect(cfg?.sources).toHaveLength(0);
   });
 
-  it('search_provider=general + sources=[bing]（老数据）→ 归一化为 searxng source（向后兼容）', async () => {
+  it('search_provider=general + sources=[bing]（老数据）→ 归一化为 searxng 来源集（向后兼容，不再出现 bing）', async () => {
     const service = new AiConfigService(readonlyDb(row({
       enabled: 1,
       searchEnabled: 1,
@@ -596,8 +596,11 @@ describe('AiConfigService — search qwen', () => {
       searchSources: JSON.stringify(['bing']),
     })));
     const cfg = await service.getSearchConfig();
-    expect(cfg?.sources).toHaveLength(1);
-    expect(cfg?.sources[0]).toMatchObject({ name: 'searxng', provider: 'searxng' });
+    // bing 退役后按 searxng 处理；站点未限定 → 展开为 4 个社交平台来源 + 全站兜底（wire 形态由 1 变 5）
+    expect(cfg?.sources).toHaveLength(5);
+    expect(cfg?.sources.every((s) => s.provider === 'searxng')).toBe(true);
+    expect(cfg?.sources.some((s) => s.name === 'bing')).toBe(false);
+    expect(cfg?.sources.map((s) => s.name)).toContain('searxng-xhs');
   });
 
   it('search_provider=general + sources=[searxng] + searchSite → source 带 site', async () => {
@@ -794,5 +797,39 @@ describe('AiConfigService — save() qwen-official', () => {
       searchQwenOfficialApiKey: 'sk-official',
       searchQwenOfficialModel: 'qwen-max',
     }));
+  });
+});
+
+describe('AiConfigService — searxng 社交平台默认来源集', () => {
+  it('searxng 且站点限定为空：返回社交平台默认来源集 + 全站兜底', async () => {
+    // 按本文件既有方式构造 row：searchEnabled=1, searchProvider=general（searxng 模式）, searchSite=null
+    const service = new AiConfigService(readonlyDb(row({
+      enabled: 1,
+      searchEnabled: 1,
+      searchProvider: 'general',
+      searchBaseUrl: 'http://lumira-searxng:8080',
+      searchSite: null,
+      searchSources: JSON.stringify(['searxng']),
+    })));
+    const cfg = await service.getSearchConfig();
+    const names = (cfg?.sources ?? []).map((s) => s.name);
+    expect(names).toContain('searxng-xhs');
+    expect(names).toContain('searxng-all');
+    const xhs = (cfg?.sources ?? []).find((s) => s.name === 'searxng-xhs');
+    expect(xhs?.site).toBe('xiaohongshu.com');
+  });
+
+  it('searxng 且显式填了站点限定：只返回单来源（向后兼容）', async () => {
+    const service = new AiConfigService(readonlyDb(row({
+      enabled: 1,
+      searchEnabled: 1,
+      searchProvider: 'general',
+      searchBaseUrl: 'http://lumira-searxng:8080',
+      searchSite: 'zhihu.com',
+      searchSources: JSON.stringify(['searxng']),
+    })));
+    const cfg = await service.getSearchConfig();
+    expect((cfg?.sources ?? []).length).toBe(1);
+    expect((cfg?.sources ?? [])[0].site).toBe('zhihu.com');
   });
 });
