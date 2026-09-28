@@ -186,3 +186,43 @@ describe('llm-trace', () => {
     expect(d2).toMatchObject({ callId: r2!.callId, response: '第二次的响应' });
   });
 });
+
+describe('traceStep attach', () => {
+  it('attach 返回值合并进 done 事件', async () => {
+    const events: AiTraceEvent[] = [];
+    let seq = 0;
+    await runWithTrace(
+      (ev) => {
+        seq += 1;
+        events.push({ ...ev, seq, ts: 0 } as AiTraceEvent);
+      },
+      async () => {
+        await traceStep(
+          'researchImages',
+          '参考图抓取',
+          async () => ({ images: [{ id: 'a', url: 'https://x/a.jpg', source: 'searxng' }] }),
+          (v) => `${v.images.length} 张`,
+          (v) => ({ images: v.images }),
+        );
+      },
+    );
+    const done = events.find((e) => e.type === 'step' && e.status === 'done');
+    expect(done?.images?.[0].id).toBe('a');
+    expect(done?.resultBrief).toBe('1 张');
+  });
+
+  it('attach 未提供时不带 images 字段', async () => {
+    const events: AiTraceEvent[] = [];
+    let seq = 0;
+    await runWithTrace(
+      (ev) => {
+        seq += 1;
+        events.push({ ...ev, seq, ts: 0 } as AiTraceEvent);
+      },
+      async () => {
+        await traceStep('x', 'X', async () => 1, () => 'ok');
+      },
+    );
+    expect(events.find((e) => e.status === 'done')?.images).toBeUndefined();
+  });
+});

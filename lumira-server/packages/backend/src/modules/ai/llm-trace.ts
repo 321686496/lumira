@@ -41,6 +41,17 @@ export interface AiTraceEvent {
   rawResponse?: string;
   /** 实际发出的请求次数（含 jsonMode 降级 / 5xx 重试；1 表示一次成功） */
   attempts?: number;
+  /** 参考图抓取阶段产出的图片（只存 URL 与溯源信息，不存 base64） */
+  images?: {
+    id: string;
+    url: string;
+    sourceUrl?: string;
+    pageUrl?: string;
+    source: string;
+    query?: string;
+  }[];
+  /** 参考图解读阶段被采纳的图片 id（前端据此给缩略图打「已采用」徽标） */
+  adoptedImageIds?: string[];
   /** 阶段结论简述（条数、是否跳过、校验结果等） */
   resultBrief?: string;
   /** 失败原因 */
@@ -108,6 +119,7 @@ export async function traceStep<T>(
   title: string,
   fn: () => Promise<T>,
   brief?: (value: T) => string,
+  attach?: (value: T) => Partial<Pick<AiTraceEvent, 'images' | 'adoptedImageIds'>>,
 ): Promise<T> {
   const store = storage.getStore();
   if (!store) return fn();
@@ -125,6 +137,7 @@ export async function traceStep<T>(
       parentStep,
       status: 'done',
       resultBrief: brief?.(value),
+      ...(attach?.(value) ?? {}),
       durationMs: Date.now() - startedAt,
     });
     return value;
