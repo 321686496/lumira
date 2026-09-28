@@ -396,6 +396,12 @@ export const aiProviderConfig = mysqlTable('ai_provider_config', {
   crawlEnabled: int('crawl_enabled').notNull().default(0),
   /** 单次文本会话最多爬取次数（1~6） */
   crawlMaxPerSession: int('crawl_max_per_session').notNull().default(3),
+  /** 爬取静态失败时是否降级到无头渲染：1=启用；0=关闭 */
+  crawlRenderEnabled: int('crawl_render_enabled').notNull().default(0),
+  /** 单次无头渲染超时（毫秒，5000~60000） */
+  crawlRenderTimeoutMs: int('crawl_render_timeout_ms').notNull().default(20_000),
+  /** 按域名隔离的 cookie（JSON：{domain: cookieString}），AES-256-GCM 加密存储 */
+  crawlCookies: text('crawl_cookies'),
   /** Qwen 模型自带联网搜索端点（search_provider=qwen 时使用） */
   searchQwenBaseUrl: varchar('search_qwen_base_url', { length: 255 }),
   /** Qwen 搜索 API key（脱敏返回，永不回传明文） */

@@ -1,7 +1,7 @@
 // lumira-server/packages/backend/src/modules/ai/dto/update-ai-config.dto.ts
 // AI 服务商配置保存入参（PUT /api/v1/admin/ai-config）
 
-import { IsIn, IsOptional, IsString, IsBoolean, MaxLength, IsArray, ArrayMaxSize, ArrayNotEmpty, IsInt, Min, Max } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsBoolean, MaxLength, IsArray, ArrayMaxSize, ArrayNotEmpty, IsInt, Min, Max, IsObject } from 'class-validator';
 import { PROVIDERS } from '../enums';
 
 export class UpdateAiConfigDto {
@@ -238,4 +238,25 @@ export class UpdateAiConfigDto {
   @Min(1)
   @Max(6)
   crawlMaxPerSession?: number;
+
+  /** 爬取静态失败时是否降级到无头渲染；缺省 = 沿用原值 */
+  @IsOptional()
+  @IsBoolean()
+  crawlRenderEnabled?: boolean;
+
+  /** 单次无头渲染超时（毫秒，5000~60000）；缺省 = 沿用原值 */
+  @IsOptional()
+  @IsInt()
+  @Min(5000)
+  @Max(60000)
+  crawlRenderTimeoutMs?: number;
+
+  /**
+   * 按域名隔离的 cookie（{domain: cookieString}）。
+   * 语义：字段缺省 = 保留存量；传入对象 = 以该对象整体覆盖（传 {} 即清空全部域名 cookie）。
+   * 值长度与域名合法性在 service 层校验；落库前加密。
+   */
+  @IsOptional()
+  @IsObject()
+  crawlCookies?: Record<string, string>;
 }

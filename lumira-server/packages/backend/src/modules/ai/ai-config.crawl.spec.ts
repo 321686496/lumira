@@ -71,13 +71,13 @@ describe('AiConfigService — 网页爬取开关', () => {
   it('getActiveConfig() 暴露 crawl 配置', async () => {
     const service = new AiConfigService(readonlyDb(row({ crawlEnabled: 1, crawlMaxPerSession: 5 })));
     const cfg = await service.getActiveConfig();
-    expect(cfg.crawl).toEqual({ enabled: true, maxPerSession: 5 });
+    expect(cfg.crawl).toEqual({ enabled: true, maxPerSession: 5, renderEnabled: false, renderTimeoutMs: 20_000, cookies: {} });
   });
 
   it('getActiveConfig() 缺列 → crawl 默认关闭、上限 3', async () => {
     const service = new AiConfigService(readonlyDb(row()));
     const cfg = await service.getActiveConfig();
-    expect(cfg.crawl).toEqual({ enabled: false, maxPerSession: 3 });
+    expect(cfg.crawl).toEqual({ enabled: false, maxPerSession: 3, renderEnabled: false, renderTimeoutMs: 20_000, cookies: {} });
   });
 
   it('save() 越界次数上限（>6）→ 400', async () => {
@@ -103,7 +103,15 @@ describe('AiConfigService — 网页爬取开关', () => {
       imageModel: 'wanx2.1-t2i-turbo',
       enabled: true,
     });
-    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ crawlEnabled: 1, crawlMaxPerSession: 5 }));
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        crawlEnabled: 1,
+        crawlMaxPerSession: 5,
+        crawlRenderEnabled: 0,
+        crawlRenderTimeoutMs: 20_000,
+        crawlCookies: null,
+      }),
+    );
   });
 
   it('save() 首次保存缺 crawl 字段 → insert 收到默认值（关闭 / 3）', async () => {
@@ -116,6 +124,139 @@ describe('AiConfigService — 网页爬取开关', () => {
       imageModel: 'wanx2.1-t2i-turbo',
       enabled: true,
     });
-    expect(insertValues).toHaveBeenCalledWith(expect.objectContaining({ crawlEnabled: 0, crawlMaxPerSession: 3 }));
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        crawlEnabled: 0,
+        crawlMaxPerSession: 3,
+        crawlRenderEnabled: 0,
+        crawlRenderTimeoutMs: 20_000,
+        crawlCookies: null,
+      }),
+    );
+  });
+
+  it('get() 映射渲染开关 / 超时 / cookie 域名列表（只回显域名）', async () => {
+    const secret = process.env.CRAWL_COOKIE_SECRET;
+    process.env.CRAWL_COOKIE_SECRET = 'a'.repeat(64);
+    const { encryptCookies } = await import('./cookie-crypto');
+    const stored = encryptCookies({ 'zhihu.com': 'z_c0=abc' });
+    const service = new AiConfigService(
+      readonlyDb(row({ crawlRenderEnabled: 1, crawlRenderTimeoutMs: 12_000, crawlCookies: stored })),
+    );
+    const view = await service.get();
+    expect(view).toMatchObject({
+      crawlRenderEnabled: true,
+      crawlRenderTimeoutMs: 12_000,
+      crawlCookieDomains: ['zhihu.com'],
+    });
+    expect(JSON.stringify(view)).not.toContain('z_c0=abc');
+    if (secret === undefined) delete process.env.CRAWL_COOKIE_SECRET;
+    else process.env.CRAWL_COOKIE_SECRET = secret;
+  });
+
+  it('get() 缺列 → 渲染关闭 / 默认 20000 / 无域名', async () => {
+    const service = new AiConfigService(readonlyDb(row()));
+    const view = await service.get();
+    expect(view).toMatchObject({ crawlRenderEnabled: false, crawlRenderTimeoutMs: 20_000, crawlCookieDomains: [] });
+  });
+
+  it('getActiveConfig() 暴露渲染配置（cookie 解密为明文映射）', async () => {
+    const secret = process.env.CRAWL_COOKIE_SECRET;
+    process.env.CRAWL_COOKIE_SECRET = 'a'.repeat(64);
+    const { encryptCookies } = await import('./cookie-crypto');
+    const stored = encryptCookies({ 'zhihu.com': 'z_c0=abc' });
+    const service = new AiConfigService(readonlyDb(row({ crawlRenderEnabled: 1, crawlCookies: stored })));
+    const cfg = await service.getActiveConfig();
+    expect(cfg.crawl).toEqual({
+      enabled: false,
+      maxPerSession: 3,
+      renderEnabled: true,
+      renderTimeoutMs: 20_000,
+      cookies: { 'zhihu.com': 'z_c0=abc' },
+    });
+    if (secret === undefined) delete process.env.CRAWL_COOKIE_SECRET;
+    else process.env.CRAWL_COOKIE_SECRET = secret;
+  });
+
+  it('save() 渲染超时越界 → 400', async () => {
+    const { service } = writableDb(row());
+    await expect(
+      service.save({
+        provider: 'qwen',
+        baseUrl: 'https://x.example',
+        visionModel: 'qwen-vl-max',
+        imageModel: 'wanx2.1-t2i-turbo',
+        enabled: true,
+        crawlRenderTimeoutMs: 1_000,
+      } as never),
+    ).rejects.toThrow('5000~60000');
+  });
+
+  it('save() cookie 落库值不是明文，且域名非法被拒', async () => {
+    const secret = process.env.CRAWL_COOKIE_SECRET;
+    process.env.CRAWL_COOKIE_SECRET = 'a'.repeat(64);
+    const { service, updateSet } = writableDb(row());
+    await service.save({
+      provider: 'qwen',
+      baseUrl: 'https://x.example',
+      visionModel: 'qwen-vl-max',
+      imageModel: 'wanx2.1-t2i-turbo',
+      enabled: true,
+      crawlCookies: { 'zhihu.com': 'z_c0=abc' },
+    } as never);
+    const patch = updateSet.mock.calls[0][0] as Record<string, unknown>;
+    expect(String(patch.crawlCookies)).toMatch(/^v1:/);
+    expect(String(patch.crawlCookies)).not.toContain('z_c0=abc');
+
+    await expect(
+      service.save({
+        provider: 'qwen',
+        baseUrl: 'https://x.example',
+        visionModel: 'qwen-vl-max',
+        imageModel: 'wanx2.1-t2i-turbo',
+        enabled: true,
+        crawlCookies: { 'not a domain': 'x=1' },
+      } as never),
+    ).rejects.toThrow('cookie 域名非法');
+
+    if (secret === undefined) delete process.env.CRAWL_COOKIE_SECRET;
+    else process.env.CRAWL_COOKIE_SECRET = secret;
+  });
+
+  it('save() 未配置密钥时保存 cookie → 400（绝不落明文）', async () => {
+    const secret = process.env.CRAWL_COOKIE_SECRET;
+    delete process.env.CRAWL_COOKIE_SECRET;
+    const { service, updateSet } = writableDb(row());
+    await expect(
+      service.save({
+        provider: 'qwen',
+        baseUrl: 'https://x.example',
+        visionModel: 'qwen-vl-max',
+        imageModel: 'wanx2.1-t2i-turbo',
+        enabled: true,
+        crawlCookies: { 'zhihu.com': 'z_c0=abc' },
+      } as never),
+    ).rejects.toThrow('未配置 CRAWL_COOKIE_SECRET');
+    expect(updateSet).not.toHaveBeenCalled();
+    if (secret !== undefined) process.env.CRAWL_COOKIE_SECRET = secret;
+  });
+
+  it('save() 未传 cookie → 保留存量', async () => {
+    const secret = process.env.CRAWL_COOKIE_SECRET;
+    process.env.CRAWL_COOKIE_SECRET = 'a'.repeat(64);
+    const { encryptCookies } = await import('./cookie-crypto');
+    const stored = encryptCookies({ 'zhihu.com': 'z_c0=abc' }) as string;
+    const { service, updateSet } = writableDb(row({ crawlCookies: stored }));
+    await service.save({
+      provider: 'qwen',
+      baseUrl: 'https://x.example',
+      visionModel: 'qwen-vl-max',
+      imageModel: 'wanx2.1-t2i-turbo',
+      enabled: true,
+    });
+    const patch = updateSet.mock.calls[0][0] as Record<string, unknown>;
+    expect(patch.crawlCookies).toBe(stored);
+    if (secret === undefined) delete process.env.CRAWL_COOKIE_SECRET;
+    else process.env.CRAWL_COOKIE_SECRET = secret;
   });
 });

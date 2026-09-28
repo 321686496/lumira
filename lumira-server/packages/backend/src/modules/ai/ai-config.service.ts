@@ -9,6 +9,7 @@ import { aiProviderConfig } from '../../database/schema';
 import { visionChat, textChat } from './llm-client';
 import { generateImage, mapSize } from './image-client';
 import { UpdateAiConfigDto } from './dto/update-ai-config.dto';
+import { decryptCookies, encryptCookies } from './cookie-crypto';
 import type { SearchConfig, SearchSourceConfig } from './trend-research';
 // 从叶子模块直接引入：research-image.ts 无任何依赖，避免 ai-config ↔ trend-research.service 的循环导入
 import { DEFAULT_RESEARCH_IMAGES_CONFIG } from './trend-research/research-image';
@@ -71,6 +72,12 @@ export interface AiConfigView {
   crawlEnabled: boolean;
   /** 单次文本会话最多爬取次数（1~6） */
   crawlMaxPerSession: number;
+  /** 爬取静态失败时是否降级到无头渲染 */
+  crawlRenderEnabled: boolean;
+  /** 单次无头渲染超时（毫秒） */
+  crawlRenderTimeoutMs: number;
+  /** 已配置 cookie 的域名列表（只回显域名，绝不回传 cookie 值） */
+  crawlCookieDomains: string[];
   /** 参考图抓取总开关 */
   researchImagesEnabled: boolean;
   /** 每主题最多保留参考图张数 */
@@ -118,10 +125,16 @@ export interface ActiveAiConfig {
     sources: string[];
     maxIterations: number;
   };
-  /** 网页爬取工具（文本模型工具循环的开关与预算） */
+  /** 网页爬取工具（文本模型工具循环的开关、预算、渲染降级与按域 cookie） */
   crawl: {
     enabled: boolean;
     maxPerSession: number;
+    /** 静态失败时是否降级到无头渲染 */
+    renderEnabled: boolean;
+    /** 单次无头渲染超时（毫秒） */
+    renderTimeoutMs: number;
+    /** 按域隔离的 cookie（已解密，仅内存存在） */
+    cookies: Record<string, string>;
   };
   /** 识别链路稳定性（JSON 识别步骤重试 / 超时 / 输出上限） */
   runtime: {
@@ -163,6 +176,15 @@ const DEFAULT_LLM_TIMEOUT_MS = 300_000;
 const DEFAULT_LLM_MAX_TOKENS = 8192;
 /** 网页爬取默认次数上限（与迁移 049 的 DEFAULT 一致） */
 const DEFAULT_CRAWL_MAX_PER_SESSION = 3;
+/** 无头渲染默认超时（与迁移 050 的 DEFAULT 一致） */
+const DEFAULT_CRAWL_RENDER_TIMEOUT_MS = 20_000;
+/** 无头渲染超时允许区间（毫秒） */
+const CRAWL_RENDER_TIMEOUT_LOWER = 5_000;
+const CRAWL_RENDER_TIMEOUT_UPPER = 60_000;
+/** cookie 单值长度上限 */
+const CRAWL_COOKIE_VALUE_MAX = 4096;
+/** cookie 域名字面量（必须是带点的合法 hostname，如 zhihu.com） */
+const CRAWL_COOKIE_DOMAIN_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i;
 
 /** apiKey 脱敏：空值返回空串（避免与脱敏后的 '****' 混淆）；≤8 位全遮蔽；否则前 3 + **** + 后 2 */
 function maskKey(k: string): string {
@@ -245,6 +267,9 @@ export class AiConfigService {
       llmMaxTokens: row.llmMaxTokens ?? DEFAULT_LLM_MAX_TOKENS,
       crawlEnabled: row.crawlEnabled === 1,
       crawlMaxPerSession: row.crawlMaxPerSession ?? DEFAULT_CRAWL_MAX_PER_SESSION,
+      crawlRenderEnabled: row.crawlRenderEnabled === 1,
+      crawlRenderTimeoutMs: row.crawlRenderTimeoutMs ?? DEFAULT_CRAWL_RENDER_TIMEOUT_MS,
+      crawlCookieDomains: Object.keys(decryptCookies(row.crawlCookies)),
       researchImagesEnabled: (row.researchImagesEnabled ?? 0) === 1,
       researchImagesMax: row.researchImagesMax ?? DEFAULT_RESEARCH_IMAGES_CONFIG.max,
       researchImagesPageFetch: (row.researchImagesPageFetch ?? 1) === 1,
@@ -334,6 +359,33 @@ export class AiConfigService {
     }
     const crawlEnabled = dto.crawlEnabled === undefined ? (existing?.crawlEnabled === 1 ? 1 : 0) : dto.crawlEnabled ? 1 : 0;
     const crawlMaxPerSession = dto.crawlMaxPerSession ?? existing?.crawlMaxPerSession ?? DEFAULT_CRAWL_MAX_PER_SESSION;
+    if (
+      dto.crawlRenderTimeoutMs !== undefined &&
+      (dto.crawlRenderTimeoutMs < CRAWL_RENDER_TIMEOUT_LOWER || dto.crawlRenderTimeoutMs > CRAWL_RENDER_TIMEOUT_UPPER)
+    ) {
+      throw new BadRequestException('无头渲染超时需在 5000~60000 毫秒之间');
+    }
+    if (dto.crawlCookies !== undefined) {
+      for (const [domain, value] of Object.entries(dto.crawlCookies)) {
+        if (!CRAWL_COOKIE_DOMAIN_RE.test(domain.trim())) {
+          throw new BadRequestException(`cookie 域名非法：${domain}`);
+        }
+        if (typeof value !== 'string' || value.length > CRAWL_COOKIE_VALUE_MAX) {
+          throw new BadRequestException(`cookie 值非法或过长（域名 ${domain}）`);
+        }
+      }
+    }
+    const crawlRenderEnabled = dto.crawlRenderEnabled === undefined ? (existing?.crawlRenderEnabled === 1 ? 1 : 0) : dto.crawlRenderEnabled ? 1 : 0;
+    const crawlRenderTimeoutMs = dto.crawlRenderTimeoutMs ?? existing?.crawlRenderTimeoutMs ?? DEFAULT_CRAWL_RENDER_TIMEOUT_MS;
+    // cookie：仅在显式传入时重写（加密后落库）；未传则保留存量
+    let nextCrawlCookies: string | null = existing?.crawlCookies ?? null;
+    if (dto.crawlCookies !== undefined) {
+      try {
+        nextCrawlCookies = encryptCookies(dto.crawlCookies);
+      } catch (err) {
+        throw new BadRequestException(err instanceof Error ? err.message : 'cookie 保存失败');
+      }
+    }
     const searchQwenBaseUrl = dto.searchQwenBaseUrl?.trim() || existing?.searchQwenBaseUrl || null;
     const resolvedSearchQwenApiKey = dto.searchQwenApiKey?.trim() || existing?.searchQwenApiKey || null;
     const searchQwenModel = dto.searchQwenModel?.trim() || existing?.searchQwenModel || null;
@@ -403,6 +455,9 @@ export class AiConfigService {
         llmMaxTokens,
         crawlEnabled,
         crawlMaxPerSession,
+        crawlRenderEnabled,
+        crawlRenderTimeoutMs,
+        crawlCookies: nextCrawlCookies,
         searchQwenBaseUrl,
         searchQwenApiKey: resolvedSearchQwenApiKey,
         searchQwenModel,
@@ -450,6 +505,9 @@ export class AiConfigService {
           llmMaxTokens,
           crawlEnabled,
           crawlMaxPerSession,
+          crawlRenderEnabled,
+          crawlRenderTimeoutMs,
+          crawlCookies: nextCrawlCookies,
           searchQwenBaseUrl,
           searchQwenApiKey: dto.searchQwenApiKey?.trim() ? resolvedSearchQwenApiKey : existing?.searchQwenApiKey,
           searchQwenModel,
@@ -675,6 +733,9 @@ export class AiConfigService {
       crawl: {
         enabled: row.crawlEnabled === 1,
         maxPerSession: row.crawlMaxPerSession ?? DEFAULT_CRAWL_MAX_PER_SESSION,
+        renderEnabled: row.crawlRenderEnabled === 1,
+        renderTimeoutMs: row.crawlRenderTimeoutMs ?? DEFAULT_CRAWL_RENDER_TIMEOUT_MS,
+        cookies: decryptCookies(row.crawlCookies),
       },
       runtime: {
         retryCount: row.llmRetryCount ?? DEFAULT_LLM_RETRY_COUNT,
