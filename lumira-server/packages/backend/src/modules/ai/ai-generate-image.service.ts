@@ -14,11 +14,26 @@ import { composeImagePrompt } from './image-prompt.composer';
 import type { ResearchItem } from './trend-research/research-item';
 import { normalizeBrief } from './trend-research/research-brief';
 import type { ResearchBrief } from './trend-research/research-brief';
+import { renderResearchVision } from './trend-research/research-vision';
+import type { ResearchVision } from './trend-research/research-vision';
 
 const logger = new Logger('AiGenerateImageService');
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** 参考视觉要点归一：后端已渲染文本直接沿用；admin 透传的 ResearchVision 对象现场渲染为分节文本；其余为 null */
+function resolveResearchVision(v: unknown): string | null {
+  if (typeof v === 'string') {
+    const s = v.trim();
+    return s !== '' ? s : null;
+  }
+  if (isPlainObject(v)) {
+    const text = renderResearchVision(v as unknown as ResearchVision).trim();
+    return text !== '' ? text : null;
+  }
+  return null;
 }
 
 /**
@@ -146,9 +161,11 @@ export class AiGenerateImageService {
       }
     }
 
-    // 2.5 解析研究结果 JSON：兼容旧前端（数组）与新前端（{ items, brief }）；非法静默降级，不阻断生图
+    // 2.5 解析研究结果 JSON：兼容旧前端（数组）与新前端（{ items, brief, vision }）；
+    //     vision 可能是后端已渲染文本，也可能是 admin 直接透传的 ResearchVision 对象；非法静默降级，不阻断生图
     let research: ResearchItem[] = [];
     let researchBrief: ResearchBrief | null = null;
+    let researchVision: string | null = null;
     if (researchJson) {
       try {
         const parsed: unknown = JSON.parse(researchJson);
@@ -157,6 +174,7 @@ export class AiGenerateImageService {
         } else if (isPlainObject(parsed)) {
           if (Array.isArray(parsed.items)) research = parsed.items as ResearchItem[];
           researchBrief = normalizeBrief(parsed.brief);
+          researchVision = resolveResearchVision(parsed.vision);
         }
       } catch {
         // 非法 JSON → 无研究参考，走纯草稿素材
@@ -168,7 +186,7 @@ export class AiGenerateImageService {
     const fallbackPrompt = buildImagePrompt(draft, extraPrompt);
     const { prompt, composed } = await composeImagePrompt(
       cfg.text,
-      { draft, research, brief: researchBrief, extraPrompt },
+      { draft, research, brief: researchBrief, vision: researchVision, extraPrompt },
       fallbackPrompt,
     );
     // 组织器失败/超时/空白输出时静默回退机械拼接（趋势要点与风格素材未注入）——留痕以便排查

@@ -317,3 +317,20 @@ describe('去噪写实', () => {
     expect(sys).toContain('噪点受控');
   });
 });
+
+describe('composeImagePrompt 参考视觉要点', () => {
+  it('传入 vision 时提示词含【参考视觉要点】区块且保留结论文本', () => {
+    const text = buildPromptMaterial({
+      draft: { topic: '旗袍写真' },
+      research: [],
+      vision: '- 风格倾向：新中式\n- 综合结论：暖调逆光',
+    });
+    expect(text).toContain('【参考视觉要点】');
+    expect(text).toContain('暖调逆光');
+  });
+
+  it('未传 vision 时不出现该区块', () => {
+    const text = buildPromptMaterial({ draft: { topic: 'x' }, research: [] });
+    expect(text).not.toContain('【参考视觉要点】');
+  });
+});
