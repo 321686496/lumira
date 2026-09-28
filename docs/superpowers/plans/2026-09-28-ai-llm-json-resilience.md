@@ -752,7 +752,8 @@ git commit -m "feat(ai): 新增 llm-json 重试封装（解析失败/超时/5xx/
 - Modify: `lumira-server/packages/backend/src/modules/ai/pose-ref-sheet.service.ts`（L127-178）
 - Modify: `lumira-server/packages/backend/src/modules/ai/image-score.service.ts`（L185-205）
 - Modify: `lumira-server/packages/backend/src/modules/ai/draft-refine.service.ts`（L79-104）
-- Test: `image-describe.service.spec.ts` / `pose-ref-sheet.service.spec.ts` / `image-score.service.spec.ts` / `draft-refine.service.spec.ts` / `ai-analyze.service.spec.ts`
+- Modify: `lumira-server/packages/backend/src/modules/ai/style-profile.service.ts`（L95-115；**2026-09-28 用户确认追加**，见 Step 5.5）
+- Test: `image-describe.service.spec.ts` / `pose-ref-sheet.service.spec.ts` / `image-score.service.spec.ts` / `draft-refine.service.spec.ts` / `ai-analyze.service.spec.ts` / `style-profile.service.spec.ts`
 
 **Interfaces:**
 - Consumes: `visionChatJson` / `textChatJson` / `LlmJsonError`（Task 4）、`cfg.runtime`（Task 1）
@@ -922,7 +923,31 @@ L87-103 段替换为：
 
 提示词内容与 temperature 保持原值不变。并把 import 中 `textChat` 换为 `textChatJson`（来自 `./llm-json`），移除 `extractJson` 导入。
 
-- [ ] **Step 6: 适配五个 spec 的 mock**
+- [ ] **Step 5.5: 改 `style-profile.service.ts`（用户确认追加）**
+
+> 背景：`style-profile.service.ts` 的「风格档案识别」同为 JSON 识别步骤（`textChat + extractJson`、超时硬编码 `60_000`、解析失败静默回退默认档案），是用户最初反馈的痛点，原 §4 接线范围表漏列，经用户确认一并纳入。
+
+`resolve` 方法内 L95-115 段替换为：
+
+```ts
+      const json = await textChatJson(
+        cfg.text,
+        { systemPrompt: STYLE_RESOLVE_SYSTEM_PROMPT, userText, temperature: 0.3 },
+        cfg.runtime,
+      );
+      const profile = normalizeStyleProfile(json);
+      return {
+        profile,
+        source: 'llm',
+        note: `${STYLE_ARCHETYPE_LABELS[profile.archetype]}/${profile.category}/${profile.retouchLevel}`,
+      };
+```
+
+- `jsonMode: true` 与 `timeoutMs: 60_000` 一并去掉（`textChatJson` 内部固定 `jsonMode` 并按 `runtime.timeoutMs` 走）。
+- `if (!json) { ... fallback ... }` 分支不再可达（`textChatJson` 要么返回对象要么抛 `LlmJsonError`），删除该分支；**既有 `catch` 的兜底语义不变**：重试用尽仍回退 `defaultStyleProfile()`，仅把 note 文案对齐为「重试用尽」。
+- import：`textChat` 换成 `textChatJson`（来自 `./llm-json`），移除不再使用的 `extractJson` 导入。
+
+- [ ] **Step 6: 适配六个 spec 的 mock**
 
 对 `image-describe.service.spec.ts` / `pose-ref-sheet.service.spec.ts` / `image-score.service.spec.ts` / `draft-refine.service.spec.ts` / `ai-analyze.service.spec.ts` 逐个执行：
 

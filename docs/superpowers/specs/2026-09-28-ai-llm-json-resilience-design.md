@@ -81,6 +81,9 @@ export async function textChatJson(cfg, input): Promise<Record<string, unknown>>
 | pose-ref-sheet.service | textChat + extractJson | textChatJson |
 | image-score.service | textChat + extractJson | textChatJson（失败仍回退 retry） |
 | draft-refine.service | textChat + extractJson | textChatJson（失败仍回退 null） |
+| style-profile.service（风格档案识别） | textChat + extractJson（超时硬编码 60s，解析失败静默回退默认档案） | textChatJson（失败仍回退 defaultStyleProfile） |
+
+> 追加说明（2026-09-28 用户确认）：`style-profile.service.ts` 与原表同属 JSON 识别步骤，且「解析失败即静默回退」正是本设计要消除的痛点，初期遗漏，经用户拍板一并纳入接线范围。
 
 ### 5. 超时治理
 
