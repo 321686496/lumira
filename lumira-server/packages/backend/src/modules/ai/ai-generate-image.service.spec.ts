@@ -293,4 +293,23 @@ describe('research 两种形态解析', () => {
     expect(composeSpy.mock.calls[0][1]).toMatchObject({ research: [{ title: 't' }] });
     composeSpy.mockRestore();
   });
+
+  it('brief 结构畸形（themes/sources 非数组）→ 归一为 null，不因渲染抛错而整体回退机械拼接', async () => {
+    const { service } = buildService();
+    generateImageMock.mockResolvedValueOnce({ base64: 'aGVsbG8=', mimeType: 'image/png' });
+    const { textChat } = jest.requireMock('./llm-client') as { textChat: jest.Mock };
+    const composeSpy = jest.spyOn(composerModule, 'composeImagePrompt');
+
+    await service.generate(undefined, JSON.stringify({ meta: { category: 'portrait' } }), null, JSON.stringify({
+      items: [{ source: 'searxng', title: 't', snippet: 's', keywords: [] }],
+      brief: { summary: '', themes: '不是数组', colorLight: [], visualElements: [], seasons: [], poseIdeas: [], sources: '也不是数组' },
+    }));
+
+    // 畸形 brief 被 normalizeBrief 归一为 null（趋势要点区块缺失），不再把原始对象塞给 renderResearchBrief
+    expect((composeSpy.mock.calls[0][1] as PromptComposeInput).brief).toBeNull();
+    // 组织器未被渲染抛错触发回退：仍走模型润色结果，素材中不含趋势要点区块
+    expect(textChat.mock.calls[0][1].userText).not.toContain('【趋势要点（结构化）】');
+    expect(generateImageMock.mock.calls[0][1].prompt).toBe(hardenPhotoRealism('润色后的提示词'));
+    composeSpy.mockRestore();
+  });
 });

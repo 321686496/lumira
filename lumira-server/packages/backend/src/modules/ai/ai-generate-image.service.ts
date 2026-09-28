@@ -4,7 +4,7 @@
 //
 // prompt 由后端统一构建（前端不拼 prompt）；qwen/zhipu 内部忽略参考图走文生图（image-client 分支处理）。
 
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { UploadFile } from '../templates/admin-templates.service';
 import { AiConfigService } from './ai-config.service';
 import { GenerateImageResult, generateImage, mapSize } from './image-client';
@@ -12,7 +12,10 @@ import { buildImagePrompt, isSelfieDraft, retouchLevelOfDraft } from './image-pr
 import type { RetouchLevel } from './style-profile.presets';
 import { composeImagePrompt } from './image-prompt.composer';
 import type { ResearchItem } from './trend-research/research-item';
+import { normalizeBrief } from './trend-research/research-brief';
 import type { ResearchBrief } from './trend-research/research-brief';
+
+const logger = new Logger('AiGenerateImageService');
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -153,7 +156,7 @@ export class AiGenerateImageService {
           research = parsed as ResearchItem[];
         } else if (isPlainObject(parsed)) {
           if (Array.isArray(parsed.items)) research = parsed.items as ResearchItem[];
-          researchBrief = (parsed.brief ?? null) as ResearchBrief | null;
+          researchBrief = normalizeBrief(parsed.brief);
         }
       } catch {
         // 非法 JSON → 无研究参考，走纯草稿素材
@@ -161,12 +164,17 @@ export class AiGenerateImageService {
     }
 
     // 3. 机械拼接 prompt 作为兜底；结构化素材交文本模型整理为最终生图提示词（失败回退拼接值）
+    //    + 按厂商映射尺寸 → 生图（有参考图时 doubao/openai 走图生图）
     const fallbackPrompt = buildImagePrompt(draft, extraPrompt);
-    const { prompt } = await composeImagePrompt(
+    const { prompt, composed } = await composeImagePrompt(
       cfg.text,
       { draft, research, brief: researchBrief, extraPrompt },
       fallbackPrompt,
     );
+    // 组织器失败/超时/空白输出时静默回退机械拼接（趋势要点与风格素材未注入）——留痕以便排查
+    if (!composed) {
+      logger.warn('生图提示词组织回退机械拼接 prompt（文本模型整理失败/超时/空白输出，趋势要点与风格素材未注入）');
+    }
     // 网络生图（含 qwen 异步轮询/结果下载）纳入全局并发闸门，避免并发打爆上游厂商
     // prompt 出口统一照片写实加固（媒介声明 + 真实材质 + 反动漫负面清单；自拍追加第一人称视角与设备负面清单）
     const hardenedPrompt = hardenPhotoRealism(prompt, {

@@ -150,8 +150,7 @@ export class AiAnalyzeService {
           );
           research = r.items;
           researchBrief = r.brief ?? null;
-          const brief = r.brief ?? null;
-          researchDigest = brief ? renderResearchBrief(brief) : buildResearchDigest(r.items);
+          researchDigest = researchBrief ? renderResearchBrief(researchBrief) : buildResearchDigest(r.items);
         } catch {
           // 搜索失败 → 无摘要，草稿生成回到无研究参考的原路径
         }

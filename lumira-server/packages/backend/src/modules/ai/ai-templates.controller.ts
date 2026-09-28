@@ -64,7 +64,8 @@ export class AiTemplatesController {
   }
 
   /**
-   * AI 生成模板效果图（异步任务式：multipart meta 草稿 JSON 文本语义 + reference 参考图可选 + extraPrompt 附加提示词可选 + research 识别研究结果可选）
+   * AI 生成模板效果图（异步任务式：multipart meta 草稿 JSON 文本语义 + reference 参考图可选 + extraPrompt 附加提示词可选 + research 识别研究结果 JSON 可选）
+   * research 现为 `{ items, brief }`（识别阶段透传），兼容旧的纯数组（ResearchItem[]）形态。
    * 返回 { taskId }，前端轮询 GET ai-generate-image/tasks/:taskId 获取结果（避免同步长请求超时）。
    */
   @Post('ai-generate-image')
@@ -76,6 +77,7 @@ export class AiTemplatesController {
   /**
    * 批量姿势图：一次提交返回单一 batchId。后端内部控制锚点先后、并发上限与逐张进度，
    * 前端只需轮询 GET batch/:batchId 一个接口即可拿到全量进度与结果。
+   * multipart 字段同 ai-generate-image（research 为 `{ items, brief }`，兼容旧纯数组）。
    */
   @Post('ai-generate-image/batch')
   async generateImageBatch(@Req() req: FastifyRequest) {
@@ -152,7 +154,7 @@ export class AiTemplatesController {
 
 // ===== 模块内小型 multipart 助手 =====
 // 不复用 admin-templates.controller 的专用解析器（其字段名固定 cover/silhouette/pptpl/icon/images）；
-// AI 端点解析：meta / textDesc / creationReq / poseCount / extraPrompt（文本）+ image / reference（文件）。
+// AI 端点解析：meta / textDesc / creationReq / poseCount / subjectCount / extraPrompt / research（文本）+ image / reference（文件）。
 
 /** AI 端点 multipart 解析结果 */
 export interface ParsedAiMultipart {
@@ -169,7 +171,7 @@ export interface ParsedAiMultipart {
   subjectCount: string | null;
   /** Step3 附加提示词（可选，拼接到封面生图提示词末尾） */
   extraPrompt: string | null;
-  /** 识别阶段研究结果 JSON（可选，ResearchItem[]；透传给生图提示词组织器） */
+  /** 识别阶段研究结果 JSON（可选，`{ items, brief }`，兼容旧的纯数组 ResearchItem[]；透传给生图提示词组织器） */
   research: string | null;
   image?: UploadFile;
   reference?: UploadFile;
@@ -179,7 +181,7 @@ export interface ParsedAiMultipart {
 const TEXT_FIELDS = ['meta', 'text', 'textDesc', 'creationReq', 'poseCount', 'subjectCount', 'extraPrompt', 'research'] as const;
 
 /**
- * 解析 AI 端点 multipart 请求，提取文本字段（meta / textDesc / creationReq / poseCount / extraPrompt）
+ * 解析 AI 端点 multipart 请求，提取文本字段（meta / textDesc / creationReq / poseCount / subjectCount / extraPrompt / research）
  * 和 `image` / `reference` 文件字段。
  * 使用 @fastify/multipart 的 request.parts() 异步迭代器（同 admin-templates.controller）。
  */

@@ -102,11 +102,12 @@ export function AiCreateWizard({
   const [poseTraceRunning, setPoseTraceRunning] = useState(false);
   /** 「AI 生成过程」面板本次是否被手动关闭（仅隐藏展示，不清空已采集过程） */
   const [progressPanelHidden, setProgressPanelHidden] = useState(false);
-  /** Step1 附加输入：创作要求 / 姿势个数（'auto' = AI 自动判断）；主文字描述复用 inputText（同时作为 textDesc 附加输入） */
+  /** Step1 附加输入：创作要求 / 姿势个数 / 人物数量（'auto' = AI 自动判断）；主文字描述复用 inputText（同时作为 textDesc 附加输入） */
   const [creationReq, setCreationReq] = useState('');
   const [poseCount, setPoseCount] = useState('auto');
+  /** Step1 附加输入：人物数量（'auto' = AI 自动判断；'1'~'3' 固定指定） */
   const [subjectCount, setSubjectCount] = useState('auto');
-  /** Step1「高级设置」折叠区是否展开（低频参数：补充创作要求 / 姿势个数） */
+  /** Step1「高级设置」折叠区是否展开（低频参数：补充创作要求 / 姿势个数 / 人物数量） */
   const [advancedOpen, setAdvancedOpen] = useState(false);
   /** AI 剪影可用性（配置且启用）：Step4 默认引擎 + 全自动流程剪影 engine */
   const [aiSilhouetteAvailable, setAiSilhouetteAvailable] = useState(false);
@@ -712,7 +713,7 @@ export function AiCreateWizard({
                           <SelectItem value="auto">AI 自动判断</SelectItem>
                           <SelectItem value="1">1 人</SelectItem>
                           <SelectItem value="2">2 人（情侣 / 双人）</SelectItem>
-                          <SelectItem value="3">3 人以上（全家福 / 合影）</SelectItem>
+                          <SelectItem value="3">3 人（合影 / 全家福）</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
