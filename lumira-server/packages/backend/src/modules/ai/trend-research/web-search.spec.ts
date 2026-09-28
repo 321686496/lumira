@@ -135,6 +135,19 @@ describe('cacheableSearch', () => {
     expect(p.count()).toBe(2);
   });
 
+  it('同 query、不同 site 的 searxng 适配器不共享缓存（缓存 key 含 site）', async () => {
+    const pXhs = createWebSearchProvider('searxng', { baseUrl: 'http://lumira-searxng:8080', site: 'xiaohongshu.com' });
+    const pWeibo = createWebSearchProvider('searxng', { baseUrl: 'http://lumira-searxng:8080', site: 'weibo.com' });
+    const fetchMock = jest.spyOn(global, 'fetch').mockImplementation(async () => searxngOkResponse([]));
+
+    await cacheableSearch(pXhs, { query: '多平台唯一查询串', limit: 3 });
+    await cacheableSearch(pWeibo, { query: '多平台唯一查询串', limit: 3 });
+
+    // name 必须能区分不同 site，否则缓存 key 相同 → 第二次命中第一次的缓存
+    expect(pXhs.name).not.toBe(pWeibo.name);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('provider 失败 → 抛错', async () => {
     const p: WebSearchProvider = {
       name: 'bad',

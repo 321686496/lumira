@@ -41,7 +41,9 @@ export function createSearxngSearchProvider(cfg: { baseUrl?: string; apiKey?: st
   const site = (cfg.site || '').trim();
 
   return {
-    name: 'searxng',
+    // name 需区分不同 site：cacheableSearch 以 provider.name 作为缓存键的一部分，
+    // 同一进程内多平台来源（小红书/抖音/微博/知乎…）若共用 'searxng' 会在热缓存下相互串味。
+    name: site ? `searxng:${site}` : 'searxng',
     async search(q: WebSearchQuery): Promise<ResearchItem[]> {
       const query = site ? `site:${site} ${q.query}` : q.query;
       const params = new URLSearchParams({ q: query, format: 'json', language: 'zh-CN' });

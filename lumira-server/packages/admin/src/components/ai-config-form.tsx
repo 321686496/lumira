@@ -988,7 +988,7 @@ export function AiConfigForm({
                     id="ai-searxng-site"
                     value={form.searchSite}
                     onChange={(e) => setForm((f) => ({ ...f, searchSite: e.target.value }))}
-                    placeholder="xiaohongshu.com / v.douyin.com，留空 = 全站搜索"
+                    placeholder="xiaohongshu.com / v.douyin.com，留空 = 默认检索小红书等平台"
                   />
                   <p className="text-xs text-muted-foreground">
                     留空则默认检索小红书、抖音、微博、知乎等社交平台（小红书为主）并辅以全站兜底；填写后仅检索该站点。

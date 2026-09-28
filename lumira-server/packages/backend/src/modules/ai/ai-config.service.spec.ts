@@ -813,10 +813,29 @@ describe('AiConfigService — searxng 社交平台默认来源集', () => {
     })));
     const cfg = await service.getSearchConfig();
     const names = (cfg?.sources ?? []).map((s) => s.name);
+    expect(cfg?.sources).toHaveLength(5);
     expect(names).toContain('searxng-xhs');
     expect(names).toContain('searxng-all');
-    const xhs = (cfg?.sources ?? []).find((s) => s.name === 'searxng-xhs');
-    expect(xhs?.site).toBe('xiaohongshu.com');
+    const siteOf = (n: string) => (cfg?.sources ?? []).find((s) => s.name === n)?.site;
+    expect(siteOf('searxng-xhs')).toBe('xiaohongshu.com');
+    expect(siteOf('searxng-douyin')).toBe('douyin.com');
+    expect(siteOf('searxng-weibo')).toBe('weibo.com');
+    expect(siteOf('searxng-zhihu')).toBe('zhihu.com');
+    expect(siteOf('searxng-all')).toBeUndefined(); // 全站兜底不带 site
+  });
+
+  it('searxng 且站点限定为纯空白：与未填一致，走默认多来源集', async () => {
+    const service = new AiConfigService(readonlyDb(row({
+      enabled: 1,
+      searchEnabled: 1,
+      searchProvider: 'general',
+      searchBaseUrl: 'http://lumira-searxng:8080',
+      searchSite: '   ',
+      searchSources: JSON.stringify(['searxng']),
+    })));
+    const cfg = await service.getSearchConfig();
+    expect(cfg?.sources).toHaveLength(5);
+    expect((cfg?.sources ?? []).map((s) => s.name)).toContain('searxng-all');
   });
 
   it('searxng 且显式填了站点限定：只返回单来源（向后兼容）', async () => {
