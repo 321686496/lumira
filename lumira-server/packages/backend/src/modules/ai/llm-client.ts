@@ -39,7 +39,7 @@ export interface TextChatInput {
 
 // ===== 函数调用往返（Task 1：工具调用基建）=====
 
-/** tool definition（OpenAI 兼容 tools 数组元素） */
+/** 内部扁平工具定义（发送时由 buildChatBody 包装成 OpenAI 契约形态） */
 export interface ToolDef {
   name: string;
   description: string;
@@ -117,6 +117,14 @@ interface ChatRequestBase {
 }
 
 /**
+ * 内部扁平 ToolDef → OpenAI 契约形态 `{ type:'function', function:{...} }`。
+ * 厂商对 tools 元素强校验，缺 `type` / `function` 外壳会直接 HTTP 400（'type' is a required property）。
+ */
+function toOpenAiTools(tools: ToolDef[]): Array<{ type: 'function'; function: ToolDef }> {
+  return tools.map((t) => ({ type: 'function', function: t }));
+}
+
+/**
  * 构造 chat/completions 请求体（chatRequest / toolChat 共用）：
  * jsonMode → response_format；tools 非空 → 带 tools + tool_choice:'auto'。
  */
@@ -129,7 +137,7 @@ export function buildChatBody(input: ChatRequestBase, opts: { tools?: ToolDef[];
   };
   if (opts.jsonMode ?? input.jsonMode) body.response_format = { type: 'json_object' };
   if (opts.tools && opts.tools.length) {
-    body.tools = opts.tools;
+    body.tools = toOpenAiTools(opts.tools);
     body.tool_choice = opts.toolChoice ?? 'auto';
   }
   return body;

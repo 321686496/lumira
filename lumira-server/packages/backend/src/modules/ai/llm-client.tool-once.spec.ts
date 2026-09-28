@@ -50,4 +50,23 @@ describe('toolChatOnce', () => {
     expect(body.tools).toHaveLength(1);
     expect(body.response_format).toEqual({ type: 'json_object' });
   });
+
+  it('tools 按 OpenAI 契约序列化：type:"function" + function 外壳（厂商强校验，缺 type 会 400）', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'ok' } }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await toolChatOnce(CFG, { messages: [{ role: 'user', content: 'hi' }], tools: TOOLS });
+
+    const body = parseBody(fetchMock.mock.calls[0][1]);
+    expect(body.tools).toEqual([
+      {
+        type: 'function',
+        function: { name: 'crawl_website', description: '抓取网页正文', parameters: { type: 'object', properties: {} } },
+      },
+    ]);
+  });
 });

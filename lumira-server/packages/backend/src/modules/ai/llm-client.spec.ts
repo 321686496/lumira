@@ -320,7 +320,7 @@ describe('toolChat / extractToolCalls', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const body = parseBody(fetchMock.mock.calls[0][1]);
     expect(body.tool_choice).toBe('auto');
-    expect(body.tools).toEqual([TOOL]);
+    expect(body.tools).toEqual([{ type: 'function', function: TOOL }]);
     expect(body.messages).toEqual([
       { role: 'system', content: 'sys' },
       { role: 'user', content: '帮我研究秋日人像趋势' },
