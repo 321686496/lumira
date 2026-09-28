@@ -1023,3 +1023,43 @@
 - **根因/优化点**：`prompt-polisher.ts` 已不在生图链路上被调用（`ai-generate-image.service` 走 `composeImagePrompt`），仅残留死代码与单测。
 - **目标状态**：确认无引用后删除文件与 `prompt-polisher.spec.ts`。
 - **状态**：⏳ 待实现（本次为降低风险未删除）
+
+---
+
+## AI 一键生成模板 · 多人物 / 去噪写实 / 搜索落地姿势图（期1，2026-09-28）
+
+> 计划：`docs/superpowers/plans/2026-09-28-ai-template-multi-subject-photoreal-search.md`（已落地 `83619d1..feb2199`）
+
+### P1 · 手动指定人物数量只到「3 人」，5 人以上只能靠 AI 推断
+
+- **模块**：后台 AI 一键生成（`lumira-server/packages/admin/src/components/ai-create/wizard.tsx`）+ 后端 `meta.subjectCount`
+- **优化点**：Step1「人物数量」控件只给 自动 / 1 / 2 / 3 三个固定档（`'auto'` 时不提交字段），而契约本身是 1~8；其中「3 人（合影 / 全家福）」归一到**正好 3 人**，所以手选「5 人全家福」这一类场景拿不到真实人数。
+- **背景/动机**：本期先覆盖最高频的情侣 / 双人 / 三人合影场景，UI 保持极简；超出 3 人的场景由用户留「AI 自动判断」，识别侧会按画面实际人数给出 `subjectCount`（1~8）。
+- **目标状态**：控件扩展为 自动 + 1~8 精确选择（或在选「3 人以上」后再选具体人数）；后端已支持 1~8，无需改动，仅前端与文案。
+
+### P1 · 去噪写实为全局取向，胶片 / 复古风格档案的颗粒观感被一并去掉
+
+- **模块**：后端 AI 生图提示词（`image-prompt.builder.ts` / `image-prompt.composer.ts` / `image-client.ts` / `ai-generate-image.service.ts`）
+- **优化点**：本期把「颗粒 / 噪点 / sensor noise / 瑕疵」类要求从全部链路删除（含英文写实锚点与 `hardenPhotoRealism`），统一改为「高清干净写实」口径；这同时抹掉了胶片、复古等风格档案本应有的颗粒质感。
+- **背景/动机**：用户反馈「生成图人物质感与光影不够真实、噪点严重」，需要先在全局去噪，避免个别风格档案又把颗粒写回提示词；按风格档案分档需要把「颗粒」重新设计为风格可选项，超出本期范围。
+- **目标状态**：把「颗粒 / 质感」交由风格档案（`STYLE_ARCHETYPE_PRESETS`，或后续迁到 DB 的档案配置）按风格分档控制——写实人像保持干净，胶片 / 复古风格可选性引入颗粒；负面清单中的「禁止颗粒与噪点」按档案差异化。
+
+### P2 · 提示词组织器回退日志只记「已回退」事实，不区分原因
+
+- **模块**：后端 AI（`lumira-server/packages/backend/src/modules/ai/ai-generate-image.service.ts`）
+- **优化点**：本次在 `composed === false` 时补了一行 `warn`（此前是静默回退），但无法区分「文本模型超时 / 空白输出 / 调用抛错」三类原因。
+- **背景/动机**：为排查「趋势要点与风格素材未注入」时缺少可分辨的线索；本期按最小改动只留痕不分类。
+- **目标状态**：让 `composeImagePrompt` 回传失败原因（超时 / 空白 / 异常），日志按原因分类输出，并在后台时间线可见。
+
+### P2 · 非人像大类也输出「画面主体人数」
+
+- **模块**：后端 AI（`lumira-server/packages/backend/src/modules/ai/image-prompt.composer.ts` 的 `buildPromptMaterial`）
+- **优化点**：风景 / 静物 / 美食等非人像模板同样会渲染「- 画面主体人数：1」，语义上略怪（该字段由 `subjectCountOfDraft` 缺省为 1 派生）。
+- **目标状态**：仅在主体含人（`subjectKey === 'portrait'` 或同义判定）时输出该行，非人像大类不输出。
+
+### P2 · ResearchBrief 透传链路的两个分支缺测试
+
+- **模块**：后端（`ai-analyze.service.ts` 的 orchestrator 返回路径）/ 后台（`src/lib/ai-task.ts` 的 researchBrief-only 序列化）
+- **优化点**：识别 orchestrator 分支返回的 `brief`、以及 admin 只拿到 `researchBrief` 而无 `research` 时的表单序列化（`JSON.stringify({ items: [], brief })`），当前均无单测覆盖。
+- **背景/动机**：终审已人工核实两条链路正确（orchestrator 的 `research` 与 `brief` 同源、admin 两路径共用同一序列化），仅缺回归网。
+- **目标状态**：各补一条聚焦用例，锁住「brief 只在单次路径存在」与「researchBrief-only 也能正确序列化」两个行为。
