@@ -481,6 +481,18 @@ export interface AiProviderConfigView {
   llmTimeoutMs: number;
   /** 识别稳定性：单次 LLM 输出 token 上限（默认 8192） */
   llmMaxTokens: number;
+  /** 参考图抓取：开关 */
+  researchImagesEnabled: boolean;
+  /** 参考图抓取：最多保留张数 */
+  researchImagesMax: number;
+  /** 参考图抓取：命中页面 og:image 抓取 */
+  researchImagesPageFetch: boolean;
+  /** 参考图抓取：图片搜索兜底 */
+  researchImagesSearchFallback: boolean;
+  /** 参考图抓取：多模态解读 */
+  researchImagesVision: boolean;
+  /** 参考图抓取：图片保留天数 */
+  researchImagesTtlDays: number;
 }
 
 /** PUT /admin/ai-config 请求体（apiKey 空串/缺省 = 不修改原值，首次保存必填） */
@@ -531,6 +543,18 @@ export interface UpdateAiConfigPayload {
   llmTimeoutMs?: number;
   /** 识别稳定性：单次 LLM 输出 token 上限（1024~16384） */
   llmMaxTokens?: number;
+  /** 参考图抓取：开关 */
+  researchImagesEnabled?: boolean;
+  /** 参考图抓取：最多保留张数（1~12） */
+  researchImagesMax?: number;
+  /** 参考图抓取：命中页面 og:image 抓取 */
+  researchImagesPageFetch?: boolean;
+  /** 参考图抓取：图片搜索兜底 */
+  researchImagesSearchFallback?: boolean;
+  /** 参考图抓取：多模态解读 */
+  researchImagesVision?: boolean;
+  /** 参考图抓取：图片保留天数（1~90） */
+  researchImagesTtlDays?: number;
 }
 
 /** POST /admin/ai-config/test 可选目标（缺省 = 全部） */
@@ -551,6 +575,10 @@ export interface AiAnalyzeResult {
   warnings: string[];
   /** 研究管线（orchestrator）启用时返回的 trace 轨迹；旧后端/关闭时缺省 */
   trace?: AiAnalyzeTraceEntry[];
+  /** 参考图抓取管线产出的图片（旧后端/未启用时缺省） */
+  researchImages?: AiResearchImage[];
+  /** 参考图多模态解读结论（旧后端/未启用时缺省） */
+  researchVision?: AiResearchVision | null;
 }
 
 /** AI 画像编排单步 trace（研究 / 识别 / 姿势面片 / 评分等阶段） */
@@ -698,6 +726,39 @@ export interface AiTraceEvent {
   resultBrief?: string;
   error?: string;
   durationMs?: number;
+  /** 参考图抓取阶段产出的图片 */
+  images?: Array<{ id: string; url: string; sourceUrl?: string; pageUrl?: string; source: string; query?: string }>;
+  /** 参考图解读阶段被采纳的图片 id */
+  adoptedImageIds?: string[];
+}
+
+/** 识别流程中展示的参考图（trace 事件 / 结果接口共用） */
+export interface AiTraceImage {
+  id: string;
+  url: string;
+  sourceUrl?: string;
+  pageUrl?: string;
+  source: string;
+  query?: string;
+}
+
+/** 参考图抓取管线产出的图片（含尺寸与层级元信息） */
+export interface AiResearchImage extends AiTraceImage {
+  layer: string;
+  width?: number;
+  height?: number;
+  bytes: number;
+}
+
+/** 参考图多模态解读结论 */
+export interface AiResearchVision {
+  summary: string;
+  styles: string[];
+  colorLight: string[];
+  composition: string[];
+  wardrobe: string[];
+  scene: string[];
+  adopted: { id: string; reason: string }[];
 }
 
 /** 趋势研究二次整理后的结构化结论（与后端 ResearchBrief 对齐） */
@@ -726,6 +787,10 @@ export interface AiAnalyzeStatusResult {
   research?: AiResearchRef[];
   /** 趋势研究结构化结论（生图阶段复用；旧后端/未启用时缺省） */
   researchBrief?: AiResearchBrief | null;
+  /** 参考图抓取管线产出的图片（旧后端/未启用时缺省） */
+  researchImages?: AiResearchImage[];
+  /** 参考图多模态解读结论（旧后端/未启用时缺省） */
+  researchVision?: AiResearchVision | null;
   /** 识别流程实时事件流（含每步提示词与响应，按 seq 递增） */
   events?: AiTraceEvent[];
   /** 已产生的最大 seq（下一次增量拉取的 since） */

@@ -17,6 +17,7 @@ import type {
   AiBatchImageTraceEvent,
   AiResearchRef,
   AiResearchBrief,
+  AiResearchVision,
   AiTraceEvent,
 } from '@/types/admin';
 import { compressImage } from '@/lib/image-compress';
@@ -67,6 +68,8 @@ export function generateAiPoseImages(options: {
   research?: AiResearchRef[] | null;
   /** 趋势研究结构化结论（与 items 同源，透传给后端生图提示词组织器） */
   researchBrief?: AiResearchBrief | null;
+  /** 参考图多模态解读结论（透传给后端生图提示词组织器，渲染为文本参考） */
+  researchVision?: AiResearchVision | null;
   /** 中止信号：命中后抛 AiTaskPollError('已中止')，仅供前端停止等待（不取消服务端任务） */
   signal?: AbortSignal;
   onResult?: (result: AiTaskFileResult) => void;
@@ -74,7 +77,7 @@ export function generateAiPoseImages(options: {
   /** 逐张实时过程事件（按 seq 增量累积；用于可溯源的姿势图过程展示） */
   onEvents?: (events: AiBatchImageTraceEvent[]) => void;
 }): Promise<AiTaskFileResult[]> {
-  const { draft, referenceFile, extraPrompt, research, researchBrief, signal, onResult, onProgress, onEvents } = options;
+  const { draft, referenceFile, extraPrompt, research, researchBrief, researchVision, signal, onResult, onProgress, onEvents } = options;
   return (async () => {
     throwIfAborted(signal);
     const fd = new FormData();
@@ -85,8 +88,12 @@ export function generateAiPoseImages(options: {
     if (referenceFile) fd.set('reference', referenceFile);
     const extra = typeof extraPrompt === 'string' ? extraPrompt.trim() : '';
     if (extra) fd.set('extraPrompt', extra);
-    if ((research && research.length > 0) || researchBrief) {
-      fd.set('research', JSON.stringify({ items: research ?? [], brief: researchBrief ?? null }));
+    if ((research && research.length > 0) || researchBrief || researchVision) {
+      fd.set('research', JSON.stringify({
+        items: research ?? [],
+        brief: researchBrief ?? null,
+        vision: researchVision ?? null,
+      }));
     }
 
     const started = await aiGenerateImageBatchStartAction(fd);

@@ -93,6 +93,13 @@ interface FormState {
   searchQwenOfficialApiKey: string; // 留空 = 不修改原值
   searchQwenOfficialModel: string;
   maxIterations: number; // 迭代上限（预算护栏 1~3）
+  // 参考图抓取（spec 2026-09-28 参考图）
+  researchImagesEnabled: boolean;
+  researchImagesMax: number;
+  researchImagesPageFetch: boolean;
+  researchImagesSearchFallback: boolean;
+  researchImagesVision: boolean;
+  researchImagesTtlDays: number;
   // 识别稳定性（spec 2026-09-28）
   llmRetryCount: number; // 失败后额外重试次数 0~3
   llmTimeoutSeconds: number; // 单次调用超时（秒，入库时 ×1000）
@@ -212,6 +219,12 @@ export function AiConfigForm({
           searchQwenOfficialApiKey: '',
           searchQwenOfficialModel: initial.searchQwenOfficialModel,
           maxIterations: initial.maxIterations,
+          researchImagesEnabled: initial.researchImagesEnabled,
+          researchImagesMax: initial.researchImagesMax,
+          researchImagesPageFetch: initial.researchImagesPageFetch,
+          researchImagesSearchFallback: initial.researchImagesSearchFallback,
+          researchImagesVision: initial.researchImagesVision,
+          researchImagesTtlDays: initial.researchImagesTtlDays,
           llmRetryCount: initial.llmRetryCount,
           llmTimeoutSeconds: Math.max(1, Math.round(initial.llmTimeoutMs / 1000)),
           llmMaxTokens: initial.llmMaxTokens,
@@ -236,6 +249,12 @@ export function AiConfigForm({
           searchQwenOfficialApiKey: '',
           searchQwenOfficialModel: '',
           maxIterations: 2,
+          researchImagesEnabled: false,
+          researchImagesMax: 6,
+          researchImagesPageFetch: true,
+          researchImagesSearchFallback: true,
+          researchImagesVision: true,
+          researchImagesTtlDays: 7,
           llmRetryCount: 2,
           llmTimeoutSeconds: 300,
           llmMaxTokens: 8192,
@@ -499,6 +518,12 @@ export function AiConfigForm({
       payload.llmRetryCount = form.llmRetryCount;
       payload.llmTimeoutMs = Math.round(form.llmTimeoutSeconds * 1000);
       payload.llmMaxTokens = form.llmMaxTokens;
+      payload.researchImagesEnabled = form.researchImagesEnabled;
+      payload.researchImagesMax = form.researchImagesMax;
+      payload.researchImagesPageFetch = form.researchImagesPageFetch;
+      payload.researchImagesSearchFallback = form.researchImagesSearchFallback;
+      payload.researchImagesVision = form.researchImagesVision;
+      payload.researchImagesTtlDays = form.researchImagesTtlDays;
       if (form.searchMode === 'qwen-official') {
         payload.searchProvider = 'qwen-official';
         payload.searchSources = ['qwen-official'];
@@ -1031,6 +1056,48 @@ export function AiConfigForm({
                 </p>
               </div>
             )}
+
+            <div className="space-y-3 rounded-lg border p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium">参考图抓取</div>
+                  <p className="text-xs text-muted-foreground">联网检索后抓取参考网站图片，交给多模态模型转述后注入生图提示词（仅作文本参考，不作底图）</p>
+                </div>
+                <Switch
+                  checked={form.researchImagesEnabled}
+                  onCheckedChange={(v) => setForm((s) => ({ ...s, researchImagesEnabled: v }))}
+                />
+              </div>
+              {form.researchImagesEnabled ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="ri-max">最多保留张数</Label>
+                    <Input id="ri-max" type="number" min={1} max={12} value={form.researchImagesMax}
+                      onChange={(e) => setForm((s) => ({ ...s, researchImagesMax: Number(e.target.value) || 6 }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="ri-ttl">图片保留天数</Label>
+                    <Input id="ri-ttl" type="number" min={1} max={90} value={form.researchImagesTtlDays}
+                      onChange={(e) => setForm((s) => ({ ...s, researchImagesTtlDays: Number(e.target.value) || 7 }))} />
+                  </div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Switch checked={form.researchImagesPageFetch}
+                      onCheckedChange={(v) => setForm((s) => ({ ...s, researchImagesPageFetch: v }))} />
+                    抓取命中页面 og:image
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Switch checked={form.researchImagesSearchFallback}
+                      onCheckedChange={(v) => setForm((s) => ({ ...s, researchImagesSearchFallback: v }))} />
+                    图片搜索兜底
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Switch checked={form.researchImagesVision}
+                      onCheckedChange={(v) => setForm((s) => ({ ...s, researchImagesVision: v }))} />
+                    多模态解读
+                  </label>
+                </div>
+              ) : null}
+            </div>
 
             <div className="space-y-4 border-t pt-4">
               <div>

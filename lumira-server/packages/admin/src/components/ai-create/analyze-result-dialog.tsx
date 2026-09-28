@@ -20,7 +20,8 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { AnalyzeTraceStream } from './analyze-trace-stream';
-import type { AiAnalyzeStatusResult, AiAnalyzeTraceEntry, AiResearchRef } from '@/types/admin';
+import { TraceImageGrid } from './trace-image-grid';
+import type { AiAnalyzeStatusResult, AiAnalyzeTraceEntry, AiResearchImage, AiResearchRef, AiResearchVision } from '@/types/admin';
 
 type TabKey = 'flow' | 'trace' | 'raw' | 'research';
 
@@ -106,7 +107,9 @@ export function AnalyzeResultDialog({ open, onOpenChange, result }: AnalyzeResul
           )}
           {tab === 'trace' && <TraceTab entries={trace} />}
           {tab === 'raw' && <RawTab raw={raw} draft={result?.draft} draftEntries={draftEntries} />}
-          {tab === 'research' && <ResearchTab items={research} />}
+          {tab === 'research' && (
+            <ResearchTab items={research} images={result?.researchImages} vision={result?.researchVision} />
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -211,8 +214,16 @@ function RawTab({
 }
 
 /* ---------- 参考来源（URL 列表） ---------- */
-function ResearchTab({ items }: { items: (AiResearchRef & { url?: string })[] }) {
-  if (!items.length) {
+function ResearchTab({
+  items,
+  images,
+  vision,
+}: {
+  items: (AiResearchRef & { url?: string })[];
+  images?: AiResearchImage[];
+  vision?: AiResearchVision | null;
+}) {
+  if (!items.length && !images?.length && !vision) {
     return (
       <p className="py-10 text-center text-sm text-muted-foreground">
         本次未启用趋势研究，没有参考 URL。
@@ -220,35 +231,56 @@ function ResearchTab({ items }: { items: (AiResearchRef & { url?: string })[] })
     );
   }
   return (
-    <ul className="space-y-3">
-      {items.map((it, i) => (
-        <li key={i} className="rounded-md border bg-card p-3">
-          <div className="flex items-center justify-between gap-2">
-            <a
-              href={it.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="line-clamp-2 text-sm font-medium text-primary hover:underline break-all"
-            >
-              {it.title || it.url}
-            </a>
-            <Badge variant="outline" className="shrink-0 font-mono">
-              {it.source}
-            </Badge>
-          </div>
-          {it.snippet && (
-            <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{it.snippet}</p>
-          )}
-          <a
-            href={it.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-1 inline-block max-w-full truncate text-xs text-muted-foreground hover:text-primary break-all"
-          >
-            {it.url}
-          </a>
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-3">
+      {images?.length ? (
+        <div className="space-y-2">
+          <div className="text-xs font-medium text-muted-foreground">参考图片（{images.length} 张）</div>
+          <TraceImageGrid images={images} adoptedImageIds={vision?.adopted.map((a) => a.id) ?? []} />
+        </div>
+      ) : null}
+      {vision ? (
+        <div className="space-y-1 rounded-md border p-3 text-sm">
+          <div className="text-xs font-medium text-muted-foreground">视觉结论</div>
+          {vision.styles.length ? <div>风格倾向：{vision.styles.join('；')}</div> : null}
+          {vision.colorLight.length ? <div>色彩与光影：{vision.colorLight.join('；')}</div> : null}
+          {vision.composition.length ? <div>构图：{vision.composition.join('；')}</div> : null}
+          {vision.wardrobe.length ? <div>穿搭/妆造：{vision.wardrobe.join('；')}</div> : null}
+          {vision.scene.length ? <div>场景：{vision.scene.join('；')}</div> : null}
+          {vision.summary ? <div className="text-muted-foreground">综合结论：{vision.summary}</div> : null}
+        </div>
+      ) : null}
+      {items.length ? (
+        <ul className="space-y-3">
+          {items.map((it, i) => (
+            <li key={i} className="rounded-md border bg-card p-3">
+              <div className="flex items-center justify-between gap-2">
+                <a
+                  href={it.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="line-clamp-2 text-sm font-medium text-primary hover:underline break-all"
+                >
+                  {it.title || it.url}
+                </a>
+                <Badge variant="outline" className="shrink-0 font-mono">
+                  {it.source}
+                </Badge>
+              </div>
+              {it.snippet && (
+                <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{it.snippet}</p>
+              )}
+              <a
+                href={it.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-block max-w-full truncate text-xs text-muted-foreground hover:text-primary break-all"
+              >
+                {it.url}
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }

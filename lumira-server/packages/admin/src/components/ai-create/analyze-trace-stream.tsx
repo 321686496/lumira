@@ -15,7 +15,8 @@ import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { TraceCallCard, collapseTraceCalls } from '@/components/ai-create/trace-call-card';
 import type { TraceCallCardData } from '@/components/ai-create/trace-call-card';
-import type { AiTraceEvent, AiTraceEventStatus } from '@/types/admin';
+import { TraceImageGrid } from '@/components/ai-create/trace-image-grid';
+import type { AiTraceEvent, AiTraceEventStatus, AiTraceImage } from '@/types/admin';
 
 interface AnalyzeTraceStreamProps {
   events: AiTraceEvent[];
@@ -53,6 +54,10 @@ interface StepNode {
   occurrence: number;
   /** 该 step 一共发生几次（> 1 时展示序号） */
   total: number;
+  /** 参考图抓取阶段产出的图片 */
+  images?: AiTraceImage[];
+  /** 参考图解读阶段被采纳的图片 id */
+  adoptedImageIds?: string[];
   children: TimelineItem[];
 }
 
@@ -130,6 +135,8 @@ function buildTimeline(events: AiTraceEvent[]): { roots: TimelineItem[]; count: 
         node.brief = ev.resultBrief ?? '';
         node.error = ev.error ?? '';
         node.durationMs = ev.durationMs;
+        node.images = ev.images ?? node.images;
+        node.adoptedImageIds = ev.adoptedImageIds ?? node.adoptedImageIds;
         open.splice(idx, 1);
       } else {
         // 兼容缺 running 的历史事件：直接建一个已结束的阶段节点
@@ -198,12 +205,12 @@ function collapseToRows(items: TimelineItem[]): RowSpec[] {
 }
 
 /** 一层的行 → 竖轨嵌套列表（用于「选中阶段」下方的子项展示） */
-function renderItems(items: TimelineItem[]): React.ReactNode[] {
+function renderItems(items: TimelineItem[], adoptedImageIds: string[]): React.ReactNode[] {
   const rows = collapseToRows(items);
   const lastIdx = rows.length - 1;
   return rows.map((row, i) => {
     const last = i === lastIdx;
-    if (row.kind === 'step') return <StepRow key={row.key} node={row.node} last={last} />;
+    if (row.kind === 'step') return <StepRow key={row.key} node={row.node} last={last} adoptedImageIds={adoptedImageIds} />;
     if (row.kind === 'call') return <CallRow key={row.key} ev={row.ev} last={last} />;
     return <NoteRow key={row.key} ev={row.ev} last={last} />;
   });
@@ -239,6 +246,7 @@ export function AnalyzeTraceStream({ events, running = false, title = '识别流
   const [pickedId, setPickedId] = useState<string | null>(null);
 
   const timeline = buildTimeline(events);
+  const adoptedImageIds = events.flatMap((e) => e.adoptedImageIds ?? []);
   const rows = collapseToRows(timeline.roots);
   const lastRow = rows[rows.length - 1];
   const pickedValid = pickedId !== null && rows.some((r) => rowId(r) === pickedId);
@@ -340,7 +348,7 @@ export function AnalyzeTraceStream({ events, running = false, title = '识别流
 
           {/* 选中阶段的详情与子项 */}
           <div ref={bodyRef} onScroll={handleScroll} className={cn('overflow-y-auto p-3', bodyClassName)}>
-            {selected && <RowDetail row={selected} />}
+            {selected && <RowDetail row={selected} adoptedImageIds={adoptedImageIds} />}
           </div>
         </>
       )}
@@ -371,7 +379,7 @@ function RailDot({ row, active }: { row: RowSpec; active: boolean }) {
 }
 
 /** 选中阶段下方的内容：阶段结论 + 其全部子项；调用/说明则直接展示本身 */
-function RowDetail({ row }: { row: RowSpec }) {
+function RowDetail({ row, adoptedImageIds }: { row: RowSpec; adoptedImageIds: string[] }) {
   if (row.kind === 'call') return <TraceCallCard ev={row.ev} />;
   if (row.kind === 'note') {
     return (
@@ -402,8 +410,11 @@ function RowDetail({ row }: { row: RowSpec }) {
       {(node.error || node.brief) && (
         <div className={cn('mt-1 text-xs', node.error ? 'text-destructive' : 'text-muted-foreground')}>{node.error || node.brief}</div>
       )}
+      {node.images?.length ? (
+        <TraceImageGrid images={node.images} adoptedImageIds={adoptedImageIds} className="mt-2" />
+      ) : null}
       {hasChildren ? (
-        <div className="mt-2">{renderItems(node.children)}</div>
+        <div className="mt-2">{renderItems(node.children, adoptedImageIds)}</div>
       ) : (
         <p className="mt-2 text-xs text-muted-foreground">该阶段没有更细的过程事件。</p>
       )}
@@ -424,7 +435,7 @@ function TimelineRow({ dot, dotClassName, last, children }: { dot: React.ReactNo
   );
 }
 
-function StepRow({ node, last }: { node: StepNode; last: boolean }) {
+function StepRow({ node, last, adoptedImageIds }: { node: StepNode; last: boolean; adoptedImageIds: string[] }) {
   const [open, setOpen] = useState(true);
   const duration = formatDuration(node.durationMs);
   const hasChildren = node.children.length > 0;
@@ -448,7 +459,7 @@ function StepRow({ node, last }: { node: StepNode; last: boolean }) {
       {(node.error || node.brief) && (
         <div className={cn('mt-0.5 text-xs', node.error ? 'text-destructive' : 'text-muted-foreground')}>{node.error || node.brief}</div>
       )}
-      {open && hasChildren && <div className="mt-1">{renderItems(node.children)}</div>}
+      {open && hasChildren && <div className="mt-1">{renderItems(node.children, adoptedImageIds)}</div>}
     </TimelineRow>
   );
 }
