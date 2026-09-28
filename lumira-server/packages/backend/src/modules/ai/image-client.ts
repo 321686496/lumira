@@ -160,7 +160,7 @@ async function zhipuGenerate(cfg: ImageClientConfig, input: GenerateImageInput, 
  * 在中文提示词后追加英文写实摄影指令，把输出锚定回「真实照片」分布。
  */
 const ENGLISH_PHOTOREAL_ANCHOR =
-  'Candid real-life photograph taken with a real camera: realistic human skin with visible pores, fine vellus hair, subtle oily shine and uneven skin tone; authentic fabric and environment textures; natural ambient light with realistic falloff; slight sensor noise; candid imperfect framing. Strictly not anime, not illustration, not painting, not 3D render, not AI-retouched; no airbrushed or plastic skin.';
+  'Photorealistic photograph taken with a real camera: highly detailed realistic skin texture with visible pores and fine vellus hair in sharp focus; distinguishable fabric fibers and weave; individual strands of hair; directional natural light with realistic falloff and layered shadow transitions; clean and crisp image with faithful fine detail and no grain. Strictly not anime, not illustration, not painting, not 3D render, not AI-retouched; no airbrushed or plastic skin.';
 
 export function withEnglishPhotorealism(prompt: string): string {
   return `${prompt}\n${ENGLISH_PHOTOREAL_ANCHOR}`;

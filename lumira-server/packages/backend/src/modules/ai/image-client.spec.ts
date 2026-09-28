@@ -427,3 +427,20 @@ describe('mapSize', () => {
     expect(mapSize('bogus', undefined)).toBe('1024x1024');
   });
 });
+
+describe('英文写实锚点', () => {
+  it('不含噪点与瑕疵要求', () => {
+    const anchor = withEnglishPhotorealism('一段中文提示词');
+    expect(anchor).toContain('一段中文提示词');
+    expect(anchor.toLowerCase()).not.toContain('sensor noise');
+    expect(anchor.toLowerCase()).not.toContain('noise');
+    expect(anchor.toLowerCase()).not.toContain('uneven skin tone');
+    expect(anchor).not.toContain('candid imperfect framing');
+  });
+
+  it('保留高清细节要求', () => {
+    const anchor = withEnglishPhotorealism('x');
+    expect(anchor).toContain('visible pores');
+    expect(anchor).toContain('fabric fibers');
+  });
+});
