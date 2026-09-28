@@ -142,6 +142,9 @@ export function StepCover({
 
   const viewing = viewIndex != null ? candidates[viewIndex] : null;
 
+  /** 当前参考图是否正是「风格识别参考图（示例图）」：只有用户显式勾选或对该图「设为参考」才成立 */
+  const usingStyleRef = Boolean(exampleFile && referenceFile === exampleFile);
+
   /** 将示例图置顶为封面候选 */
   const rollExampleToTop = () => {
     if (!exampleFile) return;
@@ -166,7 +169,8 @@ export function StepCover({
     try {
       const results = await generateAiPoseImages({
         draft,
-        referenceFile: referenceFile ?? exampleFile,
+        // 不设回退：未显式选择参考图（含勾选「使用风格识别参考图」）时一律不带参考图生成
+        referenceFile,
         extraPrompt,
         research,
         researchBrief,
@@ -259,7 +263,9 @@ export function StepCover({
         <div className="space-y-2">
           <Label htmlFor="ai-pose-reference">姿势参考图（可选）</Label>
           <p className="text-xs text-muted-foreground">
-            可上传一张姿势参考图，或点击候选图「设为参考」。生成时第一张会以它为基准，后续姿势自动用第一张结果保持人物与场景一致。
+            可上传一张姿势参考图，或点击候选图「设为参考」，或勾选下方选项复用风格识别的示例图。
+            <span className="font-medium text-foreground">不选则不带参考图生成</span>
+            （不会自动使用示例图）。生成时第一张会以参考图为基准，后续姿势自动用第一张结果保持人物与场景一致。
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <Button
@@ -295,6 +301,28 @@ export function StepCover({
               />
             )}
           </div>
+          {/* 显式复用「风格识别参考图（示例图）」：只有勾选才会作为姿势参考图，取消勾选即完全不带参考图 */}
+          <label
+            className={cn(
+              'flex w-fit items-center gap-2 text-xs',
+              !exampleFile || disabled ? 'cursor-not-allowed text-muted-foreground/60' : 'cursor-pointer text-foreground',
+            )}
+          >
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-primary"
+              checked={usingStyleRef}
+              disabled={disabled || !exampleFile}
+              onChange={(event) => {
+                if (event.target.checked && exampleFile) {
+                  onReferenceChange(exampleFile, URL.createObjectURL(exampleFile));
+                } else {
+                  onReferenceChange(null, null);
+                }
+              }}
+            />
+            使用风格识别的参考图（示例图）作为姿势参考图
+          </label>
           <Input
             id="ai-pose-reference"
             ref={referenceInputRef}

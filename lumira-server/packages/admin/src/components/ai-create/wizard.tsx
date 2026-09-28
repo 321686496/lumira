@@ -371,7 +371,9 @@ export function AiCreateWizard({
       };
       const poseResults = await generateAiPoseImages({
         draft: draftLocal,
-        referenceFile: poseReferenceFile ?? exampleFile,
+        // 全自动从 Step1 触发，此时用户尚未选择姿势参考图 → 一律不带参考图；
+        // 绝不用风格识别的示例图兜底（示例图只用于识别风格，不作为生图参考）
+        referenceFile: poseReferenceFile,
         research: analyzeResult.research,
         researchBrief: analyzeResult.researchBrief ?? null,
         signal,

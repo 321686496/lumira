@@ -86,6 +86,7 @@ describe('generateAiPoseImages', () => {
     batchStatusMock
       .mockResolvedValueOnce({
         batchId: 'batch-1', total: 3, completed: 1, current: 1, status: 'running',
+        createdAt: 0, events: [], lastSeq: 0,
         results: [
           { index: 0, status: 'running' },
           { index: 1, status: 'pending' },
@@ -94,6 +95,7 @@ describe('generateAiPoseImages', () => {
       })
       .mockResolvedValue({
         batchId: 'batch-1', total: 3, completed: 3, current: 3, status: 'done',
+        createdAt: 0, events: [], lastSeq: 0,
         results: [0, 1, 2].map((index) => ({
           index,
           status: 'done' as const,
@@ -126,6 +128,7 @@ describe('generateAiPoseImages', () => {
     batchStartMock.mockResolvedValue({ batchId: 'batch-1' });
     batchStatusMock.mockResolvedValue({
       batchId: 'batch-1', total: 1, completed: 1, current: 1, status: 'done',
+      createdAt: 0, events: [], lastSeq: 0,
       results: [{ index: 0, status: 'done' as const, image: 'aGVsbG8=', mimeType: 'image/png' }],
     });
     const reference = new File(['reference'], 'pose.png', { type: 'image/png' });
@@ -140,6 +143,7 @@ describe('generateAiPoseImages', () => {
     batchStartMock.mockResolvedValue({ batchId: 'batch-1' });
     batchStatusMock.mockResolvedValue({
       batchId: 'batch-1', total: 1, completed: 1, current: 1, status: 'done',
+      createdAt: 0, events: [], lastSeq: 0,
       results: [{ index: 0, status: 'done' as const, image: 'aGVsbG8=', mimeType: 'image/png' }],
     });
     const research = [{ source: 'sogou', title: '千金风', snippet: '流行' }];
