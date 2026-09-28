@@ -1,23 +1,19 @@
-import 'dart:ui' as ui;
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../models/watermark_template.dart';
+import '../services/watermark_layout.dart';
 
-/// 水印预览组件：默认在深色（仿照片）背景上，传入 [background] 时改为在
-/// 真实照片底图上以 [CustomPaint] + [TextPainter] 渲染 [WatermarkTemplate]
-/// 的元素，供水印管理页（照片底）与编辑页（深色底）共用。
+/// 水印预览组件：在深色（无底图）或真实照片底图上渲染 [WatermarkTemplate]
+/// 的画框 + 元素，供水印管理页缩略图使用。
 ///
-/// 绘制约定与 [WatermarkRenderer] 一致：
-/// - 锚点 = `element.x * size.width`, `element.y * size.height`
-/// - 绝对字号 = `element.fontSize * size.width`（fontSize 为相对值 0.0~1.0），
-///   并施加最小字号 7px 的下限，保证小尺寸预览中文字仍可读
-/// - letterSpacing 按 `size.width / 400` 缩放（参考宽度 400）
-/// - textAlign 决定相对锚点的水平偏移（left=0 / right=-w / center=-w/2）
-/// - 旋转 / 透明度 / bold / italic / shadow 均按元素属性应用
-///
-/// 照片底图按 [BoxFit.cover] 铺满预览区；水印元素坐标统一按整个预览矩形
-/// 换算（近似，不做画框缩放），保证小尺寸缩略图中叠加观感真实可读。
+/// 几何与换算完全交给 [WatermarkPreviewGeometry] / [WatermarkElementMetrics] /
+/// [WatermarkTextPlacement]（与成片渲染器同源），因此缩略图与成片一致：
+/// - 画框按 [WatermarkLayout] 绘制：拍立得白卡（纯色 / 渐变 + 圆角）铺满卡片，
+///   照片绘进 `photoRect`，内描边沿 `photoRect` 内缩半个线宽
+/// - 元素坐标按其 [WatermarkElement.space] 取基准矩形（`frame` → 白板）
+/// - 字号夹取在**显示像素**上做：`clamp(显示字号, 5, 卡片显示宽 × 0.16)`
 class WatermarkPreview extends StatelessWidget {
   const WatermarkPreview({
     super.key,
@@ -26,34 +22,27 @@ class WatermarkPreview extends StatelessWidget {
     this.height = 130,
     this.background,
     this.borderRadius = 8,
+    this.date,
   });
 
   final WatermarkTemplate template;
   final double width;
   final double height;
 
-  /// 可选照片底图。提供时以 [Stack] 将照片铺在底层、水印叠加在上层；
-  /// 未提供时保持深色仿照片底，用于编辑页等场景。
+  /// 可选照片底图。提供时以 [BoxFit.cover] 绘进画框的照片区域；
+  /// 未提供时保持深色仿照片底（此时拍立得仍会画出白卡）。
   final ImageProvider? background;
   final double borderRadius;
 
-  /// 深色仿照片背景：浅灰文字在深色背景上清晰可辨
+  /// `dateTime` 元素所用日期；为空时用当天（缩略图无照片 EXIF）。
+  final DateTime? date;
+
+  /// 深色仿照片背景
   static const Color _defaultBackground = Color(0xFF2A2A2A);
 
   @override
   Widget build(BuildContext context) {
-    final Widget content;
-    if (background != null) {
-      content = Stack(
-        fit: StackFit.expand,
-        children: [
-          Image(image: background!, fit: BoxFit.cover),
-          CustomPaint(painter: _WatermarkPreviewPainter(template)),
-        ],
-      );
-    } else {
-      content = CustomPaint(painter: _WatermarkPreviewPainter(template));
-    }
+    final dateText = formatWatermarkDate(date ?? DateTime.now());
     return Container(
       width: width,
       height: height,
@@ -62,102 +51,182 @@ class WatermarkPreview extends StatelessWidget {
         color: _defaultBackground,
         borderRadius: BorderRadius.circular(borderRadius),
       ),
-      child: content,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final geometry = WatermarkPreviewGeometry.fit(
+            size: Size(constraints.maxWidth, constraints.maxHeight),
+            frame: template.frame,
+          );
+          final cardRect = geometry.displayRect(geometry.layout.cardRect);
+          final photoRect = geometry.displayRect(geometry.layout.photoRect);
+          return Stack(
+            children: [
+              // 卡片底色：仅画框模板需要（none 时画布底色被照片完全覆盖）。
+              if (template.frame.type != WatermarkFrameType.none)
+                Positioned.fromRect(
+                  rect: cardRect,
+                  child: CustomPaint(
+                    painter: _CardBasePainter(
+                      template.frame,
+                      photoWidth: photoRect.width,
+                    ),
+                  ),
+                ),
+              if (background != null)
+                Positioned.fromRect(
+                  rect: photoRect,
+                  child: Image(image: background!, fit: BoxFit.cover),
+                ),
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _WatermarkPreviewPainter(
+                    template: template,
+                    geometry: geometry,
+                    dateText: dateText,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
 
-class _WatermarkPreviewPainter extends CustomPainter {
-  _WatermarkPreviewPainter(this.template);
+/// 卡片底色：拍立得白卡（纯色 / 渐变 + 圆角），铺满整张卡片。
+class _CardBasePainter extends CustomPainter {
+  _CardBasePainter(this.frame, {required this.photoWidth});
 
-  static const double _referenceWidth = 400.0;
+  final WatermarkFrame frame;
 
-  final WatermarkTemplate template;
+  /// 照片显示宽度，用于按「相对照片宽」的比例换算圆角。
+  final double photoWidth;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final scale = size.width / _referenceWidth;
+    final rect = Offset.zero & size;
+    final paint = Paint();
+    if (frame.borderFill == WatermarkBorderFill.gradient) {
+      paint.shader = watermarkFrameGradientShader(frame, rect);
+    } else {
+      paint.color = frame.color;
+    }
+    final radius = frame.borderRadius * photoWidth;
+    if (radius > 0) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, Radius.circular(radius)),
+        paint,
+      );
+    } else {
+      canvas.drawRect(rect, paint);
+    }
+  }
 
+  @override
+  bool shouldRepaint(covariant _CardBasePainter oldDelegate) => true;
+}
+
+class _WatermarkPreviewPainter extends CustomPainter {
+  _WatermarkPreviewPainter({
+    required this.template,
+    required this.geometry,
+    required this.dateText,
+  });
+
+  final WatermarkTemplate template;
+  final WatermarkPreviewGeometry geometry;
+  final String dateText;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final frame = template.frame;
+    if (frame.type == WatermarkFrameType.innerBorder) {
+      final photoRect = geometry.displayRect(geometry.layout.photoRect);
+      final stroke = frame.borderRatio * photoRect.width;
+      final paint = Paint()
+        ..color = frame.color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke;
+      final inner = photoRect.deflate(stroke / 2);
+      if (frame.borderRadius > 0) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+              inner, Radius.circular(frame.borderRadius * photoRect.width)),
+          paint,
+        );
+      } else {
+        canvas.drawRect(inner, paint);
+      }
+    }
+
+    final cardDisplayWidth =
+        geometry.displayRect(geometry.layout.cardRect).width;
     for (final element in template.elements) {
       if (element.type == WatermarkElementType.image) {
         // 图片元素预览暂不支持（与渲染器当前行为一致）
         continue;
       }
-      _drawTextElement(canvas, element, size, scale);
+      _drawTextElement(canvas, element, cardDisplayWidth);
     }
   }
 
   void _drawTextElement(
     Canvas canvas,
     WatermarkElement element,
-    Size size,
-    double scale,
+    double cardDisplayWidth,
   ) {
-    // 预览场景施加最小字号 7px，保证小尺寸预览（如 100x130）中文字仍可读；
-    // 最大字号限制为预览宽度的 18%，防止过大元素溢出预览框
-    final absoluteFontSize =
-        (element.fontSize * size.width).clamp(7.0, size.width * 0.18);
-    final blurRadius = (absoluteFontSize * 0.08).clamp(0.5, 8.0);
+    final base = geometry.baseFor(element.space);
 
-    final textStyle = TextStyle(
-      color: _withOpacity(element.color, element.opacity),
-      fontSize: absoluteFontSize,
-      fontWeight: element.bold ? FontWeight.bold : FontWeight.normal,
-      fontStyle: element.italic ? FontStyle.italic : FontStyle.normal,
-      fontFamily: element.fontFamily.isEmpty ? null : element.fontFamily,
-      letterSpacing: element.letterSpacing * scale,
-      shadows: [
-        ui.Shadow(
-          color: _withOpacity(element.shadowColor, element.opacity),
-          blurRadius: blurRadius,
-          offset: ui.Offset(blurRadius * 0.4, blurRadius * 0.4),
-        ),
-      ],
-    );
+    // 字号夹取在显示像素上做，并回推等效基准宽度，使阴影 / 字距随之等比缩放，
+    // 避免小缩略图中文字互相重叠、大元素溢出画框。
+    const minFontSize = 5.0;
+    final maxFontSize = math.max(minFontSize, cardDisplayWidth * 0.16);
+    var baseWidth = base.width;
+    if (element.fontSize > 0) {
+      final displayFontSize = element.fontSize * base.width;
+      final clamped =
+          displayFontSize.clamp(minFontSize, maxFontSize).toDouble();
+      if (clamped != displayFontSize) {
+        baseWidth = clamped / element.fontSize;
+      }
+    }
+    final metrics = WatermarkElementMetrics.of(element, baseWidth);
 
     final painter = TextPainter(
-      text: TextSpan(text: element.text, style: textStyle),
+      text: TextSpan(
+        text: element.type == WatermarkElementType.dateTime
+            ? dateText
+            : element.text,
+        style: TextStyle(
+          color: metrics.color,
+          fontSize: metrics.fontSize,
+          fontWeight: metrics.fontWeight,
+          fontStyle: metrics.fontStyle,
+          fontFamily: metrics.fontFamily,
+          letterSpacing: metrics.letterSpacing,
+          shadows: metrics.shadows,
+        ),
+      ),
       textAlign: element.textAlign,
       textDirection: TextDirection.ltr,
     )..layout();
 
-    final anchorX = element.x * size.width;
-    final anchorY = element.y * size.height;
-
-    double offsetX;
-    switch (element.textAlign) {
-      case TextAlign.right:
-        offsetX = -painter.width;
-        break;
-      case TextAlign.center:
-        offsetX = -painter.width / 2;
-        break;
-      case TextAlign.left:
-      case TextAlign.justify:
-      case TextAlign.start:
-      case TextAlign.end:
-      default:
-        offsetX = 0.0;
-    }
-    // 与渲染器一致：y 锚点视为文本基线顶部偏上，使视觉位置贴合
-    final offsetY = -painter.height * 0.85;
+    final placement = WatermarkTextPlacement.compute(
+      element: element,
+      base: base,
+      textWidth: painter.width,
+      textHeight: painter.height,
+    );
 
     canvas.save();
-    canvas.translate(anchorX, anchorY);
+    canvas.translate(placement.anchorX, placement.anchorY);
     if (element.rotation != 0.0) {
       canvas.rotate(element.rotation);
     }
-    canvas.translate(offsetX, offsetY);
-    painter.paint(canvas, ui.Offset.zero);
+    canvas.translate(placement.offsetX, placement.offsetY);
+    painter.paint(canvas, Offset.zero);
     canvas.restore();
-  }
-
-  /// 将 [color] 的 alpha 通道乘以 [opacity]（0.0~1.0），返回带透明度的颜色。
-  ui.Color _withOpacity(ui.Color color, double opacity) {
-    if (opacity >= 1.0) return color;
-    final clamped = opacity.clamp(0.0, 1.0);
-    final alpha = (color.alpha * clamped).round();
-    return ui.Color.fromARGB(alpha, color.red, color.green, color.blue);
   }
 
   @override

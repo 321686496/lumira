@@ -226,6 +226,9 @@ class WatermarkElement {
   double letterSpacing; // 字间距（像素）
   WatermarkElementSpace space; // 定位坐标系：photo（默认）/ frame
 
+  /// 柔光晕半径 = 值 × 绝对字号。
+  double shadowBlur;
+
   WatermarkElement({
     required this.id,
     required this.type,
@@ -243,6 +246,7 @@ class WatermarkElement {
     this.italic = false,
     this.letterSpacing = 0.0,
     this.space = WatermarkElementSpace.photo,
+    this.shadowBlur = 0.08,
   });
 
   WatermarkElement copyWith({
@@ -262,6 +266,7 @@ class WatermarkElement {
     bool? italic,
     double? letterSpacing,
     WatermarkElementSpace? space,
+    double? shadowBlur,
   }) {
     return WatermarkElement(
       id: id ?? this.id,
@@ -280,6 +285,7 @@ class WatermarkElement {
       italic: italic ?? this.italic,
       letterSpacing: letterSpacing ?? this.letterSpacing,
       space: space ?? this.space,
+      shadowBlur: shadowBlur ?? this.shadowBlur,
     );
   }
 
@@ -301,6 +307,7 @@ class WatermarkElement {
       'italic': italic,
       'letterSpacing': letterSpacing,
       'space': space.name,
+      'shadowBlur': shadowBlur,
     };
   }
 
@@ -322,6 +329,9 @@ class WatermarkElement {
       italic: (json['italic'] as bool?) ?? false,
       letterSpacing: (json['letterSpacing'] as num?)?.toDouble() ?? 0.0,
       space: _parseSpace(json['space'] as String?),
+      // 旧模板无该字段：缺省 0.08，视觉与旧行为一致。
+      // 历史版本写过的 shadowOutline 键在解析时被忽略（描边能力已移除）。
+      shadowBlur: (json['shadowBlur'] as num?)?.toDouble() ?? 0.08,
     );
   }
 

@@ -14,6 +14,7 @@ import '../../../core/db/database_provider.dart'
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/effects/breathing_tap.dart';
+import '../../../shared/widgets/effects/color_picker.dart';
 import '../../../shared/widgets/lumira/lumira.dart'
     show
         LumiraSlider,
@@ -22,8 +23,10 @@ import '../../../shared/widgets/lumira/lumira.dart'
         LumiraToast,
         showLumiraSaveModeSheet;
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../data/preset_watermarks.dart' show WatermarkGradientPreset, watermarkGradientPresets;
 import '../data/watermark_providers.dart';
 import '../models/watermark_template.dart';
+import '../services/watermark_layout.dart';
 
 /// 底部操作栏的 Tab。
 enum _EditorTab { element, style, border }
@@ -68,6 +71,10 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
   String? _selectedElementId;
   bool _expanded = true;
   _EditorTab _tab = _EditorTab.element;
+
+  /// 正在展开「自定义取色」的色板行 id（null = 全部收起）。
+  /// 同一时刻只展开一行，避免面板过高把预览挤没。
+  String? _customColorTargetId;
 
   /// 背景照片字节（模板模式为示例照片，应用模式为真实照片）。
   Uint8List? _photoBytes;
@@ -278,11 +285,11 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
   }
 
   void _addElement(WatermarkElementType type) {
-    final isDate = type == WatermarkElementType.dateTime;
+    // 日期元素不写死文本：渲染时按照片真实拍摄日期格式化（见 WatermarkRenderer）。
     final el = WatermarkElement(
       id: _nextId(),
       type: type,
-      text: isDate ? '2026.08.20' : '',
+      text: '',
       x: 0.5,
       y: 0.9,
       fontSize: 0.04,
@@ -435,8 +442,12 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
       codec.dispose();
 
       final renderer = ref.read(watermarkRendererProvider);
-      final r =
-          await renderer.render(sourceImage: sourceImage, template: _template);
+      final r = await renderer.render(
+        sourceImage: sourceImage,
+        template: _template,
+        // 日期元素用源照片文件名里的快门时间（解析不到则回退当天）。
+        captureDate: watermarkCaptureDateFromPath(widget.photoPath),
+      );
       final output = img.Image.fromBytes(
         width: r.width,
         height: r.height,
@@ -712,15 +723,20 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
                 child: ClipRect(
                   child: LayoutBuilder(
                     builder: (context, c) {
-                      final photoRect = Offset.zero & c.biggest;
+                      final size = c.biggest;
+                      final layout = WatermarkLayout.compute(
+                        photoW: size.width,
+                        photoH: size.height,
+                        frame: frame,
+                      );
                       return Stack(
                         clipBehavior: Clip.none,
                         children: [
                           _photoImage(),
                           if (frame.type == WatermarkFrameType.innerBorder)
-                            _buildInnerBorderOverlay(photoRect, frame),
+                            _buildInnerBorderOverlay(layout.photoRect, frame),
                           ..._template.elements
-                              .map((e) => _buildElementOverlay(e, photoRect)),
+                              .map((e) => _buildElementOverlay(e, layout)),
                         ],
                       );
                     },
@@ -745,8 +761,8 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     );
   }
 
-  /// 拍立得预览：白边向外扩展，照片区域缩小并被四周白边包围；
-  /// 与真实渲染一致，因此配图围绕外扩的卡片底布局。
+  /// 拍立得预览：白边向外扩展，照片区域缩小并被四周白边包围。
+  /// 几何全部取自 [WatermarkLayout]，与成片渲染逐项一致。
   Widget _buildPolaroidPreview(ThemeTokens tokens, UIStyle style) {
     final aspect = (_sourceAspect != null && _sourceAspect! > 0)
         ? _sourceAspect!
@@ -757,55 +773,45 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
       final availH = c.maxHeight;
       if (availW <= 0 || availH <= 0) return const SizedBox.shrink();
 
-      // 以照片高为 1 单位：photoW = aspect；边宽/白板均按 x 照片宽换算。
-      final photoW = aspect;
-      const photoH = 1.0;
-      final pL = f.borderLeft * photoW;
-      final pR = f.borderRight * photoW;
-      final pT = f.borderTop * photoW;
-      final pB = f.borderBottom * photoW +
-          (f.bottomPlate ? f.bottomRatio * photoH : 0.0);
-      final shadowOn = f.shadowOpacity > 0;
-      final shadowH = shadowOn ? photoW * 0.1 : 0.0;
-      final cardW = photoW + pL + pR;
-      final cardH = photoH + pT + pB;
-      final totalH = cardH + shadowH;
-
-      final scale = math.min(availW / cardW, availH / totalH);
+      // 先以「照片高 = 1 单位」换算卡片比例，再整体缩放到可用区域。
+      final unit = WatermarkLayout.compute(
+        photoW: aspect,
+        photoH: 1.0,
+        frame: f,
+      );
+      // 卡片投影只存在于屏幕呈现，不烘焙进成片（见 WatermarkRenderer 注释）。
+      final shadowH = f.shadowOpacity > 0 ? aspect * 0.1 : 0.0;
+      final scale = math.min(
+        availW / unit.cardRect.width,
+        availH / (unit.cardRect.height + shadowH),
+      );
       if (scale <= 0) return const SizedBox.shrink();
 
-      final w = cardW * scale;
-      final h = totalH * scale;
-      final radius = BorderRadius.circular(f.borderRadius * cardW * scale);
-      final photoRect = Rect.fromLTWH(
-          pL * scale, pT * scale, photoW * scale, photoH * scale);
+      // 等比缩放后重新计算，元素叠加层直接消费同一份几何。
+      final layout = WatermarkLayout.compute(
+        photoW: aspect * scale,
+        photoH: scale,
+        frame: f,
+      );
+      final radius = BorderRadius.circular(f.borderRadius * aspect * scale);
 
       return SizedBox(
-        width: w,
-        height: h,
+        width: layout.cardRect.width,
+        height: layout.cardRect.height + shadowH * scale,
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            Positioned(
-              left: 0,
-              top: 0,
-              width: cardW * scale,
-              height: cardH * scale,
+            Positioned.fromRect(
+              rect: layout.cardRect,
               child: DecoratedBox(
                 decoration: _frameCardDecoration(f, radius),
               ),
             ),
-            Positioned(
-              left: photoRect.left,
-              top: photoRect.top,
-              width: photoRect.width,
-              height: photoRect.height,
-              child: ClipRRect(
-                borderRadius: radius,
-                child: _photoImage(),
-              ),
+            Positioned.fromRect(
+              rect: layout.photoRect,
+              child: ClipRRect(borderRadius: radius, child: _photoImage()),
             ),
-            ..._template.elements.map((e) => _buildElementOverlay(e, photoRect)),
+            ..._template.elements.map((e) => _buildElementOverlay(e, layout)),
           ],
         ),
       );
@@ -892,104 +898,150 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     );
   }
 
-  /// 元素定位基准矩形：按 space 选择照片矩形或拍立得白板矩形（近似）。
-  Rect _baseRectFor(WatermarkElementSpace space, Rect photoRect) {
-    if (space == WatermarkElementSpace.frame) {
-      final f = _template.frame;
-      if (f.type == WatermarkFrameType.polaroid && f.bottomPlate) {
-        final plateH = f.bottomRatio * photoRect.height;
-        return Rect.fromLTRB(
-          photoRect.left,
-          photoRect.top,
-          photoRect.right,
-          photoRect.bottom + plateH,
-        );
-      }
-      return photoRect;
-    }
-    return photoRect;
-  }
-
-  Widget _buildElementOverlay(WatermarkElement e, Rect photoRect) {
-    final base = _baseRectFor(e.space, photoRect);
-    final fontSize = (e.fontSize * base.width).clamp(4.0, 220.0);
-    final left = base.left + e.x * base.width - fontSize * 0.5;
-    final top = base.top + e.y * base.height - fontSize;
+  /// 元素叠加层：基准矩形取自 [WatermarkLayout]，定量 / 定位 / 旋转均与
+  /// 成片渲染同源（[WatermarkElementMetrics] + [WatermarkTextPlacement]）。
+  Widget _buildElementOverlay(WatermarkElement e, WatermarkLayout layout) {
+    final base = layout.baseFor(e.space);
     final selected = e.id == _selectedElementId;
     final tokens = ref.read(themeTokensProvider);
+    // 字号夹取后回推等效基准宽度，使阴影 / 字距随夹取后的字号等比缩放。
+    final metrics = WatermarkElementMetrics.of(e, _editorBaseWidth(e, base));
+    final textScaleFactor =
+        MediaQuery.maybeOf(context)?.textScaleFactor ?? 1.0;
+
+    final isEmptyText =
+        e.type == WatermarkElementType.text && e.text.isEmpty;
+    final text = _displayTextFor(e);
+    final TextStyle contentStyle;
+    final double contentWidth;
+    final double contentHeight;
+    if (isEmptyText) {
+      // 空文本：以「输入文字」提示占位（尺寸可测），定位与真实文本同一套换算。
+      contentStyle = TextStyle(
+        fontSize: metrics.fontSize.clamp(9.0, 28.0).toDouble(),
+        color: tokens.textTertiary,
+      );
+      final hint = TextPainter(
+        text: TextSpan(text: '输入文字', style: contentStyle),
+        textDirection: TextDirection.ltr,
+        textScaleFactor: textScaleFactor,
+      )..layout();
+      contentWidth = hint.width + 16;
+      contentHeight = hint.height + 8;
+    } else {
+      contentStyle = _elementTextStyle(metrics);
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: contentStyle),
+        textAlign: e.textAlign,
+        textDirection: TextDirection.ltr,
+        textScaleFactor: textScaleFactor,
+        maxLines: 1,
+      )..layout();
+      contentWidth = painter.width;
+      contentHeight = painter.height;
+    }
+
+    final placement = _placementOf(e, base, contentWidth, contentHeight);
 
     return Positioned(
-          left: left,
-          top: top,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            // 文字元素点选即可进入「样式」Tab 改字；日期等其它元素仅选中。
-            onTap: () => e.type == WatermarkElementType.text
-                ? _selectAndEditText(e)
-                : _selectElement(e),
-            // 单指拖拽 = 焦点位移（focalPointDelta），双指捏合 = scale。
-            // scale 手势是 pan 的超集，不能同时声明两者。
-            onScaleStart: (_) {
-              _scaleStartFontSize = e.fontSize;
-            },
-            onScaleUpdate: (d) {
-              setState(() {
-                final dx = d.focalPointDelta.dx / base.width;
-                final dy = d.focalPointDelta.dy / base.height;
-                e.x = (e.x + dx).clamp(-0.2, 1.2).toDouble();
-                e.y = (e.y + dy).clamp(-0.2, 1.2).toDouble();
-                final startF = _scaleStartFontSize ?? e.fontSize;
-                e.fontSize =
-                    (startF * d.scale).clamp(0.01, 0.6).toDouble();
-              });
-            },
-            child: Container(
-              foregroundDecoration: selected
-                  ? BoxDecoration(
-                      border:
-                          Border.all(color: Colors.white, width: 1.5),
-                    )
-                  : null,
-              child: Transform.rotate(
-                angle: e.rotation,
-                child: _renderElementContent(e, fontSize, tokens),
-              ),
-            ),
-          ),
-        );
-  }
-
-  /// 元素绘制主体：空文本独占虚线占位（可点、可见），其余渲染真实文本。
-  Widget _renderElementContent(
-      WatermarkElement e, double fontSize, ThemeTokens tokens) {
-    if (e.type == WatermarkElementType.text && e.text.isEmpty) {
-      return CustomPaint(
-        painter: _DashedBorderPainter(color: tokens.textTertiary, radius: 6),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minWidth: 120, minHeight: fontSize * 1.4),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: Text(
-              '输入文字',
-              style: TextStyle(fontSize: 12, color: tokens.textTertiary),
-            ),
+      left: placement.anchorX + placement.offsetX,
+      top: placement.anchorY + placement.offsetY,
+      width: contentWidth,
+      height: contentHeight,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        // 文字元素点选即可进入「样式」Tab 改字；日期等其它元素仅选中。
+        onTap: () => e.type == WatermarkElementType.text
+            ? _selectAndEditText(e)
+            : _selectElement(e),
+        // 单指拖拽 = 焦点位移（focalPointDelta），双指捏合 = scale。
+        // scale 手势是 pan 的超集，不能同时声明两者。
+        onScaleStart: (_) {
+          _scaleStartFontSize = e.fontSize;
+        },
+        onScaleUpdate: (d) {
+          setState(() {
+            final dx = d.focalPointDelta.dx / base.width;
+            final dy = d.focalPointDelta.dy / base.height;
+            e.x = (e.x + dx).clamp(-0.2, 1.2).toDouble();
+            e.y = (e.y + dy).clamp(-0.2, 1.2).toDouble();
+            final startF = _scaleStartFontSize ?? e.fontSize;
+            e.fontSize = (startF * d.scale).clamp(0.01, 0.6).toDouble();
+          });
+        },
+        child: Container(
+          foregroundDecoration: selected
+              ? BoxDecoration(
+                  border: Border.all(color: Colors.white, width: 1.5),
+                )
+              : null,
+          child: Transform.rotate(
+            angle: e.rotation,
+            // 旋转绕「锚点」发生（与渲染器 translate→rotate→translate 次序一致）。
+            alignment: Alignment.topLeft,
+            origin: Offset(-placement.offsetX, -placement.offsetY),
+            child: isEmptyText
+                ? CustomPaint(
+                    painter: _DashedBorderPainter(
+                        color: tokens.textTertiary, radius: 6),
+                    child: Padding(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      child: Text('输入文字', style: contentStyle),
+                    ),
+                  )
+                : Text(
+                    text,
+                    maxLines: 1,
+                    textAlign: e.textAlign,
+                    style: contentStyle,
+                  ),
           ),
         ),
-      );
-    }
-    return Text(
-      e.text,
-      maxLines: 1,
-      textAlign: e.textAlign,
-      style: TextStyle(
-        fontSize: fontSize,
-        color: e.color,
-        fontWeight: e.bold ? FontWeight.bold : FontWeight.normal,
-        fontStyle: e.italic ? FontStyle.italic : FontStyle.normal,
-        letterSpacing: e.letterSpacing,
       ),
     );
   }
+
+  /// 元素绘制文本：`dateTime` 按当天日期展示（编辑器内无照片 EXIF，
+  /// 成片保存时才注入真实拍摄日期）。
+  String _displayTextFor(WatermarkElement e) {
+    if (e.type == WatermarkElementType.dateTime) {
+      return formatWatermarkDate(DateTime.now());
+    }
+    return e.text;
+  }
+
+  /// 元素文本样式：与成片渲染同源（[WatermarkElementMetrics]）。 */
+  TextStyle _elementTextStyle(WatermarkElementMetrics m) => TextStyle(
+        fontSize: m.fontSize,
+        color: m.color,
+        fontWeight: m.fontWeight,
+        fontStyle: m.fontStyle,
+        fontFamily: m.fontFamily,
+        letterSpacing: m.letterSpacing,
+        shadows: m.shadows,
+      );
+
+  /// 字号夹取后回推的等效基准宽度：使阴影 / 字距随夹取后的字号等比缩放。
+  double _editorBaseWidth(WatermarkElement e, Rect base) {
+    if (e.fontSize <= 0) return base.width;
+    final raw = e.fontSize * base.width;
+    final clamped = raw.clamp(4.0, 220.0).toDouble();
+    return clamped == raw ? base.width : clamped / e.fontSize;
+  }
+
+  WatermarkTextPlacement _placementOf(
+    WatermarkElement e,
+    Rect base,
+    double textWidth,
+    double textHeight,
+  ) =>
+      WatermarkTextPlacement.compute(
+        element: e,
+        base: base,
+        textWidth: textWidth,
+        textHeight: textHeight,
+      );
 
   // === 底部操作栏 ===
 
@@ -1348,9 +1400,12 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
           tokens: tokens,
         ),
         const SizedBox(height: 10),
-        _sectionLabel('文字颜色', tokens: tokens),
-        const SizedBox(height: 6),
-        _buildElementPalette(el, tokens),
+        _colorSwatchRow(
+            'element-${el.id}',
+            '文字颜色',
+            el.color,
+            (c) => setState(() => el.color = c),
+            tokens),
         const SizedBox(height: 10),
         _sectionLabel('对齐与字形', tokens: tokens),
         const SizedBox(height: 6),
@@ -1396,42 +1451,6 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildElementPalette(WatermarkElement el, ThemeTokens tokens) {
-    final colors = <Color>[
-      const Color(0xFFFFFFFF),
-      const Color(0xFF000000),
-      tokens.brand,
-      tokens.brandText,
-      tokens.textPrimary,
-      tokens.textSecondary,
-    ];
-    return Row(
-      children: [
-        for (final c in colors)
-          Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: GestureDetector(
-              onTap: () => setState(() => el.color = c),
-              child: Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: c,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: el.color == c
-                        ? tokens.brand
-                        : tokens.textTertiary.withOpacity(0.35),
-                    width: 2,
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
     );
   }
 
@@ -1572,7 +1591,7 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
           const SizedBox(height: 8),
           _buildPolaroidColorSettings(frame, tokens, style),
         ] else if (frame.type == WatermarkFrameType.innerBorder) ...[
-          _colorSwatchRow('描边颜色', frame.color,
+          _colorSwatchRow('frame-inner-border', '描边颜色', frame.color,
               (c) => _updateFrame((f) => f.copyWith(color: c)), tokens),
           const SizedBox(height: 8),
           _sliderRow(
@@ -1633,49 +1652,121 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     ];
   }
 
-  /// 一行「标签 + 可点选的色板」。
-  Widget _colorSwatchRow(String label, Color current, ValueChanged<Color> onSelect,
-      ThemeTokens tokens) {
-    return Row(
+  /// 一行「标签 + 可点选的色板 + 自定义取色入口」。
+  ///
+  /// [id] 标记该行的取色器展开态（各行互斥展开）。取色器只给不透明色，
+  /// 回写时沿用 [current] 的 alpha，保住内描边预设的半透明白。
+  Widget _colorSwatchRow(String id, String label, Color current,
+      ValueChanged<Color> onSelect, ThemeTokens tokens) {
+    final expanded = _customColorTargetId == id;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          width: 56,
-          child: Text(
-            label,
-            style: TextStyle(fontSize: 12, color: tokens.textSecondary),
-          ),
-        ),
-        Flexible(
-          child: Wrap(
-            spacing: 10,
-            runSpacing: 8,
-            children: [
-              for (final c in _frameColors(tokens))
-                GestureDetector(
-                  onTap: () => onSelect(c),
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: c,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: current == c
-                            ? tokens.brand
-                            : tokens.textTertiary.withOpacity(0.35),
-                        width: 2,
+        Row(
+          children: [
+            SizedBox(
+              width: 56,
+              child: Text(
+                label,
+                style: TextStyle(fontSize: 12, color: tokens.textSecondary),
+              ),
+            ),
+            Flexible(
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  for (final c in _frameColors(tokens))
+                    GestureDetector(
+                      onTap: () => onSelect(c),
+                      child: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: c,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: current == c
+                                ? tokens.brand
+                                : tokens.textTertiary.withOpacity(0.35),
+                            width: 2,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-            ],
-          ),
+                  _customColorEntry(id, current, expanded, tokens),
+                ],
+              ),
+            ),
+          ],
         ),
+        if (expanded)
+          Padding(
+            padding: const EdgeInsets.only(top: 10, left: 56),
+            child: SquareColorPicker(
+              key: ValueKey('wm-picker-$id'),
+              initialColor: current,
+              tokens: tokens,
+              onColorChanged: (c) => onSelect(
+                  Color.fromARGB(current.alpha, c.red, c.green, c.blue)),
+            ),
+          ),
       ],
     );
   }
 
-  /// 拍立得白边颜色设置：纯色 / 渐变切换 + 色板 + 渐变方向。
+  /// 互斥展开/收起某行的自定义取色器。
+  void _toggleCustomColorPicker(String id) {
+    setState(() =>
+        _customColorTargetId = _customColorTargetId == id ? null : id);
+  }
+
+  /// 「自定义」入口：彩虹环表示可任选颜色，内圈为当前色。
+  ///
+  /// 彩虹环属取色盘自身的色彩内容（与色相条同理），不是主题皮肤。
+  Widget _customColorEntry(
+      String id, Color current, bool expanded, ThemeTokens tokens) {
+    // 当前色不在预设色板内 → 说明已是自定义色，入口常亮以便回看。
+    final isCustom =
+        !_frameColors(tokens).any((c) => c.value == current.value);
+    final active = expanded || isCustom;
+    return GestureDetector(
+      key: ValueKey('wm-custom-color-$id'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _toggleCustomColorPicker(id),
+      child: Container(
+        width: 24,
+        height: 24,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: const SweepGradient(
+            colors: [
+              Color(0xFFFF0000),
+              Color(0xFFFFFF00),
+              Color(0xFF00FF00),
+              Color(0xFF00FFFF),
+              Color(0xFF0000FF),
+              Color(0xFFFF00FF),
+              Color(0xFFFF0000),
+            ],
+          ),
+          border: Border.all(
+            color:
+                active ? tokens.brand : tokens.textTertiary.withOpacity(0.35),
+            width: 2,
+          ),
+        ),
+        child: Container(
+          decoration: BoxDecoration(color: current, shape: BoxShape.circle),
+        ),
+      ),
+    );
+  }
+
+  /// 拍立得白边颜色设置：纯色 / 渐变切换 + 渐变预设色卡 + 起止色 + 渐变方向。
   Widget _buildPolaroidColorSettings(
       WatermarkFrame frame, ThemeTokens tokens, UIStyle style) {
     final isGradient = frame.borderFill == WatermarkBorderFill.gradient;
@@ -1691,22 +1782,21 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
                 tokens,
                 style),
             const SizedBox(width: 8),
-            _toggleChip('渐变', isGradient,
-                (_) => _updateFrame(
-                    (f) => f.copyWith(borderFill: WatermarkBorderFill.gradient)),
-                tokens,
-                style),
+            _toggleChip('渐变', isGradient, (_) => _switchToGradient(), tokens, style),
           ],
         ),
         const SizedBox(height: 8),
         if (!isGradient) ...[
-          _colorSwatchRow('颜色', frame.color,
+          _colorSwatchRow('polaroid-solid', '颜色', frame.color,
               (c) => _updateFrame((f) => f.copyWith(color: c)), tokens),
         ] else ...[
-          _colorSwatchRow('起始色', frame.color,
+          _sectionLabel('渐变预设', tokens: tokens),
+          _gradientPresetRow(frame, tokens),
+          const SizedBox(height: 10),
+          _colorSwatchRow('polaroid-start', '起始色', frame.color,
               (c) => _updateFrame((f) => f.copyWith(color: c)), tokens),
           const SizedBox(height: 6),
-          _colorSwatchRow('结束色', frame.gradientEndColor,
+          _colorSwatchRow('polaroid-end', '结束色', frame.gradientEndColor,
               (c) => _updateFrame((f) => f.copyWith(gradientEndColor: c)),
               tokens),
           const SizedBox(height: 8),
@@ -1721,6 +1811,74 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
           ),
         ],
       ],
+    );
+  }
+
+  /// 切到渐变：起止色相同时补一个可辨的结束色，否则用户会以为渐变没生效。
+  void _switchToGradient() {
+    final f = _template.frame;
+    final sameColor = f.color.value == f.gradientEndColor.value;
+    _updateFrame((frame) => frame.copyWith(
+          borderFill: WatermarkBorderFill.gradient,
+          gradientEndColor:
+              sameColor ? watermarkGradientPresets.first.end : null,
+        ));
+  }
+
+  /// 渐变预设色卡：点击一次同时设好起始色 / 结束色 / 方向。
+  Widget _gradientPresetRow(WatermarkFrame frame, ThemeTokens tokens) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final preset in watermarkGradientPresets)
+          _gradientPresetChip(preset, frame, tokens),
+      ],
+    );
+  }
+
+  Widget _gradientPresetChip(
+      WatermarkGradientPreset preset, WatermarkFrame frame, ThemeTokens tokens) {
+    final active = preset.matches(frame);
+    return GestureDetector(
+      key: ValueKey('wm-gradient-${preset.label}'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _updateFrame((f) => f.copyWith(
+            borderFill: WatermarkBorderFill.gradient,
+            color: preset.start,
+            gradientEndColor: preset.end,
+            gradientDirection: preset.direction,
+          )),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 56,
+            height: 34,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: _gradientBegin(preset.direction),
+                end: _gradientEnd(preset.direction),
+                colors: [preset.start, preset.end],
+              ),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: active ? tokens.brand : tokens.textTertiary.withOpacity(0.35),
+                width: active ? 2 : 1,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            preset.label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+              color: active ? tokens.brandText : tokens.textSecondary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

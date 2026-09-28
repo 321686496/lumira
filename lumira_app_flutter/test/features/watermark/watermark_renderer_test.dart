@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/painting.dart' show TextAlign;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumira_app_flutter/features/watermark/models/watermark_template.dart';
+import 'package:lumira_app_flutter/features/watermark/services/watermark_layout.dart';
 import 'package:lumira_app_flutter/features/watermark/services/watermark_renderer.dart';
 
 /// 构造一张纯色测试图（w×h）
@@ -136,4 +138,123 @@ void main() {
     final r = await WatermarkRenderer().render(sourceImage: src, template: t);
     expect(r.rgbaBytes.length, r.width * r.height * 4);
   });
+
+  test('space=frame 的元素以白板为基准绘制（y=0.5 落入白板区间）', () async {
+    final src = await makeImage(100, 80, 0xFFFFFFFF);
+    const frame = WatermarkFrame(
+      type: WatermarkFrameType.polaroid,
+      borderLeft: 0.1, // 10
+      borderRight: 0.3, // 30
+      borderTop: 0.05, // 4
+      borderBottom: 0.05, // 4
+      bottomPlate: true,
+      bottomRatio: 0.2, // 16
+      shadowOpacity: 0.0,
+    );
+    // 画布 140×(80+4+4+16=104)；photoRect 垂直 [4,84) → 中线 44；白板垂直 [84,104) → 中线 94
+    final layout =
+        WatermarkLayout.compute(photoW: 100, photoH: 80, frame: frame);
+
+    WatermarkElement el(WatermarkElementSpace space) => WatermarkElement(
+          id: 'd',
+          type: WatermarkElementType.text,
+          text: '2026.08.20',
+          x: 0.5,
+          y: 0.5,
+          fontSize: 0.06,
+          color: const ui.Color(0xFFFF0000),
+          shadowColor: const ui.Color(0x00000000),
+          textAlign: TextAlign.center,
+          space: space,
+        );
+
+    Future<double> centerY(WatermarkElementSpace space) async {
+      final r = await WatermarkRenderer().render(
+        sourceImage: src,
+        template: WatermarkTemplate(
+          id: 't',
+          name: 't',
+          type: WatermarkTemplateType.custom,
+          createdAt: DateTime(2026, 8, 20),
+          elements: [el(space)],
+          frame: frame,
+        ),
+      );
+      return _redCenterY(r);
+    }
+
+    final photoY = await centerY(WatermarkElementSpace.photo);
+    final frameY = await centerY(WatermarkElementSpace.frame);
+    expect(photoY, greaterThan(layout.photoRect.top));
+    expect(photoY, lessThan(layout.photoRect.bottom));
+    // 白板基准 → 绘制落在照片区域之下（回归：白板元素不再按照片区域定位）。
+    expect(frameY, greaterThan(layout.plateRect.top));
+    expect(frameY, lessThan(layout.plateRect.bottom));
+  });
+
+  test('dateTime 元素按 captureDate 格式化（渲染结果等同等价文本元素）', () async {
+    final src = await makeImage(60, 50, 0xFFFFFFFF);
+
+    WatermarkElement el(WatermarkElementType type, String text) => WatermarkElement(
+          id: 'd',
+          type: type,
+          text: text,
+          x: 0.5,
+          y: 0.5,
+          fontSize: 0.08,
+          color: const ui.Color(0xFF000000),
+          shadowColor: const ui.Color(0x00000000),
+          textAlign: TextAlign.center,
+        );
+
+    Future<WatermarkRenderResult> render(
+      WatermarkElement el, {
+      DateTime? captureDate,
+    }) {
+      return WatermarkRenderer().render(
+        sourceImage: src,
+        template: WatermarkTemplate(
+          id: 't',
+          name: 't',
+          type: WatermarkTemplateType.custom,
+          createdAt: DateTime(2026, 8, 20),
+          elements: [el],
+        ),
+        captureDate: captureDate,
+      );
+    }
+
+    final withDate = await render(
+      el(WatermarkElementType.dateTime, ''),
+      captureDate: DateTime(1999, 1, 1),
+    );
+    final equivalent =
+        await render(el(WatermarkElementType.text, '1999.01.01'));
+    final blank = await render(el(WatermarkElementType.text, ''));
+
+    // 若 dateTime 未按 captureDate 格式化（例如回退元素自带的空文本），
+    // withDate 会退化成全白，与 equivalent 不再相等。
+    expect(withDate.rgbaBytes, equals(equivalent.rgbaBytes));
+    expect(withDate.rgbaBytes, isNot(equals(blank.rgbaBytes)));
+  });
+}
+
+/// 输出图中「纯红核心像素」的垂直重心（用于断言元素绘制落点）。
+double _redCenterY(WatermarkRenderResult r) {
+  var sum = 0;
+  var count = 0;
+  for (var y = 0; y < r.height; y++) {
+    for (var x = 0; x < r.width; x++) {
+      final i = (y * r.width + x) * 4;
+      final red = r.rgbaBytes[i];
+      final green = r.rgbaBytes[i + 1];
+      final blue = r.rgbaBytes[i + 2];
+      if (red > 200 && green < 160 && blue < 160) {
+        sum += y;
+        count++;
+      }
+    }
+  }
+  expect(count, greaterThan(0), reason: '输出图中未找到红色文字像素');
+  return sum / count;
 }

@@ -17,6 +17,29 @@ void main() {
     });
   });
 
+  group('WatermarkElement 光晕序列化', () {
+    test('toJson/fromJson 保留 shadowBlur', () {
+      final e = WatermarkElement(id: 'e1', type: WatermarkElementType.text, text: 'x')
+          .copyWith(shadowBlur: 0.45);
+      final back = WatermarkElement.fromJson(e.toJson());
+      expect(back.shadowBlur, 0.45);
+    });
+    test('旧 JSON 缺省回退光晕 0.08（视觉与旧行为一致）', () {
+      final e = WatermarkElement.fromJson({'id': 'e1', 'type': 'text', 'text': 'x'});
+      expect(e.shadowBlur, 0.08);
+    });
+    test('历史 JSON 里的 shadowOutline 键被忽略，不影响解析', () {
+      final e = WatermarkElement.fromJson({
+        'id': 'e1',
+        'type': 'text',
+        'text': 'x',
+        'shadowOutline': 0.07,
+      });
+      expect(e.shadowBlur, 0.08);
+      expect(e.toJson().containsKey('shadowOutline'), isFalse);
+    });
+  });
+
   group('WatermarkFrame 序列化', () {
     test('toJson/fromJson roundtrip', () {
       const f = WatermarkFrame(

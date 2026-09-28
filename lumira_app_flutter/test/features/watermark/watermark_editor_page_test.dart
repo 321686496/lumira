@@ -6,12 +6,14 @@ import 'package:lumira_app_flutter/core/db/dao/watermark_dao.dart';
 import 'package:lumira_app_flutter/core/db/database_provider.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
+import 'package:lumira_app_flutter/features/watermark/data/preset_watermarks.dart';
 import 'package:lumira_app_flutter/features/watermark/data/watermark_providers.dart';
 import 'package:lumira_app_flutter/features/watermark/models/watermark_template.dart';
 import 'package:lumira_app_flutter/features/watermark/pages/watermark_editor_page.dart';
+import 'package:lumira_app_flutter/shared/widgets/effects/color_picker.dart';
 
 /// 预置模板「简约日期」的真实 id（与 preset_watermarks.dart 一致）。
-/// 该模板含 3 个文本元素、无画框（frame.type == none）。
+/// 该模板含 2 个元素（dateTime 日期 + LUMIRA 品牌）、无画框（frame.type == none）。
 const _presetMinimal = 'preset_minimal_date';
 
 /// 测试用自定义水印 DAO（内存实现，无需真实 Database）。
@@ -322,6 +324,141 @@ void main() {
       expect(state.template.id, isNot(_presetMinimal));
       expect(state.template.name, isNotEmpty);
       expect(state.template.type, WatermarkTemplateType.custom);
+    });
+  });
+
+  group('自定义颜色', () {
+    /// 进入「边框」Tab 并选中画框类型。
+    Future<void> pickFrame(WidgetTester tester, String label) async {
+      await tester.tap(find.byKey(const ValueKey('wm-tab-border')));
+      await settle(tester, UIStyle.neumorphic);
+      await tester.tap(find.text(label));
+      await settle(tester, UIStyle.neumorphic);
+    }
+
+    /// 面板内容可滚动，色板可能落在可视区外，先滚动到可见再点击。
+    Future<void> tapEntry(WidgetTester tester, Finder entry) async {
+      await tester.ensureVisible(entry);
+      await tester.pumpAndSettle();
+      await tester.tap(entry);
+      await settle(tester, UIStyle.neumorphic);
+    }
+
+    testWidgets('拍立得：色板含「自定义」入口，取色后写入画框颜色', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+      await settle(tester, UIStyle.neumorphic);
+      await pickFrame(tester, '拍立得');
+
+      const entryKey = ValueKey('wm-custom-color-polaroid-solid');
+      expect(find.byKey(entryKey), findsOneWidget);
+      // 初始收起，点击后在同一行内联展开取色器
+      expect(find.byType(SquareColorPicker), findsNothing);
+      await tapEntry(tester, find.byKey(entryKey));
+      expect(find.byType(SquareColorPicker), findsOneWidget);
+
+      tester
+          .widget<SquareColorPicker>(find.byType(SquareColorPicker))
+          .onColorChanged(const Color(0xFF3366CC));
+      await tester.pump();
+      expect(editorState(tester).template.frame.color.value, 0xFF3366CC);
+
+      // 再次点击入口收起
+      await tapEntry(tester, find.byKey(entryKey));
+      expect(find.byType(SquareColorPicker), findsNothing);
+    });
+
+    testWidgets('内描边：自定义取色保留原半透明 alpha（0xE6 不回退为不透明）',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
+            uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
+          ],
+          child: const MaterialApp(
+            // 预置「画框水印」= 半透明白内描边（0xE6FFFFFF）
+            home: WatermarkEditorPage(templateId: 'preset_frame_border'),
+          ),
+        ),
+      );
+      await settle(tester, UIStyle.neumorphic);
+      expect(editorState(tester).template.frame.color.alpha, 0xE6);
+
+      await tester.tap(find.byKey(const ValueKey('wm-tab-border')));
+      await settle(tester, UIStyle.neumorphic);
+      await tapEntry(tester,
+          find.byKey(const ValueKey('wm-custom-color-frame-inner-border')));
+      tester
+          .widget<SquareColorPicker>(find.byType(SquareColorPicker))
+          .onColorChanged(const Color(0xFF3366CC));
+      await tester.pump();
+      // 取色器只给不透明色 → 色板行沿用原 alpha 合成
+      expect(editorState(tester).template.frame.color.value, 0xE63366CC);
+    });
+
+    testWidgets('渐变：起始色与结束色各自可自定义', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+      await settle(tester, UIStyle.neumorphic);
+      await pickFrame(tester, '拍立得');
+      final gradientChip = find.text('渐变');
+      await tester.ensureVisible(gradientChip);
+      await tester.pumpAndSettle();
+      await tester.tap(gradientChip);
+      await settle(tester, UIStyle.neumorphic);
+
+      await tapEntry(
+          tester, find.byKey(const ValueKey('wm-custom-color-polaroid-start')));
+      tester
+          .widget<SquareColorPicker>(find.byType(SquareColorPicker))
+          .onColorChanged(const Color(0xFF102030));
+      await tester.pump();
+
+      await tapEntry(
+          tester, find.byKey(const ValueKey('wm-custom-color-polaroid-end')));
+      tester
+          .widget<SquareColorPicker>(find.byType(SquareColorPicker))
+          .onColorChanged(const Color(0xFF405060));
+      await tester.pump();
+
+      final frame = editorState(tester).template.frame;
+      expect(frame.color.value, 0xFF102030);
+      expect(frame.gradientEndColor.value, 0xFF405060);
+      // 自定义起止色后不再是任何渐变预设的选中态
+      expect(watermarkGradientPresets.any((p) => p.matches(frame)), isFalse);
+    });
+
+    testWidgets('样式 Tab：元素文字颜色也可自定义', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+      await settle(tester, UIStyle.neumorphic);
+
+      // 新增元素（自动选中并切入样式 Tab）
+      await tester.tap(find.text('＋文本'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+      tester.binding.focusManager.primaryFocus?.unfocus(); // 停用光标闪烁
+      await tester.pump();
+      final elId = editorState(tester).template.elements.last.id;
+
+      await tapEntry(
+          tester, find.byKey(ValueKey('wm-custom-color-element-$elId')));
+      tester
+          .widget<SquareColorPicker>(find.byType(SquareColorPicker))
+          .onColorChanged(const Color(0xFFAA33CC));
+      await tester.pump();
+
+      expect(
+        editorState(tester)
+            .template
+            .elements
+            .firstWhere((e) => e.id == elId)
+            .color
+            .value,
+        0xFFAA33CC,
+      );
     });
   });
 }

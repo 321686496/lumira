@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/services/ohos_image_processor.dart';
 import '../models/watermark_template.dart';
+import '../services/watermark_layout.dart'
+    show watermarkCaptureDateFromPath;
 import '../services/watermark_renderer.dart';
 import '../../capture/services/dart_photo_pipeline.dart'
     show applyP3ToSrgbRgba, isDisplayP3Jpeg;
@@ -204,6 +206,8 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
         final result = await WatermarkRenderer().render(
           sourceImage: downscaled,
           template: widget.watermarkTemplate,
+          // 定格动画不读 EXIF（避免为取日期再解一次全分辨率 JPEG 拖慢起始帧）。
+          captureDate: watermarkCaptureDateFromPath(widget.photoPath),
         );
         final composite = await _rgbaToImage(
           result.rgbaBytes,
