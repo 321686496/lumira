@@ -26,6 +26,8 @@ export class AiTaskPollError extends Error {}
 
 const DEFAULT_INTERVAL_MS = 2000;
 const DEFAULT_TIMEOUT_MS = 600_000;
+/** 识别任务总预算：链路含重试，比生图长，单独放宽（生图 / 剪影仍用 600s） */
+const ANALYZE_TIMEOUT_MS = 900_000;
 
 function sleep(intervalMs: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, intervalMs));
@@ -236,7 +238,7 @@ export function pollAiAnalyzeTask(
   } = {},
   onTick?: (status: AiAnalyzeStatusResult['status']) => void,
 ): Promise<AiAnalyzeStatusResult> {
-  const { intervalMs = DEFAULT_INTERVAL_MS, timeoutMs = DEFAULT_TIMEOUT_MS, onEvents, signal } = options;
+  const { intervalMs = DEFAULT_INTERVAL_MS, timeoutMs = ANALYZE_TIMEOUT_MS, onEvents, signal } = options;
   const deadline = Date.now() + timeoutMs;
   let since = 0;
   const events: AiTraceEvent[] = [];

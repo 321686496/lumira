@@ -475,6 +475,12 @@ export interface AiProviderConfigView {
   searchQwenOfficialModel: string;
   /** 迭代上限（预算护栏） */
   maxIterations: number;
+  /** 识别稳定性：失败后额外重试次数（默认 2） */
+  llmRetryCount: number;
+  /** 识别稳定性：单次 LLM 调用超时（毫秒，默认 300000） */
+  llmTimeoutMs: number;
+  /** 识别稳定性：单次 LLM 输出 token 上限（默认 8192） */
+  llmMaxTokens: number;
 }
 
 /** PUT /admin/ai-config 请求体（apiKey 空串/缺省 = 不修改原值，首次保存必填） */
@@ -519,6 +525,12 @@ export interface UpdateAiConfigPayload {
   searchQwenOfficialModel?: string;
   /** 迭代上限（预算护栏 1~3） */
   maxIterations?: number;
+  /** 识别稳定性：失败后额外重试次数（0~3） */
+  llmRetryCount?: number;
+  /** 识别稳定性：单次 LLM 调用超时（毫秒，10000~600000） */
+  llmTimeoutMs?: number;
+  /** 识别稳定性：单次 LLM 输出 token 上限（1024~16384） */
+  llmMaxTokens?: number;
 }
 
 /** POST /admin/ai-config/test 可选目标（缺省 = 全部） */

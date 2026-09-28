@@ -93,6 +93,10 @@ interface FormState {
   searchQwenOfficialApiKey: string; // 留空 = 不修改原值
   searchQwenOfficialModel: string;
   maxIterations: number; // 迭代上限（预算护栏 1~3）
+  // 识别稳定性（spec 2026-09-28）
+  llmRetryCount: number; // 失败后额外重试次数 0~3
+  llmTimeoutSeconds: number; // 单次调用超时（秒，入库时 ×1000）
+  llmMaxTokens: number; // 单次输出 token 上限
 }
 
 /** 模态独立平台子表单状态 */
@@ -208,6 +212,9 @@ export function AiConfigForm({
           searchQwenOfficialApiKey: '',
           searchQwenOfficialModel: initial.searchQwenOfficialModel,
           maxIterations: initial.maxIterations,
+          llmRetryCount: initial.llmRetryCount,
+          llmTimeoutSeconds: Math.max(1, Math.round(initial.llmTimeoutMs / 1000)),
+          llmMaxTokens: initial.llmMaxTokens,
         }
       : {
           provider: 'qwen',
@@ -229,6 +236,9 @@ export function AiConfigForm({
           searchQwenOfficialApiKey: '',
           searchQwenOfficialModel: '',
           maxIterations: 2,
+          llmRetryCount: 2,
+          llmTimeoutSeconds: 300,
+          llmMaxTokens: 8192,
         },
   );
   /** 手动改过预设字段的标记：切换厂商时不覆盖 */
@@ -486,6 +496,9 @@ export function AiConfigForm({
       // 研究管线（Agentic）：搜索方式四选一互斥 → provider/sources/字段映射
       payload.searchEnabled = form.searchMode !== 'off';
       payload.maxIterations = form.maxIterations;
+      payload.llmRetryCount = form.llmRetryCount;
+      payload.llmTimeoutMs = Math.round(form.llmTimeoutSeconds * 1000);
+      payload.llmMaxTokens = form.llmMaxTokens;
       if (form.searchMode === 'qwen-official') {
         payload.searchProvider = 'qwen-official';
         payload.searchSources = ['qwen-official'];
@@ -1018,6 +1031,54 @@ export function AiConfigForm({
                 </p>
               </div>
             )}
+
+            <div className="space-y-4 border-t pt-4">
+              <div>
+                <p className="text-sm font-medium">识别稳定性</p>
+                <p className="text-xs text-muted-foreground">
+                  识别步骤（示例图识别 / 草稿生成 / 姿势面片 / 质量评分 / 草稿细化）遇到输出非法 JSON、超时、上游 5xx 或空输出时，
+                  会先做结构补救再自动重试；鉴权类错误不重试。
+                </p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="ai-llm-retry-count">失败重试次数</Label>
+                  <Input
+                    id="ai-llm-retry-count"
+                    type="number"
+                    min={0}
+                    max={3}
+                    value={form.llmRetryCount}
+                    onChange={(e) => setForm((f) => ({ ...f, llmRetryCount: Number(e.target.value) }))}
+                  />
+                  <p className="text-xs text-muted-foreground">0~3，默认 2。总调用次数 ≤ 次数 + 1。</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ai-llm-timeout">单次调用超时（秒）</Label>
+                  <Input
+                    id="ai-llm-timeout"
+                    type="number"
+                    min={10}
+                    max={600}
+                    value={form.llmTimeoutSeconds}
+                    onChange={(e) => setForm((f) => ({ ...f, llmTimeoutSeconds: Number(e.target.value) }))}
+                  />
+                  <p className="text-xs text-muted-foreground">10~600，默认 300（5 分钟）。含图识别建议不低于 120。</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ai-llm-max-tokens">单次输出上限（token）</Label>
+                  <Input
+                    id="ai-llm-max-tokens"
+                    type="number"
+                    min={1024}
+                    max={16384}
+                    value={form.llmMaxTokens}
+                    onChange={(e) => setForm((f) => ({ ...f, llmMaxTokens: Number(e.target.value) }))}
+                  />
+                  <p className="text-xs text-muted-foreground">1024~16384，默认 8192。穷尽式识别输出大，过低会导致 JSON 被截断。</p>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* 启用开关 */}
