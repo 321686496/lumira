@@ -56,7 +56,7 @@ export class AiAnalyzeService {
 
   /**
    * 示例图（可选）+ 文字描述（可选）+ Step1 附加输入 → 模板草稿：
-   * 校验（至少一项；text ≤ 500 字；poseCount 1~6）→ 读活跃分类树 → 取启用配置（未配置 503）→
+   * 校验（至少一项；text ≤ 1500 字；poseCount 1~6）→ 读活跃分类树 → 取启用配置（未配置 503）→
    * 图存在走 visionChat（extras 注入识别指令）/ 仅文字走 textChat → JSON 容错提取 → 归一化
    */
   async analyze(
@@ -92,8 +92,8 @@ export class AiAnalyzeService {
     if (!image && !trimmedText) {
       throw new BadRequestException('请至少提供示例图或文字描述之一');
     }
-    if (trimmedText.length > 500) {
-      throw new BadRequestException('文字描述不能超过 500 字');
+    if (trimmedText.length > 1500) {
+      throw new BadRequestException('文字描述不能超过 1500 字');
     }
     if (image) {
       if (!ALLOWED_IMAGE_MIMES.includes(image.mimetype)) {

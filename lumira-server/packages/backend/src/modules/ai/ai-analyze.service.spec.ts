@@ -328,9 +328,9 @@ describe('AiAnalyzeService — 多输入', () => {
     );
   });
 
-  it('text 超 500 字 → 400', async () => {
+  it('text 超 1500 字 → 400', async () => {
     const { service } = buildService();
-    await expect(service.analyze(undefined, '长'.repeat(501))).rejects.toThrow('文字描述不能超过 500 字');
+    await expect(service.analyze(undefined, '长'.repeat(1501))).rejects.toThrow('文字描述不能超过 1500 字');
   });
 
   it('仅文字 → 走 textChat（visionChat 不被调），返回归一化草稿', async () => {

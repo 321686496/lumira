@@ -60,14 +60,14 @@ describe('AiTemplatesController ai-analyze (e2e)', () => {
     expect(res.body.message).toContain('示例图或文字描述');
   });
 
-  it('POST /api/v1/admin/templates/ai-analyze — text 超 500 字返回 400', async () => {
+  it('POST /api/v1/admin/templates/ai-analyze — text 超 1500 字返回 400', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/admin/templates/ai-analyze')
       .set('Authorization', `Bearer ${adminToken}`)
-      .field('text', '长'.repeat(501))
+      .field('text', '长'.repeat(1501))
       .expect(400);
 
-    expect(res.body.message).toContain('500');
+    expect(res.body.message).toContain('1500');
   });
 
   it('POST /api/v1/admin/templates/ai-analyze — 非法 mimetype 返回 400', async () => {

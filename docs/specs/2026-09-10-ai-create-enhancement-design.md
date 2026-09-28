@@ -72,7 +72,7 @@ export interface ActiveAiConfig {
 
 - `POST /api/v1/admin/ai/analyze` 请求变化：`image`（文件）**改为可选**，新增 `text`（字符串）**可选**；两者都为空 → 400「请至少提供示例图或文字描述之一」。
 
-- `text` 长度校验：trim 后 > 500 字 → 400「文字描述不能超过 500 字」。
+- `text` 长度校验：trim 后 > 1500 字 → 400「文字描述不能超过 1500 字」。
 
 - `image` 存在时沿用现有校验（mimetype / ≤ MAX\_IMAGE\_BYTES）。
 
@@ -107,7 +107,7 @@ export async function textChat(cfg: LlmConfig & { textModel?: string }, input: T
 
 ### Admin 向导 Step1（wizard.tsx）
 
-- 示例图上传区标注「可选」；新增 textarea「文字描述 / 创作要求」（≤500 字，placeholder 示例：「日系田园风，午后侧逆光，少女侧身回眸，清新通透」）。
+- 示例图上传区标注「可选」；新增 textarea「文字描述 / 创作要求」（≤1500 字，placeholder 示例：「日系田园风，午后侧逆光，少女侧身回眸，清新通透」）。
 
 - 「开始识别」「全自动生成并上架」按钮的禁用条件改为：**图和文字都为空**。
 
@@ -190,7 +190,7 @@ AI 建模页（/dashboard/templates/ai-create）
 | 场景                                                | 行为                                             |
 | ------------------------------------------------- | ---------------------------------------------- |
 | 图文都为空点识别                                          | 400 → 前端按钮禁用 + 后端兜底 400                        |
-| text 超 500 字                                      | 400，前端 textarea maxLength + 计数提示               |
+| text 超 1500 字                                     | 400，前端 textarea maxLength + 计数提示               |
 | textModel 未配置（回退 visionModel）但 visionModel 不支持纯文本 | 仅文模式识别报错 → 引导「请在 AI 设置中配置文本模型」；润色静默回退拼接 prompt |
 | 润色超时/失败                                           | 静默回退 rawPrompt，生图正常继续                          |
 | 纯文模式全自动                                           | 生图走文生图（reference 空）；其余流程同现状                    |

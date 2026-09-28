@@ -731,12 +731,12 @@ export function AiCreateWizard({
                 <textarea
                   id="ai-input-text"
                   className="mt-2 min-h-[88px] w-full rounded-md border border-border bg-background p-2 text-sm"
-                  maxLength={500}
+                  maxLength={1500}
                   placeholder="例：日系田园风，午后侧逆光，少女侧身回眸，画面清新通透"
                   value={inputText}
                   onChange={(e) => handleTextChange(e.target.value)}
                 />
-                <div className="mt-1 text-right text-xs text-muted-foreground">{inputText.length}/500</div>
+                <div className="mt-1 text-right text-xs text-muted-foreground">{inputText.length}/1500</div>
               </div>
 
               {errorText && (
