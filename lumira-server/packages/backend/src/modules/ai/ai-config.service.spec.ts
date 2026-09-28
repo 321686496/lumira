@@ -852,3 +852,52 @@ describe('AiConfigService — searxng 社交平台默认来源集', () => {
     expect((cfg?.sources ?? [])[0].site).toBe('zhihu.com');
   });
 });
+
+describe('AiConfigService — 识别稳定性（runtime / retryCount / timeout / maxTokens）', () => {
+  it('get() 行含三列 → 视图原样返回', async () => {
+    const svc = new AiConfigService(readonlyDb(row({ llmRetryCount: 3, llmTimeoutMs: 240_000, llmMaxTokens: 12_288 })) as unknown as DatabaseService);
+    const view = await svc.get();
+    expect(view).toMatchObject({ configured: true, llmRetryCount: 3, llmTimeoutMs: 240_000, llmMaxTokens: 12_288 });
+  });
+
+  it('get() 行缺三列（老数据 / 未选列）→ 回退默认 2 / 300000 / 8192', async () => {
+    const svc = new AiConfigService(readonlyDb(row()) as unknown as DatabaseService);
+    const view = await svc.get();
+    expect(view).toMatchObject({ llmRetryCount: 2, llmTimeoutMs: 300_000, llmMaxTokens: 8192 });
+  });
+
+  it('getActiveConfig() → runtime 取自三列', async () => {
+    const svc = new AiConfigService(readonlyDb(row({ llmRetryCount: 1, llmTimeoutMs: 120_000, llmMaxTokens: 4096 })) as unknown as DatabaseService);
+    const cfg = await svc.getActiveConfig();
+    expect(cfg.runtime).toEqual({ retryCount: 1, timeoutMs: 120_000, maxTokens: 4096 });
+  });
+
+  it('getActiveConfig() 行缺三列 → runtime 用默认值', async () => {
+    const svc = new AiConfigService(readonlyDb(row()) as unknown as DatabaseService);
+    const cfg = await svc.getActiveConfig();
+    expect(cfg.runtime).toEqual({ retryCount: 2, timeoutMs: 300_000, maxTokens: 8192 });
+  });
+
+  it('save() 更新带三字段 → update set 收到三列', async () => {
+    const { service, updateSet } = writableDb(row());
+    await service.save({
+      provider: 'qwen', baseUrl: 'https://x.example', visionModel: 'qwen-vl-max', imageModel: 'wanx2.1-t2i-turbo',
+      enabled: true, llmRetryCount: 3, llmTimeoutMs: 240_000, llmMaxTokens: 12_288,
+    });
+    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ llmRetryCount: 3, llmTimeoutMs: 240_000, llmMaxTokens: 12_288 }));
+  });
+
+  it('save() 更新缺三字段 → 保留存量值', async () => {
+    const { service, updateSet } = writableDb(row({ llmRetryCount: 3, llmTimeoutMs: 240_000, llmMaxTokens: 12_288 }));
+    await service.save({ provider: 'qwen', baseUrl: 'https://x.example', visionModel: 'qwen-vl-max', imageModel: 'wanx2.1-t2i-turbo', enabled: true });
+    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ llmRetryCount: 3, llmTimeoutMs: 240_000, llmMaxTokens: 12_288 }));
+  });
+
+  it('save() 首次保存缺三字段 → insert values 收到默认值', async () => {
+    const { service, insertValues } = writableDb(undefined);
+    await service.save({
+      provider: 'qwen', baseUrl: 'https://x.example', apiKey: 'sk-1', visionModel: 'qwen-vl-max', imageModel: 'wanx2.1-t2i-turbo', enabled: true,
+    });
+    expect(insertValues).toHaveBeenCalledWith(expect.objectContaining({ llmRetryCount: 2, llmTimeoutMs: 300_000, llmMaxTokens: 8192 }));
+  });
+});

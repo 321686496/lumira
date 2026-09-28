@@ -385,6 +385,13 @@ export const aiProviderConfig = mysqlTable('ai_provider_config', {
   searchSite: varchar('search_site', { length: 255 }),
   /** 迭代上限（预算护栏，默认 3，绝不无限迭代） */
   maxIterations: int('max_iterations').notNull().default(3),
+  /** ===== 识别链路稳定性（spec 2026-09-28）===== */
+  /** 识别步骤失败后额外重试次数（0~3；总调用次数 ≤ 次数 + 1） */
+  llmRetryCount: int('llm_retry_count').notNull().default(2),
+  /** 单次 LLM 调用超时（毫秒） */
+  llmTimeoutMs: int('llm_timeout_ms').notNull().default(300_000),
+  /** 单次 LLM 输出 token 上限 */
+  llmMaxTokens: int('llm_max_tokens').notNull().default(8192),
   /** Qwen 模型自带联网搜索端点（search_provider=qwen 时使用） */
   searchQwenBaseUrl: varchar('search_qwen_base_url', { length: 255 }),
   /** Qwen 搜索 API key（脱敏返回，永不回传明文） */

@@ -58,6 +58,12 @@ export interface AiConfigView {
   searchQwenOfficialApiKeyMasked: string;
   /** Qwen 官方百炼搜索模型（缺省 = qwen-plus） */
   searchQwenOfficialModel: string;
+  /** 识别稳定性：失败后额外重试次数（默认 2） */
+  llmRetryCount: number;
+  /** 识别稳定性：单次 LLM 调用超时（毫秒，默认 300000） */
+  llmTimeoutMs: number;
+  /** 识别稳定性：单次 LLM 输出 token 上限（默认 8192） */
+  llmMaxTokens: number;
 }
 
 /** 单模态运行时端点（含明文 apiKey） */
@@ -93,6 +99,15 @@ export interface ActiveAiConfig {
     sources: string[];
     maxIterations: number;
   };
+  /** 识别链路稳定性（JSON 识别步骤重试 / 超时 / 输出上限） */
+  runtime: {
+    /** 失败后额外重试次数（0 = 不重试） */
+    retryCount: number;
+    /** 单次 LLM 调用超时（毫秒） */
+    timeoutMs: number;
+    /** 单次 LLM 输出 token 上限 */
+    maxTokens: number;
+  };
 }
 
 /** 连通性测试目标（text 永远测有效文本模型；silhouette 永远测有效剪影模型） */
@@ -117,6 +132,11 @@ const TEST_IMAGE_PNG_B64 =
 const TEST_NOTE = '生图 / 剪影为真实模型调用并按次计费；未选择的目标不测试';
 
 const ALL_TEST_TARGETS: AiConfigTestTarget[] = ['vision', 'text', 'image', 'silhouette'];
+
+/** 识别链路稳定性默认值（老数据 / 未配置列的回退口径，与迁移 047 的 DEFAULT 一致） */
+const DEFAULT_LLM_RETRY_COUNT = 2;
+const DEFAULT_LLM_TIMEOUT_MS = 300_000;
+const DEFAULT_LLM_MAX_TOKENS = 8192;
 
 /** apiKey 脱敏：空值返回空串（避免与脱敏后的 '****' 混淆）；≤8 位全遮蔽；否则前 3 + **** + 后 2 */
 function maskKey(k: string): string {
@@ -194,6 +214,9 @@ export class AiConfigService {
       searchQwenOfficialBaseUrl: row.searchQwenOfficialBaseUrl ?? '',
       searchQwenOfficialApiKeyMasked: maskKey(row.searchQwenOfficialApiKey ?? ''),
       searchQwenOfficialModel: row.searchQwenOfficialModel ?? 'qwen-plus',
+      llmRetryCount: row.llmRetryCount ?? DEFAULT_LLM_RETRY_COUNT,
+      llmTimeoutMs: row.llmTimeoutMs ?? DEFAULT_LLM_TIMEOUT_MS,
+      llmMaxTokens: row.llmMaxTokens ?? DEFAULT_LLM_MAX_TOKENS,
     };
   }
 
@@ -268,6 +291,9 @@ export class AiConfigService {
     const searchSources = serializeSearchSources(dto.searchSources) ?? existing?.searchSources ?? null;
     const searchSite = dto.searchSite?.trim() || existing?.searchSite || null;
     const maxIterations = dto.maxIterations ?? existing?.maxIterations ?? 3;
+    const llmRetryCount = dto.llmRetryCount ?? existing?.llmRetryCount ?? DEFAULT_LLM_RETRY_COUNT;
+    const llmTimeoutMs = dto.llmTimeoutMs ?? existing?.llmTimeoutMs ?? DEFAULT_LLM_TIMEOUT_MS;
+    const llmMaxTokens = dto.llmMaxTokens ?? existing?.llmMaxTokens ?? DEFAULT_LLM_MAX_TOKENS;
     const searchQwenBaseUrl = dto.searchQwenBaseUrl?.trim() || existing?.searchQwenBaseUrl || null;
     const resolvedSearchQwenApiKey = dto.searchQwenApiKey?.trim() || existing?.searchQwenApiKey || null;
     const searchQwenModel = dto.searchQwenModel?.trim() || existing?.searchQwenModel || null;
@@ -317,6 +343,9 @@ export class AiConfigService {
         searchSources,
         searchSite,
         maxIterations,
+        llmRetryCount,
+        llmTimeoutMs,
+        llmMaxTokens,
         searchQwenBaseUrl,
         searchQwenApiKey: resolvedSearchQwenApiKey,
         searchQwenModel,
@@ -353,6 +382,9 @@ export class AiConfigService {
           searchSources,
           searchSite, // 留空 = 不改（searchSite 常量已是解析后的最终值）
           maxIterations,
+          llmRetryCount,
+          llmTimeoutMs,
+          llmMaxTokens,
           searchQwenBaseUrl,
           searchQwenApiKey: dto.searchQwenApiKey?.trim() ? resolvedSearchQwenApiKey : existing?.searchQwenApiKey,
           searchQwenModel,
@@ -551,6 +583,11 @@ export class AiConfigService {
         site: row.searchSite ?? '',
         sources: parseSearchSources(row.searchSources),
         maxIterations: row.maxIterations ?? 3,
+      },
+      runtime: {
+        retryCount: row.llmRetryCount ?? DEFAULT_LLM_RETRY_COUNT,
+        timeoutMs: row.llmTimeoutMs ?? DEFAULT_LLM_TIMEOUT_MS,
+        maxTokens: row.llmMaxTokens ?? DEFAULT_LLM_MAX_TOKENS,
       },
     };
   }

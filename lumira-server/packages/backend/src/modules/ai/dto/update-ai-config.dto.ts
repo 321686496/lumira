@@ -132,6 +132,27 @@ export class UpdateAiConfigDto {
   @Max(3)
   maxIterations?: number;
 
+  /** 识别稳定性：失败后额外重试次数（0~3）；缺省 = 沿用原值 */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(3)
+  llmRetryCount?: number;
+
+  /** 识别稳定性：单次 LLM 调用超时（毫秒，10000~600000）；缺省 = 沿用原值 */
+  @IsOptional()
+  @IsInt()
+  @Min(10_000)
+  @Max(600_000)
+  llmTimeoutMs?: number;
+
+  /** 识别稳定性：单次 LLM 输出 token 上限（1024~16384）；缺省 = 沿用原值 */
+  @IsOptional()
+  @IsInt()
+  @Min(1024)
+  @Max(16_384)
+  llmMaxTokens?: number;
+
   /** Qwen 模型自带搜索端点（searchProvider=qwen 时使用） */
   @IsOptional()
   @IsString()
