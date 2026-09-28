@@ -124,7 +124,7 @@ describe('AiGenerateImageService', () => {
 
     const input = generateImageMock.mock.calls[0][1];
     expect(input.prompt.startsWith('一张真实相机直出的实拍照片：')).toBe(true);
-    expect(input.prompt).toContain('毛孔');
+    expect(input.prompt).toContain('皮肤纹理与布料纤维可辨');
     expect(input.prompt).toContain('禁止：动漫、二次元、漫画、插画');
   });
 
@@ -252,5 +252,14 @@ describe('hardenPhotoRealism 精修档分档', () => {
     );
     const [, input] = generateImageMock.mock.calls[0];
     expect(String(input.prompt)).toContain(RETOUCH_REALISM_SUFFIX.polished);
+  });
+});
+
+describe('hardenPhotoRealism 去噪', () => {
+  it('不引入颗粒/噪点要求，且声明禁止噪点', () => {
+    const out = hardenPhotoRealism('一段提示词', {});
+    expect(out).not.toContain('自然噪点');
+    expect(out).toContain('高清干净');
+    expect(out).toContain('禁止颗粒与噪点');
   });
 });

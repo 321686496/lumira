@@ -35,9 +35,6 @@ const ASPECT_ORIENTATIONS: Record<string, string> = {
   '1:1': '方形构图',
 };
 
-/** 颗粒感强度分界：grain ≥ 30 描述为「明显」，否则「轻微」 */
-const GRAIN_STRONG_THRESHOLD = 30;
-
 /** 空草稿（无任何可用字段）兜底 prompt */
 const FALLBACK_PROMPT = '一张 3:4 竖构图的人像摄影作品，自然光线，柔和氛围，画面干净通透';
 
@@ -150,7 +147,7 @@ export function isSelfieDraft(draft: Record<string, unknown>): boolean {
  * 从草稿合成生图 prompt（中文，一段式描述）。前端不拼 prompt。
  *
  * 拼接顺序：classification 主体类型 + aspectRatio 画幅 → tags 风格 → 构图描述 →
- * 光线（方向 + 最佳时段）→ 背景 + 道具 → 后期（LUT 标签 + 颗粒感）→ 氛围（shortDesc / description）→
+ * 光线（方向 + 最佳时段）→ 背景 + 道具 → 后期（LUT 标签；grain 不写入）→ 氛围（shortDesc / description）→
  * 额外要求（extraPrompt，用户显式补充，置于末尾权重最高）。
  * 格式固定为「一张{画幅}{主体类型}摄影作品，风格{…}，{光线}，背景{…}，{氛围/后期}」，
  * 字段缺失跳过，空草稿走兜底模板。
@@ -174,9 +171,9 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
   const selfie = isSelfieDraft(draft);
 
   // 主体类型：classification.type → meta.category 兜底，均未命中内置映射则跳过
-  const subject =
-    CATEGORY_SUBJECT_LABELS[toStr(classification.type) ?? ''] ??
-    CATEGORY_SUBJECT_LABELS[toStr(meta.category) ?? ''];
+  // （subjectKey 保留一级 key 供人像分支判断，subject 为中文标签）
+  const subjectKey = toStr(classification.type) ?? toStr(meta.category);
+  const subject = subjectKey !== undefined ? CATEGORY_SUBJECT_LABELS[subjectKey] : undefined;
 
   // 画幅短语：比例 + 取向词（如「3:4 竖构图」）；未知比例仅保留比例值
   const ratio = toStr(composition.aspectRatio);
@@ -227,14 +224,10 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
   const cameraPhrase = describeCamera(camera);
   if (cameraPhrase !== undefined) segments.push(cameraPhrase);
 
-  // ⑥ 后期：LUT 中文标签（none/未知 key 跳过）+ 颗粒感
+  // ⑥ 后期：LUT 中文标签（none/未知 key 跳过）；grain 仅作 App 后期参数，不写入生图提示词
   const lut = toStr(postProcess.lut);
   const lutLabel = lut !== undefined && lut !== 'none' ? LUT_LABELS[lut] : undefined;
   if (lutLabel !== undefined) segments.push(`整体呈${lutLabel}色调`);
-  const grain = postProcess.grain;
-  if (typeof grain === 'number' && Number.isFinite(grain) && grain > 0) {
-    segments.push(`带${grain >= GRAIN_STRONG_THRESHOLD ? '明显' : '轻微'}颗粒感`);
-  }
 
   // ⑦ 氛围：shortDesc 优先，缺失时回退 description
   const shortDesc = toStr(meta.shortDesc);
@@ -278,18 +271,21 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
         : '真实相机直出的摄影质感，画面像真实抓拍的照片，而非插画、动漫、CG、3D 渲染',
     );
     segments.push(RETOUCH_TEXTURE_LINES[retouchLevelOfDraft(draft)]);
-    if (subject === 'portrait') {
+    if (subjectKey === 'portrait') {
       segments.push(
-        '人物是街上随处可见的普通年轻人而非精修模特：肤色不均匀、T 区微泛油光而脸颊哑光，皮肤保留毛孔、纹理与细小绒毛，不做美颜磨皮，绝不光滑发亮的塑料质感',
+        '人物皮肤纹理清晰不糊：毛孔与细小绒毛可辨、肤色过渡自然，不做美颜磨皮，无塑料质感',
       );
       segments.push(
-        '头发有几缕碎发，衣服有自然褶皱，表情松弛自然像被抓拍的瞬间；光影来自真实环境与自然光，明暗过渡自然可信',
+        '头发发丝根根分明、有自然蓬松与层次；衣物布料纤维与褶皱纹理可辨',
+      );
+      segments.push(
+        '光影有明确方向与衰减层次：面部明暗过渡自然可信、有受光面与暗部的层次，避免平光无层次',
       );
       segments.push(
         '五官、头发、衣服纹理与手部细节贴合真实人体结构，无肢体或手指畸变；姿势是经过设计的：身体朝向与重心明确、肩胯有错位、双手落点具体，画面水平',
       );
       segments.push(
-        '避免典型 AI 感：不过度磨皮、不完美对称脸、不锥子脸卡通化、不高饱和炫彩、不镜面质感、不影棚式浮夸打光、不精致摆拍',
+        '避免典型 AI 感：不过度磨皮、不完美对称脸、不锥子脸卡通化、不镜面质感、不影棚式浮夸打光、不精致摆拍',
       );
     } else if (subject) {
       segments.push('画面像随手抓拍的实拍照片而非精修广告图，颜色与光线自然不夸张，无塑料或镜面质感');

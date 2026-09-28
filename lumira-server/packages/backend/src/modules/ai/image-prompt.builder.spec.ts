@@ -79,10 +79,10 @@ describe('buildImagePrompt', () => {
     expect(prompt).toContain('日系清新');       // LUT 中文标签（japanese_fresh）
     expect(prompt).toContain('把夏天拍进眼睛里'); // 氛围关键词（shortDesc）
 
-    // 场景引导其余字段与后期颗粒
+    // 场景引导其余字段与后期颗粒（grain 不再写入生图提示词）
     expect(prompt).toContain('草帽');
     expect(prompt).toContain('三分线');
-    expect(prompt).toContain('颗粒感');
+    expect(prompt).not.toContain('颗粒感');
 
     // 构图落位（subjectFrame 归一化坐标 → 可读落位与占比）与相机参数（原先整段丢失）
     expect(prompt).toContain('主体落在画面中部纵向居中');
@@ -328,5 +328,23 @@ describe('多人物', () => {
     const prompt = buildImagePrompt(draft);
     expect(prompt).toContain('画面中有两位人物');
     expect(prompt).not.toContain('画面中只有一个人物');
+  });
+});
+
+describe('去噪写实', () => {
+  it('草稿带 grain 也不再输出颗粒感', () => {
+    const draft = fullDraft();
+    (draft as any).postProcess = { grain: 40, lut: 'none' };
+    const prompt = buildImagePrompt(draft);
+    expect(prompt).not.toContain('颗粒感');
+    expect(prompt).not.toContain('噪点');
+  });
+
+  it('人像不再写缺陷集合，改为细节分辨力', () => {
+    const prompt = buildImagePrompt(fullDraft());
+    expect(prompt).not.toContain('肤色不均匀');
+    expect(prompt).not.toContain('T 区微泛油光');
+    expect(prompt).not.toContain('碎发');
+    expect(prompt).toContain('皮肤纹理清晰不糊');
   });
 });

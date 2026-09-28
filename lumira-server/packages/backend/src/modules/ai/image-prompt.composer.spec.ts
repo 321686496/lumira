@@ -273,3 +273,25 @@ describe('多人物与系统角色', () => {
     expect(buildComposeSystemPrompt(undefined)).toContain('顶级人像摄影艺术指导');
   });
 });
+
+describe('去噪写实', () => {
+  it('带 grain 也不再输出颗粒感', () => {
+    const material = buildPromptMaterial({
+      draft: { meta: { category: 'portrait' }, singlePose: true, pose: { name: 'a', description: 'b' }, postProcess: { grain: 40 } },
+      research: [],
+    });
+    expect(material).not.toContain('颗粒感');
+  });
+
+  it('不再强制写「画面带自然噪点」', () => {
+    const material = buildPromptMaterial({ draft: { meta: { category: 'portrait' } }, research: [] });
+    expect(material).not.toContain('画面带自然噪点');
+    expect(material).toContain('噪点受控');
+  });
+
+  it('系统提示不再要求写自然噪点', () => {
+    const sys = buildComposeSystemPrompt();
+    expect(sys).not.toContain('自然噪点');
+    expect(sys).toContain('噪点受控');
+  });
+});
