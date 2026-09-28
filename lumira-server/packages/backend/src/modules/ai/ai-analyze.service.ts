@@ -21,6 +21,7 @@ import { extractJson, normalizeDraft, CategoryNode } from './normalize';
 import { AiOrchestratorService } from './ai-orchestrator.service';
 import type { OrchestratorInput, OrchestratorTraceEntry } from './ai-orchestrator.service';
 import type { ResearchItem } from './trend-research/research-item';
+import type { ResearchBrief } from './trend-research/research-brief';
 import { renderResearchBrief } from './trend-research/research-brief';
 import { buildResearchDigest } from './trend-research/research-digest';
 import { TrendResearchService } from './trend-research/trend-research.service';
@@ -39,6 +40,8 @@ export interface AiAnalyzeResult {
   raw: Record<string, unknown>;
   /** 趋势研究阶段命中的来源（含 url） */
   research: ResearchItem[];
+  /** 趋势研究二次整理后的结构化结论（供生图阶段复用）；未启用/未命中 → null */
+  brief?: ResearchBrief | null;
 }
 
 @Injectable()
@@ -131,6 +134,7 @@ export class AiAnalyzeService {
     //     整理失败回退规则摘要，搜索失败静默降级（均不阻断识别）。
     //     主题口径与 orchestrator 一致：创作要求 ?? 文字描述。
     let research: ResearchItem[] = [];
+    let researchBrief: ResearchBrief | null = null;
     let researchDigest = '';
     /** 搜索开启且主题非空、但本次没取到任何条目（失败或空结果）→ 下游禁止编造时效信息 */
     let researchUnavailable = false;
@@ -145,6 +149,7 @@ export class AiAnalyzeService {
             (res) => (res.items.length ? `${res.items.length} 条参考来源${res.brief ? '（已二次整理）' : ''}` : '未取到来源'),
           );
           research = r.items;
+          researchBrief = r.brief ?? null;
           const brief = r.brief ?? null;
           researchDigest = brief ? renderResearchBrief(brief) : buildResearchDigest(r.items);
         } catch {
@@ -223,10 +228,10 @@ export class AiAnalyzeService {
         poseCount: poseCount ?? undefined,
       };
       const r = await this.orchestrator.run(input, { categories, draft: json, research, styleProfile: styleResolve });
-      return { draft: r.draft, warnings: r.warnings, trace: r.trace, raw: json, research: r.research ?? [] };
+      return { draft: r.draft, warnings: r.warnings, trace: r.trace, raw: json, research: r.research ?? [], brief: researchBrief };
     }
 
     traceNote('finalize', '定稿归一化', `草稿就绪；修正提示 ${normalized.warnings.length} 条`);
-    return { ...normalized, trace: [], raw: json, research };
+    return { ...normalized, trace: [], raw: json, research, brief: researchBrief };
   }
 }

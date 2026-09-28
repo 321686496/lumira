@@ -284,6 +284,37 @@ describe('AiAnalyzeService', () => {
     expect(userText).toContain('本次未取到任何联网来源');
     expect(res.research).toEqual([]);
   });
+
+  it('识别结果透传结构化趋势结论 brief', async () => {
+    const select = jest.fn(() => chainable(CATEGORY_ROWS));
+    const dbService = { getDb: () => ({ select }) } as unknown as DatabaseService;
+    const cfgWithSearch = { ...ACTIVE_CFG, search: { enabled: true } };
+    const getActiveConfig = jest.fn(async () => cfgWithSearch);
+    const researchMock = jest.fn(async () => ({
+      items: [{ source: 'searxng', title: 't', snippet: 's', keywords: [] }],
+      brief: {
+        summary: '暖调为主流',
+        themes: ['秋季人像'],
+        styles: [],
+        colorLight: [],
+        visualElements: [],
+        seasons: [],
+        poseIdeas: ['侧身回眸'],
+        sources: [],
+      },
+      sourceErrors: [],
+    }));
+    const service = new AiAnalyzeService(
+      dbService,
+      { getActiveConfig } as unknown as AiConfigService,
+      { research: researchMock } as unknown as TrendResearchService,
+    );
+    textChatMock.mockResolvedValueOnce(JSON.stringify(RAW_DRAFT));
+
+    const r = await service.analyze(undefined, '秋日人像模板', {});
+
+    expect(r.brief?.poseIdeas).toEqual(['侧身回眸']);
+  });
 });
 
 describe('AiAnalyzeService — 多输入', () => {

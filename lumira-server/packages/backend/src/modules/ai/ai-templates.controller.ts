@@ -54,6 +54,7 @@ export class AiTemplatesController {
       trace: task.result?.trace ?? [],
       raw: task.result?.raw ?? null,
       research: task.result?.research ?? [],
+      researchBrief: task.result?.brief ?? null,
       /** 增量流程事件（seq > since）；since 缺省返回全部 */
       events: task.events.filter((e) => e.seq > sinceSeq),
       /** 已产生的最大 seq（前端下次拉取的 since） */
