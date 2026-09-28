@@ -73,7 +73,63 @@ function toFiniteNumber(v: unknown): number | undefined {
 // ===== 导出 API =====
 
 /**
- * LLM 输出容错提取：剥 code fence → 首个 { 到末个 } 截取 → JSON.parse；失败返回 null。
+ * 结构性闭合：去掉对象/数组尾随逗号，并按括号栈补齐未闭合的 } / ]。
+ * 仅做语法层修复，绝不臆造字段或值；字符串内的截断无法修复（由重试层负责）。
+ */
+function closeUnbalancedJson(candidate: string): string | null {
+  let text = candidate.replace(/,\s*([}\]])/g, '$1');
+
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') stack.push('}');
+    else if (ch === '[') stack.push(']');
+    else if (ch === '}' || ch === ']') {
+      if (stack[stack.length - 1] === ch) stack.pop();
+      else return null; // 括号错配（多出右括号）→ 交给其它分支
+    }
+  }
+  // 截断发生在字符串内部：闭合引号也换不回合法 JSON，直接放弃
+  if (inString) return null;
+  return text + stack.reverse().join('');
+}
+
+/** 从首个 { 起，按深度切出最后一个「括号平衡」的 {…} 子串（容忍尾部多余 JSON / 废话） */
+function balancedSubstring(candidate: string): string | null {
+  const start = candidate.indexOf('{');
+  if (start === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < candidate.length; i += 1) {
+    const ch = candidate[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') depth += 1;
+    else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) return candidate.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * LLM 输出容错提取：直解 → 剥 code fence → 首个 { 到末个 } 截取 → 结构性闭合 → 平衡子串；失败返回 null。
  * 仅接受 plain object（数组 / 标量一律 null）。
  */
 export function extractJson(text: string): Record<string, unknown> | null {
@@ -94,13 +150,39 @@ export function extractJson(text: string): Record<string, unknown> | null {
   // 3. 首个 { 到末个 } 截取（容忍前后废话）
   const start = candidate.indexOf('{');
   const end = candidate.lastIndexOf('}');
-  if (start === -1 || end <= start) return null;
-  try {
-    const parsed = JSON.parse(candidate.slice(start, end + 1));
-    if (isPlainObject(parsed)) return parsed;
-  } catch {
-    // fallthrough
+  if (start !== -1 && end > start) {
+    try {
+      const parsed = JSON.parse(candidate.slice(start, end + 1));
+      if (isPlainObject(parsed)) return parsed;
+    } catch {
+      // fallthrough
+    }
   }
+
+  // 4. 结构性闭合（治截断 / 尾随逗号）
+  if (start !== -1) {
+    const closed = closeUnbalancedJson(candidate.slice(start));
+    if (closed) {
+      try {
+        const parsed = JSON.parse(closed);
+        if (isPlainObject(parsed)) return parsed;
+      } catch {
+        // fallthrough
+      }
+    }
+  }
+
+  // 5. 平衡子串回退（首个 { 起切出第一个深度归零的完整对象）
+  const balanced = balancedSubstring(candidate);
+  if (balanced) {
+    try {
+      const parsed = JSON.parse(balanced);
+      if (isPlainObject(parsed)) return parsed;
+    } catch {
+      // fallthrough
+    }
+  }
+
   return null;
 }
 

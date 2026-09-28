@@ -95,6 +95,22 @@ describe('extractJson', () => {
   it('4. 完全不是 JSON → null', () => {
     expect(extractJson('完全不是 JSON')).toBeNull();
   });
+
+  it('5. 截断 JSON（缺尾部括号）→ 补全括号后解析成功', () => {
+    expect(extractJson('{"a":1,"b":{"c":[1,2')).toEqual({ a: 1, b: { c: [1, 2] } });
+  });
+
+  it('6. 尾随逗号 → 去掉后解析成功', () => {
+    expect(extractJson('{"a":1,"b":[1,2,],}')).toEqual({ a: 1, b: [1, 2] });
+  });
+
+  it('7. 截断发生在字符串内 → 仍是非法 JSON，返回 null（不臆造内容）', () => {
+    expect(extractJson('{"a":"未闭合的字符串')).toBeNull();
+  });
+
+  it('8. 首个 { 之后存在多个 JSON 块 → 取首个括号平衡的完整对象（尾部多余内容不影响）', () => {
+    expect(extractJson('{"a":1} 中间说明 {"b":2}')).toEqual({ a: 1 });
+  });
 });
 
 describe('mapEnumValue', () => {
