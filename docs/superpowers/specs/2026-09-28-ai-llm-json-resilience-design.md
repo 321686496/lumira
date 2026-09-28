@@ -20,7 +20,7 @@
 ## 目标
 
 - 示例图识别及其余全部 JSON 识别步骤：解析失败不再静默跳过，先结构补救，再自动重试（次数后台可配，默认 2 次）。
-- 单步超时后台可配（默认 180s），超时自动重试；前端识别轮询总预算放宽到 900s。
+- 单步超时后台可配（默认 300s），超时自动重试；前端识别轮询总预算放宽到 900s。
 - 输出上限提升到 8192 且后台可配，消除截断型解析失败。
 - 全程保留实时过程可见性（每次尝试的提示词 / 原始响应 / 次数 / 失败原因）。
 
@@ -39,12 +39,12 @@
 | 列 | 默认 | 范围 | 语义 |
 |---|---|---|---|
 | `llm_retry_count` | 2 | 0~3 | 失败后额外重试次数；0=不重试，总调用次数 ≤ 次数+1 |
-| `llm_timeout_ms` | 180000 | 10000~600000 | 单次 LLM 调用超时 |
+| `llm_timeout_ms` | 300000 | 10000~600000 | 单次 LLM 调用超时（取 300s 而非 180s：`analyze` 视觉调用当前有效默认即 300s，收紧会与「减少超时」目标相悖） |
 | `llm_max_tokens` | 8192 | 1024~16384 | 单次输出上限（从 4096 提升） |
 
 - `schema.ts` 补 3 列；`AiConfigView` / `getActiveConfig()` 增加 `runtime: { retryCount, timeoutMs, maxTokens }` 字段；`save()` / `get()` 透传。
-- `UpdateAiConfigDto` 补 3 个可选整数/字符串字段（`IsInt + Min/Max` 校验），缺省 / `undefined` = 沿用原值；DTO 从 multipart 表单进入，字段可能是字符串，`save()` 用现有 `toIntOrNull` 风格做数值归一。
-- 后台 `ai-config-form.tsx` 新增「识别稳定性」分区：重试次数（0~3，默认 2）、单次超时（秒，默认 180）、输出上限（默认 8192）。
+- `UpdateAiConfigDto` 补 3 个可选整数字段（`@IsOptional + @IsInt + Min/Max` 校验），缺省 = 沿用原值。端点走 JSON body（`PUT /admin/ai-config`），字段为 number，无需字符串转换。
+- 后台 `ai-config-form.tsx` 新增「识别稳定性」分区：重试次数（0~3，默认 2）、单次超时（秒，默认 300）、输出上限（默认 8192）。
 
 ### 2. JSON 容错层（normalize.ts `extractJson` 增强）
 
@@ -84,7 +84,7 @@ export async function textChatJson(cfg, input): Promise<Record<string, unknown>>
 
 ### 5. 超时治理
 
-- 各步骤硬编码 `timeoutMs: 120_000 / 60_000` 改为取配置 `cfg.runtime.timeoutMs`（默认 180s）。
+- 各步骤硬编码 `timeoutMs: 120_000 / 60_000` 改为取配置 `cfg.runtime.timeoutMs`（默认 300s；`analyze` 原本走 llm-client 默认 300s，一并纳入配置）。
 - `llm-client.ts` `MAX_TOKENS` 常量改为参数，默认取 `cfg.runtime.maxTokens`（8192）。
 - 前端 `ai-task.ts` `pollAiAnalyzeTask` 默认总预算 600s → **900s**（给重试留时间）；生图/剪影保持 600s 不动。
 
