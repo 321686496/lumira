@@ -1145,3 +1145,11 @@
 - **背景/动机**：当前后端为单容器部署，进程内 LRU 已足够；跨进程缓存需引入 Redis 等外部存储，超出本轮范围。
 - **目标状态**：接入后端 Redis（见《后端 Redis 缓存 + 集群就绪》登记项）后，把爬取结果改为 key=url 的共享缓存，并补 TTL 与容量上限。
 - **状态**：⏳ 待优化
+
+### P4 · 生图 prompt 润色 / 提示词润色链路的工具接线休眠（无调用方传 `ctx`）
+
+- **模块**：后端 AI 文本链路（`lumira-server/packages/backend/src/modules/ai/image-prompt.composer.ts` 的 `composeImagePrompt`、`prompt-polisher.ts` 的 `polishPrompt`）
+- **优化点**：两者已改为经 `chatWithTools` 调用并新增可选 `ctx?: TextToolContext`，但当前没有任何调用方传参，`crawl_website` 在这条链路上始终不会下发，工具能力处于休眠（缺省即回落 `textChat`，行为与旧版逐字节一致）。
+- **背景/动机**：这两个是纯函数，作用域内没有 `ActiveAiConfig`；其中 `composeImagePrompt` 的唯一生产调用方 `ai-generate-image.service.ts` 属本次计划的禁改文件（并行「生图参考图」WIP），`polishPrompt` 当前无生产调用方，故本次无法在调用点传 `resolveTextTools(cfg)`，只能先把能力留在线程内。
+- **目标状态**：待 `ai-generate-image.service.ts` 解禁后，于其调用处传入 `resolveTextTools(cfg)`，使生图 prompt 润色 / 提示词润色链路可按需调用 `crawl_website`；同时评估 `web-search-vendor.ts`（`createVendorSearchProvider` 作用域内同样取不到带 `crawl` 的配置，本次未接线）是否一并接线。（本条与《P2 · 抖音 / 小红书直连适配器后续接入》无重叠：那条针对搜索内容源适配器，本条针对文本链路工具接线。）
+- **状态**：⏳ 待优化
