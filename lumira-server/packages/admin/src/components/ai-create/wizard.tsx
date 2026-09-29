@@ -323,7 +323,11 @@ export function AiCreateWizard({
     setAnalyzeExtras(fd);
     fd.set('jobMode', mode);
     if (mode === 'auto') {
-      for (const f of poseReferenceFiles) fd.append('reference', f);
+      // auto 会跳过 Step3，用户没有勾选姿势参考图的机会：兜底用 Step1 示例图作参考，
+      // 但置 refAnchor=0 只作视觉识别参考（示例图常为多格拼图 / 多主体合集，作图生图底图会被照抄成拼图）
+      const refs = poseReferenceFiles.length ? poseReferenceFiles : exampleFiles;
+      for (const f of refs) fd.append('reference', f);
+      if (!poseReferenceFiles.length && exampleFiles.length) fd.set('refAnchor', '0');
       fd.set('silMode', 'sketch');
       fd.set('silCrop', '1');
       fd.set('silEngine', aiSilhouetteAvailable ? 'ai' : 'local');

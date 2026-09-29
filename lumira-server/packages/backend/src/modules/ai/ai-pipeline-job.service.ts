@@ -95,6 +95,12 @@ export interface AiPipelineJob {
       subjectCount?: string | null;
     };
     references?: UploadFile[];
+    /**
+     * 参考图是否兼作图生图底图（默认 true = 保持既有语义）。
+     * auto 模式把 Step1 示例图兜底当参考图时置 false：示例图常为多格拼图 / 多主体合集，
+     * 作底图会被照抄成拼图，故仅交视觉识别注入提示词。
+     */
+    referenceAnchor: boolean;
     extraPrompt?: string | null;
     silhouette: { mode: 'sketch' | 'solid'; crop: boolean; engine: 'ai' | 'local' };
   };
@@ -120,6 +126,8 @@ export interface PipelineCreateInput {
     subjectCount?: string | null;
   };
   references?: UploadFile[];
+  /** 参考图是否兼作图生图底图（默认 true）；auto 兜底传示例图时置 false，仅作视觉识别参考 */
+  referenceAnchor?: boolean;
   extraPrompt?: string | null;
   mode: JobMode;
   silhouette?: { mode: 'sketch' | 'solid'; crop: boolean; engine: 'ai' | 'local' };
@@ -227,6 +235,7 @@ export class AiPipelineJobService implements OnModuleDestroy {
         text: text || undefined,
         extra: input.extra ?? {},
         references: input.references,
+        referenceAnchor: input.referenceAnchor !== false,
         extraPrompt: input.extraPrompt ?? null,
         silhouette: input.silhouette ?? { mode: 'sketch', crop: true, engine: 'local' },
       },
@@ -381,11 +390,12 @@ export class AiPipelineJobService implements OnModuleDestroy {
     metaJson: string,
     extraPrompt: string | null,
     research: string | null,
+    anchor: boolean,
   ): Promise<{ base64: string; mimeType: string; prompt: string; model: string }> {
     let lastError: unknown;
     for (let attempt = 1; attempt <= GENERATE_RETRY_LIMIT; attempt += 1) {
       try {
-        return await this.aiGenerateImageService.generate(references, metaJson, extraPrompt, research);
+        return await this.aiGenerateImageService.generate(references, metaJson, extraPrompt, research, { anchor });
       } catch (err) {
         lastError = err;
         const c = classifyUpstreamError(err);
@@ -451,8 +461,11 @@ export class AiPipelineJobService implements OnModuleDestroy {
           singlePose: true,
           consistency: index === 0 ? { mode: 'strict' } : { mode: 'strict', anchor: 'first' },
         });
+        // 首张用的是外部参考图，是否作底图由 referenceAnchor 决定；
+        // 依赖张（index>0）的 refs 是上一张锚点成片，必须保留底图以维持人物一致性。
+        const useAnchor = index === 0 ? job.inputs.referenceAnchor : true;
         const r = await runWithTrace(sink, () =>
-          this.generateWithRetry(refs, meta, job.inputs.extraPrompt ?? null, research),
+          this.generateWithRetry(refs, meta, job.inputs.extraPrompt ?? null, research, useAnchor),
         );
         byIndex.set(index, { index, base64: r.base64, mimeType: r.mimeType });
         this.append(job, {

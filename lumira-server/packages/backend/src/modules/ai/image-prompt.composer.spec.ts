@@ -172,6 +172,13 @@ describe('buildPromptMaterial', () => {
     expect(material).not.toContain('构图抓拍式');
   });
 
+  it('生图要求：反摆拍僵硬感（真实情绪 + 重心错位 + 手部落点，禁假笑与对称站姿）', () => {
+    expect(material).toContain('反对摆拍僵硬感');
+    expect(material).toContain('不要假笑、不要面无表情直视镜头');
+    expect(material).toContain('手部有明确动作与落点');
+    expect(material).toContain('两侧肢体不完全对称');
+  });
+
   it('生图要求含真实感去 AI 味 + 锚点一致性 + 用户额外要求权重最高', () => {
     expect(material).toContain('真实相机直出');
     expect(material).toContain('毛孔');

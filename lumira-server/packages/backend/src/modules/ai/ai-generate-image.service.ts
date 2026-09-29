@@ -152,12 +152,14 @@ export class AiGenerateImageService {
    * （失败回退机械拼接）+ 厂商尺寸 → generateImage（有参考图时 doubao/openai 走图生图）。
    * references 支持多张：第一张作为图生图直接锚点（保底不回归），全部参考图另交由图片识别大模型
    * 识别并把结论注入提示词组织素材（仅 >1 张时触发识别，单张保持原快速路径）。
+   * opts.anchor=false：参考图仅交视觉识别注入提示词、不作图生图底图（多格拼图 / 多主体示例图作底图会被照抄）。
    */
   async generate(
     references: UploadFile[] | undefined,
     metaJson: string | null,
     extraPrompt?: string | null,
     researchJson?: string | null,
+    opts?: { anchor?: boolean },
   ): Promise<GenerateImageResult & { prompt: string; model: string }> {
     // 1. 取启用配置（未配置/未启用 → 503 透传）
     const cfg = await this.aiConfigService.getActiveConfig();
@@ -201,9 +203,11 @@ export class AiGenerateImageService {
     // 3.5 用户上传多张参考图：全部交给图片识别大模型识别，识别结论注入提示词组织素材；
     //     第一张仍作为图生图直接锚点。识别失败/超时静默降级（referenceDesc=null），不阻断生图。
     const refs = references ?? [];
-    const anchor = refs[0];
+    // anchor=false：不作图生图底图；此时单张参考图也必须走视觉识别，否则参考图对提示词毫无贡献
+    const useAnchor = opts?.anchor !== false;
+    const anchor = useAnchor ? refs[0] : undefined;
     let referenceDesc: string | null = null;
-    if (refs.length > 1) {
+    if (refs.length >= 1 && (refs.length > 1 || !useAnchor)) {
       referenceDesc = await this.describeReferences(refs);
     }
     const { prompt, composed } = await composeImagePrompt(

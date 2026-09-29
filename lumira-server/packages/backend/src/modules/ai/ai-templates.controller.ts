@@ -176,6 +176,7 @@ export class AiTemplatesController {
         subjectCount: p.subjectCount,
       },
       references: p.references,
+      referenceAnchor: p.refAnchor !== '0',
       extraPrompt: p.extraPrompt,
       mode,
       silhouette: {
@@ -251,10 +252,12 @@ export interface ParsedAiMultipart {
   silCrop?: string;
   /** 剪影引擎：'ai' / 'local'；缺省 local */
   silEngine?: string;
+  /** 参考图是否兼作图生图底图：'0' 仅作视觉识别参考；其余（缺省）兼作底图 */
+  refAnchor?: string;
 }
 
 /** 文本字段名集合（multipart 循环内按字段名收集） */
-const TEXT_FIELDS = ['meta', 'text', 'textDesc', 'creationReq', 'poseCount', 'subjectCount', 'extraPrompt', 'research', 'jobMode', 'silMode', 'silCrop', 'silEngine'] as const;
+const TEXT_FIELDS = ['meta', 'text', 'textDesc', 'creationReq', 'poseCount', 'subjectCount', 'extraPrompt', 'research', 'jobMode', 'silMode', 'silCrop', 'silEngine', 'refAnchor'] as const;
 
 /**
  * 解析 AI 端点 multipart 请求，提取文本字段（meta / textDesc / creationReq / poseCount / subjectCount / extraPrompt / research）

@@ -248,6 +248,19 @@ describe('AiPipelineJobService（三阶段与续跑）', () => {
     expect(job.events.map((e) => e.seq)).toEqual(job.events.map((_, i) => i + 1));
   });
 
+  it('auto：referenceAnchor=false（示例图仅作视觉识别）→ 首张 anchor=false，依赖张仍以锚点成片为底图', async () => {
+    const ref = { buffer: Buffer.from('ref'), filename: 'example.png', mimetype: 'image/png' };
+    const { jobId } = await service.create({
+      text: '火锅店情侣他拍，九种姿势',
+      mode: 'auto',
+      references: [ref],
+      referenceAnchor: false,
+    });
+    await waitStatus(jobId, 'done');
+    const opts = generateMock.mock.calls.map((c) => c[4]);
+    expect(opts).toEqual([{ anchor: false }, { anchor: true }]);
+  });
+
   it(
     'auto：单张姿势图失败 → image 阶段 error，中断详情带失败下标且不继续到剪影',
     async () => {
