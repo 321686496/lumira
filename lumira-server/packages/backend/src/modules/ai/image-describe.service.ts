@@ -6,6 +6,7 @@ import { Injectable } from '@nestjs/common';
 import { AiConfigService } from './ai-config.service';
 import { visionChatJson } from './llm-json';
 import { buildExhaustiveSystemPrompt } from './image-describe.prompt';
+import { AiUpstreamError, classifyUpstreamError } from './ai-upstream-error';
 
 // ===== ImageDescription 契约（全字段双引号，缺失以 unknown 兜底）=====
 
@@ -201,7 +202,7 @@ export class ImageDescribeService {
   constructor(private readonly aiConfigService: AiConfigService) {}
 
   /** 穷尽式识别：visionChatJson（jsonMode + 有界重试）→ normalizeImageDescription（缺字段兜底） */
-  async describe(image: { base64: string; mime: string }): Promise<ImageDescription> {
+  async describe(image: { base64: string; mime: string }, timeoutMs?: number): Promise<ImageDescription> {
     const cfg = await this.aiConfigService.getActiveConfig();
     const json = await visionChatJson(
       cfg.vision,
@@ -212,19 +213,41 @@ export class ImageDescribeService {
         imageMime: image.mime,
         temperature: 0.4,
       },
-      cfg.runtime,
+      timeoutMs ? { ...cfg.runtime, timeoutMs } : cfg.runtime,
     );
     return normalizeImageDescription(json);
   }
 
-  /** 多图穷尽识别：用户上传多张参考图时逐张识别后合并为一份描述
-   *  （全局/相机取第一张，人物取并集，场景道具/层次取并集；任一张失败由调用方整体兜底）。 */
-  async describeMany(images: { base64: string; mime: string }[]): Promise<ImageDescription> {
-    const list: ImageDescription[] = [];
-    for (const img of images) {
-      list.push(await this.describe(img));
+  /**
+   * 多图穷尽识别：用户上传多张参考图时逐张识别后合并为一份描述。
+   * 逐张失败不致命（单张超时/上游报错时跳过该张，其余正常合并并在事件流标注），
+   * 全部失败才抛 AiUpstreamError（带全部失败下标）。
+   */
+  async describeMany(
+    images: { base64: string; mime: string }[],
+    options: { timeoutMs?: number; onImageFailure?: (index: number, err: unknown) => void } = {},
+  ): Promise<{ description: ImageDescription; failedIndexes: number[] }> {
+    const done: ImageDescription[] = [];
+    const failedIndexes: number[] = [];
+    let firstError: unknown;
+    for (let i = 0; i < images.length; i += 1) {
+      try {
+        done.push(await this.describe(images[i]!, options.timeoutMs));
+      } catch (err) {
+        if (firstError === undefined) firstError = err;
+        failedIndexes.push(i);
+        options.onImageFailure?.(i, err);
+      }
     }
-    return mergeImageDescriptions(list);
+    if (done.length === 0) {
+      const classified = classifyUpstreamError(firstError);
+      throw new AiUpstreamError(
+        classified.code === 'internal' ? 'upstream_timeout' : classified.code,
+        `示例图识别全部失败（共 ${images.length} 张）：${classified.message}`,
+        { status: classified.status, upstream: classified.upstream, failedIndexes },
+      );
+    }
+    return { description: mergeImageDescriptions(done), failedIndexes };
   }
 }
 

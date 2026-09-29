@@ -170,12 +170,34 @@ export class AiOrchestratorService {
       }
     }
 
-    // (3) 有图 → 穷尽识别（多张时逐张识别后合并）；无图 → 跳过
+    // (3) 有图 → 穷尽识别（多张时逐张识别后合并；单张失败跳过该张，全部失败才降级为占位）；无图 → 跳过
     let desc: ImageDescription | undefined;
     if (input.images?.length) {
-      desc = await this.wrapStep<ImageDescription>('describe', 'image-describe', trace, () =>
-        this.imageDescribe.describeMany(input.images as { base64: string; mime: string }[]),
+      const described = await this.wrapStep<{ description: ImageDescription; failedIndexes: number[] }>(
+        'describe',
+        'image-describe',
+        trace,
+        () =>
+          this.imageDescribe.describeMany(input.images as { base64: string; mime: string }[], {
+            onImageFailure: (index, err) => {
+              traceNote(
+                'describe',
+                `示例图识别跳过 #${index + 1}`,
+                err instanceof Error ? err.message : String(err),
+              );
+            },
+          }),
       );
+      if (described) {
+        if (described.failedIndexes.length) {
+          traceNote(
+            'describe',
+            '示例图识别部分跳过',
+            `${described.failedIndexes.length} 张失败（#${described.failedIndexes.map((i) => i + 1).join('、')}），已用其余图片继续`,
+          );
+        }
+        desc = described.description;
+      }
     } else {
       trace.push({ step: 'describe', resultBrief: 'skip-describe（无图）' });
       traceNote('describe', STEP_TITLES.describe!, 'skip-describe（无参考图）');

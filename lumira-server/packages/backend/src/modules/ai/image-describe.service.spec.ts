@@ -6,6 +6,7 @@ import { buildExhaustiveSystemPrompt } from './image-describe.prompt';
 import { LlmJsonError, visionChatJson } from './llm-json';
 import type { LlmEndpoint } from './llm-client';
 import type { AiConfigService } from './ai-config.service';
+import { AiUpstreamError } from './ai-upstream-error';
 
 jest.mock('./llm-json', () => ({
   visionChatJson: jest.fn(),
@@ -143,7 +144,7 @@ describe('ImageDescribeService.describeMany', () => {
       .mockResolvedValueOnce(SECOND_DESC as Record<string, unknown>);
     const svc = buildService();
 
-    const merged = await svc.describeMany([
+    const { description: merged, failedIndexes } = await svc.describeMany([
       { base64: 'aGk=', mime: 'image/jpeg' },
       { base64: 'aG8=', mime: 'image/png' },
     ]);
@@ -152,6 +153,7 @@ describe('ImageDescribeService.describeMany', () => {
     expect(visionChatJsonMock).toHaveBeenCalledTimes(2);
     expect(visionChatJsonMock.mock.calls[0][1].imageBase64).toBe('aGk=');
     expect(visionChatJsonMock.mock.calls[1][1].imageBase64).toBe('aG8=');
+    expect(failedIndexes).toEqual([]);
     // global / cameraLike 取第一张
     expect(merged.global.subject).toBe('年轻女性，坐姿，望向窗外');
     expect(merged.cameraLike.wbSuggestion).toBe('daylight');
@@ -167,14 +169,16 @@ describe('ImageDescribeService.describeMany', () => {
     expect(merged.scene.location).toBe('室内飘窗');
   });
 
-  it('任一张识别失败 → describeMany 抛错（调用方整体兜底）', async () => {
+  it('任一张识别失败 → 跳过该张，其余正常合并（不再整体抛错）', async () => {
     visionChatJsonMock
       .mockResolvedValueOnce(LEGAL_DESC as Record<string, unknown>)
       .mockRejectedValueOnce(new LlmJsonError('AI 输出无法解析为 JSON'));
     const svc = buildService();
 
-    await expect(svc.describeMany([{ base64: 'aGk=', mime: 'image/jpeg' }, { base64: 'aG8=', mime: 'image/png' }]))
-      .rejects.toThrow(/无法解析为 JSON/);
+    const r = await svc.describeMany([{ base64: 'aGk=', mime: 'image/jpeg' }, { base64: 'aG8=', mime: 'image/png' }]);
+
+    expect(r.failedIndexes).toEqual([1]);
+    expect(r.description.global.subject).toBe('年轻女性，坐姿，望向窗外');
   });
 });
 
@@ -199,5 +203,67 @@ describe('mergeImageDescriptions', () => {
 
   it('空数组抛「无可合并的图片描述」', () => {
     expect(() => mergeImageDescriptions([])).toThrow('无可合并的图片描述');
+  });
+});
+
+describe('ImageDescribeService.describeMany（逐张失败不致命）', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  /** 最小合法 ImageDescription（mock describe 的返回值；merge 只访问这些字段） */
+  const okDesc = (subject: string) =>
+    ({
+      global: {
+        subject, mood: '', season: '', timeOfDay: '',
+        palette: { dominant: [], tone: '', brightness: '' },
+        light: {},
+        composition: { leadLines: '', framing: '', symmetry: '', subjectFrame: {}, cropRatio: '', negativeSpace: '', depthOfField: '' },
+        reproducibility: { level: '', reason: '', enableFillLight: false, lightHint: '' },
+      },
+      people: [],
+      scene: { location: '', depthLayers: { near: [], middle: [], far: [] }, props: [], furniture: [], texture: '', cleanliness: '' },
+      cameraLike: { lightSuggestion: '', wbSuggestion: '', evSuggestion: '', focusDepth: '' },
+    }) as ImageDescription;
+
+  it('部分图片失败：返回成功图片的合并描述 + failedIndexes，并回调失败下标', async () => {
+    const service = new ImageDescribeService({} as never);
+    const calls: number[] = [];
+    const failures: number[] = [];
+    jest.spyOn(service, 'describe').mockImplementation(async () => {
+      const n = calls.length;
+      calls.push(n);
+      if (n === 1) throw new Error('AI 请求超时，请稍后重试');
+      return okDesc(`s${n}`);
+    });
+
+    const r = await service.describeMany(
+      [
+        { base64: 'a', mime: 'image/png' },
+        { base64: 'b', mime: 'image/png' },
+        { base64: 'c', mime: 'image/png' },
+      ],
+      { onImageFailure: (i) => failures.push(i) },
+    );
+
+    expect(r.failedIndexes).toEqual([1]);
+    expect(failures).toEqual([1]);
+    expect(r.description.people).toEqual([]);
+  });
+
+  it('全部图片失败：抛 AiUpstreamError，带全部失败下标', async () => {
+    const service = new ImageDescribeService({} as never);
+    jest.spyOn(service, 'describe').mockRejectedValue(new Error('AI 请求超时，请稍后重试'));
+
+    const err: unknown = await service
+      .describeMany([
+        { base64: 'a', mime: 'image/png' },
+        { base64: 'b', mime: 'image/png' },
+      ])
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+
+    expect(err).toBeInstanceOf(AiUpstreamError);
+    expect(err).toMatchObject({ code: 'upstream_timeout', failedIndexes: [0, 1] });
   });
 });

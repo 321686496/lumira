@@ -38,7 +38,7 @@ function build(opts: { searchEnabled?: boolean; scoreSequence?: Array<'pass' | '
   const { searchEnabled = true, scoreSequence = ['pass'] } = opts;
 
   const research = { research: jest.fn().mockResolvedValue({ items: [RESEARCH_ITEM], sourceErrors: [] }) };
-  const describe = { describeMany: jest.fn().mockResolvedValue(DESC) };
+  const describe = { describeMany: jest.fn().mockResolvedValue({ description: DESC, failedIndexes: [] }) };
   const poseRefSheet = { generate: jest.fn().mockResolvedValue(POSE_SHEET) };
   const paramValidate = new ParamValidateService();
   const score = { score: jest.fn() };
@@ -200,7 +200,7 @@ describe('AiOrchestratorService.run', () => {
   it('retry 后无法生成有效改进（refine 返回同稿/空）→ 停止空转，score 仅评一次', async () => {
     const service = (() => {
       const research = { research: jest.fn().mockResolvedValue({ items: [RESEARCH_ITEM], sourceErrors: [] }) };
-      const describe = { describeMany: jest.fn().mockResolvedValue(DESC) };
+      const describe = { describeMany: jest.fn().mockResolvedValue({ description: DESC, failedIndexes: [] }) };
       const poseRefSheet = { generate: jest.fn().mockResolvedValue(POSE_SHEET) };
       const paramValidate = new ParamValidateService();
       const score = { score: jest.fn().mockResolvedValue({ score: 0.6, verdict: 'retry' as const, reasons: ['待改进'], suggests: ['调整关键词'] }) };
