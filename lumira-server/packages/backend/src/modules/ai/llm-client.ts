@@ -9,6 +9,7 @@
 // 识别流程采集：调用 traceLlmCall 记录提示词/响应（无采集上下文时 no-op，见 llm-trace.ts）。
 
 import { traceLlmCall } from './llm-trace';
+import { AiUpstreamError } from './ai-upstream-error';
 
 export interface LlmEndpoint {
   provider: string;   // 预留（chat 请求只用 baseUrl + apiKey）
@@ -83,9 +84,9 @@ const MAX_TOKENS = 8192;
 function mapNetworkError(err: unknown): never {
   const name = (err as { name?: string } | null | undefined)?.name;
   if (name === 'AbortError' || name === 'TimeoutError') {
-    throw new Error('AI 请求超时，请稍后重试');
+    throw new AiUpstreamError('upstream_timeout', 'AI 请求超时，请稍后重试', { cause: err });
   }
-  throw new Error('AI 服务无法连接，请检查 baseUrl');
+  throw new AiUpstreamError('network', 'AI 服务无法连接，请检查 baseUrl', { cause: err });
 }
 
 /** 解析上游错误响应体（body.error.message / body.message），拼接 HTTP status；body 非 JSON 时仅带 status */
@@ -181,9 +182,16 @@ async function rawChatMessage(cfg: LlmEndpoint, input: ChatRequestBase, opts: { 
     res = await doFetch(input.jsonMode).catch(mapNetworkError);
   }
   if (res.status === 401 || res.status === 403) {
-    throw new Error('AI 服务认证失败（apiKey 无效或无权限/欠费），请到后台「AI 设置」检查');
+    throw new AiUpstreamError(
+      'upstream_http',
+      'AI 服务认证失败（apiKey 无效或无权限/欠费），请到后台「AI 设置」检查',
+      { status: res.status },
+    );
   }
-  if (!res.ok) throw new Error(await upstreamError(res));
+  if (!res.ok) {
+    const msg = await upstreamError(res);
+    throw new AiUpstreamError('upstream_http', msg, { status: res.status, upstream: msg });
+  }
 
   const rawText = await res.text();
   let data: { choices?: Array<{ message?: Record<string, unknown> }> } | null = null;
@@ -208,7 +216,9 @@ interface ChatRequestResult {
 async function chatRequest(cfg: LlmEndpoint, input: ChatRequestBase): Promise<ChatRequestResult> {
   const { message, rawText, attempts } = await rawChatMessage(cfg, input);
   const content = message.content;
-  if (typeof content !== 'string' || !content) throw new Error('AI 服务返回内容为空');
+  if (typeof content !== 'string' || !content) {
+    throw new AiUpstreamError('upstream_empty', 'AI 服务返回内容为空');
+  }
   return { content, rawText, attempts };
 }
 
