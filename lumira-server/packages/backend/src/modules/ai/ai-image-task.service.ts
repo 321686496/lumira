@@ -105,8 +105,10 @@ export interface AiBatchProgress {
 /** 批次 trace 事件上限（超出静默丢弃，防空涨内存） */
 const MAX_TRACE_EVENTS = 1000;
 
-/** 已完成/错误任务的保留时长（超过即清理，防 base64 结果占用内存） */
-const RESULT_TTL_MS = 15 * 60 * 1000;
+/** 已完成/错误任务的保留时长（超过即清理，防 base64 结果占用内存）。
+ *  批量姿势图按「单张真实生成耗时」判定超时（排队不计入），整个批次可跑较久
+ * （并发 3、多张慢生成），故保留期对齐 analyze 任务（60 分钟），避免批次中途被清掉。 */
+const RESULT_TTL_MS = 60 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 60 * 1000;
 const GENERATE_RETRY_LIMIT = 4;
 

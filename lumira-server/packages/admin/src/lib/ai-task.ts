@@ -27,11 +27,12 @@ export class AiTaskPollError extends Error {}
 
 const DEFAULT_INTERVAL_MS = 2000;
 const DEFAULT_TIMEOUT_MS = 600_000;
-/** 批量姿势图总预算：对齐后端批次保留期（RESULT_TTL_MS = 15 分钟）。
- *  排队等待生图额度不占用「生成」计时——前端把超时拆为「排队 Xs + 生成 Ys」如实展示，
- *  单张超时从「真正开始生成」那一刻起算，不再把排队误算进生成耗时（原 10 分钟按提交起算，
- *  第 4 张排队 150s + 生成 60s 却报「已运行 624.8s 超时」）。 */
-const BATCH_TIMEOUT_MS = 900_000;
+/** 单张姿势图「真正生成」超时上限：从该张「开始生成」事件起算，排队等待不计入。
+ *  原实现从点击提交起算整个批次总时长（10 分钟），第 4 张排队 150s + 生成 60s 也会被
+ *  误报「已运行 624.8s 超时」；改为逐张判定后，排队长/批次张数多不再误杀正常生成。 */
+const BATCH_IMAGE_GEN_TIMEOUT_MS = 900_000;
+/** 批次总预算兜底：从点击起算，仅防信号量死锁/全批卡死；对齐后端批次保留期（60 分钟） */
+const BATCH_GLOBAL_BUDGET_MS = 3_600_000;
 /** 识别任务总预算：链路含「评分→细化」最多 3 轮迭代且单次 LLM 调用可达 10 分钟，
  *  实测单轮 16~26 分钟、整体可达 40+ 分钟。前端预算必须覆盖后端任务保留期
  *  （后端 RESULT_TTL_MS = 60 分钟，超期任务会被清理），否则会出现「前端已放弃、
@@ -189,11 +190,24 @@ export function generateAiPoseImages(options: {
     let since = 0;
     const trace: AiBatchImageTraceEvent[] = [];
     const startedAt = Date.now();
-    const deadline = startedAt + BATCH_TIMEOUT_MS;
+    const budgetDeadline = startedAt + BATCH_GLOBAL_BUDGET_MS;
     const emitProgress = (res: AiBatchStatusResult) =>
       onProgress?.({ current: res.current, total: res.total, status: res.status });
+    /** 按 index 聚合姿势图生命周期事件 */
+    const groupByIndex = (): Map<number, AiBatchImageTraceEvent[]> => {
+      const m = new Map<number, AiBatchImageTraceEvent[]>();
+      for (const ev of trace) {
+        if (ev.kind && ev.kind !== 'pose') continue;
+        const list = m.get(ev.index) ?? [];
+        list.push(ev);
+        m.set(ev.index, list);
+      }
+      return m;
+    };
+    /** 已按「单张真实生成超时」判定并合成 error 的 index（避免重复合成） */
+    const genTimedOut = new Set<number>();
 
-    while (Date.now() < deadline) {
+    while (Date.now() < budgetDeadline) {
       throwIfAborted(signal);
       const res = await aiGenerateImageBatchStatusAction(batchId, since);
       if ('error' in res) throw new AiTaskPollError(res.error || '查询生成任务失败');
@@ -204,6 +218,33 @@ export function generateAiPoseImages(options: {
         onEvents?.(trace.slice());
       }
       emitProgress(res);
+
+      // 逐张真实生成超时判定：仅对「已真正开始生成」且未结束的张计时；排队阶段不计入，避免误杀
+      let synthesized = false;
+      const now = Date.now();
+      for (const [index, evs] of groupByIndex()) {
+        if (genTimedOut.has(index)) continue;
+        const last = evs[evs.length - 1]!;
+        if (last.status !== 'pending' && last.status !== 'running') continue;
+        const genStart = evs.find((e) => e.status === 'running');
+        if (!genStart) continue; // 仍在排队等待额度：不消耗生成超时预算，继续等待
+        const genMs = Math.max(0, now - genStart.ts);
+        if (genMs <= BATCH_IMAGE_GEN_TIMEOUT_MS) continue;
+        const queueStart = evs.find((e) => e.status === 'pending');
+        const queueMs = queueStart ? Math.max(0, genStart.ts - queueStart.ts) : 0;
+        genTimedOut.add(index);
+        synthesized = true;
+        trace.push({
+          seq: (trace.length ? Math.max(...trace.map((e) => e.seq)) : 0) + 1,
+          ts: now,
+          index,
+          title: `姿势图 #${index + 1}`,
+          status: 'error',
+          error: `生成超时：本张已生成 ${formatSec(genMs)}（排队 ${formatSec(queueMs)}），超过单张生成上限 ${Math.round(BATCH_IMAGE_GEN_TIMEOUT_MS / 60000)} 分钟，生图模型未返回`,
+          durationMs: genMs,
+        });
+      }
+      if (synthesized) onEvents?.(trace.slice());
 
       // 逐张实时回报已完成的姿势图
       for (const item of res.results ?? []) {
@@ -223,47 +264,39 @@ export function generateAiPoseImages(options: {
       }
       await sleep(DEFAULT_INTERVAL_MS);
     }
-    // —— 超时：把仍 pending/running 的姿势图合成 error 事件（面板即时标失败），并抛出带明细的报错 ——
-    // 单张计时拆两段：排队 = 排队中事件 → 生成事件；生成 = 生成事件 → 现在（排队不计入生成超时）。
+    // —— 全局兜底：批次从点击起算超总预算（60 分钟，仅防全批卡死/信号量死锁），
+    //     把剩余未完成（含仍在排队）合成 error 并抛出 ——
     const now = Date.now();
     const elapsedMs = now - startedAt;
-    const budgetMin = Math.round(BATCH_TIMEOUT_MS / 60000);
-    const byIndex = new Map<number, AiBatchImageTraceEvent[]>();
-    for (const ev of trace) {
-      if (ev.kind && ev.kind !== 'pose') continue;
-      const list = byIndex.get(ev.index) ?? [];
-      list.push(ev);
-      byIndex.set(ev.index, list);
-    }
+    const budgetMin = Math.round(BATCH_GLOBAL_BUDGET_MS / 60000);
     const unfinished: number[] = [];
     let queuedStill = 0;
-    let nextSeq = trace.length ? Math.max(...trace.map((e) => e.seq)) + 1 : 1;
-    for (const [index, evs] of byIndex) {
+    for (const [index, evs] of groupByIndex()) {
+      if (genTimedOut.has(index)) continue;
       const last = evs[evs.length - 1]!;
       if (last.status !== 'pending' && last.status !== 'running') continue;
       unfinished.push(index);
-      const queueStart = evs.find((e) => e.status === 'pending');
       const genStart = evs.find((e) => e.status === 'running');
+      const queueStart = evs.find((e) => e.status === 'pending');
+      if (!genStart) queuedStill += 1;
       const queueMs = genStart && queueStart ? Math.max(0, genStart.ts - queueStart.ts) : queueStart ? Math.max(0, now - queueStart.ts) : undefined;
       const genMs = genStart ? Math.max(0, now - genStart.ts) : undefined;
-      if (!genStart) queuedStill += 1;
-      const reason = genStart
-        ? `批次总时长超 ${budgetMin} 分钟：本张已生成 ${formatSec(genMs!)}（排队 ${queueMs ? formatSec(queueMs) : '0s'}），生图模型未返回`
-        : `批次总时长超 ${budgetMin} 分钟：本张仍在排队等待生图额度（已等 ${queueMs ? formatSec(queueMs) : '…'}），生图模型未返回`;
       trace.push({
-        seq: nextSeq++,
+        seq: (trace.length ? Math.max(...trace.map((e) => e.seq)) : 0) + 1,
         ts: now,
         index,
         title: `姿势图 #${index + 1}`,
         status: 'error',
-        error: reason,
+        error: genStart
+          ? `批次总时长超 ${budgetMin} 分钟：本张已生成 ${formatSec(genMs!)}（排队 ${queueMs ? formatSec(queueMs) : '0s'}），生图模型未返回`
+          : `批次总时长超 ${budgetMin} 分钟：本张仍在排队等待生图额度（已等 ${queueMs ? formatSec(queueMs) : '…'}），生图模型未返回`,
         durationMs: genMs ?? elapsedMs,
       });
     }
     onEvents?.(trace.slice());
-    const breakdown = `有 ${unfinished.length} 张姿势图未完成（其中排队中 ${queuedStill} 张、生成中 ${unfinished.length - queuedStill} 张；已耗时 ${formatSec(elapsedMs)}）`;
+    const breakdown = `有 ${unfinished.length} 张姿势图未完成（其中排队中 ${queuedStill} 张、生成中 ${unfinished.length - queuedStill} 张；批次已耗时 ${formatSec(elapsedMs)}）`;
     throw new AiTaskPollError(
-      `生成超时：批次已运行 ${formatSec(elapsedMs)}，超过总时长上限 ${budgetMin} 分钟。${breakdown}。` +
+      `生成超时：批次已运行 ${formatSec(elapsedMs)}，超过总时长上限 ${budgetMin} 分钟（单张生成超时上限 ${Math.round(BATCH_IMAGE_GEN_TIMEOUT_MS / 60000)} 分钟，排队不计入）。${breakdown}。` +
         `常见原因：生图模型响应过慢或批量排队积压；可稍后重试，或检查「AI 设置」中的生图模型。`,
     );
   })();
