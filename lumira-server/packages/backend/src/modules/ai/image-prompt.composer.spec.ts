@@ -116,7 +116,7 @@ describe('buildPromptMaterial · 风格档案', () => {
 
   it('无档案时不出现【风格档案】段落', async () => {
     textChatMock.mockResolvedValueOnce('最终提示词');
-    await composeImagePrompt(TEXT_ENDPOINT, { draft: {} }, '兜底');
+    await composeImagePrompt(TEXT_ENDPOINT, { draft: {}, research: [] }, '兜底');
     expect(String(textChatMock.mock.calls[0][1].userText)).not.toContain('【风格档案】');
   });
 });

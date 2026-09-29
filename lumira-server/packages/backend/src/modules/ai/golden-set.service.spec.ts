@@ -27,7 +27,7 @@ const DESC: ImageDescription = {
 };
 
 const POSE_SHEET: PoseRefSheet = {
-  shared: { outfit: '米色针织', scene: '飘窗', light: '窗光', aspectRatio: '3:4', mood: '清冷', palette: '暖棕' },
+  shared: { outfit: '米色针织', scene: '飘窗', light: '窗光', aspectRatio: '3:4', mood: '清冷', palette: '暖棕', styling: '针织开衫 + 细金链', expressionMood: '平静微松' },
   perPose: [{ name: '坐姿侧靠', subjectPose: {}, camera: {}, frame: {}, lightOnPose: {}, differentiationNote: '侧靠偏左' }],
 };
 
