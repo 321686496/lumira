@@ -20,6 +20,9 @@ import type {
   AiImageStatusResult,
   AiSilhouetteTaskId,
   AiSilhouetteStatusResult,
+  AiPipelineJobId,
+  AiPipelineStatusResult,
+  AiPipelineResumeResult,
 } from '@/types/admin';
 
 export async function getAiConfigAction(): Promise<
@@ -149,6 +152,56 @@ export async function aiGenerateSilhouetteStatusAction(
 ): Promise<AiSilhouetteStatusResult | { error: string }> {
   try {
     return await api.aiGenerateSilhouetteStatus(taskId);
+  } catch (e) {
+    if (e instanceof UnauthenticatedError) redirect('/login');
+    return { error: (e as Error).message };
+  }
+}
+
+/** formData：识别/全自动共用的 pipeline job 提交（示例图 + 文字 + 附加输入 + 参考图 + jobMode/silMode/silCrop/silEngine） */
+export async function aiPipelineStartAction(
+  formData: FormData,
+): Promise<AiPipelineJobId | { error: string }> {
+  try {
+    return await api.aiPipelineStart(formData);
+  } catch (e) {
+    if (e instanceof UnauthenticatedError) redirect('/login');
+    return { error: (e as Error).message };
+  }
+}
+
+/** 轮询 pipeline job；since 传上个 lastSeq 只取增量事件，verbose=true 强制全量（含 base64 产物） */
+export async function aiPipelineStatusAction(
+  jobId: string,
+  since?: number,
+  verbose?: boolean,
+): Promise<AiPipelineStatusResult | { error: string }> {
+  try {
+    return await api.aiPipelineStatus(jobId, since, verbose);
+  } catch (e) {
+    if (e instanceof UnauthenticatedError) redirect('/login');
+    return { error: (e as Error).message };
+  }
+}
+
+/** 断点续跑：running 仅重连、error 从失败阶段重跑（job 不存在 → 404 文案由 api 透传） */
+export async function aiPipelineResumeAction(
+  jobId: string,
+): Promise<AiPipelineResumeResult | { error: string }> {
+  try {
+    return await api.aiPipelineResume(jobId);
+  } catch (e) {
+    if (e instanceof UnauthenticatedError) redirect('/login');
+    return { error: (e as Error).message };
+  }
+}
+
+/** 放弃本次生成（删除 job，幂等） */
+export async function aiPipelineCancelAction(
+  jobId: string,
+): Promise<{ ok: true } | { error: string }> {
+  try {
+    return await api.aiPipelineCancel(jobId);
   } catch (e) {
     if (e instanceof UnauthenticatedError) redirect('/login');
     return { error: (e as Error).message };
