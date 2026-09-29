@@ -29,6 +29,7 @@ import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
 import { useToast } from '@/hooks/use-toast';
 import { saveBanner, removeBanner, setBannerActive, uploadBannerImage } from '@/actions/banners';
 import { toAssetUrl, toTemplateThumbUrl, toTemplateThumbFallbackUrl } from '@/lib/asset-url';
+import { compressImage } from '@/lib/image-compress';
 import { ThumbImage } from '@/components/thumb-image';
 import type { AdminTemplateListItem, BannerAdminItem, BannerPayload } from '@/types/admin';
 
@@ -51,7 +52,8 @@ const CONDITION_LABEL = Object.fromEntries(CONDITION_OPTIONS.map((c) => [c.value
 
 /** Banner 配图上传限制（与后端 BANNER_IMAGE_MIME_EXT / MAX_BYTES 一致） */
 const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp';
-const IMAGE_MAX_BYTES = 2 * 1024 * 1024;
+/** 允许上传原始文件的最大体积（提交/上传前会做客户端压缩，存库均为压缩后小图） */
+const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 
 interface FormState {
   id: string;
@@ -172,19 +174,21 @@ export function BannerManager({
     setDialogOpen(true);
   };
 
-  /** 选择配图：本地校验 → 立即上传 → 成功后记录 URL（预览用本地 objectURL，无网络延迟） */
-  const handleImageSelect = (file: File | null) => {
+  /** 选择配图：本地校验 → 客户端压缩 → 上传 → 成功后记录 URL（预览用压缩后图，与存库一致） */
+  const handleImageSelect = async (file: File | null) => {
     if (!file) return;
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       toast({ variant: 'destructive', title: '格式不支持', description: '仅支持 jpg / png / webp 格式图片' });
       return;
     }
     if (file.size > IMAGE_MAX_BYTES) {
-      toast({ variant: 'destructive', title: '文件过大', description: '图片不能超过 2MB' });
+      toast({ variant: 'destructive', title: '文件过大', description: '图片不能超过 10MB' });
       return;
     }
+    // 提交/上传前先做客户端压缩：允许 10MB 原图，但上传与存库的实际是压缩后的小图
+    const compressed = await compressImage(file, { maxDim: 1600, quality: 0.8 });
     const fd = new FormData();
-    fd.set('image', file);
+    fd.set('image', compressed);
     startUploadTransition(async () => {
       const result = await uploadBannerImage(fd);
       if ('error' in result) {
@@ -192,7 +196,7 @@ export function BannerManager({
         setImageFile(null);
         return;
       }
-      setImageFile(file);
+      setImageFile(compressed);
       setForm((f) => ({ ...f, imageUrl: result.url }));
       toast({ title: '配图已上传', description: '保存 Banner 后生效' });
     });
@@ -550,7 +554,7 @@ export function BannerManager({
                     <X size={14} className="mr-1" /> 移除
                   </Button>
                 )}
-                <span className="text-xs text-muted-foreground">jpg / png / webp，≤ 2MB</span>
+                <span className="text-xs text-muted-foreground">jpg / png / webp，≤ 10MB（自动压缩）</span>
               </div>
               {form.imageUrl && (
                 <div className="space-y-2 rounded-xl border bg-muted/20 p-3">

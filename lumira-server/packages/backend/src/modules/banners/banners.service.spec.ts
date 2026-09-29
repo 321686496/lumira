@@ -195,9 +195,9 @@ describe('BannersService', () => {
       .rejects.toThrow(BadRequestException);
   });
 
-  it('uploadImage 超过 2MB 抛 BadRequest', async () => {
+  it('uploadImage 超过 10MB 抛 BadRequest', async () => {
     const { service } = buildService();
-    const oversize = Buffer.alloc(2 * 1024 * 1024 + 1);
+    const oversize = Buffer.alloc(10 * 1024 * 1024 + 1);
     await expect(service.uploadImage(oversize, 'image/png'))
       .rejects.toThrow(BadRequestException);
   });

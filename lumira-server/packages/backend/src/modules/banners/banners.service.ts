@@ -21,7 +21,7 @@ const BANNER_IMAGE_MIME_EXT: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
 };
-const BANNER_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
+const BANNER_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 
 const clampFocus = (value: number | undefined, min: number, max: number, fallback: number) => {
   if (typeof value !== 'number' || Number.isNaN(value)) return fallback;
@@ -187,7 +187,7 @@ export class BannersService {
       throw new BadRequestException(`不支持的图片格式（仅 jpg/png/webp）：${mimetype || 'unknown'}`);
     }
     if (buffer.length > BANNER_IMAGE_MAX_BYTES) {
-      throw new BadRequestException('图片超过 2MB 上限');
+      throw new BadRequestException('图片超过 10MB 上限');
     }
     const compressed = await this.imageCompression.compress(buffer, `image.${ext}`, mimetype);
     const subId = `bnr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
