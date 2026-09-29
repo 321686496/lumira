@@ -1,7 +1,7 @@
 // 参考图抓取的数据模型与常量（spec 2026-09-28-ai-research-reference-images-design.md 第 4 章）
 
-/** 命中的哪一层：检索条目自带图 / 命中页面解析 / 图片搜索兜底 */
-export type ResearchImageLayer = 'metadata' | 'page' | 'image-search';
+/** 命中的哪一层：用户显式参考页面 / 检索条目自带图 / 命中页面解析 / 图片搜索兜底 */
+export type ResearchImageLayer = 'user-reference' | 'metadata' | 'page' | 'image-search';
 
 /** 一张已抓取落盘的参考图 */
 export interface ResearchImage {

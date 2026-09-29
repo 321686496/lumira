@@ -60,46 +60,49 @@ export async function fetchPageHtml(url: string, timeoutMs: number): Promise<str
   return buffer.toString('utf8');
 }
 
-/** 从 HTML 中按优先级提取首图：og:image → twitter:image → JSON-LD image → 首个 <img src> */
-export function extractPageImageUrl(html: string, pageUrl: string): string | null {
-  const meta = (patterns: RegExp[]): string | null => {
-    for (const re of patterns) {
-      const m = html.match(re);
-      if (m?.[1]) {
-        try {
-          return new URL(decodeHtml(m[1].trim()), pageUrl).toString();
-        } catch {
-          /* 试下一个 */
-        }
-      }
+/**
+ * 从 HTML 中按优先级提取多张候选图：og:image → twitter:image → JSON-LD image → 前 cap 个正文 <img src>。
+ * 相对地址转绝对、绝对地址去重、忽略 data: 与锚点；cap 由调用方按剩余预算传入。
+ */
+export function extractPageImages(html: string, pageUrl: string, cap = 4): string[] {
+  const out: string[] = [];
+  const push = (raw: string): boolean => {
+    if (out.length >= cap) return false;
+    const trimmed = (raw || '').trim();
+    if (!trimmed || /^data:/i.test(trimmed) || trimmed.startsWith('#')) return false;
+    try {
+      const abs = new URL(decodeHtml(trimmed), pageUrl).toString();
+      if (!out.includes(abs)) out.push(abs);
+      return out.length < cap;
+    } catch {
+      return out.length < cap;
     }
-    return null;
   };
-  const byMeta = meta([
+  // 元信息图（og / twitter）少量且质量高，优先
+  const metaPatterns = [
     /<meta[^>]+(?:property|name)=["']og:image(?::url)?["'][^>]*content=["']([^"']+)["']/i,
     /<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["']og:image(?::url)?["']/i,
     /<meta[^>]+(?:property|name)=["']twitter:image["'][^>]*content=["']([^"']+)["']/i,
     /<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["']twitter:image["']/i,
-  ]);
-  if (byMeta) return byMeta;
-
+  ];
+  for (const re of metaPatterns) {
+    const m = html.match(re);
+    if (m?.[1] && !push(m[1])) return out;
+  }
   const jsonLd = html.match(/"image"\s*:\s*"([^"]+)"/i);
-  if (jsonLd?.[1]) {
-    try {
-      return new URL(decodeHtml(jsonLd[1].trim()), pageUrl).toString();
-    } catch {
-      /* 落回 img */
-    }
+  if (jsonLd?.[1] && !push(jsonLd[1])) return out;
+  // 正文 <img>：补充到 cap
+  const imgRe = /<img[^>]+src=["']([^"']+)["']/gi;
+  let m: RegExpExecArray | null;
+  while (out.length < cap && (m = imgRe.exec(html)) !== null) {
+    push(m[1]);
   }
-  const img = html.match(/<img[^>]+src=["']([^"']+)["']/i);
-  if (img?.[1]) {
-    try {
-      return new URL(decodeHtml(img[1].trim()), pageUrl).toString();
-    } catch {
-      return null;
-    }
-  }
-  return null;
+  return out;
+}
+
+/** 从 HTML 中按优先级提取首图：og:image → twitter:image → JSON-LD image → 首个 <img src> */
+export function extractPageImageUrl(html: string, pageUrl: string): string | null {
+  return extractPageImages(html, pageUrl, 1)[0] ?? null;
 }
 
 /** 常见 HTML 实体反转义（只处理会出现在 URL 中的少数几个） */

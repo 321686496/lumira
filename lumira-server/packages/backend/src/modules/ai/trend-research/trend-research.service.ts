@@ -34,6 +34,20 @@ export function splitQueries(query: string, groupSize = 3, maxGroups = 4): strin
   return groups;
 }
 
+/**
+ * 从创作要求文本中提取用户显式给出的参考页面 URL（http/https）。
+ * 只消费 URL 合法字符，遇到中文/全角标点即停（避免把「参考这个网站：URL，风格类似」的后续文字吞进 URL）；
+ * 尾部 ASCII 标点容忍去除；结果去重。
+ */
+export function extractExplicitUrls(text: string): string[] {
+  const urls: string[] = [];
+  for (const raw of (text || '').match(/https?:\/\/[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+/gi) ?? []) {
+    const clean = raw.replace(/[.,;:!?]+$/, '');
+    if (!urls.includes(clean)) urls.push(clean);
+  }
+  return urls;
+}
+
 /** 单个启用搜索来源的配置 */
 export interface SearchSourceConfig {
   /** 来源标识（vendor / searxng / baidu / qwen / qwen-official） */
@@ -211,10 +225,12 @@ export class TrendResearchService {
     // 子步骤「资料整理」）。失败/无有效内容 → null，由调用方回退规则摘要 buildResearchDigest。
     const brief = out.length ? await this.researchDigest.summarize(topic, out) : null;
 
-    // ===== 参考图支路：抓取（三层递进）→ 多模态解读 =====
+    // ===== 参考图支路：抓取（第零层显式 URL + 三层递进）→ 多模态解读 =====
     // 两阶段都包在 traceStep 内，因 research() 自身已在 traceStep('research') 上下文里，
     // 它们的 parentStep 天然为 'research'，后台时间线自动渲染为子阶段。
     const imagesCfg = cfg.images ?? DEFAULT_RESEARCH_IMAGES_CONFIG;
+    // 用户显式给出的参考页面 URL（创作要求里直接给的链接）：作为第零层抓整页多图，大模型据此能看到网页内图片
+    const explicitUrls = extractExplicitUrls(topic);
     let images: ResearchImage[] = [];
     let imageErrors: { name: string; error: string }[] = [];
     let vision: ResearchVision | null = null;
@@ -231,7 +247,7 @@ export class TrendResearchService {
         const r = await traceStep(
           'researchImages',
           '参考图抓取',
-          () => this.researchImages.collect({ items: out, queries, imagesSearch, cfg: imagesCfg }),
+          () => this.researchImages.collect({ items: out, queries, imagesSearch, cfg: imagesCfg, extraUrls: explicitUrls }),
           (res) => (res.images.length ? `抓取 ${res.images.length} 张参考图${res.errors.length ? `（${res.errors.length} 处失败）` : ''}` : '未抓到参考图'),
           (res) => ({ images: toTraceImages(res.images) }),
         );

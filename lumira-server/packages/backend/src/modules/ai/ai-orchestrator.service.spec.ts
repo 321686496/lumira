@@ -290,4 +290,27 @@ describe('AiOrchestratorService.run', () => {
     expect(res.trace.map((t) => t.step)).toContain('styleProfile');
     expect(res.draft.styleProfile).toBeDefined();
   });
+
+  it('imageScore 调用失败（抛异常/超时）→ 直接收束，不再触发草稿细化空转', async () => {
+    const research = { research: jest.fn().mockResolvedValue({ items: [RESEARCH_ITEM], sourceErrors: [] }) };
+    const describe = { describe: jest.fn().mockResolvedValue(DESC) };
+    const poseRefSheet = { generate: jest.fn().mockResolvedValue(POSE_SHEET) };
+    const paramValidate = new ParamValidateService();
+    const score = { score: jest.fn().mockRejectedValue(new Error('AI 服务超时（180s）')) };
+    const aiConfigService = { getSearchConfig: async () => ({ enabled: false, sources: [] }) } as unknown as AiConfigService;
+    const draftRefine = { refine: jest.fn() } as unknown as DraftRefineService;
+
+    const service = new AiOrchestratorService(
+      aiConfigService, research as unknown as TrendResearchService, describe as unknown as ImageDescribeService,
+      poseRefSheet as unknown as PoseRefSheetService, paramValidate, score as unknown as ImageScoreService, draftRefine,
+    );
+
+    const res = await service.run({ imageBase64: 'aGk=', imageMime: 'image/jpeg', poseCount: 1 }, { categories: CATEGORIES });
+
+    expect(score.score).toHaveBeenCalledTimes(1); // 失败即停，不进入再判循环
+    expect(draftRefine.refine).not.toHaveBeenCalled(); // 不做草稿细化空转
+    expect(res.warnings.join('\n')).toContain('质量评分失败');
+    const scoreTrace = res.trace.find((t) => t.step === 'imageScore');
+    expect(String(scoreTrace?.resultBrief)).toContain('fail');
+  });
 });

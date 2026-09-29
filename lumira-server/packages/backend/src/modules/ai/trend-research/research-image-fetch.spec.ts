@@ -1,5 +1,5 @@
 // lumira-server/packages/backend/src/modules/ai/trend-research/research-image-fetch.spec.ts
-import { isPrivateAddress, extractPageImageUrl } from './research-image-fetch';
+import { isPrivateAddress, extractPageImageUrl, extractPageImages } from './research-image-fetch';
 
 describe('isPrivateAddress', () => {
   it('拦截 IPv4 私网 / 环回 / 链路本地 / 保留段', () => {
@@ -43,5 +43,36 @@ describe('extractPageImageUrl', () => {
 
   it('都没有时返回 null', () => {
     expect(extractPageImageUrl('<head></head>', 'https://a.com/p')).toBeNull();
+  });
+});
+
+describe('extractPageImages', () => {
+  it('og:image 优先，且补充正文多张 <img>（相对路径转绝对）', () => {
+    const html = `<head><meta property="og:image" content="https://cdn.a.com/o.jpg"></head><body><img src="/img/1.png"><img src="https://cdn.a.com/2.jpg"></body>`;
+    const urls = extractPageImages(html, 'https://a.com/p', 4);
+    expect(urls[0]).toBe('https://cdn.a.com/o.jpg');
+    expect(urls).toContain('https://a.com/img/1.png');
+    expect(urls).toContain('https://cdn.a.com/2.jpg');
+  });
+
+  it('忽略 data: 与锚点占位，不污染结果', () => {
+    const html = `<img src="data:image/png;base64,AAAA"><img src="#placeholder"><img src="https://cdn.a.com/1.jpg">`;
+    const urls = extractPageImages(html, 'https://a.com/p', 4);
+    expect(urls).toEqual(['https://cdn.a.com/1.jpg']);
+  });
+
+  it('cap 截断到上限', () => {
+    const html = Array.from({ length: 6 }, (_, i) => `<img src="https://cdn.a.com/${i}.jpg">`).join('');
+    expect(extractPageImages(html, 'https://a.com/p', 3)).toHaveLength(3);
+  });
+
+  it('同一绝对地址去重（相对与绝对指向同一图只保留一次）', () => {
+    const html = `<img src="/img/1.png"><img src="https://a.com/img/1.png">`;
+    const urls = extractPageImages(html, 'https://a.com/p', 4);
+    expect(urls.filter((u) => u === 'https://a.com/img/1.png')).toHaveLength(1);
+  });
+
+  it('无图时返回空数组', () => {
+    expect(extractPageImages('<head></head>', 'https://a.com/p')).toEqual([]);
   });
 });

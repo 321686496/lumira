@@ -1,7 +1,7 @@
 // lumira-server/packages/backend/src/modules/ai/trend-research/trend-research.service.spec.ts
 // T1 trend-research 服务编排（Task 4，TDD）：来源并行 + allSettled 降级、source+title+snippet 去重、研究关闭返回 []
 
-import { TrendResearchService } from './trend-research.service';
+import { TrendResearchService, extractExplicitUrls } from './trend-research.service';
 import type { SearchProviderFactory } from './trend-research.service';
 import { AiConfigService } from '../ai-config.service';
 import { ResearchDigestService } from './research-digest.service';
@@ -39,6 +39,27 @@ function build(factory: SearchProviderFactory, searchConfig: unknown) {
 
 beforeEach(() => {
   clearWebSearchCache();
+});
+
+describe('extractExplicitUrls', () => {
+  it('提取 http/https URL，并在中文/全角标点处截断', () => {
+    const urls = extractExplicitUrls('参考这个网站制作模板：https://zhuanlan.zhihu.com/p/2003398601259373929，风格要类似');
+    expect(urls).toEqual(['https://zhuanlan.zhihu.com/p/2003398601259373929']);
+  });
+
+  it('多个 URL 全部提取且去重', () => {
+    const urls = extractExplicitUrls('看 https://a.com/p1 和 https://a.com/p1 还有 https://b.com/p2 吧');
+    expect(urls).toEqual(['https://a.com/p1', 'https://b.com/p2']);
+  });
+
+  it('尾部 ASCII 标点容忍去除', () => {
+    expect(extractExplicitUrls('参考 https://a.com/page. 这个页面')).toEqual(['https://a.com/page']);
+  });
+
+  it('无 URL / 非 http 协议 → 空数组', () => {
+    expect(extractExplicitUrls('就想要清新风格')).toEqual([]);
+    expect(extractExplicitUrls('ftp://a.com/x')).toEqual([]);
+  });
 });
 
 describe('TrendResearchService', () => {
@@ -271,5 +292,27 @@ describe('TrendResearchService 参考图串接', () => {
     svc.factory = () => ({ name: 'searxng', search: async () => [{ source: 'searxng', title: 't', snippet: 's', keywords: [] }] });
     const r = await svc.research('旗袍', { limitPerSource: 1 });
     expect(r.items.length).toBeGreaterThan(0);
+  });
+
+  it('创作要求含显式 URL 时作为 extraUrls 传入参考图抓取', async () => {
+    const fakeConfig = {
+      getSearchConfig: async () => ({
+        enabled: true,
+        sources: [{ name: 'searxng', provider: 'searxng' }],
+        images: { ...DEFAULT_RESEARCH_IMAGES_CONFIG, enabled: true },
+      }),
+    } as never;
+    const digest = { summarize: async () => null } as never;
+    let captured: { extraUrls?: string[] } | null = null;
+    const images = {
+      collect: async (input: { extraUrls?: string[] }) => { captured = input; return { images: [], errors: [] }; },
+      readBase64: async () => null,
+    } as never;
+    const vision = { interpret: async () => null } as never;
+
+    const svc = new TrendResearchService(fakeConfig, digest, images, vision);
+    svc.factory = () => ({ name: 'searxng', search: async () => [] });
+    await svc.research('参考这个网站制作模板：https://zhuanlan.zhihu.com/p/2003398601259373929，风格要类似', { limitPerSource: 1 });
+    expect(captured?.extraUrls).toEqual(['https://zhuanlan.zhihu.com/p/2003398601259373929']);
   });
 });

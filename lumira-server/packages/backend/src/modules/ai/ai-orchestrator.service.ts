@@ -210,7 +210,14 @@ export class AiOrchestratorService {
       const scored = await this.wrapStep<ScoreOutcome>(
         'imageScore', 'image-score', trace, () => this.imageScore.score(scoreInput),
       );
-      const result: ScoreOutcome = scored ?? { score: 0, verdict: 'retry' as const };
+      if (scored === undefined) {
+        // 评分调用失败/超时（wrapStep 已捕获异常并记 trace fail）：
+        // 直接以当前最佳候选收束，绝不在评分失败后再触发草稿细化（否则一次超时会被放大成
+        // 多轮 LLM 调用，前端等待时间指数级增长）。
+        warnings.push('质量评分失败（调用异常/超时），沿用当前最佳候选');
+        break;
+      }
+      const result: ScoreOutcome = scored;
       const last = trace[trace.length - 1];
       if (last && last.step === 'imageScore') {
         last.score = result.score;

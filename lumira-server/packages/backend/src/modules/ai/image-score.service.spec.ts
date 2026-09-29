@@ -281,4 +281,27 @@ describe('ImageScoreService.score 三段闸门', () => {
     expect(prompt).toContain('本次风格档案（必须遵守）');
     expect(prompt).toContain('时尚大片');
   });
+
+  it('评分不携带工具上下文（ctx 缺省 → 纯文本评审，避免工具循环拖超时）', async () => {
+    textChatJsonMock.mockResolvedValueOnce({ aesthetics: OK_AESTHETICS, realism: OK_REALISM, score: 0.9 });
+    const svc = buildService();
+
+    await svc.score(input());
+
+    const chatInput = textChatJsonMock.mock.calls[0][1];
+    expect(chatInput.ctx).toBeUndefined();
+    expect(chatInput.timeoutMs).toBe(180_000);
+  });
+
+  it('趋势研究条目在评审输入中截断（条数与 snippet 长度限制，控制载荷）', async () => {
+    textChatJsonMock.mockResolvedValueOnce({ aesthetics: OK_AESTHETICS, realism: OK_REALISM, score: 0.9 });
+    const svc = buildService();
+    const many = Array.from({ length: 30 }, (_, i) => ({ source: 'bing', title: `t${i}`, snippet: 'x'.repeat(500), keywords: ['秋'] }));
+
+    await svc.score(input({ research: many }));
+
+    const userText = String(textChatJsonMock.mock.calls[0][1].userText);
+    expect(userText).toContain('仅展示前 12 / 30 条');
+    expect(userText).not.toContain('x'.repeat(500)); // 单条 snippet 已截断
+  });
 });

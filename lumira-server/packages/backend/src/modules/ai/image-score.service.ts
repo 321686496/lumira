@@ -10,7 +10,6 @@ import { Injectable } from '@nestjs/common';
 import { AiConfigService } from './ai-config.service';
 import type { LlmEndpoint } from './llm-client';
 import { textChatJson, LlmJsonError } from './llm-json';
-import { resolveTextTools } from './tools/text-tools';
 import { clampNumber } from './normalize';
 import type { ImageDescription } from './image-describe.service';
 import type { PoseRefSheet } from './pose-ref-sheet.service';
@@ -19,6 +18,9 @@ import { renderStyleProfileBlock, normalizeStyleProfile, type StyleProfile } fro
 
 /** 通过闸门：score >= 该值 → pass，否则 retry */
 export const SCORE_PASS_THRESHOLD = 0.85;
+
+/** 单次评分 LLM 调用的超时上限（毫秒）：评审是纯文本判断，不应像检索/识图那样长跑 */
+export const SCORE_TIMEOUT_MS = 180_000;
 
 /** 审美分项：画面是否「好看且命中档案取向」 */
 export interface AestheticsScores {
@@ -161,6 +163,15 @@ function buildScoreSystemPrompt(styleProfile?: StyleProfile): string {
 function buildScoreUserText(input: ImageScoreInput): string {
   const { desc, poseSheet, research, draft, imageDescOfGenerated } = input;
 
+  // 趋势研究条目：截断条数与字段长度，避免把全量检索条目塞进评审载荷导致模型处理慢/超时
+  const researchSlim = research.slice(0, 12).map((r) => ({
+    source: r.source,
+    title: (r.title || '').slice(0, 120),
+    snippet: (r.snippet || '').slice(0, 180),
+    keywords: r.keywords,
+  }));
+  const researchNote = research.length > 12 ? `（仅展示前 12 / ${research.length} 条）` : '';
+
   return [
     '## 参考图穷尽描述（期望值）',
     JSON.stringify({
@@ -173,8 +184,8 @@ function buildScoreUserText(input: ImageScoreInput): string {
     '## 姿势参考面片',
     JSON.stringify({ shared: poseSheet.shared, perPose: poseSheet.perPose.map((p) => ({ name: p.name, differentiationNote: p.differentiationNote })) }),
     '',
-    '## 趋势研究摘要',
-    JSON.stringify(research.map((r) => ({ source: r.source, title: r.title, snippet: r.snippet, keywords: r.keywords }))),
+    `## 趋势研究摘要${researchNote}`,
+    JSON.stringify(researchSlim),
     '',
     '## 候选模板草稿',
     JSON.stringify(draft),
@@ -200,7 +211,9 @@ export class ImageScoreService {
           systemPrompt: buildScoreSystemPrompt(profile),
           userText: buildScoreUserText(input),
           temperature: 0.3,
-          ctx: resolveTextTools(cfg),
+          // 不携带工具上下文：评分是纯文本评审，若开启爬取工具会让模型陷入工具循环，一次评分最多拖出
+          // 多轮 LLM 调用（每轮 300s）导致「动不动超时」；同时用 SCORE_TIMEOUT_MS 兜底每次调用时长。
+          timeoutMs: SCORE_TIMEOUT_MS,
         },
         cfg.runtime,
       );

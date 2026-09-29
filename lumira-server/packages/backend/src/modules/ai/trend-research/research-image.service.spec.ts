@@ -169,6 +169,52 @@ describe('ResearchImageService.collect', () => {
     });
     expect(res.images.length).toBeLessThanOrEqual(2);
   });
+
+  it('第零层：用户显式 URL 页面抓多张图（不限于 og:image 一张）', async () => {
+    const svc = new ResearchImageService(fakeConfig);
+    let n = 0;
+    svc.fetchImage = async () => { n += 1; return { buffer: await makePng(800 + n), mime: 'image/png' }; };
+    svc.fetchPage = async () => `<meta property="og:image" content="https://cdn.b.com/o.jpg"><img src="https://cdn.b.com/1.jpg"><img src="https://cdn.b.com/2.jpg">`;
+    const res = await svc.collect({
+      items: [],
+      queries: ['x'],
+      cfg: cfg(),
+      extraUrls: ['https://zhuanlan.zhihu.com/p/abc'],
+    });
+    expect(res.images.length).toBeGreaterThan(1);
+    expect(res.images.every((i) => i.source === 'user-reference')).toBe(true);
+    expect(res.images[0].layer).toBe('user-reference');
+  });
+
+  it('第零层单页多图受 max 截断', async () => {
+    const svc = new ResearchImageService(fakeConfig);
+    let n = 0;
+    svc.fetchImage = async () => { n += 1; return { buffer: await makePng(800 + n), mime: 'image/png' }; };
+    svc.fetchPage = async () => `<img src="https://cdn.b.com/1.jpg"><img src="https://cdn.b.com/2.jpg"><img src="https://cdn.b.com/3.jpg">`;
+    const res = await svc.collect({
+      items: [],
+      queries: ['x'],
+      cfg: cfg({ max: 2 }),
+      extraUrls: ['https://a.com/p1'],
+    });
+    expect(res.images).toHaveLength(2);
+  });
+
+  it('第零层页面抓取失败：记 errors 且不阻断', async () => {
+    const svc = new ResearchImageService(fakeConfig);
+    svc.fetchImage = async () => ({ buffer: await makePng(), mime: 'image/png' });
+    svc.fetchPage = async () => {
+      throw new Error('页面抓取失败（HTTP 403）');
+    };
+    const res = await svc.collect({
+      items: [],
+      queries: ['x'],
+      cfg: cfg(),
+      extraUrls: ['https://a.com/p1'],
+    });
+    expect(res.images).toHaveLength(0);
+    expect(res.errors.length).toBeGreaterThan(0);
+  });
 });
 
 describe('ResearchImageService.readBase64', () => {
