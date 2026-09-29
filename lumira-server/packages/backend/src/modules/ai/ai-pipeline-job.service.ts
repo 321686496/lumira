@@ -664,10 +664,15 @@ export class AiPipelineJobService implements OnModuleDestroy {
    * 序列化（响应体收敛的关键）：
    * - running 且非 verbose：事件按 since 增量返回并收紧（长文本截断、丢弃 rawResponse），
    *   不返回 base64 产物与草稿（避免每轮整包回传导致响应体随耗时膨胀）。
-   * - 终态（done/error）或 verbose=1：返回完整事件（含 rawResponse）与全部产物，供前端最后一次性取回。
+   * - 终态（done/error）：忽略 since，一次性返回**全量**完整事件（含 rawResponse）与全部产物；
+   *   运行期返回的是收敛版（截断 / 无 rawResponse），前端又按 seq 增量累积，
+   *   终态若仍只返回增量，累积列表里的收敛版将永远无法被完整版覆盖（截断残留 bug）。
+   * - verbose=1：按 since 返回增量，但按完整字段返回（供带 since 的显式全量查询）。
    */
   serialize(job: AiPipelineJob, since = 0, verbose = false) {
-    const compact = job.status === 'running' && !verbose;
+    const terminal = job.status === 'done' || job.status === 'error';
+    const compact = !terminal && !verbose;
+    const from = terminal ? 0 : since;
     const a = job.artifacts.analyze;
     return {
       jobId: job.id,
@@ -675,7 +680,7 @@ export class AiPipelineJobService implements OnModuleDestroy {
       mode: job.mode,
       stages: job.stages,
       error: job.error ?? null,
-      events: job.events.filter((e) => e.seq > since).map((e) => (compact ? capEvent(e) : e)),
+      events: job.events.filter((e) => e.seq > from).map((e) => (compact ? capEvent(e) : e)),
       lastSeq: job.events.length ? job.events[job.events.length - 1]!.seq : 0,
       draft: compact ? null : (a?.draft ?? null),
       warnings: compact ? [] : (a?.warnings ?? []),

@@ -125,6 +125,25 @@ describe('analyze.prompt 风格档案分流', () => {
   });
 });
 
+describe('示例图姿势基准（视觉版 / 纯文字版分流）', () => {
+  it('视觉版：姿势必须以示例图真实可见姿势为基准，禁止编造参考图之外的姿势', () => {
+    const vision = buildAnalyzeSystemPrompt(CATS, PORTRAIT_PROFILE);
+    expect(vision).toContain('参考图中真实可见的姿势就是本模板的姿势库');
+    expect(vision).toContain('禁止编造参考图中不存在的新姿势');
+    expect(vision).toContain('不得脱离示例图另起炉灶');
+    // 旧措辞（要求脱离参考图自行发挥构图与姿势）不得再出现
+    expect(vision).not.toContain('不要照抄它的缺点');
+    expect(vision).toContain('姿势必须以示例图中真实可见的动作为基准');
+  });
+
+  it('纯文字版：无示例图时按专业水准设计，不出现「姿势以示例图为基准」的硬约束', () => {
+    const textOnly = buildTextOnlySystemPrompt(CATS, PORTRAIT_PROFILE);
+    expect(textOnly).not.toContain('参考图中真实可见的姿势就是本模板的姿势库');
+    expect(textOnly).not.toContain('姿势必须以示例图中真实可见的动作为基准');
+    expect(textOnly).toContain('由你按专业摄影水准设计');
+  });
+});
+
 const CATEGORIES: CategoryNode[] = [{ key: 'portrait', name: '人像', parentKey: null, level: 1 }];
 
 describe('多人物支持', () => {

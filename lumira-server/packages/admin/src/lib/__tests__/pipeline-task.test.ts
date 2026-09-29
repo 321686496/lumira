@@ -205,6 +205,33 @@ describe('pollPipelineJob', () => {
     // 第二次查询带 since=1（增量）
     expect(statusMock.mock.calls[1]?.[1]).toBe(1);
   });
+
+  it('终态为全量事件：整体替换运行期收敛版（截断正文被完整版覆盖）', async () => {
+    const truncated = mkEvent({ seq: 1, stage: 'analyze', response: 'a'.repeat(2000) + '…（已截断，原长 5000 字）' });
+    statusMock
+      .mockResolvedValueOnce(mkStatus({ events: [truncated], lastSeq: 1 }))
+      .mockResolvedValueOnce(
+        mkStatus({
+          status: 'done',
+          events: [
+            mkEvent({ seq: 1, stage: 'analyze', response: 'a'.repeat(5000), rawResponse: 'raw' }),
+            mkEvent({ seq: 2, stage: 'image' }),
+          ],
+          lastSeq: 2,
+        }),
+      );
+    const snapshots: AiPipelineEvent[][] = [];
+    const res = await pollPipelineJob('job_1', {
+      intervalMs: 1,
+      timeoutMs: 2000,
+      onEvents: (evs) => snapshots.push(evs.slice()),
+    });
+    expect(res.status).toBe('done');
+    const last = snapshots[snapshots.length - 1]!;
+    expect(last.map((e) => e.seq)).toEqual([1, 2]);
+    expect(last[0]!.response!.length).toBe(5000);
+    expect(last[0]!.rawResponse).toBe('raw');
+  });
 });
 
 describe('事件转换', () => {

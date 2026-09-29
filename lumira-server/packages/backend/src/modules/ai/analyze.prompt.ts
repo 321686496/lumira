@@ -76,6 +76,13 @@ export const PORTRAIT_POSE_REQUIREMENT =
   '姿势要有设计感的线条：避免正面僵直、双手对称、关节正对镜头、手臂紧贴身体。每个姿势必须写清「重心与支撑腿」「肩胯错位」「手部分落点（左右手分别写明动作与落点）」「视线方向」「表情（眼神强度与方向、嘴角、下颌与颈部线的松紧）」「穿搭（颜色、材质、廓形、配饰与褶皱状态，与风格档案的穿搭要求一致）」。';
 
 /**
+ * 人像姿势硬要求（有示例图版）：以示例图中真实可见的动作为基准还原，而非另起炉灶。
+ * 术语必须与 PORTRAIT_POSE_REQUIREMENT 对齐（含「重心与支撑腿」「手部落点」），保持既有断言与口径一致。
+ */
+export const PORTRAIT_POSE_FROM_EXAMPLE_REQUIREMENT =
+  '姿势必须以示例图中真实可见的动作为基准，不要另起炉灶：每个姿势都要写清「该姿势在参考图中的真实姿态——身体朝向、重心与支撑腿、肩胯错位、手部落点（左右手分别写明动作与落点）、视线方向、表情（眼神强度与方向、嘴角、下颌与颈部线的松紧）」，以及穿搭（颜色、材质、廓形、配饰与褶皱状态，与参考图和风格档案一致）；禁止用「自然站立」「微笑看镜头」这类空泛描述，也禁止把参考图中不同的姿势改写成同一个姿势。';
+
+/**
  * 非人像大类的拍摄方案硬要求：不套用人像姿势用语。
  */
 export const NON_PORTRAIT_POSE_REQUIREMENT =
@@ -94,9 +101,13 @@ export function isPortraitCategory(category: StyleProfile['category']): boolean 
   return category === 'portrait';
 }
 
-/** 按大类分流的「创作质量要求」第 1/2/4 条 */
-export function qualityRequirements(category: StyleProfile['category']): string {
-  const pose = isPortraitCategory(category) ? PORTRAIT_POSE_REQUIREMENT : NON_PORTRAIT_POSE_REQUIREMENT;
+/** 按大类分流的「创作质量要求」第 1/2/4 条；hasExample=true（有示例图）时人像姿势以示例图真实可见姿势为基准 */
+export function qualityRequirements(category: StyleProfile['category'], hasExample = false): string {
+  const pose = isPortraitCategory(category)
+    ? hasExample
+      ? PORTRAIT_POSE_FROM_EXAMPLE_REQUIREMENT
+      : PORTRAIT_POSE_REQUIREMENT
+    : NON_PORTRAIT_POSE_REQUIREMENT;
   const term = isPortraitCategory(category)
     ? '人像：构图（三分法/居中/框架式/对角线）+ 浅景深虚化形态 + 主体与背景的分离方式 + 情绪表达'
     : `${STYLE_CATEGORY_LABELS[category]}：${NON_PORTRAIT_TERMS[category]}`;
@@ -182,11 +193,27 @@ function poseConsistencyLineOf(portrait: boolean, subjectCountHint: number): str
     '  造型时，才允许对应要素变化；';
 }
 
-/** 系统提示词公共主体：分类树 + 枚举表 + 输出 JSON 契约 + 硬约束（视觉/纯文字版共用） */
-function buildSystemPromptBody(categories: CategoryNode[], styleProfile?: StyleProfile, subjectCountHint = 1): string {
+/** 系统提示词公共主体：分类树 + 枚举表 + 输出 JSON 契约 + 硬约束（视觉/纯文字版共用；hasExample 区分是否给了示例图） */
+function buildSystemPromptBody(
+  categories: CategoryNode[],
+  styleProfile?: StyleProfile,
+  subjectCountHint = 1,
+  hasExample = false,
+): string {
   const category = styleProfile?.category ?? 'portrait';
   const portrait = isPortraitCategory(category);
   const poseConsistencyLine = poseConsistencyLineOf(portrait, subjectCountHint);
+  // 示例图是姿势的权威来源（用户投诉「识别结果完全不参照示例图」）；无图时姿势与构图交给模型按专业水准发挥
+  const referenceLine = hasExample
+    ? '- 参考图是本模板的最高优先级依据，姿势尤其如此：参考图中真实可见的姿势就是本模板的姿势库，\n' +
+      '  pose 数组的每个 description 都必须对着参考图中的一个真实姿势来写（参考图是多格拼图 / 多姿势合集时，每一格就是一种可复用姿势），\n' +
+      '  逐一还原该姿势的动作、身体朝向、重心与支撑、肩胯关系、手部分落点（左右手分别写明动作与落点）、视线方向、表情，\n' +
+      '  以及人物之间的相对位置与互动、穿搭、所在场景与道具；用户要求的姿势数量少于参考图可见姿势数时，从中挑选最清晰、最具代表性的逐一还原，未选中的不必输出；\n' +
+      '  禁止把参考图中不同的姿势改写成同一个姿势，禁止编造参考图中不存在的新姿势；\n' +
+      '  仅当参考图中某姿势被遮挡或画面过小而无法辨认时，才按专业摄影水准补齐该处细节；\n' +
+      '  相机参数按「复现参考图观感」估算，可比参考图原拍摄手法更专业，但不得改变参考图中的画面主体、姿势与场景；'
+    : '- 构图落位、机位、参数与姿势细节由你按专业摄影水准设计，并与文字描述的光线、色调、场景保持一致；\n' +
+      '  环境信息只能来自用户描述与创作要求，不得凭空编造描述中未提及的时段、天气或道具；';
   return `## 分类树（meta.category 取一级 key；meta.classification.majorStyle/style/method 按层级逐级选择，只能从下列 key 中选择，禁止编造 key）
 ${renderCategoryTree(categories)}
 
@@ -211,7 +238,7 @@ ${DRAFT_JSON_EXAMPLE}
 ## 创作质量要求（模板合格线：用户照着拍能得到一张「有构图、有机位、有参数、有细节」的好照片）
 只堆氛围词、没有可执行信息的模板视为不合格。以下四条必须写足：
 
-${qualityRequirements(category)}
+${qualityRequirements(category, hasExample)}
 
 ## 硬约束
 - 只输出 JSON，不要任何解释，markdown 代码块标记也尽量省略；
@@ -228,22 +255,23 @@ ${qualityRequirements(category)}
 - meta.classification 从分类树逐级选择，非人像题材允许 style/method 留空；
 - 相机参数是「复现该风格的建议参数」，给出合理估算值，并按「创作质量要求」保证各参数互洽；
 - 环境信息（光线、背景、道具、时段、天气）必须与参考图或文字描述中实际可见的内容一致，禁止美化或凭空编造；
-- 「还原参考图」与「构图 / 姿势 / 参数的质量要求」并不冲突：参考图给的是光线、色调、场景与人物这些客观事实，
-  构图落位、机位、参数与姿势细节由你按专业摄影水准补足；参考图本身构图不佳时，不要照抄它的缺点，
-  而是在保持光线与风格一致的前提下给出更好的构图与机位建议；
+${referenceLine}
 - 相机参数要给「真正能复现参考图观感」的数值：白平衡 / 曝光必须匹配参考图的明暗冷暖——图中偏暖偏亮就给偏暖色温与正常偏亮曝光，图中暗部柔和就相应降低曝光补正，不要给浮夸的电影感或影棚数值；
 - 光线方向、最佳时段、拍摄距离要与参考图中的真实光影走向一致，文字描述的光线不能与图中阴影方向冲突，确保用户按此模板实拍能复现参考图的光影效果；
 - 不输出 price / silhouette / author / sortOrder / isActive 字段。${styleProfileBlock(styleProfile)}`;
 }
 
-/** 视觉识别版系统提示词（现状行为不变，仅结构拆分） */
+/**
+ * 视觉识别版系统提示词：示例图是姿势、场景与光线的基准，识别结果必须忠实还原图中真实可见的内容，
+ * 不得脱离示例图另起炉灶（姿势尤其）。
+ */
 export function buildAnalyzeSystemPrompt(categories: CategoryNode[], styleProfile?: StyleProfile, subjectCountHint = 1): string {
-  return `你是资深摄影/视觉模板编辑（按风格档案作业），分析用户上传的示例图，产出可直接上线的摄影模板表单数据。\n\n${buildSystemPromptBody(categories, styleProfile, subjectCountHint)}`;
+  return `你是资深摄影/视觉模板编辑（按风格档案作业），分析用户上传的示例图，产出可直接上线的摄影模板表单数据。\n示例图是本模板的最高优先级依据：图中真实可见的姿势、人物互动、穿搭、场景与光线都必须忠实还原，不得脱离示例图另起炉灶。\n\n${buildSystemPromptBody(categories, styleProfile, subjectCountHint, true)}`;
 }
 
 /** 纯文字构思版系统提示词（无示例图，基于文字描述构思模板） */
 export function buildTextOnlySystemPrompt(categories: CategoryNode[], styleProfile?: StyleProfile, subjectCountHint = 1): string {
-  return `你是资深摄影/视觉模板编辑（按风格档案作业）。用户将提供一段风格描述或创作要求（没有示例图），请据此构思一个可直接上线的摄影模板，产出模板表单数据。描述未提及的字段，给出符合该风格的合理建议值（相机参数为复现该风格的估算值）。\n\n${buildSystemPromptBody(categories, styleProfile, subjectCountHint)}`;
+  return `你是资深摄影/视觉模板编辑（按风格档案作业）。用户将提供一段风格描述或创作要求（没有示例图），请据此构思一个可直接上线的摄影模板，产出模板表单数据。描述未提及的字段，给出符合该风格的合理建议值（相机参数为复现该风格的估算值）。\n\n${buildSystemPromptBody(categories, styleProfile, subjectCountHint, false)}`;
 }
 
 /** 识别用户提示词附加输入：Step1 文字描述 / 创作要求 / 姿势个数（均可选） */

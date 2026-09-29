@@ -82,9 +82,33 @@ describe('AiPipelineJobService（生命周期与序列化）', () => {
     const done = service.serialize(service.get(jobId)!, 0, false);
     expect(done.poseImages).toHaveLength(1);
     expect(done.draft).toEqual({ title: '草稿' });
+    // 终态返回完整正文：运行期收到的收敛版（截断 + 丢 rawResponse）必须被完整版覆盖
+    const doneLlm = done.events.find((e) => e.type === 'llm')!;
+    expect(doneLlm.response!.length).toBe(5000);
+    expect(doneLlm.rawResponse).toBe('b'.repeat(5000));
   });
 
-  it('serialize：since 只返回增量事件；lastSeq 为最大 seq', async () => {
+  it('serialize：running 态按 since 只返回增量事件；lastSeq 为最大 seq', async () => {
+    analyzeMock.mockImplementation(() => new Promise(() => undefined));
+    const { jobId } = await service.create({ text: '文字', mode: 'analyze-only' });
+    const job = service.get(jobId)!;
+    // 流水线启动时可能已追加事件，故以现有长度为基准续编 seq
+    const base = job.events.length;
+    for (const i of [1, 2, 3]) {
+      job.events.push({
+        seq: base + i, ts: base + i, stage: 'analyze', type: 'note', step: 'analyze', title: `e${base + i}`, status: 'done',
+      });
+    }
+    const all = service.serialize(job, 0, false);
+    expect(all.status).toBe('running');
+    expect(all.events.map((e) => e.seq)).toEqual(job.events.map((e) => e.seq));
+    expect(all.lastSeq).toBe(base + 3);
+
+    const incremental = service.serialize(job, base + 2, false);
+    expect(incremental.events.map((e) => e.seq)).toEqual([base + 3]);
+  });
+
+  it('serialize：终态忽略 since，一次性返回全量事件（供前端覆盖收敛版）', async () => {
     const { jobId } = await service.create({ text: '文字', mode: 'analyze-only' });
     await waitStatus(jobId, 'done');
     const job = service.get(jobId)!;
@@ -92,10 +116,9 @@ describe('AiPipelineJobService（生命周期与序列化）', () => {
     expect(all.events.length).toBeGreaterThan(0);
     expect(all.lastSeq).toBe(job.events[job.events.length - 1]!.seq);
 
-    const since = all.lastSeq - 1;
-    const incremental = service.serialize(job, since, false);
-    expect(incremental.events.length).toBe(1);
-    expect(incremental.events[0]!.seq).toBe(all.lastSeq);
+    // 即使带 since（= lastSeq），终态仍返回全量，前端才能整体替换累积的收敛版
+    const withSince = service.serialize(job, all.lastSeq, false);
+    expect(withSince.events.map((e) => e.seq)).toEqual(all.events.map((e) => e.seq));
   });
 });
 

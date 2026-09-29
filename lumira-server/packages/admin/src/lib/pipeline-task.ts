@@ -169,7 +169,8 @@ export interface PollPipelineOptions {
  * 轮询 job 到终态：
  * - 单次查询失败 → 退避重试（1/2/4/8s），不因一次抖动就中断（原「查询识别任务失败」的致盲点）
  * - running → 按 since 增量吸收事件后继续
- * - done/error → 直接返回该次响应（终态响应后端已放宽为全量：含 draft / 产物 / error 详情）
+ * - done/error → 直接返回该次响应（终态响应为全量：含完整事件 / draft / 产物 / error 详情，
+ *   前端据 status 整体替换累积事件，避免运行期收敛版残留）
  * - 超过总预算 → 抛 PipelinePollError(code=poll_timeout)，前端展示「继续」重连
  */
 export async function pollPipelineJob(
@@ -184,9 +185,16 @@ export async function pollPipelineJob(
   const events: AiPipelineEvent[] = [];
 
   const absorb = (res: AiPipelineStatusResult) => {
-    if (!res.events?.length) return;
+    const incoming = res.events ?? [];
+    if (!incoming.length) return;
     since = res.lastSeq ?? since;
-    events.push(...res.events);
+    // 终态响应为全量事件（后端忽略 since 返回完整正文）：整体替换，
+    // 让运行期收到的收敛版（长文本截断 / 无 rawResponse）被完整版覆盖，而不是继续增量累积。
+    if (res.status === 'done' || res.status === 'error') {
+      events.splice(0, events.length, ...incoming);
+    } else {
+      events.push(...incoming);
+    }
     onEvents?.(events.slice());
   };
 
