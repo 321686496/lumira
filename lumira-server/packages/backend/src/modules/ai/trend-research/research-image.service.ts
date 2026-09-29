@@ -263,7 +263,8 @@ export class ResearchImageService implements OnModuleInit, OnModuleDestroy {
       seenUrl.add(pageKey);
       try {
         const html = await this.fetchPage(pageUrl, RESEARCH_IMAGE_PAGE_TIMEOUT_MS);
-        const { title, text } = extractPageText(html, pageUrl);
+        // 用户显式指定 URL：正文提取接近全文（20000 字），保证模型能按网页实际摄影内容创作
+        const { title, text } = extractPageText(html, pageUrl, 20_000);
         if (text.trim()) {
           items.push({
             source: 'user-reference',

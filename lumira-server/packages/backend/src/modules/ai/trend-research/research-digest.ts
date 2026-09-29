@@ -12,6 +12,8 @@ const TITLE_CAP = 60;
 const SNIPPET_CAP = 300;
 /** digest 总长上限（lines 版由消费方自行约束） */
 const TOTAL_CAP = 2400;
+/** 用户显式指定 URL 的网页正文上限（接近全文；识别/生图阶段都按此透传，不再 300 字截断） */
+export const USER_REFERENCE_SNIPPET_CAP = 20_000;
 
 function bySnippetFirst(a: ResearchItem, b: ResearchItem): number {
   const aHas = (a.snippet || '').trim() ? 0 : 1;
@@ -24,12 +26,26 @@ export function selectResearchItems(items: ResearchItem[], maxItems = 8): Resear
   return items.slice().sort(bySnippetFirst).slice(0, maxItems);
 }
 
-/** 挑选 + 渲染为「标题：摘要」行数组（有摘要排前，最多 maxItems 条） */
+/** 渲染「用户指定参考网页」正文区块：snippet 不截断（上限 USER_REFERENCE_SNIPPET_CAP），
+ *  标题作为行首，供识别阶段注入草稿提示词——让大模型能按用户 URL 的实际摄影内容创作。 */
+export function renderUserReferenceItems(items: ResearchItem[]): string {
+  return items
+    .map((it) => {
+      const title = (it.title || '').trim().slice(0, 200);
+      const snippet = (it.snippet || '').trim().slice(0, USER_REFERENCE_SNIPPET_CAP);
+      return title && snippet ? `${title}\n${snippet}` : (title || snippet);
+    })
+    .filter(Boolean)
+    .join('\n\n---\n\n');
+}
+
+/** 挑选 + 渲染为「标题：摘要」行数组（有摘要排前，最多 maxItems 条；user-reference 条目全文透传） */
 export function buildResearchLines(items: ResearchItem[], maxItems = 8): string[] {
   return selectResearchItems(items, maxItems)
     .map((it) => {
       const title = (it.title || '').trim().slice(0, TITLE_CAP);
-      const snippet = (it.snippet || '').trim().slice(0, SNIPPET_CAP);
+      const raw = (it.snippet || '').trim();
+      const snippet = it.source === 'user-reference' ? raw.slice(0, USER_REFERENCE_SNIPPET_CAP) : raw.slice(0, SNIPPET_CAP);
       return title && snippet ? `${title}：${snippet}` : (title || snippet);
     })
     .filter(Boolean);

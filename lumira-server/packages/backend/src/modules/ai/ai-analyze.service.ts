@@ -25,7 +25,7 @@ import type { ResearchBrief } from './trend-research/research-brief';
 import { renderResearchBrief } from './trend-research/research-brief';
 import type { ResearchImage } from './trend-research/research-image';
 import type { ResearchVision } from './trend-research/research-vision';
-import { buildResearchDigest } from './trend-research/research-digest';
+import { buildResearchDigest, renderUserReferenceItems } from './trend-research/research-digest';
 import { TrendResearchService, extractExplicitUrls } from './trend-research/trend-research.service';
 import { renderResearchVision, visionHasContent } from './trend-research';
 import { StyleProfileService, type StyleProfileResolveResult } from './style-profile.service';
@@ -188,6 +188,18 @@ export class AiAnalyzeService {
         research.push(...ref.items);
         researchImages.push(...ref.images);
         if (ref.vision) userVision = ref.vision;
+        // 用户指定 URL 的网页正文（接近全文）优先注入草稿提示词：模型必须按该网页的实际
+        // 摄影内容创作（含服装/场景/动作/光线/参数等细节），其他趋势参考仅作部分加强
+        if (ref.items.length) {
+          const body = renderUserReferenceItems(ref.items);
+          if (body) {
+            researchDigest += researchDigest ? '\n' : '';
+            researchDigest +=
+              `【用户指定参考网页（必须严格遵守）】\n` +
+              `创作要求的来源为以下网页，必须按其实际摄影内容创建模板，包括人物衣着、动作姿势、` +
+              `场景与拍摄参数等细节；与下方其他网络趋势参考冲突时，以本网页为准，其余仅作部分加强：\n${body}`;
+          }
+        }
         if (ref.vision && visionHasContent(ref.vision)) {
           researchDigest += researchDigest ? '\n' : '';
           researchDigest += `【参考网页图片解读】\n${renderResearchVision(ref.vision)}`;
