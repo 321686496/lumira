@@ -1233,3 +1233,47 @@
 - **背景/动机**：受 LLM 上下文窗口与单次调用 token 预算约束，本轮先把上限从 4000 提到 20000 并全量注入草稿提示词；真·无限全文不可行。
 - **目标状态**：对超长网页按段切块（如每 1.5 万字符一段）多次喂给文本模型分段摘要后合并注入，或走多轮对话式「读完全文再创作」，保证模型完整读到网页内容。
 - **状态**：⏳ 待优化
+
+---
+
+## AI 一键生成模板 · 断点续跑 + 中断原因详情（2026-09-29）
+
+### P1 · analyze 阶段「示例图全部识别失败」未接线为中断详情（静默降级为占位草稿）
+
+- **模块**：后端 AI（`ai-orchestrator.service.ts` 的 `wrapStep` / `image-describe.service.ts` 的 `describeMany`）
+- **优化点**：`describeMany` 已改为「逐张 try/catch，全部失败才抛 `AiUpstreamError(..., {failedIndexes})`」，但该 throw 会被编排器 `wrapStep` 的 `catch { return undefined }` 吞掉 → 走「最简占位草稿」继续，analyze 阶段仍报 `done`，只留一条 `示例图识别跳过 #N` trace note；设计 §9.3.D 承诺的「全失败 → 中断 + `failedIndexes`」在 analyze 阶段实际不可达。
+- **背景/动机**：本轮为不破坏既有 `ai-analyze` 端点「降级继续」行为（AGENTS.md 全局约束），未把 describe 步骤改为不可降级；单张失败已改为部分合并（用户所报症状已修），全失败静默降级属遗留数据质量问题。
+- **目标状态**：为 `describe` 步骤引入「不可降级」语义（或由 job 层依据 trace `fail:` / `failedIndexes` 合成 `InterruptionInfo`），使示例图全部识别失败时 job 进入 `error` 并给出分层详情，同时不改变既有 `ai-analyze` 端点的对外行为。
+- **状态**：⏳ 待优化
+
+### P2 · 刷新恢复时「提交上架」阶段的进度指示会丢失
+
+- **模块**：后台 AI 建模向导（`wizard.tsx` 挂载恢复 `useEffect`）
+- **优化点**：恢复 effect 的 `finally` 无条件 `setAutoState(prev => ({ ...prev, running: false }))`，会覆盖 `finishAuto` 设的 `{running:true, stage:'submitting'}` → 刷新恢复路径（含「运行中刷新 → done」）提交阶段进度块不渲染、`progressStatusText` 回落、`busy` 变 false。
+- **背景/动机**：该 `finally` 由实现计划正文逐字要求（plan-mandated），本轮按计划保留；仅观感缺陷，不影响上架链路（上架由 `inject({autoSubmit:true})` 触发）。
+- **目标状态**：把复位收窄为「仅当仍处 running 时复位」，保留 `submitting` 阶段的进度展示。
+- **状态**：⏳ 待优化
+
+### P2 · job sweeper 按 `createdAt` 清理，可能清掉仍在运行的 job
+
+- **模块**：后端 AI（`ai-pipeline-job.service.ts` 的 `sweep()`）
+- **优化点**：sweeper 按 `createdAt` 判定超过 `RESULT_TTL_MS`（60min）即删除，不区分状态；真正运行超过 60min 的 job 会被删除，而 `runPipeline` 仍持有对象引用继续跑 → 孤儿任务 + 客户端 404。
+- **背景/动机**：本轮沿用既有 task service 的 TTL 模式（内存 job，不落库）。
+- **目标状态**：改用 `updatedAt` 判定，或跳过 `status === 'running'` 的 job。
+- **状态**：⏳ 待优化
+
+### P2 · pipeline job 无并发 / 内存上限
+
+- **模块**：后端 AI（`ai-pipeline-job.service.ts`）
+- **优化点**：认证管理员可无限创建 job，每个含 base64 产物，仅靠 60min TTL 回收，内存无硬上限。
+- **背景/动机**：本轮以内存 job 承载产物、不落库，未做配额。
+- **目标状态**：增加单实例 job 数量/内存上限与并发限制，超限拒绝或驱逐最旧 job。
+- **状态**：⏳ 待优化
+
+### P2 · 4 个 pipeline job 端点缺集成测试
+
+- **模块**：后端 AI（`ai-templates.controller.ts` 的 `POST/GET/POST resume/DELETE ai-job*`）
+- **优化点**：仅 `AiPipelineJobService` 有单测，controller 接线层（404 契约、DELETE 幂等、`since`/`verbose` 解析）无自动化测试，端到端依赖手动/集成检查。
+- **背景/动机**：本轮任务切分未含 controller 集成测试。
+- **目标状态**：为 4 个新端点补薄集成测试（含 job 不存在 → 404、DELETE 幂等、增量事件 `since`）。
+- **状态**：⏳ 待优化
