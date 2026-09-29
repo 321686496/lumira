@@ -114,9 +114,34 @@ export function StepCover({
   const [viewIndex, setViewIndex] = useState<number | null>(null);
   /** 附加提示词：拼接到后端合成 prompt 末尾（用户对封面图的额外要求，权重最高） */
   const [extraPrompt, setExtraPrompt] = useState('');
+  /** 姿势参考图拖拽悬停中 */
+  const [refDragActive, setRefDragActive] = useState(false);
   const referenceInputRef = useRef<HTMLInputElement>(null);
 
   const disabled = busy || generating;
+
+  /** 处理已选/拖入的姿势参考图：校验 + 压缩（点击选择与拖拽上传共用） */
+  const applyReferenceFile = async (file: File) => {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast({ variant: 'destructive', title: '格式不支持', description: '参考图仅支持 jpg / png / webp' });
+      return;
+    }
+    const compressed = await compressImage(file, {
+      maxDim: 1280,
+      quality: 0.8,
+      maxBytes: 512 * 1024,
+    });
+    onReferenceChange(compressed, URL.createObjectURL(compressed));
+  };
+
+  /** 拖拽上传姿势参考图 */
+  const handleReferenceDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setRefDragActive(false);
+    if (disabled) return;
+    const file = event.dataTransfer.files?.[0];
+    if (file) await applyReferenceFile(file);
+  };
 
   // 放大查看时支持 ←/→ 翻页（与系统相册操作一致）
   useEffect(() => {
@@ -271,7 +296,22 @@ export function StepCover({
             <span className="font-medium text-foreground">不选则不带参考图生成</span>
             （不会自动使用示例图）。生成时第一张会以参考图为基准，后续姿势自动用第一张结果保持人物与场景一致。
           </p>
-          <div className="flex flex-wrap items-center gap-3">
+          <div
+            className={cn(
+              'flex flex-wrap items-center gap-3 rounded-lg border border-dashed p-3 transition-colors',
+              refDragActive ? 'border-primary bg-primary/5' : 'border-border',
+            )}
+            onDragOver={(event) => {
+              event.preventDefault();
+              if (!disabled) setRefDragActive(true);
+            }}
+            onDragLeave={(event) => {
+              // 仅当离开整个拖拽区域时才取消高亮（进入子元素会触发 leave）
+              if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+              setRefDragActive(false);
+            }}
+            onDrop={handleReferenceDrop}
+          >
             <Button
               type="button"
               variant="outline"
@@ -304,6 +344,7 @@ export function StepCover({
                 className="h-20 w-16 rounded-md border object-cover"
               />
             )}
+            <span className="text-xs text-muted-foreground/80">或将图片拖拽到此处上传</span>
           </div>
           {/* 显式复用「风格识别参考图（示例图）」：只有勾选才会作为姿势参考图，取消勾选即完全不带参考图 */}
           <label
@@ -337,16 +378,7 @@ export function StepCover({
             onChange={async (event) => {
               const file = event.target.files?.[0];
               if (!file) return;
-              if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-                toast({ variant: 'destructive', title: '格式不支持', description: '参考图仅支持 jpg / png / webp' });
-                return;
-              }
-              const compressed = await compressImage(file, {
-                maxDim: 1280,
-                quality: 0.8,
-                maxBytes: 512 * 1024,
-              });
-              onReferenceChange(compressed, URL.createObjectURL(compressed));
+              await applyReferenceFile(file);
               if (event.target) event.target.value = '';
             }}
           />

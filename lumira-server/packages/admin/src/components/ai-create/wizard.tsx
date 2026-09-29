@@ -74,6 +74,8 @@ export function AiCreateWizard({
   const [exampleUrl, setExampleUrl] = useState<string | null>(null);
   const [poseReferenceFile, setPoseReferenceFile] = useState<File | null>(null);
   const [poseReferenceUrl, setPoseReferenceUrl] = useState<string | null>(null);
+  /** Step1 示例图拖拽悬停中 */
+  const [exampleDragActive, setExampleDragActive] = useState(false);
   const [inputText, setInputText] = useState('');
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
   /** 研究管线 trace：各阶段（研究/识别/姿势面片/评分）执行轨迹；未开启时缺省 */
@@ -193,9 +195,8 @@ export function AiCreateWizard({
     setMaxStep(1);
   };
 
-  const handleExamplePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  /** 处理已选/拖入的示例图：校验 + 压缩 + 重开流程（点击选择与拖拽上传共用） */
+  const processExampleFile = async (file: File) => {
     setErrorText(null);
     if (!ACCEPTED_MIME.includes(file.type)) {
       toast({ variant: 'destructive', title: '格式不支持', description: '仅支持 jpg / png / webp 图片' });
@@ -214,7 +215,22 @@ export function AiCreateWizard({
     setExampleUrl(URL.createObjectURL(processed));
     // 换图 = 重新开始整个流程
     resetFlow();
+  };
+
+  const handleExamplePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processExampleFile(file);
     if (e.target) e.target.value = '';
+  };
+
+  /** 拖拽上传示例图（Step1） */
+  const handleExampleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setExampleDragActive(false);
+    if (busy) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) await processExampleFile(file);
   };
 
   const handleTextChange = (v: string) => {
@@ -629,13 +645,29 @@ export function AiCreateWizard({
                 className="hidden"
                 onChange={handleExamplePick}
               />
-              <div className="rounded-lg border border-dashed border-border p-4">
+              <div
+                className={cn(
+                  'rounded-lg border border-dashed p-4 transition-colors',
+                  exampleDragActive ? 'border-primary bg-primary/5' : 'border-border',
+                )}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (!busy) setExampleDragActive(true);
+                }}
+                onDragLeave={(e) => {
+                  // 仅当离开整个拖拽区域时才取消高亮（进入子元素会触发 leave）
+                  if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                  setExampleDragActive(false);
+                }}
+                onDrop={handleExampleDrop}
+              >
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-foreground">示例图（可选，该风格的成片参考）</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       AI 将分析画面中的风格 / 构图 / 光线 / 主体，生成可上线的模板表单草稿
                     </p>
+                    <p className="mt-1 text-xs text-muted-foreground/80">支持将图片拖拽到此处上传</p>
                   </div>
                   <Button
                     type="button"
