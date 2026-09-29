@@ -818,6 +818,115 @@ export interface AiAnalyzeStatusResult {
   error?: string;
 }
 
+// ===== AI 流水线 job（识别 → 姿势图 → 剪影；后端内存 job 承载，前端只持 jobId）=====
+// 字段与后端 AiPipelineJobService.serialize() 的返回结构一一对应，勿单边改名。
+
+/** 流水线阶段：analyze 示例图识别 / image 批量姿势图 / silhouette 剪影 */
+export type AiPipelineStage = 'analyze' | 'image' | 'silhouette';
+/** 单阶段状态 */
+export type AiPipelineStageStatus = 'pending' | 'running' | 'done' | 'error';
+/** job 整体状态（后端仅维护三态） */
+export type AiPipelineJobStatus = 'running' | 'done' | 'error';
+/** job 模式：auto 全自动（识别→姿势图→剪影）/ analyze-only 仅识别 */
+export type AiPipelineJobMode = 'auto' | 'analyze-only';
+
+/** 中断分类错误码（前端据此选文案与建议，不再靠中文正则猜） */
+export type AiInterruptionCode =
+  | 'job_missing'
+  | 'upstream_timeout'
+  | 'upstream_http'
+  | 'upstream_empty'
+  | 'poll_timeout'
+  | 'network'
+  | 'payload_too_large'
+  | 'aborted'
+  | 'invalid_input'
+  | 'internal';
+
+/** 一次中断的分层详情（后端 job 失败时权威给出；传输层失败由前端合成） */
+export interface AiInterruptionInfo {
+  code: AiInterruptionCode;
+  stage: AiPipelineStage;
+  /** 运营可读的粗粒度原因（保留上游原文中的关键信息） */
+  message: string;
+  /** 上游原始响应/异常文案（截断后） */
+  upstream?: string;
+  /** 上游 HTTP 状态码 */
+  status?: number;
+  /** 该阶段已耗时（ms） */
+  elapsedMs?: number;
+  /** 失败下标（示例图/姿势图/剪影，0-based） */
+  failedIndexes?: number[];
+  /** 处置建议 */
+  hint?: string;
+  /** 发生时间（ms epoch） */
+  at: number;
+}
+
+/** 单阶段运行状态 */
+export interface AiPipelineStageState {
+  status: AiPipelineStageStatus;
+  startedAt?: number;
+  finishedAt?: number;
+  error?: AiInterruptionInfo;
+}
+
+/** 流水线事件：在既有 AiTraceEvent 之上补 stage / index / prompt */
+export interface AiPipelineEvent extends AiTraceEvent {
+  stage: AiPipelineStage;
+  /** 姿势图 / 剪影下标（0-based） */
+  index?: number;
+  /** 姿势图完成后的最终生图提示词 */
+  prompt?: string;
+}
+
+/** 序列化返回的单张产物（base64） */
+export interface AiPipelinePoseFile {
+  index: number;
+  base64: string;
+  mimeType: string;
+}
+
+/** 单张产物的结构化失败 */
+export interface AiPipelineStageFailure {
+  index: number;
+  error: string;
+}
+
+/** 查询流水线 job 状态（与后端 serialize() 返回结构一致） */
+export interface AiPipelineStatusResult {
+  jobId: string;
+  status: AiPipelineJobStatus;
+  mode: AiPipelineJobMode;
+  stages: Record<AiPipelineStage, AiPipelineStageState>;
+  error: AiInterruptionInfo | null;
+  events: AiPipelineEvent[];
+  lastSeq: number;
+  draft: Record<string, unknown> | null;
+  warnings: string[];
+  trace: AiAnalyzeTraceEntry[];
+  raw: Record<string, unknown> | null;
+  research: AiResearchRef[];
+  researchBrief: AiResearchBrief | null;
+  researchImages: AiResearchImage[];
+  researchVision: AiResearchVision | null;
+  poseImages: AiPipelinePoseFile[];
+  poseErrors: AiPipelineStageFailure[];
+  silhouetteImages: AiPipelinePoseFile[];
+  silhouetteErrors: AiPipelineStageFailure[];
+}
+
+/** 提交流水线 job → 立即返回 jobId */
+export interface AiPipelineJobId {
+  jobId: string;
+}
+
+/** resume 结果（resumed=false + status=running 表示任务仍在跑，前端只需重连） */
+export interface AiPipelineResumeResult {
+  resumed: boolean;
+  status: AiPipelineJobStatus;
+}
+
 // ===== 图片存储迁移（R2 迁移）=====
 
 export type StorageCategory = 'templates' | 'categories' | 'banners' | 'feedback' | 'users';
