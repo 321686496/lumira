@@ -170,50 +170,46 @@ describe('ResearchImageService.collect', () => {
     expect(res.images.length).toBeLessThanOrEqual(2);
   });
 
-  it('第零层：用户显式 URL 页面抓多张图（不限于 og:image 一张）', async () => {
+  it('collectUserPage：抓正文文本条目 + 整页多图落盘', async () => {
     const svc = new ResearchImageService(fakeConfig);
     let n = 0;
     svc.fetchImage = async () => { n += 1; return { buffer: await makePng(800 + n), mime: 'image/png' }; };
-    svc.fetchPage = async () => `<meta property="og:image" content="https://cdn.b.com/o.jpg"><img src="https://cdn.b.com/1.jpg"><img src="https://cdn.b.com/2.jpg">`;
-    const res = await svc.collect({
-      items: [],
-      queries: ['x'],
-      cfg: cfg(),
-      extraUrls: ['https://zhuanlan.zhihu.com/p/abc'],
-    });
+    svc.fetchPage = async () =>
+      '<title>人像构图指南</title><p>拍照时注意光线方向与机位高低……</p>'
+      + '<meta property="og:image" content="https://cdn.b.com/o.jpg">'
+      + '<img src="https://cdn.b.com/1.jpg"><img src="https://cdn.b.com/2.jpg">';
+    const res = await svc.collectUserPage({ urls: ['https://zhuanlan.zhihu.com/p/abc'] });
+    expect(res.items).toHaveLength(1);
+    expect(res.items[0].source).toBe('user-reference');
+    expect(res.items[0].title).toBe('人像构图指南');
+    expect(res.items[0].snippet).toContain('光线方向');
     expect(res.images.length).toBeGreaterThan(1);
-    expect(res.images.every((i) => i.source === 'user-reference')).toBe(true);
     expect(res.images[0].layer).toBe('user-reference');
+    expect(res.images[0].pageUrl).toBe('https://zhuanlan.zhihu.com/p/abc');
   });
 
-  it('第零层单页多图受 max 截断', async () => {
+  it('collectUserPage：整页多图受 max 截断', async () => {
     const svc = new ResearchImageService(fakeConfig);
     let n = 0;
     svc.fetchImage = async () => { n += 1; return { buffer: await makePng(800 + n), mime: 'image/png' }; };
-    svc.fetchPage = async () => `<img src="https://cdn.b.com/1.jpg"><img src="https://cdn.b.com/2.jpg"><img src="https://cdn.b.com/3.jpg">`;
-    const res = await svc.collect({
-      items: [],
-      queries: ['x'],
-      cfg: cfg({ max: 2 }),
-      extraUrls: ['https://a.com/p1'],
-    });
+    svc.fetchPage = async () => '<img src="https://cdn.b.com/1.jpg"><img src="https://cdn.b.com/2.jpg"><img src="https://cdn.b.com/3.jpg">';
+    const res = await svc.collectUserPage({ urls: ['https://a.com/p1'], max: 2 });
     expect(res.images).toHaveLength(2);
   });
 
-  it('第零层页面抓取失败：记 errors 且不阻断', async () => {
+  it('collectUserPage：页面抓取失败记 errors 且不阻断其他页', async () => {
     const svc = new ResearchImageService(fakeConfig);
     svc.fetchImage = async () => ({ buffer: await makePng(), mime: 'image/png' });
+    let pageNo = 0;
     svc.fetchPage = async () => {
-      throw new Error('页面抓取失败（HTTP 403）');
+      pageNo += 1;
+      if (pageNo === 1) throw new Error('页面抓取失败（HTTP 403）');
+      return '<p>第二页正文</p><img src="https://cdn.b.com/1.jpg">';
     };
-    const res = await svc.collect({
-      items: [],
-      queries: ['x'],
-      cfg: cfg(),
-      extraUrls: ['https://a.com/p1'],
-    });
-    expect(res.images).toHaveLength(0);
+    const res = await svc.collectUserPage({ urls: ['https://a.com/p1', 'https://a.com/p2'] });
     expect(res.errors.length).toBeGreaterThan(0);
+    expect(res.images).toHaveLength(1);
+    expect(res.items).toHaveLength(1);
   });
 });
 

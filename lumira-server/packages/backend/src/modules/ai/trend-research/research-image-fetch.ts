@@ -105,6 +105,32 @@ export function extractPageImageUrl(html: string, pageUrl: string): string | nul
   return extractPageImages(html, pageUrl, 1)[0] ?? null;
 }
 
+/** 从 HTML 提取可读正文：og:title/<title> + 去掉 script/style/noscript/svg 后的纯文本（压缩空白，cap 上限） */
+export function extractPageText(html: string, pageUrl: string, cap = 4000): { title: string; text: string } {
+  const titleMatch =
+    html.match(/<meta[^>]+(?:property|name)=["']og:title["'][^>]*content=["']([^"']+)["']/i)
+    ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["']og:title["']/i)
+    ?? html.match(/<title[^>]*>([^<]*)<\/title>/i);
+  const title = (titleMatch?.[1] || '').trim().slice(0, 200);
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<svg[\s\S]*?<\/svg>/gi, ' ')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, cap);
+  return { title, text };
+}
+
 /** 常见 HTML 实体反转义（只处理会出现在 URL 中的少数几个） */
 function decodeHtml(s: string): string {
   return s

@@ -294,25 +294,58 @@ describe('TrendResearchService 参考图串接', () => {
     expect(r.items.length).toBeGreaterThan(0);
   });
 
-  it('创作要求含显式 URL 时作为 extraUrls 传入参考图抓取', async () => {
+  it('userReference：抓文本条目 + 整页多图并回传 vision（独立于 research，不受开关限制）', async () => {
     const fakeConfig = {
-      getSearchConfig: async () => ({
-        enabled: true,
-        sources: [{ name: 'searxng', provider: 'searxng' }],
-        images: { ...DEFAULT_RESEARCH_IMAGES_CONFIG, enabled: true },
-      }),
+      getSearchConfig: async () => ({ enabled: false, sources: [] }),
     } as never;
     const digest = { summarize: async () => null } as never;
-    let captured: { extraUrls?: string[] } | null = null;
+    let capturedUrls: string[] | null = null;
     const images = {
-      collect: async (input: { extraUrls?: string[] }) => { captured = input; return { images: [], errors: [] }; },
-      readBase64: async () => null,
+      collect: async () => ({ images: [], errors: [] }),
+      collectUserPage: async (input: { urls: string[] }) => {
+        capturedUrls = input.urls;
+        return {
+          items: [{ source: 'user-reference', title: '人像构图', snippet: '侧逆光……', keywords: [], url: 'https://a.com/p' }],
+          images: [{ id: 'b'.repeat(16), url: 'https://x/uploads/research/b.jpg', sourceUrl: 'https://a.com/1.jpg', source: 'user-reference', layer: 'user-reference' as const, bytes: 100 }],
+          errors: [],
+        };
+      },
+      readBase64: async () => ({ base64: 'BBB', mime: 'image/jpeg' }),
     } as never;
+    const vision = { interpret: async () => ({ summary: '侧逆光', styles: [], colorLight: [], composition: [], wardrobe: [], scene: [], adopted: [] }) } as never;
+
+    const svc = new TrendResearchService(fakeConfig, digest, images, vision);
+    const r = await svc.userReference(['https://a.com/p', 'https://a.com/p2'], '侧逆光人像');
+    expect(capturedUrls).toEqual(['https://a.com/p', 'https://a.com/p2']);
+    expect(r.items).toHaveLength(1);
+    expect(r.items[0].source).toBe('user-reference');
+    expect(r.images).toHaveLength(1);
+    expect(r.vision?.summary).toBe('侧逆光');
+  });
+
+  it('userReference：无 URL 直接返回空结果（不调用抓取）', async () => {
+    const fakeConfig = { getSearchConfig: async () => ({ enabled: false, sources: [] }) } as never;
+    const digest = { summarize: async () => null } as never;
+    const images = { collectUserPage: async () => { throw new Error('不应被调用'); } } as never;
     const vision = { interpret: async () => null } as never;
 
     const svc = new TrendResearchService(fakeConfig, digest, images, vision);
-    svc.factory = () => ({ name: 'searxng', search: async () => [] });
-    await svc.research('参考这个网站制作模板：https://zhuanlan.zhihu.com/p/2003398601259373929，风格要类似', { limitPerSource: 1 });
-    expect(captured?.extraUrls).toEqual(['https://zhuanlan.zhihu.com/p/2003398601259373929']);
+    const r = await svc.userReference([], 'x');
+    expect(r.items).toHaveLength(0);
+    expect(r.images).toHaveLength(0);
+    expect(r.errors).toHaveLength(0);
+  });
+
+  it('userReference：抓取失败返回空结果并记 errors（不抛错）', async () => {
+    const fakeConfig = { getSearchConfig: async () => ({ enabled: false, sources: [] }) } as never;
+    const digest = { summarize: async () => null } as never;
+    const images = { collectUserPage: async () => { throw new Error('页面超时'); }, readBase64: async () => null } as never;
+    const vision = { interpret: async () => null } as never;
+
+    const svc = new TrendResearchService(fakeConfig, digest, images, vision);
+    const r = await svc.userReference(['https://a.com/p'], 'x');
+    expect(r.items).toHaveLength(0);
+    expect(r.images).toHaveLength(0);
+    expect(r.errors.length).toBeGreaterThan(0);
   });
 });

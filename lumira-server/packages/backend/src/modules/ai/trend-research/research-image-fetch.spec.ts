@@ -1,5 +1,5 @@
 // lumira-server/packages/backend/src/modules/ai/trend-research/research-image-fetch.spec.ts
-import { isPrivateAddress, extractPageImageUrl, extractPageImages } from './research-image-fetch';
+import { isPrivateAddress, extractPageImageUrl, extractPageImages, extractPageText } from './research-image-fetch';
 
 describe('isPrivateAddress', () => {
   it('拦截 IPv4 私网 / 环回 / 链路本地 / 保留段', () => {
@@ -74,5 +74,31 @@ describe('extractPageImages', () => {
 
   it('无图时返回空数组', () => {
     expect(extractPageImages('<head></head>', 'https://a.com/p')).toEqual([]);
+  });
+});
+
+describe('extractPageText', () => {
+  it('提取 og:title/<title> 并剥离脚本/样式/标签后压缩空白', () => {
+    const html = `<html><head><title>人像构图指南</title></head><body><script>var x=1;</script><style>.a{}</style><p>拍照时注意  光线方向，</p><img src="/img/1.png"><div>机位高低</div></body></html>`;
+    const { title, text } = extractPageText(html, 'https://a.com/p');
+    expect(title).toBe('人像构图指南');
+    expect(text).toContain('光线方向');
+    expect(text).toContain('机位高低');
+    expect(text).not.toContain('var x=1');
+    expect(text).not.toContain('.a{}');
+    expect(text).not.toMatch(/\s{2,}/); // 空白已压缩
+  });
+
+  it('无正文（仅有 <title>）→ text 只含标题文本', () => {
+    const { title, text } = extractPageText('<head><title>只有标题</title></head>', 'https://a.com/p');
+    expect(title).toBe('只有标题');
+    expect(text).toBe('只有标题'); // 标签剥离后标题文本仍在正文中
+  });
+
+  it('实体反转义：&nbsp;/&amp;/&lt; 等还原为可读文本', () => {
+    const { text } = extractPageText('<p>侧逆光 &amp; 补反光板&nbsp;，3&nbsp;人</p>', 'https://a.com/p');
+    expect(text).toContain('&');
+    expect(text).not.toContain('&amp;');
+    expect(text).not.toContain('&nbsp;');
   });
 });

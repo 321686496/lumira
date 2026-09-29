@@ -366,6 +366,61 @@ describe('AiAnalyzeService', () => {
     expect(r.researchImages).toEqual(images);
     expect(r.researchVision).toEqual(vision);
   });
+
+  it('创作要求含显式 URL → 无条件调用 userReference（不受 search 开关限制）并把文本/图片/解读注入识别', async () => {
+    const select = jest.fn(() => chainable(CATEGORY_ROWS));
+    const dbService = { getDb: () => ({ select }) } as unknown as DatabaseService;
+    // search 未开启：验证用户显式 URL 管线独立于可配置开关
+    const getActiveConfig = jest.fn(async () => ACTIVE_CFG);
+    const userReferenceMock = jest.fn(async () => ({
+      items: [{ source: 'user-reference', title: '人像构图指南', snippet: '侧逆光拍摄……', keywords: [], url: 'https://a.com/p' }],
+      images: [{ id: 'img-1', url: 'https://x/uploads/research/img-1.jpg', sourceUrl: 'https://a.com/1.jpg', source: 'user-reference', layer: 'user-reference', bytes: 100 }],
+      vision: { summary: '侧逆光', styles: [], colorLight: ['暖调逆光'], composition: [], wardrobe: [], scene: [], adopted: [{ id: 'img-1', reason: '构图好' }] },
+      errors: [],
+    }));
+    const service = new AiAnalyzeService(
+      dbService,
+      { getActiveConfig } as unknown as AiConfigService,
+      { research: jest.fn(), userReference: userReferenceMock } as unknown as TrendResearchService,
+    );
+    textChatJsonMock.mockResolvedValueOnce(RAW_DRAFT);
+
+    const r = await service.analyze(undefined, '人像', {
+      creationReq: '参考这个网站制作模板：https://zhuanlan.zhihu.com/p/2003398601259373929，风格类似',
+    });
+
+    expect(userReferenceMock).toHaveBeenCalledWith(
+      ['https://zhuanlan.zhihu.com/p/2003398601259373929'],
+      expect.any(String),
+    );
+    // 网页图片解读注入草稿提示词（大模型「看得到」网页内容）
+    const userText = textChatJsonMock.mock.calls[0][1].userText as string;
+    expect(userText).toContain('参考网页图片解读');
+    expect(userText).toContain('侧逆光');
+    // 文本条目合并进 research；图片 / 解读回传
+    expect(r.research[0]!.source).toBe('user-reference');
+    expect(r.researchImages).toHaveLength(1);
+    expect(r.researchVision?.summary).toBe('侧逆光');
+  });
+
+  it('创作要求含 URL 但抓取失败 → 静默降级不阻断识别', async () => {
+    const select = jest.fn(() => chainable(CATEGORY_ROWS));
+    const dbService = { getDb: () => ({ select }) } as unknown as DatabaseService;
+    const getActiveConfig = jest.fn(async () => ACTIVE_CFG);
+    const userReferenceMock = jest.fn().mockRejectedValue(new Error('页面超时'));
+    const service = new AiAnalyzeService(
+      dbService,
+      { getActiveConfig } as unknown as AiConfigService,
+      { research: jest.fn(), userReference: userReferenceMock } as unknown as TrendResearchService,
+    );
+    textChatJsonMock.mockResolvedValueOnce(RAW_DRAFT);
+
+    const res = await service.analyze(undefined, '人像', {
+      creationReq: '参考 https://a.com/p 制作',
+    });
+    expect(res).toBeDefined();
+    expect(res.research).toEqual([]);
+  });
 });
 
 describe('AiAnalyzeService — 多输入', () => {

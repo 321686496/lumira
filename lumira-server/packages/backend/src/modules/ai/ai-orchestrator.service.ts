@@ -47,6 +47,8 @@ type ScoreOutcome = {
   suggests?: string[];
   aesthetics?: AestheticsScores;
   realism?: RealismScores;
+  /** 评分调用本身失败/超时：直接收束，不进入草稿细化 */
+  error?: string;
 };
 
 export interface OrchestratorInput {
@@ -218,6 +220,12 @@ export class AiOrchestratorService {
         break;
       }
       const result: ScoreOutcome = scored;
+      // 评分调用本身失败（超时/解析失败，score 内部已标记 error）：与低分 retry 区分——
+      // 低分可交给草稿细化收敛，调用失败则收束（再细化也是白跑，还会放大等待）。
+      if (result.error) {
+        warnings.push(`质量评分失败（${result.error}），沿用当前最佳候选`);
+        break;
+      }
       const last = trace[trace.length - 1];
       if (last && last.step === 'imageScore') {
         last.score = result.score;

@@ -18,7 +18,7 @@ import type {
   ResearchImagesResult,
 } from './research-image';
 import type { ResearchItem } from './research-item';
-import { extractPageImages, extractPageImageUrl, fetchImageSafely, fetchPageHtml } from './research-image-fetch';
+import { extractPageImages, extractPageImageUrl, extractPageText, fetchImageSafely, fetchPageHtml } from './research-image-fetch';
 import { cleanupResearchImages, hashBuffer, hashUrl, readResearchImage, writeResearchImage } from './research-image-store';
 
 const logger = new Logger('ResearchImageService');
@@ -92,11 +92,10 @@ export class ResearchImageService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * 三层递进抓取参考图（第零层为「用户显式参考页面」优先抓整页多图）。
+   * 三层递进抓取参考图（检索链路专用；用户显式参考页面走 collectUserPage）。
    * - items：检索命中条目（第一层用 imgUrl、第二层用 url 抓页面）
    * - queries：本次检索词（第三层图片搜索用第一组）
    * - imagesSearch：第三层图片搜索（由 TrendResearchService 注入；缺省则该层跳过）
-   * - extraUrls：创作要求里用户显式给出的参考页面 URL，逐页抓多张图（第零层，先于检索层）
    */
   async collect(input: {
     items: ResearchItem[];
@@ -104,7 +103,6 @@ export class ResearchImageService implements OnModuleInit, OnModuleDestroy {
     imagesSearch?: ((query: string) => Promise<ResearchItem[]>) | null;
     cfg: ResearchImagesConfig;
     now?: () => number;
-    extraUrls?: string[];
   }): Promise<ResearchImagesResult> {
     const { items, queries, imagesSearch } = input;
     const cfg = input.cfg;
@@ -157,50 +155,6 @@ export class ResearchImageService implements OnModuleInit, OnModuleDestroy {
       });
       return images.length >= cfg.max;
     };
-
-    // ===== 第零层：用户显式参考页面（创作要求里直接给的 URL）：整页抓多张图 =====
-    // 检索条目是「不确定命中」，而用户显式 URL 是确定性来源，优先抓取。逐页解析多张候选图
-    // （og/twitter/JSON-LD/正文 img），沿用 URL + 内容双哈希去重与 max 截断，任何失败静默跳过。
-    if (cfg.pageFetch && input.extraUrls?.length && !overBudget()) {
-      await runPool(input.extraUrls, RESEARCH_IMAGE_CONCURRENCY, async (pageUrl) => {
-        if (images.length >= cfg.max || overBudget()) return;
-        try {
-          const html = await this.fetchPage(pageUrl, RESEARCH_IMAGE_PAGE_TIMEOUT_MS);
-          const imgUrls = extractPageImages(html, pageUrl, cfg.max - images.length);
-          for (const imgUrl of imgUrls) {
-            if (images.length >= cfg.max || overBudget()) return;
-            const key = hashUrl(imgUrl);
-            if (seenUrl.has(key)) continue;
-            seenUrl.add(key);
-            try {
-              const { buffer } = await this.fetchImage(imgUrl);
-              const contentKey = hashBuffer(buffer);
-              if (seenContent.has(contentKey)) continue;
-              seenContent.add(contentKey);
-              const written = await writeResearchImage(contentKey, buffer);
-              if (!written) continue;
-              images.push({
-                id: contentKey,
-                url: written.url,
-                sourceUrl: imgUrl,
-                pageUrl,
-                source: 'user-reference',
-                query: queries[0],
-                layer: 'user-reference',
-                width: written.width,
-                height: written.height,
-                bytes: written.bytes,
-              });
-            } catch {
-              // 单张下载失败：继续下一张候选
-            }
-          }
-        } catch (err) {
-          errors.push({ name: hostOf(pageUrl), error: err instanceof Error ? err.message : String(err) });
-        }
-      });
-    }
-    if (images.length >= cfg.max) return { images, errors };
 
     // ===== 第一层：检索条目自带图 =====
     const l1: ImageCandidate[] = items
@@ -272,5 +226,86 @@ export class ResearchImageService implements OnModuleInit, OnModuleDestroy {
     }
 
     return { images, errors };
+  }
+
+  /**
+   * 确定性抓取「用户显式参考页面」（创作要求里直接给的 URL，不受 search/images 开关限制）：
+   * 逐页提取正文文本 → 组装 ResearchItem；整页解析候选图（og/twitter/JSON-LD/正文 img）
+   * → 下载落盘 → ResearchImage。沿用 URL + 内容双哈希去重与 max 截断，任何失败静默跳过。
+   */
+  async collectUserPage(input: {
+    urls: string[];
+    max?: number;
+    now?: () => number;
+  }): Promise<{
+    items: ResearchItem[];
+    images: ResearchImage[];
+    errors: { name: string; error: string }[];
+  }> {
+    const urls = input.urls ?? [];
+    const max = input.max ?? DEFAULT_RESEARCH_IMAGES_CONFIG.max;
+    const now = input.now ?? Date.now;
+    const items: ResearchItem[] = [];
+    const images: ResearchImage[] = [];
+    const errors: { name: string; error: string }[] = [];
+    const startedAt = now();
+    const overBudget = (): boolean => now() - startedAt > RESEARCH_IMAGE_TOTAL_BUDGET_MS;
+
+    /** 已处理的 URL 哈希（跨页/跨图去重） */
+    const seenUrl = new Set<string>();
+    /** 已落盘的内容哈希（同图不同 URL 去重） */
+    const seenContent = new Set<string>();
+
+    await runPool(urls, RESEARCH_IMAGE_CONCURRENCY, async (pageUrl) => {
+      if (overBudget()) return;
+      const pageKey = hashUrl(pageUrl);
+      if (seenUrl.has(pageKey)) return;
+      seenUrl.add(pageKey);
+      try {
+        const html = await this.fetchPage(pageUrl, RESEARCH_IMAGE_PAGE_TIMEOUT_MS);
+        const { title, text } = extractPageText(html, pageUrl);
+        if (text.trim()) {
+          items.push({
+            source: 'user-reference',
+            title: title || pageUrl,
+            snippet: text.trim(),
+            keywords: [],
+            url: pageUrl,
+          });
+        }
+        const imgUrls = extractPageImages(html, pageUrl, max - images.length);
+        for (const imgUrl of imgUrls) {
+          if (images.length >= max || overBudget()) return;
+          const key = hashUrl(imgUrl);
+          if (seenUrl.has(key)) continue;
+          seenUrl.add(key);
+          try {
+            const { buffer } = await this.fetchImage(imgUrl);
+            const contentKey = hashBuffer(buffer);
+            if (seenContent.has(contentKey)) continue;
+            seenContent.add(contentKey);
+            const written = await writeResearchImage(contentKey, buffer);
+            if (!written) continue;
+            images.push({
+              id: contentKey,
+              url: written.url,
+              sourceUrl: imgUrl,
+              pageUrl,
+              source: 'user-reference',
+              layer: 'user-reference',
+              width: written.width,
+              height: written.height,
+              bytes: written.bytes,
+            });
+          } catch {
+            // 单张下载失败：继续下一张候选
+          }
+        }
+      } catch (err) {
+        errors.push({ name: hostOf(pageUrl), error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    return { items, images, errors };
   }
 }

@@ -225,12 +225,10 @@ export class TrendResearchService {
     // 子步骤「资料整理」）。失败/无有效内容 → null，由调用方回退规则摘要 buildResearchDigest。
     const brief = out.length ? await this.researchDigest.summarize(topic, out) : null;
 
-    // ===== 参考图支路：抓取（第零层显式 URL + 三层递进）→ 多模态解读 =====
+    // ===== 参考图支路：三层递进抓取 → 多模态解读 =====
     // 两阶段都包在 traceStep 内，因 research() 自身已在 traceStep('research') 上下文里，
     // 它们的 parentStep 天然为 'research'，后台时间线自动渲染为子阶段。
     const imagesCfg = cfg.images ?? DEFAULT_RESEARCH_IMAGES_CONFIG;
-    // 用户显式给出的参考页面 URL（创作要求里直接给的链接）：作为第零层抓整页多图，大模型据此能看到网页内图片
-    const explicitUrls = extractExplicitUrls(topic);
     let images: ResearchImage[] = [];
     let imageErrors: { name: string; error: string }[] = [];
     let vision: ResearchVision | null = null;
@@ -247,7 +245,7 @@ export class TrendResearchService {
         const r = await traceStep(
           'researchImages',
           '参考图抓取',
-          () => this.researchImages.collect({ items: out, queries, imagesSearch, cfg: imagesCfg, extraUrls: explicitUrls }),
+          () => this.researchImages.collect({ items: out, queries, imagesSearch, cfg: imagesCfg }),
           (res) => (res.images.length ? `抓取 ${res.images.length} 张参考图${res.errors.length ? `（${res.errors.length} 处失败）` : ''}` : '未抓到参考图'),
           (res) => ({ images: toTraceImages(res.images) }),
         );
@@ -275,5 +273,56 @@ export class TrendResearchService {
     }
 
     return { items: out, sourceErrors, brief, images, imageErrors, vision };
+  }
+
+  /**
+   * 确定性抓取「用户显式参考页面」（创作要求里直接给的 URL），不受 search/images 开关限制：
+   * 逐页抓正文文本条目 + 整页多图落盘，再交给多模态解读（失败静默 null）。
+   * 由 ai-analyze 在识别阶段无条件调用，把网页内容与图片一并注入草稿提示词。
+   */
+  async userReference(
+    urls: string[],
+    topic: string,
+  ): Promise<{
+    items: ResearchItem[];
+    images: ResearchImage[];
+    vision: ResearchVision | null;
+    errors: { name: string; error: string }[];
+  }> {
+    if (!urls.length) return { items: [], images: [], vision: null, errors: [] };
+    try {
+      const r = await traceStep(
+        'userReference',
+        '参考网页抓取',
+        () => this.researchImages.collectUserPage({ urls }),
+        (res) =>
+          `抓取 ${res.items.length} 条文本 / ${res.images.length} 张图${res.errors.length ? `（${res.errors.length} 处失败）` : ''}`,
+        (res) => ({ items: res.items.length, images: toTraceImages(res.images) }),
+      );
+      let vision: ResearchVision | null = null;
+      if (r.images.length) {
+        try {
+          const loaded = (
+            await Promise.all(
+              r.images.map(async (image) => {
+                const data = await this.researchImages.readBase64(image.id);
+                return data ? { image, base64: data.base64, mime: data.mime } : null;
+              }),
+            )
+          ).filter((v): v is { image: ResearchImage; base64: string; mime: string } => v !== null);
+          vision = await this.researchVision.interpret(topic, loaded);
+        } catch {
+          vision = null;
+        }
+      }
+      return { items: r.items, images: r.images, vision, errors: r.errors };
+    } catch (err) {
+      return {
+        items: [],
+        images: [],
+        vision: null,
+        errors: [{ name: 'userReference', error: err instanceof Error ? err.message : String(err) }],
+      };
+    }
   }
 }

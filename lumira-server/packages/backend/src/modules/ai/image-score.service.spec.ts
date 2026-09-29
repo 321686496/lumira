@@ -118,7 +118,7 @@ describe('ImageScoreService.score', () => {
     expect(res.suggests).toContain('重跑姿势面片');
   });
 
-  it('非法 JSON（重试用尽 → LlmJsonError）→ 保守 {score:0, verdict:retry, reasons:["评分为空"]} 不抛', async () => {
+  it('非法 JSON / 超时（LlmJsonError）→ 标记 error 的保守结果不抛，上游据此收束', async () => {
     textChatJsonMock.mockRejectedValueOnce(
       new LlmJsonError('AI 输出无法解析为 JSON（已重试 2 次）：输出不是合法 JSON'),
     );
@@ -126,7 +126,27 @@ describe('ImageScoreService.score', () => {
 
     const res = await svc.score(input());
 
-    expect(res).toEqual({ score: 0, verdict: 'retry', reasons: ['评分为空'], suggests: [] });
+    expect(res).toEqual({
+      score: 0,
+      verdict: 'retry',
+      error: '评分调用失败/超时或输出无法解析',
+      reasons: ['评分调用失败，未产出有效评审'],
+      suggests: [],
+    });
+  });
+
+  it('评分只允许单次尝试：runtime.retryCount 强制为 0（失败/超时不被 runJsonChat 重试放大）', async () => {
+    // 配置默认 retryCount=2；评分必须覆盖为 0
+    const aiConfigService = {
+      getActiveConfig: async () => ({ text: TEXT, runtime: { retryCount: 2, timeoutMs: 300_000, maxTokens: 8192 } }),
+    } as unknown as AiConfigService;
+    const svc = new ImageScoreService(aiConfigService);
+    textChatJsonMock.mockResolvedValueOnce({ score: 0.9, reasons: [], suggests: [] });
+
+    await svc.score(input());
+
+    const [, , runtime] = textChatJsonMock.mock.calls[0];
+    expect(runtime).toEqual(RUNTIME);
   });
 
   it('非 LlmJsonError 的硬错误（如鉴权失败）→ 原样上抛，不降级为评分 0', async () => {

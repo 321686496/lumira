@@ -105,6 +105,8 @@ export interface ScoreResult {
   reasons: string[];
   /** 可执行的改进建议（供决策层微调后重跑） */
   suggests: string[];
+  /** 评分调用本身失败/超时（区别于「低分 retry」）：上游应直接收束，不再草稿细化 */
+  error?: string;
   /** 审美分项（供 trace 与后台时间线展示） */
   aesthetics?: AestheticsScores;
   /** 真实分项（供 trace 与后台时间线展示） */
@@ -212,10 +214,12 @@ export class ImageScoreService {
           userText: buildScoreUserText(input),
           temperature: 0.3,
           // 不携带工具上下文：评分是纯文本评审，若开启爬取工具会让模型陷入工具循环，一次评分最多拖出
-          // 多轮 LLM 调用（每轮 300s）导致「动不动超时」；同时用 SCORE_TIMEOUT_MS 兜底每次调用时长。
+          // 多轮 LLM 调用（每轮 300s）导致「动不动超时」；同时用 SCORE_TIMEOUT_MS 兜底单次调用时长。
           timeoutMs: SCORE_TIMEOUT_MS,
         },
-        cfg.runtime,
+        // 评分只允许单次尝试：评审失败宁可降级沿用最佳候选，也不能让一次超时被 runJsonChat 重试放大成
+        // 多轮长跑（每轮 180s）。retryCount: 0 → 失败/超时直接 LlmJsonError → 标记 error 收束。
+        { ...cfg.runtime, retryCount: 0 },
       );
     } catch (err) {
       // 仅「解析失败/重试用尽」走保守回退；鉴权等硬错误原样上抛（与 style-profile 对齐），
@@ -224,7 +228,7 @@ export class ImageScoreService {
       else throw err;
     }
     if (!json) {
-      return { score: 0, verdict: 'retry', reasons: ['评分为空'], suggests: [] };
+      return { score: 0, verdict: 'retry', error: '评分调用失败/超时或输出无法解析', reasons: ['评分调用失败，未产出有效评审'], suggests: [] };
     }
 
     const rawScore =

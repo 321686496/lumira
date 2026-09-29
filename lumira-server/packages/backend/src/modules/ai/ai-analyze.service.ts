@@ -10,7 +10,6 @@ import { templateCategories } from '../../database/schema';
 import { MAX_IMAGE_BYTES, UploadFile } from '../templates/admin-templates.service';
 import { AiConfigService } from './ai-config.service';
 import { visionChatJson, textChatJson, LlmJsonError } from './llm-json';
-import { resolveTextTools } from './tools/text-tools';
 import {
   buildAnalyzeSystemPrompt,
   buildAnalyzeUserPrompt,
@@ -27,7 +26,8 @@ import { renderResearchBrief } from './trend-research/research-brief';
 import type { ResearchImage } from './trend-research/research-image';
 import type { ResearchVision } from './trend-research/research-vision';
 import { buildResearchDigest } from './trend-research/research-digest';
-import { TrendResearchService } from './trend-research/trend-research.service';
+import { TrendResearchService, extractExplicitUrls } from './trend-research/trend-research.service';
+import { renderResearchVision, visionHasContent } from './trend-research';
 import { StyleProfileService, type StyleProfileResolveResult } from './style-profile.service';
 import { traceNote, traceStep } from './llm-trace';
 
@@ -170,6 +170,37 @@ export class AiAnalyzeService {
       }
     }
 
+    // 3.6 用户显式参考页面：创作要求里直接给出的 URL（如「参考这个网站制作模板：https://...」）。
+    //     这是用户的确定性指定来源，不受 search/images 开关限制：整页文本条目 + 整页多图落盘 +
+    //     多模态解读一并合并进 research / researchImages / researchVision，
+    //     并把网页图片解读结论注入草稿提示词（researchDigest），让大模型在构思时「看得到」网页内容。
+    const explicitUrls = extractExplicitUrls(extra.creationReq ?? '');
+    let userVision: ResearchVision | null = null;
+    if (explicitUrls.length) {
+      const topic = (extra.creationReq?.trim() || trimmedText).trim();
+      try {
+        const ref = await traceStep(
+          'userReference',
+          '参考网页抓取',
+          () => this.trendResearch.userReference(explicitUrls, topic),
+          (res) => `抓取 ${res.items.length} 条文本 / ${res.images.length} 张图${res.vision ? '（已解读）' : ''}`,
+        );
+        research.push(...ref.items);
+        researchImages.push(...ref.images);
+        if (ref.vision) userVision = ref.vision;
+        if (ref.vision && visionHasContent(ref.vision)) {
+          researchDigest += researchDigest ? '\n' : '';
+          researchDigest += `【参考网页图片解读】\n${renderResearchVision(ref.vision)}`;
+        }
+        // 参考网页提供了一条确定性内容来源 → 不再视为「无参考」
+        if (ref.items.length || ref.images.length) researchUnavailable = false;
+      } catch {
+        // 参考网页抓取失败：静默降级，不阻断识别
+      }
+      // 结果只携带一份解读：用户显式参考网页（确定性来源）优先，检索参考图解读兜底
+      researchVision = userVision ?? researchVision;
+    }
+
     // 4. 按输入组合分叉：有图走视觉模型，仅文字走文本模型；两者均带 JSON 有界重试
     let json: Record<string, unknown>;
     try {
@@ -216,7 +247,10 @@ export class AiAnalyzeService {
                   researchUnavailable,
                 }),
                 temperature: 0.3,
-                ctx: resolveTextTools(cfg),
+                // 不携带工具上下文：文字构思是单次 JSON 生成，若开启爬取工具，模型可能对创作要求里的
+                // URL 反复发起 crawl 工具调用，一次草稿最多拖出多轮 LLM 调用（每轮 300s）导致「动不动超时」。
+                // 用户显式 URL 的内容已由「参考网页抓取」确定性管线（userReference）预抓进 researchDigest，
+                // 无需模型再主动爬取。
               },
               cfg.runtime,
             ),
