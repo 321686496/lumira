@@ -19,8 +19,10 @@ import { renderStyleProfileBlock, normalizeStyleProfile, type StyleProfile } fro
 /** 通过闸门：score >= 该值 → pass，否则 retry */
 export const SCORE_PASS_THRESHOLD = 0.85;
 
-/** 单次评分 LLM 调用的超时上限（毫秒）：评审是纯文本判断，不应像检索/识图那样长跑 */
-export const SCORE_TIMEOUT_MS = 180_000;
+/** 单次评分 LLM 调用的超时上限（毫秒）：评审模型可能慢响应（实测可达 ~174s），
+ *  180s 窗口算上网络/排队开销就会误报超时，直接拉长到 10 分钟（配合 retryCount: 0 单次尝试，
+ *  该步最坏等待 = 10 分钟封顶，不再出现「173s 响应却被判超时」的误杀）。 */
+export const SCORE_TIMEOUT_MS = 600_000;
 
 /** 审美分项：画面是否「好看且命中档案取向」 */
 export interface AestheticsScores {

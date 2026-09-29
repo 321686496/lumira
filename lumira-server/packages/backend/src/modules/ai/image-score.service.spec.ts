@@ -310,7 +310,8 @@ describe('ImageScoreService.score 三段闸门', () => {
 
     const chatInput = textChatJsonMock.mock.calls[0][1];
     expect(chatInput.ctx).toBeUndefined();
-    expect(chatInput.timeoutMs).toBe(180_000);
+    // 单次超时 10 分钟：评审模型慢响应（实测 ~174s）不能被 180s 窗口误杀
+    expect(chatInput.timeoutMs).toBe(600_000);
   });
 
   it('趋势研究条目在评审输入中截断（条数与 snippet 长度限制，控制载荷）', async () => {

@@ -58,7 +58,9 @@ export class ResearchVisionService {
       images: images.map((it) => ({ base64: it.base64, mime: it.mime })),
       temperature: 0.3,
       jsonMode: true,
-      timeoutMs: 120_000,
+      // 多图解读可能慢响应（实测评审类调用可达 ~174s），120s 窗口会误杀导致解读静默失败，
+      // 直接拉长到 10 分钟（失败仍由调用方 catch → null 兜底，不阻断流程）
+      timeoutMs: 600_000,
     });
 
   constructor(private readonly aiConfigService: AiConfigService) {}
