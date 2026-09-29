@@ -417,6 +417,7 @@ export class AiPipelineJobService implements OnModuleDestroy {
     const references = job.inputs.references;
     const research = this.buildResearchJson(job);
     const failed: number[] = [];
+    let firstError: unknown;
 
     for (const index of todo) {
       this.append(job, {
@@ -466,6 +467,7 @@ export class AiPipelineJobService implements OnModuleDestroy {
           durationMs: Date.now() - startedAt,
         });
       } catch (err) {
+        if (firstError === undefined) firstError = err;
         failed.push(index);
         byIndex.delete(index);
         this.append(job, {
@@ -515,10 +517,13 @@ export class AiPipelineJobService implements OnModuleDestroy {
     job.artifacts.poseErrors = failed.map((index) => ({ index, error: '姿势图生成失败' }));
 
     if (failed.length) {
+      // 透传真实上游分类（超时/网络/空响应/HTTP），不用固定 upstream_http 掩盖原因；
+      // 仅在没有逐张异常（如续跑时锚点本就缺失）时回退到 upstream_http。
+      const c = firstError === undefined ? null : classifyUpstreamError(firstError);
       throw new AiUpstreamError(
-        'upstream_http',
+        c?.code ?? 'upstream_http',
         `共 ${failed.length}/${total} 张姿势图生成失败（#${failed.map((i) => i + 1).join('、')}）`,
-        { failedIndexes: failed },
+        { status: c?.status, upstream: c?.upstream, failedIndexes: failed },
       );
     }
   }

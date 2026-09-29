@@ -169,3 +169,125 @@ describe('AiPipelineJobService（续跑：image 阶段锚点失败后剪影补�
     expect(job.status).toBe('done');
   });
 });
+
+describe('AiPipelineJobService（三阶段与续跑）', () => {
+  let service: AiPipelineJobService;
+  let analyzeMock: jest.Mock;
+  let generateMock: jest.Mock;
+  let silhouetteMock: jest.Mock;
+
+  const DRAFT = { pose: [{ index: 0 }, { index: 1 }] };
+
+  beforeEach(() => {
+    analyzeMock = jest.fn().mockResolvedValue({
+      draft: DRAFT, warnings: [], trace: [], raw: {}, research: [], brief: null, researchVision: null,
+    });
+    generateMock = jest.fn().mockResolvedValue({ base64: 'aW1n', mimeType: 'image/png', prompt: 'p', model: 'm' });
+    silhouetteMock = jest.fn().mockResolvedValue({ image: 'c2ls', mimeType: 'image/png' });
+    service = new AiPipelineJobService(
+      { analyze: analyzeMock } as unknown as AiAnalyzeService,
+      {
+        acquireImageSlot: jest.fn().mockResolvedValue(0),
+        releaseImageSlot: jest.fn(),
+        generate: generateMock,
+      } as unknown as AiGenerateImageService,
+      { generate: silhouetteMock } as unknown as AiSilhouetteService,
+    );
+  });
+
+  afterEach(() => {
+    service.onModuleDestroy();
+    jest.restoreAllMocks();
+  });
+
+  async function waitStatus(jobId: string, status: string): Promise<void> {
+    for (let i = 0; i < 12000; i += 1) {
+      if (service.get(jobId)?.status === status) return;
+      await new Promise((r) => setTimeout(r, 2));
+    }
+    throw new Error(`timed out waiting for job status ${status}`);
+  }
+
+  it('auto：识别 → 2 张姿势图 → 2 张剪影 → done，产物齐备且事件带 stage/index', async () => {
+    const { jobId } = await service.create({ text: '文字描述', mode: 'auto' });
+    await waitStatus(jobId, 'done');
+    const job = service.get(jobId)!;
+    expect(job.stages.analyze.status).toBe('done');
+    expect(job.stages.image.status).toBe('done');
+    expect(job.stages.silhouette.status).toBe('done');
+    expect(job.artifacts.poseFiles.map((f) => f.index)).toEqual([0, 1]);
+    expect(job.artifacts.silFiles.map((f) => f.index)).toEqual([0, 1]);
+    // 首张锚点先用用户参考图（此处无参考图 → undefined），依赖张以锚点为参考
+    expect(generateMock).toHaveBeenCalledTimes(2);
+    expect(job.events.some((e) => e.stage === 'image' && e.index === 1 && e.title === '姿势图 #2 完成')).toBe(true);
+    expect(job.events.some((e) => e.stage === 'silhouette' && e.index === 0)).toBe(true);
+    // seq 严格递增 1..n
+    expect(job.events.map((e) => e.seq)).toEqual(job.events.map((_, i) => i + 1));
+  });
+
+  it(
+    'auto：单张姿势图失败 → image 阶段 error，中断详情带失败下标且不继续到剪影',
+    async () => {
+      generateMock.mockImplementation((_refs: unknown, metaJson: string) => {
+        const meta = JSON.parse(metaJson) as { pose?: { index?: number } };
+        if (meta.pose?.index === 1) return Promise.reject(new Error('AI 请求超时，请稍后重试'));
+        return Promise.resolve({ base64: 'aW1n', mimeType: 'image/png', prompt: 'p', model: 'm' });
+      });
+
+      const { jobId } = await service.create({ text: '文字描述', mode: 'auto' });
+      await waitStatus(jobId, 'error');
+      const job = service.get(jobId)!;
+      expect(job.error?.stage).toBe('image');
+      expect(job.error?.code).toBe('upstream_timeout');
+      expect(job.error?.failedIndexes).toEqual([1]);
+      expect(job.artifacts.poseFiles.map((f) => f.index)).toEqual([0]);
+      expect(job.stages.silhouette.status).toBe('pending');
+      expect(silhouetteMock).not.toHaveBeenCalled();
+    },
+    30_000,
+  );
+
+  it(
+    'resume：image 失败后只补失败张，成功后继续跑剪影到 done',
+    async () => {
+      generateMock.mockImplementation((_refs: unknown, metaJson: string) => {
+        const meta = JSON.parse(metaJson) as { pose?: { index?: number } };
+        if (meta.pose?.index === 1) return Promise.reject(new Error('AI 请求超时，请稍后重试'));
+        return Promise.resolve({ base64: 'aW1n', mimeType: 'image/png', prompt: 'p', model: 'm' });
+      });
+
+      const { jobId } = await service.create({ text: '文字描述', mode: 'auto' });
+      await waitStatus(jobId, 'error');
+      const callsBeforeResume = generateMock.mock.calls.length;
+
+      generateMock.mockResolvedValue({ base64: 'aW1n', mimeType: 'image/png', prompt: 'p', model: 'm' });
+      const resumed = await service.resume(jobId);
+      expect(resumed).toEqual({ resumed: true, status: 'running' });
+
+      await waitStatus(jobId, 'done');
+      const job = service.get(jobId)!;
+      // 仅补失败张：resume 后只多调了 1 次生图（未重跑已成功的 #1）
+      expect(generateMock.mock.calls.length - callsBeforeResume).toBe(1);
+      expect(job.artifacts.poseFiles.map((f) => f.index)).toEqual([0, 1]);
+      expect(job.artifacts.silFiles.map((f) => f.index)).toEqual([0, 1]);
+    },
+    30_000,
+  );
+
+  it('resume：running 的 job 不重跑（前端重连即可）；不存在的 jobId 返回 null', async () => {
+    analyzeMock.mockImplementation(() => new Promise(() => undefined));
+    const { jobId } = await service.create({ text: '文字', mode: 'analyze-only' });
+    await expect(service.resume(jobId)).resolves.toEqual({ resumed: false, status: 'running' });
+    await expect(service.resume('job_nope')).resolves.toBeNull();
+  });
+
+  it('识别失败：bad request → invalid_input 中断，分析服务被调用一次', async () => {
+    analyzeMock.mockRejectedValue(new BadRequestException('示例图不能超过 8MB（当前 9.00MB）'));
+    const { jobId } = await service.create({ text: '文字', mode: 'analyze-only' });
+    await waitStatus(jobId, 'error');
+    const job = service.get(jobId)!;
+    expect(job.error?.code).toBe('invalid_input');
+    expect(job.error?.stage).toBe('analyze');
+    expect(job.error?.message).toContain('8MB');
+  });
+});
