@@ -14,7 +14,7 @@ jest.mock('./llm-json', () => ({
 }));
 const textChatJsonMock = textChatJson as jest.MockedFunction<typeof textChatJson>;
 
-const RUNTIME = { retryCount: 0, timeoutMs: 300_000, maxTokens: 8192 };
+const RUNTIME = { retryCount: 0, timeoutMs: 600_000, maxTokens: 8192 };
 
 const TEXT: LlmEndpoint = { provider: 'qwen', baseUrl: 'x', apiKey: 'sk', model: 'qwen-plus' };
 
@@ -65,5 +65,9 @@ describe('DraftRefineService.refine', () => {
     expect(systemPrompt).toContain('不得破坏真实底线');
     expect(systemPrompt).toContain('styleProfile');
     expect(systemPrompt).toContain('本次风格档案（必须遵守）');
+    // 不携带工具上下文：杜绝 crawl 工具循环卡死（「草稿细化超时」根因）
+    expect((textChatJsonMock.mock.calls[0][1] as { ctx?: unknown }).ctx).toBeUndefined();
+    // 单次超时拉长到 10 分钟
+    expect(textChatJsonMock.mock.calls[0][2]).toMatchObject({ timeoutMs: 600_000 });
   });
 });

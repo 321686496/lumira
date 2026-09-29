@@ -10,7 +10,6 @@ import { Injectable } from '@nestjs/common';
 import { AiConfigService } from './ai-config.service';
 import type { LlmEndpoint } from './llm-client';
 import { textChatJson } from './llm-json';
-import { resolveTextTools } from './tools/text-tools';
 import { describeTodayUtc8 } from '../../common/utils/date.util';
 import type { ImageDescription } from './image-describe.service';
 import type { PoseRefSheet } from './pose-ref-sheet.service';
@@ -92,9 +91,11 @@ export class DraftRefineService {
           systemPrompt: buildRefineSystemPrompt(input.styleProfile),
           userText: buildRefineUserText(input),
           temperature: 0.5,
-          ctx: resolveTextTools(cfg),
         },
-        cfg.runtime,
+        // 不携带工具上下文：杜绝模型对 URL 反复发起 crawl 工具调用（工具循环 4 轮 × 重试放大，
+        // 是「草稿细化卡死/超时」的根因）。研究内容已由确定性管线以文本注入，无需模型主动爬取。
+        // 单次超时拉长到 10 分钟（600s），覆盖 AI 慢响应场景。
+        { ...cfg.runtime, timeoutMs: 600_000 },
       );
     } catch {
       return null; // 重试用尽 → 编排层保留原稿（既有语义）
