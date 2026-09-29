@@ -36,8 +36,12 @@ function formatDuration(ms?: number): string | null {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-function statusText(ev: TraceCallCardData): string | null {
-  if (ev.status === 'running' || ev.status === 'pending') return '等待响应…';
+function statusText(ev: TraceCallCardData, nowTick?: number): string | null {
+  if (ev.status === 'running' || ev.status === 'pending') {
+    // 运行中：显示已等待秒数（nowTick 由外层每秒驱动），让「等待响应中」有明确的实时耗时
+    if (nowTick && typeof ev.ts === 'number') return `已等待 ${formatDuration(Math.max(0, nowTick - ev.ts))}`;
+    return '等待响应…';
+  }
   if (ev.status === 'fail' || ev.status === 'error') return '失败';
   return ev.resultBrief ?? null;
 }
@@ -55,10 +59,10 @@ async function copyText(text: string): Promise<boolean> {
   return false;
 }
 
-export function TraceCallCard({ ev, defaultOpen = true, className }: { ev: TraceCallCardData; defaultOpen?: boolean; className?: string }) {
+export function TraceCallCard({ ev, defaultOpen = true, nowTick, className }: { ev: TraceCallCardData; defaultOpen?: boolean; nowTick?: number; className?: string }) {
   const duration = formatDuration(ev.durationMs);
   const isSearch = ev.type === 'search';
-  const status = statusText(ev);
+  const status = statusText(ev, nowTick);
   return (
     <div className={cn('rounded-md border border-border bg-muted/40 px-3 py-2', className)}>
       <div className="flex flex-wrap items-center gap-1.5">

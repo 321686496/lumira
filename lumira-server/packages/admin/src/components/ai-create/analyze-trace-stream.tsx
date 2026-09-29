@@ -205,25 +205,25 @@ function collapseToRows(items: TimelineItem[]): RowSpec[] {
 }
 
 /** 一层的行 → 竖轨嵌套列表（用于「选中阶段」下方的子项展示） */
-function renderItems(items: TimelineItem[], adoptedImageIds: string[]): React.ReactNode[] {
+function renderItems(items: TimelineItem[], adoptedImageIds: string[], nowTick: number): React.ReactNode[] {
   const rows = collapseToRows(items);
   const lastIdx = rows.length - 1;
   return rows.map((row, i) => {
     const last = i === lastIdx;
-    if (row.kind === 'step') return <StepRow key={row.key} node={row.node} last={last} adoptedImageIds={adoptedImageIds} />;
-    if (row.kind === 'call') return <CallRow key={row.key} ev={row.ev} last={last} />;
+    if (row.kind === 'step') return <StepRow key={row.key} node={row.node} last={last} adoptedImageIds={adoptedImageIds} nowTick={nowTick} />;
+    if (row.kind === 'call') return <CallRow key={row.key} ev={row.ev} last={last} nowTick={nowTick} />;
     return <NoteRow key={row.key} ev={row.ev} last={last} />;
   });
 }
 
 const rowId = (row: RowSpec): string => (row.kind === 'step' ? `s:${row.key}` : `${row.kind === 'call' ? 'c' : 'n'}:${row.key}`);
 
-/** 轨道格子副行文案：序号 · 状态/耗时 · 时间 */
-function railMeta(row: RowSpec): string {
+/** 轨道格子副行文案：序号 · 状态/耗时 · 时间；运行中显示实时「已等待 X」 */
+function railMeta(row: RowSpec, nowTick: number): string {
   if (row.kind === 'step') {
     const parts: string[] = [];
     if (row.node.total > 1) parts.push(`#${row.node.occurrence}`);
-    if (row.node.status === 'running') parts.push('执行中…');
+    if (row.node.status === 'running') parts.push(`已等待 ${formatDuration(Math.max(0, nowTick - row.node.ts))}`);
     else {
       const d = formatDuration(row.node.durationMs);
       if (d) parts.push(d);
@@ -231,7 +231,9 @@ function railMeta(row: RowSpec): string {
     parts.push(formatTime(row.node.ts));
     return parts.join(' · ');
   }
-  if (row.ev.status === 'running' || row.ev.status === 'pending') return '执行中…';
+  if (row.ev.status === 'running' || row.ev.status === 'pending') {
+    return typeof row.ev.ts === 'number' ? `已等待 ${formatDuration(Math.max(0, nowTick - row.ev.ts))}` : '执行中…';
+  }
   return [formatDuration(row.ev.durationMs), row.ev.ts ? formatTime(row.ev.ts) : null].filter(Boolean).join(' · ');
 }
 
@@ -244,6 +246,14 @@ export function AnalyzeTraceStream({ events, running = false, title = '识别流
   const [stick, setStick] = useState(true);
   /** 用户手动点选的阶段（null = 跟随最新） */
   const [pickedId, setPickedId] = useState<string | null>(null);
+  /** 实时时钟（毫秒）：有运行中步骤/调用时每秒推进，驱动「已等待 X」刷新 */
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const anyRunning = events.some((e) => e.status === 'running');
+  useEffect(() => {
+    if (!anyRunning) return;
+    const timer = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [anyRunning]);
 
   const timeline = buildTimeline(events);
   const adoptedImageIds = events.flatMap((e) => e.adoptedImageIds ?? []);
@@ -325,7 +335,7 @@ export function AnalyzeTraceStream({ events, running = false, title = '识别流
                     key={id}
                     type="button"
                     onClick={() => setPickedId(active ? null : id)}
-                    title={`${railLabel(row)}（${railMeta(row)}）`}
+                    title={`${railLabel(row)}（${railMeta(row, nowTick)}）`}
                     className={cn(
                       'flex w-[118px] shrink-0 flex-col items-center rounded-md px-1 py-1 text-center transition-colors',
                       active ? 'bg-muted' : 'hover:bg-muted/50',
@@ -339,7 +349,7 @@ export function AnalyzeTraceStream({ events, running = false, title = '识别流
                     <span className={cn('mt-1.5 w-full truncate text-xs', fail ? 'text-destructive' : active ? 'font-semibold text-foreground' : 'text-foreground')}>
                       {railLabel(row)}
                     </span>
-                    <span className="w-full truncate font-mono text-[10px] text-muted-foreground">{railMeta(row)}</span>
+                    <span className="w-full truncate font-mono text-[10px] text-muted-foreground">{railMeta(row, nowTick)}</span>
                   </button>
                 );
               })}
@@ -348,7 +358,7 @@ export function AnalyzeTraceStream({ events, running = false, title = '识别流
 
           {/* 选中阶段的详情与子项 */}
           <div ref={bodyRef} onScroll={handleScroll} className={cn('overflow-y-auto p-3', bodyClassName)}>
-            {selected && <RowDetail row={selected} adoptedImageIds={adoptedImageIds} />}
+            {selected && <RowDetail row={selected} adoptedImageIds={adoptedImageIds} nowTick={nowTick} />}
           </div>
         </>
       )}
@@ -379,8 +389,8 @@ function RailDot({ row, active }: { row: RowSpec; active: boolean }) {
 }
 
 /** 选中阶段下方的内容：阶段结论 + 其全部子项；调用/说明则直接展示本身 */
-function RowDetail({ row, adoptedImageIds }: { row: RowSpec; adoptedImageIds: string[] }) {
-  if (row.kind === 'call') return <TraceCallCard ev={row.ev} />;
+function RowDetail({ row, adoptedImageIds, nowTick }: { row: RowSpec; adoptedImageIds: string[]; nowTick: number }) {
+  if (row.kind === 'call') return <TraceCallCard ev={row.ev} nowTick={nowTick} />;
   if (row.kind === 'note') {
     return (
       <div className="flex items-center gap-2 py-0.5">
@@ -401,7 +411,9 @@ function RowDetail({ row, adoptedImageIds }: { row: RowSpec; adoptedImageIds: st
         <span className={cn('text-sm', node.status === 'fail' ? 'font-medium text-destructive' : 'font-semibold text-foreground')}>{node.title}</span>
         {node.total > 1 && <span className="shrink-0 rounded bg-muted px-1 font-mono text-[10px] text-muted-foreground">#{node.occurrence}</span>}
         <span className="truncate font-mono text-[10px] text-muted-foreground">{node.step}</span>
-        {node.status === 'running' && <span className="shrink-0 text-xs text-primary">执行中…</span>}
+        {node.status === 'running' && (
+          <span className="shrink-0 text-xs text-primary">已等待 {formatDuration(Math.max(0, nowTick - node.ts))}</span>
+        )}
         <span className="ml-auto flex shrink-0 items-center gap-2 text-[10px] text-muted-foreground">
           {duration && <span>{duration}</span>}
           <span>{formatTime(node.ts)}</span>
@@ -414,7 +426,7 @@ function RowDetail({ row, adoptedImageIds }: { row: RowSpec; adoptedImageIds: st
         <TraceImageGrid images={node.images} adoptedImageIds={adoptedImageIds} className="mt-2" />
       ) : null}
       {hasChildren ? (
-        <div className="mt-2">{renderItems(node.children, adoptedImageIds)}</div>
+        <div className="mt-2">{renderItems(node.children, adoptedImageIds, nowTick)}</div>
       ) : (
         <p className="mt-2 text-xs text-muted-foreground">该阶段没有更细的过程事件。</p>
       )}
@@ -435,7 +447,7 @@ function TimelineRow({ dot, dotClassName, last, children }: { dot: React.ReactNo
   );
 }
 
-function StepRow({ node, last, adoptedImageIds }: { node: StepNode; last: boolean; adoptedImageIds: string[] }) {
+function StepRow({ node, last, adoptedImageIds, nowTick }: { node: StepNode; last: boolean; adoptedImageIds: string[]; nowTick: number }) {
   const [open, setOpen] = useState(true);
   const duration = formatDuration(node.durationMs);
   const hasChildren = node.children.length > 0;
@@ -449,7 +461,9 @@ function StepRow({ node, last, adoptedImageIds }: { node: StepNode; last: boolea
           <span className="shrink-0 rounded bg-muted px-1 font-mono text-[10px] text-muted-foreground">#{node.occurrence}</span>
         )}
         <span className="truncate font-mono text-[10px] text-muted-foreground">{node.step}</span>
-        {node.status === 'running' && <span className="shrink-0 text-xs text-primary">执行中…</span>}
+        {node.status === 'running' && (
+          <span className="shrink-0 text-xs text-primary">已等待 {formatDuration(Math.max(0, nowTick - node.ts))}</span>
+        )}
         <span className="ml-auto flex shrink-0 items-center gap-2 text-[10px] text-muted-foreground">
           {duration && <span>{duration}</span>}
           <span>{formatTime(node.ts)}</span>
@@ -459,12 +473,12 @@ function StepRow({ node, last, adoptedImageIds }: { node: StepNode; last: boolea
       {(node.error || node.brief) && (
         <div className={cn('mt-0.5 text-xs', node.error ? 'text-destructive' : 'text-muted-foreground')}>{node.error || node.brief}</div>
       )}
-      {open && hasChildren && <div className="mt-1">{renderItems(node.children, adoptedImageIds)}</div>}
+      {open && hasChildren && <div className="mt-1">{renderItems(node.children, adoptedImageIds, nowTick)}</div>}
     </TimelineRow>
   );
 }
 
-function CallRow({ ev, last }: { ev: TraceCallCardData; last: boolean }) {
+function CallRow({ ev, last, nowTick }: { ev: TraceCallCardData; last: boolean; nowTick: number }) {
   const waiting = ev.status === 'running' || ev.status === 'pending';
   return (
     <TimelineRow
@@ -472,7 +486,7 @@ function CallRow({ ev, last }: { ev: TraceCallCardData; last: boolean }) {
       dotClassName="mt-2.5"
       dot={<span className={cn('h-2 w-2 rounded-full', waiting ? 'bg-primary animate-pulse' : 'bg-muted-foreground/40')} />}
     >
-      <TraceCallCard ev={ev} />
+      <TraceCallCard ev={ev} nowTick={nowTick} />
     </TimelineRow>
   );
 }
