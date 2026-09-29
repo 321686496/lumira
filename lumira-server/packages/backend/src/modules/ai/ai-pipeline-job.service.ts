@@ -633,9 +633,9 @@ export class AiPipelineJobService implements OnModuleDestroy {
       onlyIndexes.image = job.artifacts.poseErrors.length
         ? job.artifacts.poseErrors.map((e) => e.index)
         : undefined;
-      onlyIndexes.silhouette = job.artifacts.poseFiles
-        .filter((s) => !job.artifacts.silFiles.some((x) => x.index === s.index))
-        .map((s) => s.index);
+      // 此处不预置 silhouette 下标：image 阶段失败时剪影阶段必未运行，且重跑会新增姿势图，
+      // 若用重跑前的 poseFiles 算「缺剪影的下标」会算死缺失集合（静默漏产出/一张不生成）。
+      // 交由 runSilhouetteStage 在只传 undefined 时对全部姿势图生成剪影。
     } else {
       onlyIndexes.silhouette = job.artifacts.silErrors.length ? job.artifacts.silErrors.map((e) => e.index) : undefined;
     }

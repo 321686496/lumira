@@ -98,3 +98,74 @@ describe('AiPipelineJobService（生命周期与序列化）', () => {
     expect(incremental.events[0]!.seq).toBe(all.lastSeq);
   });
 });
+
+describe('AiPipelineJobService（续跑：image 阶段锚点失败后剪影补齐）', () => {
+  let service: AiPipelineJobService;
+  let analyzeMock: jest.Mock;
+  let generateMock: jest.Mock;
+  let silhouetteMock: jest.Mock;
+
+  beforeEach(() => {
+    analyzeMock = jest.fn().mockResolvedValue({
+      draft: { pose: [{ index: 0 }, { index: 1 }] },
+      warnings: [],
+      trace: [],
+      raw: {},
+      research: [],
+    });
+    generateMock = jest.fn().mockResolvedValue({ base64: 'aW1n', mimeType: 'image/png', prompt: 'p', model: 'm' });
+    silhouetteMock = jest.fn().mockResolvedValue({ image: 'c2ls', mimeType: 'image/png' });
+    service = new AiPipelineJobService(
+      { analyze: analyzeMock } as unknown as AiAnalyzeService,
+      {
+        acquireImageSlot: jest.fn().mockResolvedValue(0),
+        releaseImageSlot: jest.fn(),
+        generate: generateMock,
+      } as unknown as AiGenerateImageService,
+      { generate: silhouetteMock } as unknown as AiSilhouetteService,
+    );
+  });
+
+  afterEach(() => {
+    service.onModuleDestroy();
+    jest.restoreAllMocks();
+  });
+
+  async function waitStatus(jobId: string, status: string): Promise<void> {
+    for (let i = 0; i < 6000; i += 1) {
+      if (service.get(jobId)?.status === status) return;
+      await new Promise((r) => setTimeout(r, 2));
+    }
+    throw new Error(`timed out waiting for job status ${status}`);
+  }
+
+  it('image 阶段锚点（index 0）失败 → resume 后全部姿势图与全部剪影都最终生成、job 状态为 done', async () => {
+    let resumePhase = false;
+    generateMock.mockImplementation((_refs: unknown, metaJson: string) => {
+      const meta = JSON.parse(metaJson) as { pose?: { index?: number } };
+      if (meta.pose?.index === 0 && !resumePhase) {
+        // 非可重试错误：锚点首次生成即失败（不触发 4 次有界重试），命中「锚点不可用」分支
+        return Promise.reject(new Error('生图失败：HTTP 400 Bad Request'));
+      }
+      return Promise.resolve({ base64: 'aW1n', mimeType: 'image/png', prompt: 'p', model: 'm' });
+    });
+
+    const { jobId } = await service.create({ text: '文字', mode: 'auto' });
+    await waitStatus(jobId, 'error');
+    const failed = service.get(jobId)!;
+    expect(failed.stages.image.status).toBe('error');
+    expect(failed.artifacts.poseFiles).toHaveLength(0);
+
+    resumePhase = true;
+    const r = await service.resume(jobId);
+    expect(r?.resumed).toBe(true);
+    await waitStatus(jobId, 'done');
+
+    const job = service.get(jobId)!;
+    expect(job.artifacts.poseFiles.map((f) => f.index)).toEqual([0, 1]);
+    // 核心回归点：修复前这里会得到 []（用重跑前的空 poseFiles 算死剪影下标 → 一张剪影都不生成）
+    expect(job.artifacts.silFiles.map((f) => f.index)).toEqual([0, 1]);
+    expect(job.stages.silhouette.status).toBe('done');
+    expect(job.status).toBe('done');
+  });
+});
