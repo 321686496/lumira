@@ -34,6 +34,21 @@ import { traceNote, traceStep } from './llm-trace';
 /** 允许的示例图 mimetype */
 const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
 
+/** 明确要求联网检索的意图词（命中 → 即使给了参考 URL 也走搜索） */
+const SEARCH_INTENT_RE = /(搜索|联网|搜一|查一下|查一查|查找|上网搜|参考网络|网络趋势|看看网上)/;
+
+/**
+ * 联网检索必要性判定（纯启发式，规则即用户口径，零额外 LLM 调用）：
+ * - 明确要求搜索 → 搜（无论是否给了参考 URL）；
+ * - 提供了参考 URL 且未要求搜索 → 不搜（直接爬 URL 按网页内容创作）；
+ * - 常规要求（无 URL）→ 搜。
+ */
+export function searchDecided(creationReq: string | null | undefined, textDesc: string): boolean {
+  const req = `${creationReq ?? ''} ${textDesc}`;
+  if (SEARCH_INTENT_RE.test(req)) return true;
+  return extractExplicitUrls(req).length === 0;
+}
+
 export interface AiAnalyzeResult {
   draft: Record<string, unknown>;
   warnings: string[];
@@ -140,6 +155,8 @@ export class AiAnalyzeService {
     //     草稿生成提示词，让结构性数据（主题/风格/场景/姿势描述）贴合当下趋势；
     //     整理失败回退规则摘要，搜索失败静默降级（均不阻断识别）。
     //     主题口径与 orchestrator 一致：创作要求 ?? 文字描述。
+    //     是否真正走搜索由 searchDecided 判定：明确要求搜索 → 搜；提供了参考 URL 且未要求
+    //     搜索 → 跳过（直接依赖 3.6 参考网页抓取，按网页内容创作）；常规要求 → 搜。
     let research: ResearchItem[] = [];
     let researchBrief: ResearchBrief | null = null;
     let researchDigest = '';
@@ -150,7 +167,7 @@ export class AiAnalyzeService {
     let researchUnavailable = false;
     if (cfg.search?.enabled) {
       const topic = (extra.creationReq?.trim() || trimmedText).trim();
-      if (topic) {
+      if (topic && searchDecided(extra.creationReq, trimmedText)) {
         try {
           const r = await traceStep(
             'research',
@@ -167,6 +184,9 @@ export class AiAnalyzeService {
           // 搜索失败 → 无摘要，草稿生成回到无研究参考的原路径
         }
         researchUnavailable = research.length === 0;
+      } else if (topic) {
+        // 提供了参考 URL 且未要求搜索：跳过联网检索，让面板可见原因
+        traceNote('research', '跳过联网检索', '已提供参考 URL，直接按网页内容创作');
       }
     }
 
@@ -202,7 +222,10 @@ export class AiAnalyzeService {
         }
         if (ref.vision && visionHasContent(ref.vision)) {
           researchDigest += researchDigest ? '\n' : '';
-          researchDigest += `【参考网页图片解读】\n${renderResearchVision(ref.vision)}`;
+          // 姿势优先级：网页正文已明确描述姿势时以正文为准；正文未描述姿势时，以配图解读为准
+          researchDigest +=
+            `【参考网页图片解读】（动作姿势优先级：上方正文已明确描述人物姿势时以正文为准；` +
+            `正文未描述姿势时，以下方解读的「动作姿势」为准）\n${renderResearchVision(ref.vision)}`;
         }
         // 参考网页提供了一条确定性内容来源 → 不再视为「无参考」
         if (ref.items.length || ref.images.length) researchUnavailable = false;

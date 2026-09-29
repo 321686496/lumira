@@ -6,6 +6,7 @@
 // 数据来源：后端批量状态接口的事件日志（AiBatchImageTraceEvent[]），前端按 lastSeq 增量累积后传入。
 
 import * as React from 'react';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { TraceCallCard, TraceTextBlock, collapseTraceCalls } from '@/components/ai-create/trace-call-card';
@@ -39,6 +40,14 @@ const STATUS_META: Record<string, { label: string; dot: string; text: string }> 
 };
 
 export function PoseTraceStream({ events, running = false, title = '姿势图生成实时过程', bodyClassName = 'max-h-[420px]', className }: PoseTraceStreamProps) {
+  // 实时时钟：有姿势图处于排队/生成中时每秒推进，驱动「排队中 Xs / 生成中 Xs」刷新
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (!running) return;
+    const timer = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [running]);
+
   const byIndex = new Map<number, AiBatchImageTraceEvent[]>();
   for (const ev of events) {
     if (!byIndex.has(ev.index)) byIndex.set(ev.index, []);
@@ -60,22 +69,41 @@ export function PoseTraceStream({ events, running = false, title = '姿势图生
         {indexes.length === 0 ? (
           <p className="py-6 text-center text-xs text-muted-foreground">{running ? '等待生成事件…' : '本轮没有生成事件。'}</p>
         ) : (
-          indexes.map((idx) => <PoseRow key={idx} index={idx} evs={byIndex.get(idx)!} />)
+          indexes.map((idx) => <PoseRow key={idx} index={idx} evs={byIndex.get(idx)!} nowTick={nowTick} />)
         )}
       </div>
     </div>
   );
 }
 
-function PoseRow({ index, evs }: { index: number; evs: AiBatchImageTraceEvent[] }) {
+function PoseRow({ index, evs, nowTick }: { index: number; evs: AiBatchImageTraceEvent[]; nowTick: number }) {
   // 头部状态只认姿势图生命周期事件（kind 缺省即 'pose'），避免被模型调用子事件污染
   const poseEvs = evs.filter((e) => !e.kind || e.kind === 'pose');
   const latest = poseEvs[poseEvs.length - 1] ?? evs[evs.length - 1]!;
   const meta = STATUS_META[latest.status] ?? STATUS_META.pending;
   const finished = poseEvs.find((e) => e.status === 'done' || e.status === 'error');
+  // 排队起点 = 「排队中」pending 事件；生成起点 = 「开始生成/生成中」running 事件
+  const queueStart = poseEvs.find((e) => e.status === 'pending');
+  const genStart = poseEvs.find((e) => e.status === 'running');
   const prompt = finished?.prompt;
   const model = finished?.model;
-  const duration = formatDuration(finished?.durationMs);
+  // 排队耗时 = 排队中 → 生成事件；生成耗时 = 后端 done/error 的 durationMs（不含排队）
+  const queueMs = genStart && queueStart ? Math.max(0, genStart.ts - queueStart.ts) : 0;
+  const genMs = finished
+    ? (finished.durationMs ?? (finished.ts - (genStart?.ts ?? queueStart?.ts ?? finished.ts)))
+    : undefined;
+  // 未结束时的实时计时：生成中 / 仍排队
+  const liveGenMs = genStart ? Math.max(0, nowTick - genStart.ts) : undefined;
+  const liveQueueMs = genStart ? undefined : queueStart ? Math.max(0, nowTick - queueStart.ts) : undefined;
+  const timeText = finished
+    ? [queueMs >= 1000 ? `排队 ${formatDuration(queueMs)}` : null, genMs !== undefined ? `生成 ${formatDuration(genMs)}` : null]
+        .filter(Boolean)
+        .join(' + ')
+    : latest.status === 'running' || latest.status === 'pending'
+      ? genStart
+        ? `生成中 ${formatDuration(liveGenMs)}`
+        : `排队中 ${formatDuration(liveQueueMs)}`
+      : null;
   const calls = collapseTraceCalls(evs.filter((e) => e.kind === 'llm' || e.kind === 'search'));
   return (
     <div className="rounded-md border border-border bg-card px-3 py-2">
@@ -85,7 +113,7 @@ function PoseRow({ index, evs }: { index: number; evs: AiBatchImageTraceEvent[] 
         <Badge variant="outline" className={cn('font-mono text-[10px]', meta.text)}>{meta.label}</Badge>
         {model && <span className="font-mono text-[10px] text-muted-foreground">{model}</span>}
         <span className="ml-auto flex shrink-0 items-center gap-2 text-[10px] text-muted-foreground">
-          {duration && <span>{duration}</span>}
+          {timeText && <span>{timeText}</span>}
           <span>{formatTime(latest.ts)}</span>
         </span>
       </div>

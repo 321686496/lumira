@@ -263,10 +263,9 @@ export class AiImageTaskService implements OnModuleDestroy {
   ): Promise<void> {
     const task = this.tasks.get(id);
     if (!task) return;
-    task.status = 'running';
-    task.startedAt = Date.now();
     const index = this.indexOfTask(id);
-    this.emitBatchEvent(task.batchId, { index, title: `姿势图 #${index + 1} 生成中`, status: 'running' });
+    // 排队中：尚未拿到生图并发额度（等待其他姿势图完成），此时不消耗生成超时预算
+    this.emitBatchEvent(task.batchId, { index, title: `姿势图 #${index + 1} 排队中`, status: 'pending' });
     this.refreshBatch(task.batchId);
     try {
       // 该张图生成过程中的 LLM 调用（提示词整理等）以 kind='llm' 归属本张 index，
@@ -289,11 +288,32 @@ export class AiImageTaskService implements OnModuleDestroy {
           durationMs: ev.durationMs,
         });
       };
-      const r = await runWithTrace(sink, () => this.generateWithRetry(reference, metaJson, extraPrompt, research));
+      // 显式等待生图并发额度：拿到额度那一刻即「真正开始生成」，排队阶段不计入生成耗时；
+      // 若确实排过队，额外补发一条「开始生成」事件（携带排队耗时），前端据此展示「排队 Xs + 生成 Ys」。
+      const queuedMs = (await this.aiGenerateImageService.acquireImageSlot?.()) ?? 0;
+      if (queuedMs > 0) {
+        this.emitBatchEvent(task.batchId, {
+          index,
+          title: `姿势图 #${index + 1} 开始生成`,
+          status: 'running',
+          durationMs: queuedMs,
+        });
+      } else {
+        this.emitBatchEvent(task.batchId, { index, title: `姿势图 #${index + 1} 生成中`, status: 'running' });
+      }
+      task.status = 'running';
+      task.startedAt = Date.now();
+      this.refreshBatch(task.batchId);
+      let r: { base64: string; mimeType: string; prompt: string; model: string } | null = null;
+      try {
+        r = await runWithTrace(sink, () => this.generateWithRetry(reference, metaJson, extraPrompt, research));
+      } finally {
+        this.aiGenerateImageService.releaseImageSlot?.();
+      }
       task.status = 'done';
-      task.result = { image: r.base64, mimeType: r.mimeType };
-      task.prompt = r.prompt;
-      task.model = r.model;
+      task.result = { image: r!.base64, mimeType: r!.mimeType };
+      task.prompt = r!.prompt;
+      task.model = r!.model;
       task.finishedAt = Date.now();
       this.emitBatchEvent(task.batchId, {
         index,

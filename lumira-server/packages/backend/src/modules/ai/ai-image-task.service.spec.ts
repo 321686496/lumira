@@ -12,13 +12,23 @@ import { traceLlmCall } from './llm-trace';
 describe('AiImageTaskService', () => {
   let service: AiImageTaskService;
   let generateMock: jest.Mock;
+  let acquireSlotMock: jest.Mock;
+  let releaseSlotMock: jest.Mock;
   let getActiveConfigMock: jest.Mock;
 
   beforeEach(() => {
     generateMock = jest.fn();
+    acquireSlotMock = jest.fn();
+    releaseSlotMock = jest.fn();
     getActiveConfigMock = jest.fn();
+    acquireSlotMock.mockResolvedValue(0); // 默认不排队，立即拿到额度
+    releaseSlotMock.mockReturnValue(undefined);
     service = new AiImageTaskService(
-      { generate: generateMock } as unknown as AiGenerateImageService,
+      {
+        generate: generateMock,
+        acquireImageSlot: acquireSlotMock,
+        releaseImageSlot: releaseSlotMock,
+      } as unknown as AiGenerateImageService,
       { getActiveConfig: getActiveConfigMock } as unknown as AiConfigService,
     );
   });
@@ -214,9 +224,10 @@ describe('AiImageTaskService', () => {
 
     const { batchId } = await service.submitBatch(undefined, JSON.stringify(draft));
 
-    // pending 事件在 run 触发前已写入；即便后台 run 已推进，pending 仍保留在事件日志中
+    // pending 事件在 run 触发前已写入；即便后台 run 已推进，pending 仍保留在事件日志中。
+    // （submitBatch 补发一条 + run() 拿到额度前再发一条「排队中」，故按 index 去重断言覆盖 0..n-1）
     const pending = service.getBatch(batchId)!.events.filter((e) => e.status === 'pending');
-    expect(pending.map((e) => e.index).sort((a, b) => a - b)).toEqual([0, 1, 2]);
+    expect([...new Set(pending.map((e) => e.index))].sort((a, b) => a - b)).toEqual([0, 1, 2]);
     expect(pending.every((e) => typeof e.seq === 'number' && typeof e.ts === 'number')).toBe(true);
     expect(pending.every((e) => e.title.includes('排队'))).toBe(true);
   });
@@ -304,4 +315,63 @@ describe('AiImageTaskService', () => {
     const poseDone = events.filter((e) => e.status === 'done' && e.kind !== 'llm');
     expect(poseDone.map((e) => e.index).sort((a, b) => a - b)).toEqual([0, 1]);
   });
+
+  it('批量姿势任务：显式排队时先发「排队中」pending，拿到额度后发「开始生成」且携带排队耗时', async () => {
+    getActiveConfigMock.mockResolvedValue({} as never);
+    generateMock.mockResolvedValue({ base64: 'cG9zZQ==', mimeType: 'image/png' });
+    acquireSlotMock.mockResolvedValue(2500); // 每张图都排了 2.5s 队
+    const draft = { pose: [{ index: 0 }, { index: 1 }] };
+
+    const { batchId } = await service.submitBatch(undefined, JSON.stringify(draft));
+    await waitBatchStatus(batchId, 'done');
+
+    const events = service.getBatch(batchId)!.events;
+    // 每张图都有「排队中」pending 事件（提交时 + run 时各一条，至少一条）
+    const queued = events.filter((e) => e.title.includes('排队中'));
+    expect(queued.length).toBeGreaterThanOrEqual(2);
+    expect(queued.every((e) => e.status === 'pending')).toBe(true);
+    // 每张图都补发「开始生成」running 事件，并携带排队耗时 2500
+    const startGen = events.filter((e) => e.title.includes('开始生成'));
+    expect(startGen.map((e) => e.index).sort((a, b) => a - b)).toEqual([0, 1]);
+    expect(startGen.every((e) => e.status === 'running' && e.durationMs === 2500)).toBe(true);
+    // 成功路径每张 release 一次额度
+    expect(releaseSlotMock).toHaveBeenCalledTimes(2);
+    // done 事件的 durationMs 只含真正生成阶段（acquire 后起算），不含排队
+    const doneEvents = events.filter((e) => e.status === 'done');
+    for (const ev of doneEvents) {
+      expect(typeof ev.durationMs).toBe('number');
+      expect(ev.durationMs).toBeLessThan(2500); // 生成阶段远小于排队耗时
+    }
+  });
+
+  it('批量姿势任务：不排队时直接「生成中」，不补发「开始生成」事件', async () => {
+    getActiveConfigMock.mockResolvedValue({} as never);
+    generateMock.mockResolvedValue({ base64: 'cG9zZQ==', mimeType: 'image/png' });
+    acquireSlotMock.mockResolvedValue(0);
+    const draft = { pose: [{ index: 0 }, { index: 1 }] };
+
+    const { batchId } = await service.submitBatch(undefined, JSON.stringify(draft));
+    await waitBatchStatus(batchId, 'done');
+
+    const events = service.getBatch(batchId)!.events;
+    expect(events.filter((e) => e.title.includes('开始生成'))).toHaveLength(0);
+    expect(events.filter((e) => e.title.includes('生成中')).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('批量姿势任务：生图失败路径同样释放额度（finally），并带数字 durationMs', async () => {
+    getActiveConfigMock.mockResolvedValue({} as never);
+    generateMock.mockRejectedValue(new Error('AI 上游错误（HTTP 500）：boom'));
+    acquireSlotMock.mockResolvedValue(1500);
+    const draft = { pose: [{ index: 0 }] };
+
+    const { batchId } = await service.submitBatch(undefined, JSON.stringify(draft));
+    await waitBatchStatus(batchId, 'done');
+
+    // 额度在 finally 中释放一次（4 次重试共用同一个额度，不重复排队）
+    expect(releaseSlotMock).toHaveBeenCalledTimes(1);
+    const errorEvents = service.getBatch(batchId)!.events.filter((e) => e.status === 'error');
+    expect(errorEvents).toHaveLength(1);
+    expect(errorEvents[0].error).toBe('AI 上游错误（HTTP 500）：boom');
+    expect(typeof errorEvents[0].durationMs).toBe('number');
+  }, 30000);
 });

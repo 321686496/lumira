@@ -223,8 +223,11 @@ function railMeta(row: RowSpec, nowTick: number): string {
   if (row.kind === 'step') {
     const parts: string[] = [];
     if (row.node.total > 1) parts.push(`#${row.node.occurrence}`);
-    if (row.node.status === 'running') parts.push(`已等待 ${formatDuration(Math.max(0, nowTick - row.node.ts))}`);
-    else {
+    if (row.node.status === 'running') {
+      parts.push(`已等待 ${formatDuration(Math.max(0, nowTick - row.node.ts))}`);
+      const hint = waitingHint(row.node, nowTick);
+      if (hint) parts.push(hint.replace('子步骤已完成，正在等待', '等待'));
+    } else {
       const d = formatDuration(row.node.durationMs);
       if (d) parts.push(d);
     }
@@ -238,6 +241,19 @@ function railMeta(row: RowSpec, nowTick: number): string {
 }
 
 const railLabel = (row: RowSpec): string => (row.kind === 'step' ? row.node.title : row.ev.title);
+
+/** 运行中父阶段的等待提示：子步骤已全部闭合而父仍 running 超过 20s，
+ *  说明后端正在衔接下一轮（评分 → 细化）或做函数内收尾，如实告知用户「没卡死，在等下一轮」。 */
+function waitingHint(node: StepNode, nowTick: number): string | null {
+  if (node.status !== 'running') return null;
+  if (node.children.length === 0) return null;
+  const hasActive = node.children.some((it) =>
+    it.kind === 'step' ? it.node.status === 'running' : it.ev.status === 'running',
+  );
+  if (hasActive) return null;
+  if (nowTick - node.ts < 20_000) return null;
+  return `子步骤已完成，正在等待第 ${node.occurrence + 1} 轮评分/细化…`;
+}
 
 export function AnalyzeTraceStream({ events, running = false, title = '识别流程实时过程', bodyClassName = 'max-h-[420px]', className }: AnalyzeTraceStreamProps) {
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -419,6 +435,9 @@ function RowDetail({ row, adoptedImageIds, nowTick }: { row: RowSpec; adoptedIma
           <span>{formatTime(node.ts)}</span>
         </span>
       </div>
+      {node.status === 'running' && waitingHint(node, nowTick) && (
+        <p className="mt-1 text-xs text-primary">{waitingHint(node, nowTick)}</p>
+      )}
       {(node.error || node.brief) && (
         <div className={cn('mt-1 text-xs', node.error ? 'text-destructive' : 'text-muted-foreground')}>{node.error || node.brief}</div>
       )}
@@ -470,6 +489,9 @@ function StepRow({ node, last, adoptedImageIds, nowTick }: { node: StepNode; las
           {hasChildren && <Chevron open={open} />}
         </span>
       </button>
+      {node.status === 'running' && waitingHint(node, nowTick) && (
+        <p className="mt-0.5 text-xs text-primary">{waitingHint(node, nowTick)}</p>
+      )}
       {(node.error || node.brief) && (
         <div className={cn('mt-0.5 text-xs', node.error ? 'text-destructive' : 'text-muted-foreground')}>{node.error || node.brief}</div>
       )}

@@ -23,12 +23,12 @@ const SYSTEM_PROMPT = [
   '## 规则',
   '1. 绝不编造：图片里没有的题材、人物、场景、道具一律不得出现；看不清就留空。',
   '2. 每条结论写成简短名词短语（≤30 字），同义合并去重；不要整句照抄任何文案，也不要引用图中的文字/水印/账号名。',
-  '3. 描述摄影语言而非评价好坏：风格倾向、色彩与光影、构图与机位、穿搭与妆造、场景与道具。',
+  '3. 描述摄影语言而非评价好坏：风格倾向、色彩与光影、构图与机位、人物动作姿势、穿搭与妆造、场景与道具。人物动作姿势要具体（如侧身回眸、手扶栏杆、背靠墙面、蹲姿），不要写笼统的「摆 pose」。',
   '4. adopted 只登记「对本轮模板构思确实有参考价值」的图：id 必须来自给定图片列表的 id，reason 用一句话说明为什么值得参考（可空数组）。',
   '5. summary 用一句话概括这组参考图最有价值的共性（≤60 字）；没有价值就输出空串。',
   '## 输出',
   '只输出 JSON，不要 markdown 代码块或解释：',
-  '{"summary":"","styles":[],"colorLight":[],"composition":[],"wardrobe":[],"scene":[],"adopted":[{"id":"","reason":""}]}',
+  '{"summary":"","styles":[],"colorLight":[],"composition":[],"poseIdeas":[],"wardrobe":[],"scene":[],"adopted":[{"id":"","reason":""}]}',
 ].join('\n');
 
 /** 渲染送入模型图片的 id 清单（让模型能按 id 采纳） */
@@ -86,7 +86,7 @@ export class ResearchVisionService {
         },
         (v) =>
           v
-            ? `采纳 ${v.adopted.length} 张 / 提炼 ${v.styles.length + v.colorLight.length + v.composition.length + v.wardrobe.length + v.scene.length} 条视觉要点`
+            ? `采纳 ${v.adopted.length} 张 / 提炼 ${v.styles.length + v.colorLight.length + v.composition.length + v.poseIdeas.length + v.wardrobe.length + v.scene.length} 条视觉要点`
             : '解读失败（跳过）',
         (v) => ({ adoptedImageIds: v ? v.adopted.map((a) => a.id) : [] }),
       );

@@ -18,7 +18,7 @@ import type {
   ResearchImagesResult,
 } from './research-image';
 import type { ResearchItem } from './research-item';
-import { extractPageImages, extractPageImageUrl, extractPageText, fetchImageSafely, fetchPageHtml } from './research-image-fetch';
+import { extractPageImages, extractPageText, fetchImageSafely, fetchPageHtml } from './research-image-fetch';
 import { cleanupResearchImages, hashBuffer, hashUrl, readResearchImage, writeResearchImage } from './research-image-store';
 
 const logger = new Logger('ResearchImageService');
@@ -168,7 +168,7 @@ export class ResearchImageService implements OnModuleInit, OnModuleDestroy {
       }));
     if (l1.length && (await drain(l1))) return { images, errors };
 
-    // ===== 第二层：抓命中页面 og:image =====
+    // ===== 第二层：抓命中页面正文多图（og/twitter/JSON-LD/正文 <img> 按优先级补满预算）=====
     if (cfg.pageFetch && !overBudget()) {
       const pages = items.filter((it) => typeof it.url === 'string' && /^https?:\/\//i.test(it.url ?? ''));
       await runPool(pages, RESEARCH_IMAGE_CONCURRENCY, async (it) => {
@@ -176,29 +176,31 @@ export class ResearchImageService implements OnModuleInit, OnModuleDestroy {
         const pageUrl = it.url as string;
         try {
           const html = await this.fetchPage(pageUrl, RESEARCH_IMAGE_PAGE_TIMEOUT_MS);
-          const imgUrl = extractPageImageUrl(html, pageUrl);
-          if (!imgUrl) return;
-          const key = hashUrl(imgUrl);
-          if (seenUrl.has(key)) return;
-          seenUrl.add(key);
-          const { buffer } = await this.fetchImage(imgUrl);
-          const contentKey = hashBuffer(buffer);
-          if (seenContent.has(contentKey)) return;
-          seenContent.add(contentKey);
-          const written = await writeResearchImage(contentKey, buffer);
-          if (!written) return;
-          images.push({
-            id: contentKey,
-            url: written.url,
-            sourceUrl: imgUrl,
-            pageUrl,
-            source: it.source,
-            query: queries[0],
-            layer: 'page',
-            width: written.width,
-            height: written.height,
-            bytes: written.bytes,
-          });
+          const imgUrls = extractPageImages(html, pageUrl, Math.max(1, cfg.max - images.length));
+          for (const imgUrl of imgUrls) {
+            if (images.length >= cfg.max || overBudget()) break;
+            const key = hashUrl(imgUrl);
+            if (seenUrl.has(key)) continue;
+            seenUrl.add(key);
+            const { buffer } = await this.fetchImage(imgUrl);
+            const contentKey = hashBuffer(buffer);
+            if (seenContent.has(contentKey)) continue;
+            seenContent.add(contentKey);
+            const written = await writeResearchImage(contentKey, buffer);
+            if (!written) continue;
+            images.push({
+              id: contentKey,
+              url: written.url,
+              sourceUrl: imgUrl,
+              pageUrl,
+              source: it.source,
+              query: queries[0],
+              layer: 'page',
+              width: written.width,
+              height: written.height,
+              bytes: written.bytes,
+            });
+          }
         } catch (err) {
           errors.push({ name: hostOf(pageUrl), error: err instanceof Error ? err.message : String(err) });
         }

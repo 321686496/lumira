@@ -39,38 +39,35 @@ function resolveResearchVision(v: unknown): string | null {
 /**
  * 全局生图并发闸门：批量姿势图（锚点 + 最多 5 个依赖图）会被同时发起，
  * 而多数生图厂商对并发生图存在并发/速率限制（过量会 429/排队 → 表现为“生成两张后卡住”）。
- * 这里把对上游的实际生图请求收敛到并发 ≤ 2，避免打爆上游而卡死。
+ * 这里把对上游的实际生图请求收敛到并发 ≤ 3（原 2，排队等待耗时叠加到单图 10 分钟
+ * 超时上，导致第 4 张因「已等 150s + 生成 60s ≥ 600s」误报超时），避免打爆上游而卡死。
+ * 信号量由任务服务在 run() 中显式 acquire/release（见 AiGenerateImageService.acquireImageSlot），
+ * 使得「排队等待」与「真正生成」可在前端过程面板分开展示，且排队不占用生成超时预算。
  */
-const AI_IMAGE_CONCURRENCY = 2;
+const AI_IMAGE_CONCURRENCY = 3;
 
 class Semaphore {
   private active = 0;
   private readonly waiters: Array<() => void> = [];
   constructor(private readonly limit: number) {}
 
-  async run<T>(fn: () => Promise<T>): Promise<T> {
-    await this.acquire();
-    try {
-      return await fn();
-    } finally {
-      this.release();
-    }
-  }
-
-  private acquire(): Promise<void> {
+  /** 获取一个执行额度；排队等待结束后 resolve。返回排队耗时可如实告知用户。 */
+  async acquire(): Promise<number> {
+    const queuedAt = Date.now();
     if (this.active < this.limit) {
       this.active += 1;
-      return Promise.resolve();
+      return 0;
     }
-    return new Promise((resolve) => {
+    await new Promise<void>((resolve) => {
       this.waiters.push(() => {
         this.active += 1;
         resolve();
       });
     });
+    return Date.now() - queuedAt;
   }
 
-  private release(): void {
+  release(): void {
     const next = this.waiters.shift();
     if (next) {
       next();
@@ -101,14 +98,15 @@ const PHOTO_REALISM_PREFIX = '一张真实相机直出的实拍照片：';
 /** 恒定保留的真实底线（与风格档案无关）：媒介真实 + 解剖真实 + 可实拍 + 真实材质 */
 export const PHOTO_REALISM_BASELINE_SUFFIX =
   '真实照片媒介，不是动漫、二次元、漫画、插画、赛璐璐、厚涂、CG、3D 渲染、油画或游戏立绘；' +
-  '真实人体结构与解剖，无肢体、手指与面部畸变；可实拍复现，无无源光、无不可能透视与姿势；' +
-  '高清干净、细节清晰（皮肤纹理与布料纤维可辨），真实材质，环境光有方向与衰减层次、阴影过渡自然。' +
-  '禁止：动漫、二次元、漫画、插画；禁止无源光与不可能透视；禁止肢体与面部畸变；禁止颗粒与噪点；禁止磨皮过度均匀。';
+  '真实人体结构与解剖，无肢体、手指与面部畸变，手部五根手指比例正确、指节清晰、指间自然开合；' +
+  '可实拍复现，光源方向统一且人物与背景受光一致，无无源光、无多光源打架、无不可能透视与姿势；' +
+  '高清干净、细节清晰（皮肤纹理与布料纤维可辨，皮肤保留真实毛孔与细微瑕疵、不磨皮不水光肌），真实材质，环境光有方向与衰减层次、阴影过渡自然。' +
+  '禁止：动漫、二次元、漫画、插画；禁止无源光、多光源打架与不可能透视；禁止肢体与面部畸变；禁止颗粒与噪点；禁止磨皮过度均匀与水光肌。';
 /** 按精修档追加的质感句（不再把写真/大片当贬义） */
 export const RETOUCH_REALISM_SUFFIX: Record<RetouchLevel, string> = {
   none: '自然环境光与生活化瞬间感，保留真实的环境明暗关系，画面干净无颗粒。',
-  light: '干净通透，光比克制，皮肤保留真实毛孔与绒毛，不磨皮。',
-  polished: '布光精致考究、调色讲究、明暗层次分明，但皮肤、布料与道具仍是真实材质纹理。',
+  light: '干净通透，光比克制，皮肤保留真实毛孔与绒毛、自然油脂反光不均匀（不磨皮、不水光肌），光源方向统一不乱打光，面料与道具为真实材质，手部结构清晰完整。',
+  polished: '布光精致考究、调色讲究、明暗层次分明，但皮肤、布料与道具仍是真实材质纹理，光源方向统一，高光只来自实际光源。',
 };
 /** 自拍（前置）专属负面清单：第一人称自拍里拍摄设备就是镜头本身，绝不能出现在画面里 */
 const SELFIE_DEVICE_SUFFIX =
@@ -133,6 +131,16 @@ export function hardenPhotoRealism(prompt: string, opts: HardenOptions = {}): st
 @Injectable()
 export class AiGenerateImageService {
   constructor(private readonly aiConfigService: AiConfigService) {}
+
+  /** 生图并发额度（排队等待不计入生成耗时）：调用方拿到额度前可以如实展示「排队中」。 */
+  async acquireImageSlot(): Promise<number> {
+    return imageSemaphore.acquire();
+  }
+
+  /** 释放一个生图并发额度（成功/失败后都须调用，与 acquireImageSlot 成对）。 */
+  releaseImageSlot(): void {
+    imageSemaphore.release();
+  }
 
   /**
    * 生成模板效果图：取启用配置（未配置 503）→ 解析草稿 JSON（非法 400）→
@@ -193,18 +201,20 @@ export class AiGenerateImageService {
     if (!composed) {
       logger.warn('生图提示词组织回退机械拼接 prompt（文本模型整理失败/超时/空白输出，趋势要点与风格素材未注入）');
     }
-    // 网络生图（含 qwen 异步轮询/结果下载）纳入全局并发闸门，避免并发打爆上游厂商
     // prompt 出口统一照片写实加固（媒介声明 + 真实材质 + 反动漫负面清单；自拍追加第一人称视角与设备负面清单）
     const hardenedPrompt = hardenPhotoRealism(prompt, {
       selfie: isSelfieDraft(draft),
       retouchLevel: retouchLevelOfDraft(draft),
     });
-    const imageResult = await imageSemaphore.run(() => generateImage(cfg.image, {
+    // 上游生图请求（含 qwen 异步轮询/结果下载）。并发闸门由任务服务在调用 generate 前
+    // acquireImageSlot() 显式持有（拿到额度那一刻即「真正开始生成」，排队阶段不计入生成耗时）；
+    // 调用方在 generate 返回（成功或抛错）后必须 releaseImageSlot()。
+    const imageResult = await generateImage(cfg.image, {
       prompt: hardenedPrompt,
       size: mapSize(cfg.image.provider, extractAspectRatio(draft)),
       referenceBase64: reference?.buffer.toString('base64'),
       referenceMime: reference?.mimetype,
-    }));
+    });
     return { ...imageResult, prompt: hardenedPrompt, model: cfg.image.model };
   }
 }

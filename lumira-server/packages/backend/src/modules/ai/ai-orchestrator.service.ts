@@ -91,6 +91,16 @@ const STEP_TITLES: Record<string, string> = {
   draftRefine: '草稿细化',
 };
 
+/**
+ * poseRefSheet 的姿势数量：用户显式指定（1~6）优先；未指定时跟随草稿中模型实际判断的
+ * 姿势数（AI 自动判断结果），避免「留空 = 固定 1」；兜底 1。
+ */
+function resolvePoseCount(explicit: number | undefined, draft: Record<string, unknown> | undefined): number {
+  if (typeof explicit === 'number' && explicit >= 1) return Math.floor(explicit);
+  const poses = draft && Array.isArray(draft.poses) ? (draft.poses as unknown[]).length : 0;
+  return Math.max(1, poses);
+}
+
 @Injectable()
 export class AiOrchestratorService {
   constructor(
@@ -182,7 +192,7 @@ export class AiOrchestratorService {
 
     // (4) 姿势参考面片
     const poseSheet = (await this.wrapStep<PoseRefSheet>('poseRefSheet', 'pose-ref-sheet', trace, () =>
-      this.poseRefSheet.generate(desc as ImageDescription, Math.max(1, input.poseCount ?? 1), input.creationReq, profile),
+      this.poseRefSheet.generate(desc as ImageDescription, resolvePoseCount(input.poseCount, initialDraft), input.creationReq, profile),
     )) ?? { shared: {} as PoseRefSheet['shared'], perPose: [] };
 
     // (5)+(6) 参数校准 + 评分闸门（再判 ≤ MAX_SCORE_ITERATIONS）

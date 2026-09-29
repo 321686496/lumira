@@ -8,6 +8,8 @@ export interface ResearchVision {
   styles: string[];
   colorLight: string[];
   composition: string[];
+  /** 人物动作姿势：每张图里人物的身体姿态/动作/手势/朝向/站位（如侧身回眸、手扶栏杆） */
+  poseIdeas: string[];
   wardrobe: string[];
   scene: string[];
   /** 真正被采纳的图（id 对应 ResearchImage.id）+ 采纳理由 */
@@ -53,6 +55,7 @@ export function visionHasContent(v: ResearchVision): boolean {
       v.styles.length ||
       v.colorLight.length ||
       v.composition.length ||
+      v.poseIdeas.length ||
       v.wardrobe.length ||
       v.scene.length,
   );
@@ -88,6 +91,7 @@ export function normalizeVision(raw: unknown, allowedIds?: Iterable<string>): Re
     styles: toStrList(rec.styles),
     colorLight: toStrList(rec.colorLight),
     composition: toStrList(rec.composition),
+    poseIdeas: toStrList(rec.poseIdeas),
     wardrobe: toStrList(rec.wardrobe),
     scene: toStrList(rec.scene),
     adopted,
@@ -100,6 +104,7 @@ const SECTIONS: { label: string; pick: (v: ResearchVision) => string[] }[] = [
   { label: '风格倾向', pick: (v) => v.styles },
   { label: '色彩与光影', pick: (v) => v.colorLight },
   { label: '构图', pick: (v) => v.composition },
+  { label: '动作姿势', pick: (v) => v.poseIdeas ?? [] },
   { label: '穿搭/妆造', pick: (v) => v.wardrobe },
   { label: '场景', pick: (v) => v.scene },
 ];
