@@ -383,6 +383,7 @@ export function AiCreateWizard({
     setAnalyzing(true);
     setErrorText(null);
     setInterruption(null);
+    setJobId(null);
     setTraceEvents([]);
     setPoseTraceEvents([]);
     setProgressPanelHidden(false);
@@ -479,6 +480,7 @@ export function AiCreateWizard({
     if (!hasInput) return;
     setErrorText(null);
     setInterruption(null);
+    setJobId(null);
     const controller = new AbortController();
     abortRef.current = controller;
     const { signal } = controller;
