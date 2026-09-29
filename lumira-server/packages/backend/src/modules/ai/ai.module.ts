@@ -16,6 +16,7 @@ import { AiGenerateImageService } from './ai-generate-image.service';
 import { AiImageTaskService } from './ai-image-task.service';
 import { AiSilhouetteService } from './ai-generate-silhouette.service';
 import { AiSilhouetteTaskService } from './ai-silhouette-task.service';
+import { AiPipelineJobService } from './ai-pipeline-job.service';
 import { TrendResearchService, ResearchDigestService, ResearchImageService, ResearchVisionService } from './trend-research';
 import { ImageDescribeService } from './image-describe.service';
 import { PoseRefSheetService } from './pose-ref-sheet.service';
@@ -30,7 +31,7 @@ import { RenderApproxService } from './render-approx.service';
   imports: [DatabaseModule],
   controllers: [AiConfigController, AiTemplatesController],
   providers: [
-    AiConfigService, AiAnalyzeService, AiAnalyzeTaskService, AiGenerateImageService, AiImageTaskService, AiSilhouetteService, AiSilhouetteTaskService,
+    AiConfigService, AiAnalyzeService, AiAnalyzeTaskService, AiGenerateImageService, AiImageTaskService, AiSilhouetteService, AiSilhouetteTaskService, AiPipelineJobService,
     StyleProfileService,
     // Task 9 Agentic 管线工具 + 中枢（稳定性：getActiveConfig 缺 search 配置时 research 自动降级关闭）
     TrendResearchService, ResearchDigestService, ResearchImageService, ResearchVisionService, ImageDescribeService, PoseRefSheetService, ParamValidateService, ImageScoreService, DraftRefineService,

@@ -2,7 +2,7 @@
 // AI 模板制作端点（Task 5：ai-analyze 识别；Task 7/9 再并入生图 / 剪影端点）
 // 设计文档：docs/specs/2026-09-09-ai-template-one-click-creation-design.md 第三节
 
-import { Controller, Post, Get, Param, Query, Req, UseGuards, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Param, Query, Req, UseGuards, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
 import { UploadFile } from '../templates/admin-templates.service';
@@ -10,6 +10,8 @@ import { AiAnalyzeTaskService } from './ai-analyze-task.service';
 import { AiImageTaskService } from './ai-image-task.service';
 import { AiSilhouetteService } from './ai-generate-silhouette.service';
 import { AiSilhouetteTaskService } from './ai-silhouette-task.service';
+import { AiPipelineJobService } from './ai-pipeline-job.service';
+import type { JobMode } from './ai-pipeline-job.service';
 
 @Controller('admin/templates')
 @UseGuards(AdminAuthGuard)
@@ -19,6 +21,7 @@ export class AiTemplatesController {
     private readonly aiImageTaskService: AiImageTaskService,
     private readonly aiSilhouetteService: AiSilhouetteService,
     private readonly aiSilhouetteTaskService: AiSilhouetteTaskService,
+    private readonly aiPipelineJobService: AiPipelineJobService,
   ) {}
 
   /**
@@ -152,6 +155,63 @@ export class AiTemplatesController {
       error: task.error,
     };
   }
+
+  /**
+   * 创建 AI 流水线 job（识别 → 姿势图 → 剪影）：multipart 字段同 ai-analyze（image/images + text/textDesc +
+   * creationReq/poseCount/subjectCount）+ reference/references（姿势参考图）+ extraPrompt，
+   * 另加 jobMode（auto / analyze-only）、silMode / silCrop / silEngine（剪影选项）。
+   * 立即返回 { jobId }，前端轮询 GET ai-job/:jobId。
+   */
+  @Post('ai-job')
+  async createAiJob(@Req() req: FastifyRequest) {
+    const p = await parseAiMultipart(req);
+    const mode: JobMode = p.jobMode === 'analyze-only' ? 'analyze-only' : 'auto';
+    return this.aiPipelineJobService.create({
+      images: p.images,
+      text: p.text ?? p.textDesc ?? undefined,
+      extra: {
+        textDesc: p.textDesc,
+        creationReq: p.creationReq,
+        poseCount: p.poseCount,
+        subjectCount: p.subjectCount,
+      },
+      references: p.references,
+      extraPrompt: p.extraPrompt,
+      mode,
+      silhouette: {
+        mode: p.silMode === 'solid' ? 'solid' : 'sketch',
+        crop: p.silCrop !== '0',
+        engine: p.silEngine === 'ai' ? 'ai' : 'local',
+      },
+    });
+  }
+
+  /**
+   * 查询 job 状态：running 态响应体收敛（事件按 since 增量、长文本收紧、不返回 base64 产物），
+   * 终态或 verbose=1 返回完整事件与全部产物；job 不存在（后端重启/超期清理）→ 404。
+   */
+  @Get('ai-job/:jobId')
+  async getAiJob(@Param('jobId') jobId: string, @Query('since') since?: string, @Query('verbose') verbose?: string) {
+    const job = this.aiPipelineJobService.get(jobId);
+    if (!job) throw new NotFoundException('AI pipeline job not found');
+    const sinceSeq = Number.isFinite(Number(since)) ? Number(since) : 0;
+    return this.aiPipelineJobService.serialize(job, sinceSeq, verbose === '1');
+  }
+
+  /** 续跑：running → 不重跑（前端重连）；error → 从失败阶段重跑并复用上游产物；不存在 → 404 */
+  @Post('ai-job/:jobId/resume')
+  async resumeAiJob(@Param('jobId') jobId: string) {
+    const result = await this.aiPipelineJobService.resume(jobId);
+    if (!result) throw new NotFoundException('AI pipeline job not found');
+    return result;
+  }
+
+  /** 放弃本次生成：删除 job（幂等） */
+  @Delete('ai-job/:jobId')
+  async deleteAiJob(@Param('jobId') jobId: string) {
+    this.aiPipelineJobService.remove(jobId);
+    return { ok: true };
+  }
 }
 
 // ===== 模块内小型 multipart 助手 =====
@@ -183,10 +243,18 @@ export interface ParsedAiMultipart {
   reference?: UploadFile;
   /** 姿势参考图多文件集合（Step3 多图上传 → 图片识别大模型识别全部） */
   references?: UploadFile[];
+  /** pipeline job 模式：'auto'（一键全自动）/ 'analyze-only'（仅识别）；缺省按 auto */
+  jobMode?: string;
+  /** 剪影模式：'sketch' / 'solid'；缺省 sketch */
+  silMode?: string;
+  /** 剪影是否自动裁剪：'0' 关闭，其余视为开启；缺省开启 */
+  silCrop?: string;
+  /** 剪影引擎：'ai' / 'local'；缺省 local */
+  silEngine?: string;
 }
 
 /** 文本字段名集合（multipart 循环内按字段名收集） */
-const TEXT_FIELDS = ['meta', 'text', 'textDesc', 'creationReq', 'poseCount', 'subjectCount', 'extraPrompt', 'research'] as const;
+const TEXT_FIELDS = ['meta', 'text', 'textDesc', 'creationReq', 'poseCount', 'subjectCount', 'extraPrompt', 'research', 'jobMode', 'silMode', 'silCrop', 'silEngine'] as const;
 
 /**
  * 解析 AI 端点 multipart 请求，提取文本字段（meta / textDesc / creationReq / poseCount / subjectCount / extraPrompt / research）
