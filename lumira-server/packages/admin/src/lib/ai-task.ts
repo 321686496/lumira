@@ -49,7 +49,7 @@ function throwIfAborted(signal?: AbortSignal): void {
 }
 
 /** 毫秒 → 人类可读时长（<1s 显示 ms） */
-function formatSec(ms: number): string {
+export function formatSec(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return '?';
   if (ms < 1000) return `${Math.round(ms)}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
@@ -138,7 +138,7 @@ export interface AiPoseProgress {
   status: 'pending' | 'running' | 'done' | 'error';
 }
 
-function base64ToFile(b64: string, mime: string, name: string): File {
+export function base64ToFile(b64: string, mime: string, name: string): File {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
