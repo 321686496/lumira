@@ -13,6 +13,7 @@ import type { AiInterruptionInfo } from '@/types/admin';
 export function InterruptionBanner({
   info,
   resuming,
+  canResume = true,
   onResume,
   onRestart,
   onDismiss,
@@ -20,12 +21,14 @@ export function InterruptionBanner({
   info: AiInterruptionInfo;
   /** 「继续」请求中（按钮置灰防重复点击） */
   resuming?: boolean;
+  /** 是否存在可续跑的 job；为 false 时「继续」无意义，降级为「重新开始」 */
+  canResume?: boolean;
   onResume: () => void;
   onRestart: () => void;
   onDismiss: () => void;
 }) {
   const [showUpstream, setShowUpstream] = useState(false);
-  const retryable = isRetryablePipelineError(info.code);
+  const retryable = canResume !== false && isRetryablePipelineError(info.code);
 
   return (
     <div className="rounded-md border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">

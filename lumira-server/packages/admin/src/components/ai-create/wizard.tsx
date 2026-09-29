@@ -843,6 +843,7 @@ export function AiCreateWizard({
           <InterruptionBanner
             info={interruption}
             resuming={resuming}
+            canResume={Boolean(jobId)}
             onResume={resumeFromInterruption}
             onRestart={resetFlow}
             onDismiss={discardJob}
