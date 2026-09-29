@@ -8,18 +8,22 @@ vi.mock('@/actions/ai', () => ({
   aiGenerateImageBatchStatusAction: vi.fn(),
   aiGenerateSilhouetteStartAction: vi.fn(),
   aiGenerateSilhouetteStatusAction: vi.fn(),
+  aiAnalyzeStatusAction: vi.fn(),
 }));
 
 import {
   aiGenerateImageBatchStartAction,
   aiGenerateImageStatusAction,
   aiGenerateImageBatchStatusAction,
+  aiAnalyzeStatusAction,
 } from '@/actions/ai';
-import { generateAiPoseImages, pollAiImageTask, AiTaskPollError } from '../ai-task';
+import type { AiTraceEvent } from '@/types/admin';
+import { generateAiPoseImages, pollAiImageTask, pollAiAnalyzeTask, AiTaskPollError } from '../ai-task';
 
 const statusMock = vi.mocked(aiGenerateImageStatusAction);
 const batchStartMock = vi.mocked(aiGenerateImageBatchStartAction);
 const batchStatusMock = vi.mocked(aiGenerateImageBatchStatusAction);
+const analyzeStatusMock = vi.mocked(aiAnalyzeStatusAction);
 
 describe('pollAiImageTask', () => {
   beforeEach(() => {
@@ -69,6 +73,43 @@ describe('pollAiImageTask', () => {
     await new Promise((resolve) => setTimeout(resolve, 25));
     expect(statusMock).toHaveBeenCalledTimes(1);
     await expect(polling).resolves.toMatchObject({ status: 'done' });
+  });
+});
+
+describe('pollAiAnalyzeTask', () => {
+  beforeEach(() => {
+    analyzeStatusMock.mockReset();
+  });
+
+  it('超过 timeoutMs 时：把仍 running 的阶段与调用合成 fail 事件，并抛出带明细（阶段/耗时/上限/原因）的报错', async () => {
+    const now = Date.now();
+    analyzeStatusMock.mockResolvedValue({
+      taskId: 'a',
+      status: 'running',
+      lastSeq: 2,
+      events: [
+        { seq: 1, ts: now - 5000, type: 'step', step: 'draftRefine', title: '草稿细化', status: 'running' },
+        { seq: 2, ts: now - 4000, type: 'llm', step: 'draftRefine', parentStep: 'draftRefine', title: '调用模型', status: 'running', model: 'qwen-plus', callId: 'c1' },
+      ],
+    });
+
+    const emitted: AiTraceEvent[] = [];
+    const error = await pollAiAnalyzeTask('a', { intervalMs: 5, timeoutMs: 60, onEvents: (evs) => emitted.push(...evs) }).then(
+      () => null,
+      (e) => e as Error,
+    );
+
+    // 报错带明细：指出停在哪一步 + 已耗时 + 超时上限 + 原因
+    expect(error).toBeInstanceOf(AiTaskPollError);
+    expect(error!.message).toContain('识别超时');
+    expect(error!.message).toContain('「草稿细化」阶段');
+    expect(error!.message).toContain('已耗时');
+    expect(error!.message).toContain('识别超时上限');
+    expect(error!.message).toContain('常见原因');
+
+    // 合成事件随事件流回传：阶段被闭合为 fail（带耗时），飞行中调用被标记 fail
+    expect(emitted.some((e) => e.type === 'step' && e.status === 'fail' && typeof e.durationMs === 'number')).toBe(true);
+    expect(emitted.some((e) => e.type === 'llm' && e.status === 'fail')).toBe(true);
   });
 });
 

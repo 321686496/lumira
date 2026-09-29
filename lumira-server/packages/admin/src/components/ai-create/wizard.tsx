@@ -467,7 +467,7 @@ export function AiCreateWizard({
 
   const stageIndex = autoState ? AUTO_STAGES.indexOf(autoState.stage) : -1;
 
-  /** 面板收拢态展示的进度文案（运行中优先，缺省回落 Tab 计数） */
+  /** 面板收拢态展示的进度文案（运行中优先，缺省回落 Tab 计数；失败时显示「已失败」） */
   const progressStatusText = analyzing
     ? '正在识别…'
     : autoState?.running
@@ -476,7 +476,11 @@ export function AiCreateWizard({
             ? ` ${poseProgress.current}/${poseProgress.total}`
             : ''
         }`
-      : null;
+      : errorText
+        ? '识别失败'
+        : autoState?.error
+          ? '已失败'
+          : null;
 
   /** 常驻预览面板：识别前占位，识别后由 TemplateForm portal 填充宿主 */
   const previewPanel = (
@@ -528,6 +532,7 @@ export function AiCreateWizard({
             poseEvents={poseTraceEvents}
             poseRunning={poseTraceRunning || (autoState?.running === true && autoState.stage === 'generating-image')}
             statusText={progressStatusText}
+            hadError={Boolean(errorText) || Boolean(autoState?.error)}
             onOpenDetail={() => setDetailDialogOpen(true)}
             onClose={() => setProgressPanelHidden(true)}
           />

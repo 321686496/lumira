@@ -41,6 +41,83 @@ function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw new AiTaskPollError('已中止');
 }
 
+/** 毫秒 → 人类可读时长（<1s 显示 ms） */
+function formatSec(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return '?';
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+/**
+ * 轮询超时时，把仍处于「执行中/等待响应」的阶段与 LLM/检索调用合成 fail 事件，追加进事件流并回调，
+ * 让过程面板即时把对应步骤/调用标记为失败（含耗时与原因），而不是永远停在「等待响应…」。
+ * 合成顺序：先调用后阶段（父阶段尚未闭合 → 调用 fail 归位到对应阶段下被折叠配对，随后阶段 fail 闭合节点）。
+ */
+function synthesizeAnalyzeTimeout(events: AiTraceEvent[], errorText: string, nowTs: number): AiTraceEvent[] {
+  const failEvents: AiTraceEvent[] = [];
+  let seq = 1;
+  if (events.length) seq = Math.max(...events.map((e) => e.seq)) + 1;
+  const nextSeq = () => seq++;
+
+  // 仍在飞行中的调用：running/pending 的 llm/search，且没有后续 done/fail 配对
+  const inflight = new Map<string, AiTraceEvent>();
+  const callKey = (ev: AiTraceEvent) => (ev.callId ? `id|${ev.callId}` : `${ev.type}|${ev.title}|${ev.model ?? ''}`);
+  for (const ev of events) {
+    if (ev.type !== 'llm' && ev.type !== 'search') continue;
+    if (ev.status === 'running') inflight.set(callKey(ev), ev);
+    else if (ev.status === 'done' || ev.status === 'fail') inflight.delete(callKey(ev));
+  }
+
+  // 仍开放中的阶段：running 无对应 done/fail（同阶段多轮迭代各计一次）
+  const openStepCount = new Map<string, number>();
+  for (const ev of events) {
+    if (ev.type !== 'step') continue;
+    if (ev.status === 'running') openStepCount.set(ev.step, (openStepCount.get(ev.step) ?? 0) + 1);
+    else if (ev.status === 'done' || ev.status === 'fail') {
+      const n = (openStepCount.get(ev.step) ?? 0) - 1;
+      if (n > 0) openStepCount.set(ev.step, n);
+      else openStepCount.delete(ev.step);
+    }
+  }
+  const stepRuns = events.filter((e) => e.type === 'step' && e.status === 'running');
+
+  for (const ev of inflight.values()) {
+    failEvents.push({
+      seq: nextSeq(),
+      ts: nowTs,
+      type: ev.type === 'search' ? 'search' : 'llm',
+      step: ev.step,
+      parentStep: ev.parentStep,
+      callId: ev.callId,
+      title: ev.title,
+      model: ev.model,
+      status: 'fail',
+      error: errorText,
+      durationMs: nowTs - ev.ts,
+    });
+  }
+  // 阶段 fail 从最近一次运行开始闭合（与 buildTimeline「从尾找最近开放同名节点」的顺序一致）
+  const remaining = new Map(openStepCount);
+  for (let i = stepRuns.length - 1; i >= 0; i--) {
+    const run = stepRuns[i];
+    const open = remaining.get(run.step);
+    if (!open) continue;
+    remaining.set(run.step, open - 1);
+    failEvents.push({
+      seq: nextSeq(),
+      ts: nowTs,
+      type: 'step',
+      step: run.step,
+      parentStep: run.parentStep,
+      title: run.title,
+      status: 'fail',
+      error: errorText,
+      durationMs: nowTs - run.ts,
+    });
+  }
+  return failEvents;
+}
+
 export interface AiTaskFileResult {
   index: number;
   file?: File;
@@ -105,7 +182,8 @@ export function generateAiPoseImages(options: {
     const onResultFile = new Set<number>();
     let since = 0;
     const trace: AiBatchImageTraceEvent[] = [];
-    const deadline = Date.now() + DEFAULT_TIMEOUT_MS;
+    const startedAt = Date.now();
+    const deadline = startedAt + DEFAULT_TIMEOUT_MS;
     const emitProgress = (res: AiBatchStatusResult) =>
       onProgress?.({ current: res.current, total: res.total, status: res.status });
 
@@ -139,7 +217,42 @@ export function generateAiPoseImages(options: {
       }
       await sleep(DEFAULT_INTERVAL_MS);
     }
-    throw new AiTaskPollError('生成超时，请稍后重试');
+    // —— 超时：把仍 pending/running 的姿势图合成 error 事件（面板即时标失败），并抛出带明细的报错 ——
+    const now = Date.now();
+    const elapsedMs = now - startedAt;
+    const budgetMin = Math.round(DEFAULT_TIMEOUT_MS / 60000);
+    const errText = `生成超时：已运行 ${formatSec(elapsedMs)}，超过生成超时上限 ${budgetMin} 分钟，生图模型未返回`;
+    const byIndex = new Map<number, AiBatchImageTraceEvent[]>();
+    for (const ev of trace) {
+      if (ev.kind && ev.kind !== 'pose') continue;
+      const list = byIndex.get(ev.index) ?? [];
+      list.push(ev);
+      byIndex.set(ev.index, list);
+    }
+    const unfinished: number[] = [];
+    let nextSeq = trace.length ? Math.max(...trace.map((e) => e.seq)) + 1 : 1;
+    for (const [index, evs] of byIndex) {
+      const last = evs[evs.length - 1]!;
+      if (last.status !== 'pending' && last.status !== 'running') continue;
+      unfinished.push(index);
+      const runEv = evs.find((e) => e.status === 'running');
+      trace.push({
+        seq: nextSeq++,
+        ts: now,
+        index,
+        title: `姿势图 #${index + 1}`,
+        status: 'error',
+        error: errText,
+        durationMs: runEv ? now - runEv.ts : undefined,
+      });
+    }
+    onEvents?.(trace.slice());
+    const unfinishedText =
+      unfinished.length > 0 ? `有 ${unfinished.length} 张姿势图未完成（已耗时 ${formatSec(elapsedMs)}）` : `已耗时 ${formatSec(elapsedMs)}`;
+    throw new AiTaskPollError(
+      `生成超时：${unfinishedText}，超过生成超时上限 ${budgetMin} 分钟。` +
+        `常见原因：生图模型响应过慢或批量排队积压；可稍后重试，或检查「AI 设置」中的生图模型。`,
+    );
   })();
 }
 
@@ -248,7 +361,8 @@ export function pollAiAnalyzeTask(
   onTick?: (status: AiAnalyzeStatusResult['status']) => void,
 ): Promise<AiAnalyzeStatusResult> {
   const { intervalMs = DEFAULT_INTERVAL_MS, timeoutMs = ANALYZE_TIMEOUT_MS, onEvents, signal } = options;
-  const deadline = Date.now() + timeoutMs;
+  const startedAt = Date.now();
+  const deadline = startedAt + timeoutMs;
   let since = 0;
   const events: AiTraceEvent[] = [];
 
@@ -275,6 +389,23 @@ export function pollAiAnalyzeTask(
       onTick?.(res.status);
       await sleep(intervalMs);
     }
-    throw new AiTaskPollError('识别超时，请稍后重试');
+    // —— 超时：把过程面板上仍「执行中/等待响应」的阶段与调用标记为失败，并抛出带明细的报错 ——
+    const now = Date.now();
+    const elapsedMs = now - startedAt;
+    const budgetMin = Math.round(timeoutMs / 60000);
+    const lastRunning = [...events].reverse().find((e) => e.type === 'step' && e.status === 'running');
+    const where = lastRunning ? `「${lastRunning.title}」阶段` : '识别流程中间';
+    const scopeError = `超时：已运行 ${formatSec(elapsedMs)}，超过识别超时上限 ${budgetMin} 分钟，上游未在预算内返回`;
+    const synthesized = synthesizeAnalyzeTimeout(events, scopeError, now);
+    if (synthesized.length) {
+      events.push(...synthesized);
+      onEvents?.(events.slice());
+    }
+    const stepDetail = lastRunning ? `，其中「${lastRunning.title}」已运行 ${formatSec(now - lastRunning.ts)}` : '';
+    throw new AiTaskPollError(
+      `识别超时：停在${where}，整体已耗时 ${formatSec(elapsedMs)}${stepDetail}（识别超时上限 ${budgetMin} 分钟）。` +
+        `常见原因：该阶段上游 LLM 响应过慢、多轮「评分→细化」迭代耗时叠加或网络波动；` +
+        `可调大「AI 设置 → 识别稳定性」中的单次 LLM 超时后重试。`,
+    );
   })();
 }

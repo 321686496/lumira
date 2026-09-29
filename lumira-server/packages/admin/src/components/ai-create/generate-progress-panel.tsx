@@ -25,6 +25,8 @@ interface GenerateProgressPanelProps {
   poseRunning: boolean;
   /** 收拢态优先展示的进度文案（如「进行中 · 姿势图 3/6」）；缺省回落 Tab 计数 */
   statusText?: string | null;
+  /** 本次运行已失败/超时：结束后不自动收拢，保留失败标记展示（用户可手动关闭） */
+  hadError?: boolean;
   /** 点「识别详情」时触发（打开原有数据分析弹窗） */
   onOpenDetail: () => void;
   /** 手动关闭整个面板（仅隐藏本次展示，不清空已采集过程） */
@@ -37,6 +39,7 @@ export function GenerateProgressPanel({
   poseEvents,
   poseRunning,
   statusText,
+  hadError = false,
   onOpenDetail,
   onClose,
 }: GenerateProgressPanelProps) {
@@ -44,6 +47,10 @@ export function GenerateProgressPanel({
   const anyContent = recogEvents.length > 0 || poseEvents.length > 0;
   const [tab, setTab] = useState<TabKey>('recog');
   const [expanded, setExpanded] = useState(true);
+  /** 内容区高度（px），可通过底部拖动手柄调整；默认等同原 max-h-56=224 */
+  const [bodyHeight, setBodyHeight] = useState(224);
+  const [dragging, setDragging] = useState(false);
+  const dragStartRef = useRef<{ y: number; h: number } | null>(null);
   const wasRunningRef = useRef(false);
   /** 各 Tab 已读事件数（用于未读角标） */
   const [readCounts, setReadCounts] = useState<Record<TabKey, number>>({ recog: 0, pose: 0 });
@@ -52,15 +59,41 @@ export function GenerateProgressPanel({
   /** 是否已自动切过一次到姿势图 Tab（同一次展示只自动切一次） */
   const autoSwitchedRef = useRef(false);
 
-  // 运行中自动展开；从未运行→运行→结束，结束后自动收拢
+  // 运行中自动展开；从未运行→运行→结束，结束后自动收拢（本次失败/超时则保留展开，让失败标记可见）
   useEffect(() => {
     if (anyRunning) {
       setExpanded(true);
       wasRunningRef.current = true;
-    } else if (wasRunningRef.current && !anyRunning) {
+    } else if (wasRunningRef.current && !anyRunning && !hadError) {
       setExpanded(false);
     }
-  }, [anyRunning]);
+  }, [anyRunning, hadError]);
+
+  // 底部拖动手柄控制内容区高度
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    dragStartRef.current = { y: e.clientY, h: bodyHeight };
+    setDragging(true);
+  };
+
+  useEffect(() => {
+    if (!dragging) return;
+    const move = (e: PointerEvent) => {
+      if (!dragStartRef.current) return;
+      const next = Math.min(680, Math.max(120, dragStartRef.current.h + (e.clientY - dragStartRef.current.y)));
+      setBodyHeight(next);
+    };
+    const up = () => {
+      setDragging(false);
+      dragStartRef.current = null;
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+  }, [dragging]);
 
   const recogTotal = recogEvents.length;
   const poseTotal = poseEvents.length;
@@ -97,6 +130,7 @@ export function GenerateProgressPanel({
           <MagicWand size={16} className="shrink-0 text-primary" weight={anyRunning ? 'fill' : 'regular'} />
           <span className="truncate text-sm font-semibold text-foreground">AI 生成过程</span>
           {anyRunning && !statusText && <span className="shrink-0 text-xs text-primary">进行中…</span>}
+          {!anyRunning && hadError && !statusText && <span className="shrink-0 text-xs text-destructive">已失败</span>}
           <span className={cn('shrink-0 text-xs', statusText ? 'text-primary' : 'text-muted-foreground')}>
             {statusText ?? (tab === 'recog' ? `识别 ${recogCount} 项` : `姿势图 ${poseCount} 张`)}
           </span>
@@ -140,11 +174,24 @@ export function GenerateProgressPanel({
               </button>
             ))}
           </div>
-          {/* 内容区 */}
-          <div className="p-2">
+          {/* 内容区：高度可通过底部手柄拖动调整 */}
+          <div className={cn('px-2 pt-2', dragging && 'select-none')} style={{ height: bodyHeight }}>
             {tab === 'recog'
-              ? <AnalyzeTraceStream events={recogEvents} running={recogRunning} title={null} bodyClassName="max-h-56" />
-              : <PoseTraceStream events={poseEvents} running={poseRunning} title={null} bodyClassName="max-h-56" />}
+              ? <AnalyzeTraceStream events={recogEvents} running={recogRunning} title={null} className="flex h-full flex-col" bodyClassName="min-h-0 flex-1 overflow-y-auto" />
+              : <PoseTraceStream events={poseEvents} running={poseRunning} title={null} className="flex h-full flex-col" bodyClassName="min-h-0 flex-1 overflow-y-auto" />}
+          </div>
+          {/* 拖动手柄 */}
+          <div
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="调整生成过程面板高度"
+            onPointerDown={startResize}
+            className={cn(
+              'group flex cursor-row-resize items-center justify-center pb-1.5 pt-0.5',
+              dragging && 'cursor-ns-resize select-none',
+            )}
+          >
+            <div className="h-1 w-10 rounded-full bg-primary/20 transition-colors group-hover:bg-primary/45" />
           </div>
         </>
       )}
