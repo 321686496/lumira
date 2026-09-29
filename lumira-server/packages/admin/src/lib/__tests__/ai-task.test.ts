@@ -139,7 +139,7 @@ describe('generateAiPoseImages', () => {
     expect(formData?.get('reference')).toBe(reference);
   });
 
-  it('传入研究结果时序列化为 { items, brief } 提交；均为空时不提交该字段', async () => {
+  it('传入研究结果时序列化为 { items, brief, vision } 提交；均为空时不提交该字段', async () => {
     batchStartMock.mockResolvedValue({ batchId: 'batch-1' });
     batchStatusMock.mockResolvedValue({
       batchId: 'batch-1', total: 1, completed: 1, current: 1, status: 'done',
@@ -155,7 +155,7 @@ describe('generateAiPoseImages', () => {
     await generateAiPoseImages({ draft: {}, research, researchBrief });
 
     const formData = batchStartMock.mock.calls[0]?.[0];
-    expect(JSON.parse(formData?.get('research') as string)).toEqual({ items: research, brief: researchBrief });
+    expect(JSON.parse(formData?.get('research') as string)).toEqual({ items: research, brief: researchBrief, vision: null });
 
     await generateAiPoseImages({ draft: {}, research: [] });
 
