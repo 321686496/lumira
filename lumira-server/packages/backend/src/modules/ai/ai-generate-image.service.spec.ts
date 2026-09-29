@@ -86,7 +86,7 @@ describe('AiGenerateImageService', () => {
     generateImageMock.mockResolvedValueOnce({ base64: 'aGVsbG8=', mimeType: 'image/png' });
     const { textChat } = jest.requireMock('./llm-client') as { textChat: jest.Mock };
 
-    const res = await service.generate(referenceFile(), JSON.stringify(DRAFT));
+    const res = await service.generate([referenceFile()], JSON.stringify(DRAFT));
 
     // 润色走文本模态端点
     expect(textChat).toHaveBeenCalledTimes(1);
@@ -111,7 +111,7 @@ describe('AiGenerateImageService', () => {
     const { service } = buildService();
     generateImageMock.mockResolvedValueOnce({ base64: 'aGVsbG8=', mimeType: 'image/png' });
 
-    await service.generate(referenceFile(), JSON.stringify(DRAFT));
+    await service.generate([referenceFile()], JSON.stringify(DRAFT));
 
     expect(generateImageMock).toHaveBeenCalledTimes(1);
     const input = generateImageMock.mock.calls[0][1];
@@ -203,7 +203,7 @@ describe('AiGenerateImageService', () => {
       cfgError: new ServiceUnavailableException('AI 未配置或未启用，请先在后台「AI 设置」中完成配置并启用'),
     });
 
-    await expect(service.generate(referenceFile(), JSON.stringify(DRAFT)))
+    await expect(service.generate([referenceFile()], JSON.stringify(DRAFT)))
       .rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(generateImageMock).not.toHaveBeenCalled();
   });

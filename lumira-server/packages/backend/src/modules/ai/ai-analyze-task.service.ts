@@ -59,16 +59,16 @@ export class AiAnalyzeTaskService implements OnModuleDestroy {
    * 创建 pending 任务后后台执行并立即返回 taskId。
    */
   async submit(
-    image: UploadFile | undefined,
+    images: UploadFile[] | undefined,
     text: string | undefined,
     extra: { textDesc?: string | null; creationReq?: string | null; poseCount?: string | null; subjectCount?: string | null } = {},
   ): Promise<{ taskId: string }> {
-    if (!image && !(text ?? '').trim()) {
+    if (!images?.length && !(text ?? '').trim()) {
       throw new BadRequestException('请至少提供示例图或文字描述之一');
     }
     const id = `anl_${nanoid(16)}`;
     this.tasks.set(id, { id, status: 'pending', createdAt: Date.now(), events: [] });
-    void this.run(id, image, text, extra);
+    void this.run(id, images, text, extra);
     return { taskId: id };
   }
 
@@ -76,7 +76,7 @@ export class AiAnalyzeTaskService implements OnModuleDestroy {
    *  analyze 全程在 trace 采集上下文内跑，各阶段/提示词/响应按发生顺序落到 task.events。 */
   private async run(
     id: string,
-    image: UploadFile | undefined,
+    images: UploadFile[] | undefined,
     text: string | undefined,
     extra: { textDesc?: string | null; creationReq?: string | null; poseCount?: string | null; subjectCount?: string | null },
   ): Promise<void> {
@@ -89,8 +89,8 @@ export class AiAnalyzeTaskService implements OnModuleDestroy {
     };
     try {
       const result = await runWithTrace(sink, async () => {
-        traceNote('task', '识别任务已提交', `输入：${image ? '示例图' : '无图'}${(text ?? '').trim() ? ' + 文字描述' : ''}`);
-        return this.aiAnalyzeService.analyze(image, text, extra);
+        traceNote('task', '识别任务已提交', `输入：${images?.length ? `${images.length} 张示例图` : '无图'}${(text ?? '').trim() ? ' + 文字描述' : ''}`);
+        return this.aiAnalyzeService.analyze(images, text, extra);
       });
       task.status = 'done';
       task.result = result;

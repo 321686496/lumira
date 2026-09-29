@@ -8,6 +8,7 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { UploadFile } from '../templates/admin-templates.service';
 import { AiConfigService } from './ai-config.service';
 import { GenerateImageResult, generateImage, mapSize } from './image-client';
+import { visionChatMulti } from './llm-client';
 import { buildImagePrompt, isSelfieDraft, retouchLevelOfDraft } from './image-prompt.builder';
 import type { RetouchLevel } from './style-profile.presets';
 import { composeImagePrompt } from './image-prompt.composer';
@@ -147,11 +148,13 @@ export class AiGenerateImageService {
 
   /**
    * 生成模板效果图：取启用配置（未配置 503）→ 解析草稿 JSON（非法 400）→
-   * 结构化素材（草稿 + 姿势 + 研究结果 + 照片参数 + 生图要求）交文本模型整理为生图提示词
-   * （失败回退机械拼接）+ 厂商尺寸 → generateImage（有参考图时 doubao/openai 走图生图）
+   * 结构化素材（草稿 + 姿势 + 研究结果 + 照片参数 + 生图要求 + 用户参考图识别结论）交文本模型整理为生图提示词
+   * （失败回退机械拼接）+ 厂商尺寸 → generateImage（有参考图时 doubao/openai 走图生图）。
+   * references 支持多张：第一张作为图生图直接锚点（保底不回归），全部参考图另交由图片识别大模型
+   * 识别并把结论注入提示词组织素材（仅 >1 张时触发识别，单张保持原快速路径）。
    */
   async generate(
-    reference: UploadFile | undefined,
+    references: UploadFile[] | undefined,
     metaJson: string | null,
     extraPrompt?: string | null,
     researchJson?: string | null,
@@ -195,9 +198,17 @@ export class AiGenerateImageService {
     // 3. 机械拼接 prompt 作为兜底；结构化素材交文本模型整理为最终生图提示词（失败回退拼接值）
     //    + 按厂商映射尺寸 → 生图（有参考图时 doubao/openai 走图生图）
     const fallbackPrompt = buildImagePrompt(draft, extraPrompt);
+    // 3.5 用户上传多张参考图：全部交给图片识别大模型识别，识别结论注入提示词组织素材；
+    //     第一张仍作为图生图直接锚点。识别失败/超时静默降级（referenceDesc=null），不阻断生图。
+    const refs = references ?? [];
+    const anchor = refs[0];
+    let referenceDesc: string | null = null;
+    if (refs.length > 1) {
+      referenceDesc = await this.describeReferences(refs);
+    }
     const { prompt, composed } = await composeImagePrompt(
       cfg.text,
-      { draft, research, brief: researchBrief, vision: researchVision, extraPrompt },
+      { draft, research, brief: researchBrief, vision: researchVision, extraPrompt, referenceDesc },
       fallbackPrompt,
     );
     // 组织器失败/超时/空白输出时静默回退机械拼接（趋势要点与风格素材未注入）——留痕以便排查
@@ -215,9 +226,29 @@ export class AiGenerateImageService {
     const imageResult = await generateImage(cfg.image, {
       prompt: hardenedPrompt,
       size: mapSize(cfg.image.provider, extractAspectRatio(draft)),
-      referenceBase64: reference?.buffer.toString('base64'),
-      referenceMime: reference?.mimetype,
+      referenceBase64: anchor?.buffer.toString('base64'),
+      referenceMime: anchor?.mimetype,
     });
     return { ...imageResult, prompt: hardenedPrompt, model: cfg.image.model };
+  }
+
+  /** 多张姿势参考图识别：全部图片交给图片识别大模型逐张识别并总结共同点，返回文本结论；失败返回 null（静默降级） */
+  async describeReferences(references: UploadFile[]): Promise<string | null> {
+    try {
+      const cfg = await this.aiConfigService.getActiveConfig();
+      const content = await visionChatMulti(cfg.vision, {
+        systemPrompt:
+          '你是资深人像摄影助理。用户上传了多张参考图，请逐一识别每张图中的：人物形象（长相/发型/服装/体型）、' +
+          '场景与道具、光线与色调、摄影风格与构图；最后总结这些参考图的共同点。输出中文，按「图1/图2…」分节，末尾附「共同点」小节。',
+        userText: `请逐一识别以下 ${references.length} 张参考图，输出结构化要点。`,
+        images: references.map((r) => ({ base64: r.buffer.toString('base64'), mime: r.mimetype })),
+        temperature: 0.3,
+      });
+      const text = content.trim();
+      return text !== '' ? text : null;
+    } catch {
+      // 识别失败/超时：静默降级，不阻断生图
+      return null;
+    }
   }
 }

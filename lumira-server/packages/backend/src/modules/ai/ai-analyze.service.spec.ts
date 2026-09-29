@@ -10,15 +10,16 @@ import { DatabaseService } from '../../database/database.service';
 import { AiConfigService } from './ai-config.service';
 import type { TrendResearchService } from './trend-research/trend-research.service';
 import { MAX_IMAGE_BYTES, UploadFile } from '../templates/admin-templates.service';
-import { LlmJsonError, visionChatJson, textChatJson } from './llm-json';
+import { LlmJsonError, visionChatJsonMulti, textChatJson } from './llm-json';
 
 jest.mock('./llm-json', () => ({
   visionChatJson: jest.fn(),
+  visionChatJsonMulti: jest.fn(),
   textChatJson: jest.fn(),
   LlmJsonError: class LlmJsonError extends Error {},
 }));
 
-const visionChatJsonMock = visionChatJson as jest.MockedFunction<typeof visionChatJson>;
+const visionChatJsonMultiMock = visionChatJsonMulti as jest.MockedFunction<typeof visionChatJsonMulti>;
 const textChatJsonMock = textChatJson as jest.MockedFunction<typeof textChatJson>;
 
 /** 可 await 的 drizzle 查询链 mock：select().from().where() 链式后 resolve 出 rows */
@@ -95,20 +96,20 @@ function imageFile(opts: { mimetype?: string; size?: number } = {}): UploadFile 
 }
 
 beforeEach(() => {
-  visionChatJsonMock.mockReset();
+  visionChatJsonMultiMock.mockReset();
   textChatJsonMock.mockReset();
 });
 
 describe('AiAnalyzeService', () => {
   it('成功路径：visionChatJson 收到分类树提示词 + base64 图 + runtime，返回归一化结果', async () => {
     const { service } = buildService();
-    visionChatJsonMock.mockResolvedValueOnce(RAW_DRAFT);
+    visionChatJsonMultiMock.mockResolvedValueOnce(RAW_DRAFT);
 
     const image = imageFile();
-    const res = await service.analyze(image, undefined);
+    const res = await service.analyze([image], undefined);
 
-    expect(visionChatJsonMock).toHaveBeenCalledTimes(1);
-    const [cfg, input, runtime] = visionChatJsonMock.mock.calls[0];
+    expect(visionChatJsonMultiMock).toHaveBeenCalledTimes(1);
+    const [cfg, input, runtime] = visionChatJsonMultiMock.mock.calls[0];
     expect(cfg).toEqual(ACTIVE_CFG.vision);
     // 系统提示词注入：分类树（按层级缩进）+ 枚举中文标签 + JSON 契约示例
     expect(input.systemPrompt).toContain('- portrait 人像');
@@ -117,8 +118,8 @@ describe('AiAnalyzeService', () => {
     expect(input.systemPrompt).toContain('黄金比例'); // overlayType 中文标签
     expect(input.systemPrompt).toContain('晴空田园少女人像侧拍'); // 契约示例
     expect(input.userText.length).toBeGreaterThan(0);
-    expect(input.imageBase64).toBe(image.buffer.toString('base64'));
-    expect(input.imageMime).toBe('image/jpeg');
+    // 多图契约：images 数组逐张 { base64, mime } 交给 visionChatJsonMulti 一次性识别
+    expect(input.images).toEqual([{ base64: image.buffer.toString('base64'), mime: 'image/jpeg' }]);
     expect(input.temperature).toBe(0.3);
     expect(runtime).toEqual(ACTIVE_CFG.runtime);
     // 返回为归一化结果（六段结构 + 默认姿势骨架）
@@ -143,12 +144,12 @@ describe('AiAnalyzeService', () => {
       { getActiveConfig } as unknown as AiConfigService,
       { research: jest.fn() } as unknown as TrendResearchService,
     );
-    visionChatJsonMock.mockImplementationOnce(async () => {
+    visionChatJsonMultiMock.mockImplementationOnce(async () => {
       order.push('visionChat');
       return {};
     });
 
-    await service.analyze(imageFile(), undefined);
+    await service.analyze([imageFile()], undefined);
 
     expect(order).toEqual(['categories', 'config', 'visionChat']);
   });
@@ -156,22 +157,22 @@ describe('AiAnalyzeService', () => {
   it('mimetype 非法 → 400「仅支持 jpg/png/webp 图片」，不触达分类查询 / 配置 / 模型', async () => {
     const { service, select, getActiveConfig } = buildService();
 
-    const p = service.analyze(imageFile({ mimetype: 'text/plain' }), undefined);
+    const p = service.analyze([imageFile({ mimetype: 'text/plain' })], undefined);
     await expect(p).rejects.toBeInstanceOf(BadRequestException);
     await expect(p).rejects.toThrow('仅支持 jpg/png/webp 图片');
 
     expect(select).not.toHaveBeenCalled();
     expect(getActiveConfig).not.toHaveBeenCalled();
-    expect(visionChatJsonMock).not.toHaveBeenCalled();
+    expect(visionChatJsonMultiMock).not.toHaveBeenCalled();
   });
 
   it('图片超过 8MB → 400（assertFileSize 风格文案），不调用模型', async () => {
     const { service } = buildService();
 
-    await expect(service.analyze(imageFile({ size: MAX_IMAGE_BYTES + 1 }), undefined))
+    await expect(service.analyze([imageFile({ size: MAX_IMAGE_BYTES + 1 })], undefined))
       .rejects.toThrow('示例图不能超过 8MB');
 
-    expect(visionChatJsonMock).not.toHaveBeenCalled();
+    expect(visionChatJsonMultiMock).not.toHaveBeenCalled();
   });
 
   it('未配置/未启用（getActiveConfig 503）→ 异常透传，不调用模型', async () => {
@@ -179,13 +180,13 @@ describe('AiAnalyzeService', () => {
       cfgError: new ServiceUnavailableException('AI 未配置或未启用，请先在后台「AI 设置」中完成配置并启用'),
     });
 
-    await expect(service.analyze(imageFile(), undefined)).rejects.toBeInstanceOf(ServiceUnavailableException);
-    expect(visionChatJsonMock).not.toHaveBeenCalled();
+    await expect(service.analyze([imageFile()], undefined)).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(visionChatJsonMultiMock).not.toHaveBeenCalled();
   });
 
   it('模型输出经 normalize 后：非法枚举丢弃 + 数值夹取，warnings 透传', async () => {
     const { service } = buildService();
-    visionChatJsonMock.mockResolvedValueOnce({
+    visionChatJsonMultiMock.mockResolvedValueOnce({
       meta: {
         name: '晴空田园少女人像侧拍逆光清新风格模板',
         category: 'portrait',
@@ -194,7 +195,7 @@ describe('AiAnalyzeService', () => {
       composition: { overlayType: 'bogus_overlay', opacity: 2 },
     });
 
-    const res = await service.analyze(imageFile(), undefined);
+    const res = await service.analyze([imageFile()], undefined);
 
     const composition = res.draft.composition as Record<string, unknown>;
     expect(composition.overlayType).toBeUndefined(); // 非法枚举丢弃
@@ -208,11 +209,11 @@ describe('AiAnalyzeService', () => {
 
   it('模型输出无法解析为 JSON（重试用尽 → LlmJsonError）→ 400「模型输出无法解析为 JSON，请重试识别」', async () => {
     const { service } = buildService();
-    visionChatJsonMock.mockRejectedValueOnce(
+    visionChatJsonMultiMock.mockRejectedValueOnce(
       new LlmJsonError('AI 输出无法解析为 JSON（已重试 2 次）：输出不是合法 JSON'),
     );
 
-    const p = service.analyze(imageFile(), undefined);
+    const p = service.analyze([imageFile()], undefined);
     await expect(p).rejects.toBeInstanceOf(BadRequestException);
     await expect(p).rejects.toThrow('模型输出无法解析为 JSON，请重试识别');
   });
@@ -441,11 +442,11 @@ describe('AiAnalyzeService — 多输入', () => {
 
   it('仅文字 → 走 textChat（visionChat 不被调），返回归一化草稿', async () => {
     const { service } = buildService();
-    visionChatJsonMock.mockResolvedValue(RAW_DRAFT);
+    visionChatJsonMultiMock.mockResolvedValue(RAW_DRAFT);
     textChatJsonMock.mockResolvedValue(RAW_DRAFT);
     const res = await service.analyze(undefined, '日系田园风，午后侧逆光');
     expect(textChatJsonMock).toHaveBeenCalledTimes(1);
-    expect(visionChatJsonMock).not.toHaveBeenCalled();
+    expect(visionChatJsonMultiMock).not.toHaveBeenCalled();
     expect((res.draft.meta as any).category).toBe('portrait');
     // textChat 入参：收到文本模态端点（model = 有效文本模型）、userPrompt 含用户文字
     const cfg = textChatJsonMock.mock.calls[0][0];
@@ -455,30 +456,30 @@ describe('AiAnalyzeService — 多输入', () => {
 
   it('图 + 文 → visionChat 的 userText 注入「用户文字描述」（text 无 textDesc 时回退）', async () => {
     const { service } = buildService();
-    visionChatJsonMock.mockResolvedValue(RAW_DRAFT);
-    await service.analyze(imageFile(), '要侧拍');
-    expect(visionChatJsonMock).toHaveBeenCalledTimes(1);
-    expect(visionChatJsonMock.mock.calls[0][1].userText).toContain('用户文字描述：要侧拍');
+    visionChatJsonMultiMock.mockResolvedValue(RAW_DRAFT);
+    await service.analyze([imageFile()], '要侧拍');
+    expect(visionChatJsonMultiMock).toHaveBeenCalledTimes(1);
+    expect(visionChatJsonMultiMock.mock.calls[0][1].userText).toContain('用户文字描述：要侧拍');
   });
 
   it('仅图（无文字）→ userText 不含附加输入段（现状不变）', async () => {
     const { service } = buildService();
-    visionChatJsonMock.mockResolvedValue(RAW_DRAFT);
-    await service.analyze(imageFile(), undefined);
-    expect(visionChatJsonMock.mock.calls[0][1].userText).not.toContain('用户文字描述：');
+    visionChatJsonMultiMock.mockResolvedValue(RAW_DRAFT);
+    await service.analyze([imageFile()], undefined);
+    expect(visionChatJsonMultiMock.mock.calls[0][1].userText).not.toContain('用户文字描述：');
   });
 
   it('附加输入注入：文字描述 / 创作要求 / 固定姿势个数注入 userText', async () => {
     const { service } = buildService();
-    visionChatJsonMock.mockResolvedValueOnce({});
+    visionChatJsonMultiMock.mockResolvedValueOnce({});
 
-    await service.analyze(imageFile(), undefined, {
+    await service.analyze([imageFile()], undefined, {
       textDesc: '三连拍姿势，适合闺蜜出游',
       creationReq: '偏胶片感',
       poseCount: '3',
     });
 
-    const [, input] = visionChatJsonMock.mock.calls[0];
+    const [, input] = visionChatJsonMultiMock.mock.calls[0];
     expect(input.userText).toContain('用户文字描述：三连拍姿势，适合闺蜜出游');
     expect(input.userText).toContain('创作要求：偏胶片感');
     expect(input.userText).toContain('pose 数组必须恰好输出 3 个姿势');
@@ -486,11 +487,11 @@ describe('AiAnalyzeService — 多输入', () => {
 
   it('姿势个数缺省/自动：userText 含自动判断指令而非固定数量', async () => {
     const { service } = buildService();
-    visionChatJsonMock.mockResolvedValueOnce({});
+    visionChatJsonMultiMock.mockResolvedValueOnce({});
 
-    await service.analyze(imageFile(), undefined, { textDesc: '', creationReq: '', poseCount: '' });
+    await service.analyze([imageFile()], undefined, { textDesc: '', creationReq: '', poseCount: '' });
 
-    const [, input] = visionChatJsonMock.mock.calls[0];
+    const [, input] = visionChatJsonMultiMock.mock.calls[0];
     expect(input.userText).toContain('判断需要多少个姿势');
     expect(input.userText).not.toContain('恰好输出');
   });
@@ -499,9 +500,9 @@ describe('AiAnalyzeService — 多输入', () => {
     const { service } = buildService();
 
     for (const bad of ['0', '10', '2.5', 'abc']) {
-      await expect(service.analyze(imageFile(), undefined, { poseCount: bad })).rejects.toThrow('poseCount');
+      await expect(service.analyze([imageFile()], undefined, { poseCount: bad })).rejects.toThrow('poseCount');
     }
-    expect(visionChatJsonMock).not.toHaveBeenCalled();
+    expect(visionChatJsonMultiMock).not.toHaveBeenCalled();
   });
 });
 

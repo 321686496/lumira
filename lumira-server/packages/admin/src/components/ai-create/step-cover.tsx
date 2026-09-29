@@ -71,9 +71,9 @@ function IconButton({
 }
 
 export function StepCover({
-  exampleFile,
-  referenceFile,
-  referenceUrl,
+  exampleFiles,
+  referenceFiles,
+  referenceUrls,
   onReferenceChange,
   draft,
   research,
@@ -86,10 +86,10 @@ export function StepCover({
   onPoseEvents,
   onPoseRunningChange,
 }: {
-  exampleFile: File | null;
-  referenceFile: File | null;
-  referenceUrl: string | null;
-  onReferenceChange: (file: File | null, url: string | null) => void;
+  exampleFiles: File[];
+  referenceFiles: File[];
+  referenceUrls: string[];
+  onReferenceChange: (files: File[], urls: string[]) => void;
   draft: Record<string, unknown> | null;
   /** 识别阶段的网络趋势研究结果（生成时透传给后端提示词组织器，与草稿同源） */
   research?: AiResearchRef[] | null;
@@ -120,27 +120,35 @@ export function StepCover({
 
   const disabled = busy || generating;
 
-  /** 处理已选/拖入的姿势参考图：校验 + 压缩（点击选择与拖拽上传共用） */
-  const applyReferenceFile = async (file: File) => {
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      toast({ variant: 'destructive', title: '格式不支持', description: '参考图仅支持 jpg / png / webp' });
-      return;
+  /** 处理已选/拖入的姿势参考图：逐张校验 + 压缩后追加（点击选择与拖拽上传共用） */
+  const applyReferenceFiles = async (files: File[]) => {
+    const accepted: File[] = [];
+    for (const file of files) {
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+        toast({ variant: 'destructive', title: '格式不支持', description: '参考图仅支持 jpg / png / webp' });
+        continue;
+      }
+      const compressed = await compressImage(file, {
+        maxDim: 1280,
+        quality: 0.8,
+        maxBytes: 512 * 1024,
+      });
+      accepted.push(compressed);
     }
-    const compressed = await compressImage(file, {
-      maxDim: 1280,
-      quality: 0.8,
-      maxBytes: 512 * 1024,
-    });
-    onReferenceChange(compressed, URL.createObjectURL(compressed));
+    if (accepted.length === 0) return;
+    onReferenceChange(
+      [...referenceFiles, ...accepted],
+      [...referenceUrls, ...accepted.map((f) => URL.createObjectURL(f))],
+    );
   };
 
-  /** 拖拽上传姿势参考图 */
+  /** 拖拽上传姿势参考图（支持多张） */
   const handleReferenceDrop = async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setRefDragActive(false);
     if (disabled) return;
-    const file = event.dataTransfer.files?.[0];
-    if (file) await applyReferenceFile(file);
+    const files = event.dataTransfer.files ? Array.from(event.dataTransfer.files) : [];
+    if (files.length > 0) await applyReferenceFiles(files);
   };
 
   // 放大查看时支持 ←/→ 翻页（与系统相册操作一致）
@@ -170,21 +178,28 @@ export function StepCover({
 
   const viewing = viewIndex != null ? candidates[viewIndex] : null;
 
-  /** 当前参考图是否正是「风格识别参考图（示例图）」：只有用户显式勾选或对该图「设为参考」才成立 */
-  const usingStyleRef = Boolean(exampleFile && referenceFile === exampleFile);
+  /** 当前参考图集合是否正等于「风格识别参考图（示例图）」集合：只有用户显式勾选或对该图「设为参考」才成立 */
+  const exampleIdSet = new Set(exampleFiles);
+  const usingStyleRef =
+    exampleFiles.length > 0 &&
+    referenceFiles.length === exampleFiles.length &&
+    referenceFiles.every((f) => exampleIdSet.has(f));
 
-  /** 将示例图置顶为封面候选 */
+  /** 将示例图们置顶为封面候选（保持相对顺序） */
   const rollExampleToTop = () => {
-    if (!exampleFile) return;
+    if (exampleFiles.length === 0) return;
     setCandidates((prev) => {
-      const existing = prev.find((c) => c.source === 'example');
-      const exampleCandidate: CoverCandidate = existing ?? {
-        id: 'example',
-        file: exampleFile,
-        url: URL.createObjectURL(exampleFile),
-        source: 'example',
-      };
-      return [exampleCandidate, ...prev.filter((c) => c.source !== 'example')];
+      const existing = prev.filter((c) => c.source === 'example');
+      const exampleCandidates: CoverCandidate[] =
+        existing.length > 0
+          ? existing
+          : exampleFiles.map((f, i) => ({
+              id: i === 0 ? 'example' : `example-${i}`,
+              file: f,
+              url: URL.createObjectURL(f),
+              source: 'example',
+            }));
+      return [...exampleCandidates, ...prev.filter((c) => c.source !== 'example')];
     });
   };
 
@@ -198,7 +213,7 @@ export function StepCover({
       const results = await generateAiPoseImages({
         draft,
         // 不设回退：未显式选择参考图（含勾选「使用风格识别参考图」）时一律不带参考图生成
-        referenceFile,
+        referenceFiles,
         extraPrompt,
         research,
         researchBrief,
@@ -292,9 +307,9 @@ export function StepCover({
         <div className="space-y-2">
           <Label htmlFor="ai-pose-reference">姿势参考图（可选）</Label>
           <p className="text-xs text-muted-foreground">
-            可上传一张姿势参考图，或点击候选图「设为参考」，或勾选下方选项复用风格识别的示例图。
+            可上传多张姿势参考图，或点击候选图「设为参考」，或勾选下方选项复用风格识别的示例图。
             <span className="font-medium text-foreground">不选则不带参考图生成</span>
-            （不会自动使用示例图）。生成时第一张会以参考图为基准，后续姿势自动用第一张结果保持人物与场景一致。
+            （不会自动使用示例图）。生成时第一张会以参考图为基准，全部参考图会交给图片识别大模型识别后融入提示词，后续姿势自动用第一张结果保持人物与场景一致。
           </p>
           <div
             className={cn(
@@ -322,47 +337,70 @@ export function StepCover({
               <ImageSquare size={14} className="mr-1" />
               选择参考图
             </Button>
-            {referenceFile && (
+            {referenceFiles.length > 0 && (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 disabled={disabled}
                 onClick={() => {
-                  onReferenceChange(null, null);
+                  onReferenceChange([], []);
                   if (referenceInputRef.current) referenceInputRef.current.value = '';
                 }}
               >
                 清除参考
               </Button>
             )}
-            {referenceUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={referenceUrl}
-                alt="姿势参考图"
-                className="h-20 w-16 rounded-md border object-cover"
-              />
+            {referenceUrls.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {referenceUrls.map((url, i) => (
+                  <div key={i} className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={url}
+                      alt={`姿势参考图 ${i + 1}`}
+                      className="h-20 w-16 rounded-md border object-cover"
+                    />
+                    <button
+                      type="button"
+                      title={`删除第 ${i + 1} 张参考图`}
+                      aria-label={`删除第 ${i + 1} 张参考图`}
+                      className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-foreground/70 text-background transition-colors hover:bg-destructive"
+                      onClick={() => {
+                        URL.revokeObjectURL(url);
+                        onReferenceChange(
+                          referenceFiles.filter((_, idx) => idx !== i),
+                          referenceUrls.filter((_, idx) => idx !== i),
+                        );
+                      }}
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
-            <span className="text-xs text-muted-foreground/80">或将图片拖拽到此处上传</span>
+            <span className="text-xs text-muted-foreground/80">支持多张；或将图片拖拽到此处上传</span>
           </div>
           {/* 显式复用「风格识别参考图（示例图）」：只有勾选才会作为姿势参考图，取消勾选即完全不带参考图 */}
           <label
             className={cn(
               'flex w-fit items-center gap-2 text-xs',
-              !exampleFile || disabled ? 'cursor-not-allowed text-muted-foreground/60' : 'cursor-pointer text-foreground',
+              exampleFiles.length === 0 || disabled
+                ? 'cursor-not-allowed text-muted-foreground/60'
+                : 'cursor-pointer text-foreground',
             )}
           >
             <input
               type="checkbox"
               className="h-3.5 w-3.5 accent-primary"
               checked={usingStyleRef}
-              disabled={disabled || !exampleFile}
+              disabled={disabled || exampleFiles.length === 0}
               onChange={(event) => {
-                if (event.target.checked && exampleFile) {
-                  onReferenceChange(exampleFile, URL.createObjectURL(exampleFile));
+                if (event.target.checked && exampleFiles.length > 0) {
+                  onReferenceChange(exampleFiles, exampleFiles.map((f) => URL.createObjectURL(f)));
                 } else {
-                  onReferenceChange(null, null);
+                  onReferenceChange([], []);
                 }
               }}
             />
@@ -373,19 +411,19 @@ export function StepCover({
             ref={referenceInputRef}
             type="file"
             accept="image/jpeg,image/png,image/webp"
+            multiple
             className="hidden"
             disabled={busy}
             onChange={async (event) => {
-              const file = event.target.files?.[0];
-              if (!file) return;
-              await applyReferenceFile(file);
+              const files = event.target.files ? Array.from(event.target.files) : [];
+              if (files.length > 0) await applyReferenceFiles(files);
               if (event.target) event.target.value = '';
             }}
           />
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <Button variant="outline" size="sm" disabled={!exampleFile || disabled} onClick={rollExampleToTop}>
+          <Button variant="outline" size="sm" disabled={exampleFiles.length === 0 || disabled} onClick={rollExampleToTop}>
             <ImageSquare size={14} className="mr-1" /> 用示例图（置顶）
           </Button>
           <Button size="sm" disabled={!draft || disabled} onClick={generate}>
@@ -475,7 +513,15 @@ export function StepCover({
                     </IconButton>
                   </div>
                   <div className="flex items-center gap-0.5">
-                    <IconButton label="设为姿势参考图" disabled={disabled} onClick={() => onReferenceChange(c.file, c.url)}>
+                    <IconButton
+                      label="设为姿势参考图"
+                      disabled={disabled}
+                      onClick={() => {
+                        // 追加而非替换：支持多张参考图
+                        if (referenceFiles.includes(c.file)) return;
+                        onReferenceChange([...referenceFiles, c.file], [...referenceUrls, c.url]);
+                      }}
+                    >
                       <Target size={14} />
                     </IconButton>
                     {i !== 0 && (

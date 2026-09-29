@@ -92,7 +92,7 @@ describe('AiImageTaskService', () => {
 
   it('批量姿势任务：返回单个 batchId，进度 indices 完整，首张用锚点结果启动剩余任务', async () => {
     getActiveConfigMock.mockResolvedValue({} as never);
-    generateMock.mockImplementation(async (_reference, metaJson: string) => {
+    generateMock.mockImplementation(async (_references, metaJson: string) => {
       const meta = JSON.parse(metaJson);
       if (meta.consistency?.anchor !== 'first') {
         return { base64: 'YW5jaG9y', mimeType: 'image/png' };
@@ -115,11 +115,12 @@ describe('AiImageTaskService', () => {
     expect(done?.results.every((r) => r.status === 'done' && r.error === undefined)).toBe(true);
     expect(generateMock).toHaveBeenCalledTimes(3);
 
-    const calls = generateMock.mock.calls as Array<[UploadFile | undefined, string]>;
-    const anchorBuffer = calls[1][0]?.buffer;
+    const calls = generateMock.mock.calls as Array<[UploadFile[] | undefined, string]>;
+    // 依赖图引用 = 锚点成片的 [anchorRef] 数组（多图引用只在首张任务用用户上传的全部参考图）
+    const anchorBuffer = calls[1][0]?.[0]?.buffer;
     expect(anchorBuffer?.toString('base64')).toBe('YW5jaG9y');
-    expect(calls[1][0]?.buffer.equals(anchorBuffer!)).toBe(true);
-    expect(calls[2][0]?.buffer.equals(anchorBuffer!)).toBe(true);
+    expect(calls[1][0]?.[0]?.buffer.equals(anchorBuffer!)).toBe(true);
+    expect(calls[2][0]?.[0]?.buffer.equals(anchorBuffer!)).toBe(true);
   });
 
   it('批量姿势任务：首张锚点失败时停止后续（批次 done 且带汉字错误）', async () => {

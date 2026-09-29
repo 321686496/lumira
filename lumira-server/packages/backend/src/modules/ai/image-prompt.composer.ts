@@ -72,6 +72,8 @@ export interface PromptComposeInput {
   styleProfile?: StyleProfile;
   /** 参考图多模态解读结论（已由 renderResearchVision 渲染为分节文本；仅作文本注入，不作底图） */
   vision?: string | null;
+  /** 用户上传的多张姿势参考图的图片识别模型识别结论（多图时注入；仅作文本注入，不作底图） */
+  referenceDesc?: string | null;
 }
 
 export interface ComposeResult {
@@ -321,6 +323,15 @@ export function buildPromptMaterial(input: PromptComposeInput): string {
   const visionText = (input.vision ?? '').trim();
   if (visionText) {
     sections.push(`【参考视觉要点】\n${visionText}`);
+  }
+
+  // ④.7 用户参考图识别（图片识别模型对用户上传的多张参考图的识别结论；仅作文本注入，绝不作 img2img 底图）
+  const refDescText = (input.referenceDesc ?? '').trim();
+  if (refDescText) {
+    sections.push(
+      `【用户参考图识别】（图片识别模型对用户上传的多张参考图的识别结论：人物形象 / 场景 / 道具 / 光线 / 摄影风格 / 构图；` +
+        `须作为重要视觉参考融入画面，但不得照抄具体人物身份、品牌或可识别标识）\n${refDescText}`,
+    );
   }
 
   // ⑤ 照片参数：画幅 + 相机参数（原先整段相机参数都没下发，是「没有参数优化」的根因）+ 背景道具后期

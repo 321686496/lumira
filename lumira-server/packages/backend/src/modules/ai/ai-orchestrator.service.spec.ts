@@ -38,7 +38,7 @@ function build(opts: { searchEnabled?: boolean; scoreSequence?: Array<'pass' | '
   const { searchEnabled = true, scoreSequence = ['pass'] } = opts;
 
   const research = { research: jest.fn().mockResolvedValue({ items: [RESEARCH_ITEM], sourceErrors: [] }) };
-  const describe = { describe: jest.fn().mockResolvedValue(DESC) };
+  const describe = { describeMany: jest.fn().mockResolvedValue(DESC) };
   const poseRefSheet = { generate: jest.fn().mockResolvedValue(POSE_SHEET) };
   const paramValidate = new ParamValidateService();
   const score = { score: jest.fn() };
@@ -115,12 +115,12 @@ describe('AiOrchestratorService.run', () => {
     const { service, research, describe, poseRefSheet, score, optsRun } = build();
 
     const res = await service.run(
-      { imageBase64: 'aGk=', imageMime: 'image/jpeg', creationReq: '秋冬清冷感人像', poseCount: 2 },
+      { images: [{ base64: 'aGk=', mime: 'image/jpeg' }], creationReq: '秋冬清冷感人像', poseCount: 2 },
       optsRun,
     );
 
     expect(research.research).toHaveBeenCalledWith('秋冬清冷感人像', expect.anything());
-    expect(describe.describe).toHaveBeenCalledTimes(1);
+    expect(describe.describeMany).toHaveBeenCalledTimes(1);
     expect(poseRefSheet.generate).toHaveBeenCalled();
     expect(score.score).toHaveBeenCalledTimes(1);
     // 经过 normalizeDraft 归一化：meta.name / category 落在输出
@@ -185,7 +185,7 @@ describe('AiOrchestratorService.run', () => {
   it('imageScore 先 retry 后 pass → 进入再判，score 被调用 2 次，二次通过后返回', async () => {
     const { service, score, draftRefine, optsRun } = build({ scoreSequence: ['retry', 'pass'] });
 
-    const res = await service.run({ imageBase64: 'aGk=', imageMime: 'image/jpeg', poseCount: 1 }, optsRun);
+    const res = await service.run({ images: [{ base64: 'aGk=', mime: 'image/jpeg' }], poseCount: 1 }, optsRun);
 
     expect(score.score).toHaveBeenCalledTimes(2);
     const scores = res.trace.filter((t) => t.step === 'imageScore');
@@ -200,7 +200,7 @@ describe('AiOrchestratorService.run', () => {
   it('retry 后无法生成有效改进（refine 返回同稿/空）→ 停止空转，score 仅评一次', async () => {
     const service = (() => {
       const research = { research: jest.fn().mockResolvedValue({ items: [RESEARCH_ITEM], sourceErrors: [] }) };
-      const describe = { describe: jest.fn().mockResolvedValue(DESC) };
+      const describe = { describeMany: jest.fn().mockResolvedValue(DESC) };
       const poseRefSheet = { generate: jest.fn().mockResolvedValue(POSE_SHEET) };
       const paramValidate = new ParamValidateService();
       const score = { score: jest.fn().mockResolvedValue({ score: 0.6, verdict: 'retry' as const, reasons: ['待改进'], suggests: ['调整关键词'] }) };
@@ -217,7 +217,7 @@ describe('AiOrchestratorService.run', () => {
       };
     })();
 
-    const res = await service.service.run({ imageBase64: 'aGk=', imageMime: 'image/jpeg', text: '奶油风人像', poseCount: 1 }, { categories: CATEGORIES });
+    const res = await service.service.run({ images: [{ base64: 'aGk=', mime: 'image/jpeg' }], text: '奶油风人像', poseCount: 1 }, { categories: CATEGORIES });
 
     expect(service.score.score).toHaveBeenCalledTimes(1); // 不空转
     expect(service.draftRefine.refine).toHaveBeenCalledTimes(1);
@@ -229,7 +229,7 @@ describe('AiOrchestratorService.run', () => {
 
     const res = await service.run({ text: '奶油风人像', poseCount: 1 }, optsRun);
 
-    expect(describe.describe).not.toHaveBeenCalled();
+    expect(describe.describeMany).not.toHaveBeenCalled();
     expect(poseRefSheet.generate).toHaveBeenCalled();
     expect(res.trace.some((t) => t.step === 'describe' && String(t.resultBrief).includes('skip'))).toBe(true);
   });
@@ -239,7 +239,7 @@ describe('AiOrchestratorService.run', () => {
 
     const res = await service.run({ text: '奶油风人像', poseCount: 1 }, optsRun);
 
-    expect(describe.describe).not.toHaveBeenCalled();
+    expect(describe.describeMany).not.toHaveBeenCalled();
     expect(poseRefSheet.generate).toHaveBeenCalled();
     expect(score.score).toHaveBeenCalledTimes(1);
     expect(score.score).toHaveBeenCalledWith(expect.objectContaining({ textOnly: true }));
@@ -267,7 +267,7 @@ describe('AiOrchestratorService.run', () => {
     };
 
     const res = await service.run(
-      { imageBase64: 'aGk=', imageMime: 'image/jpeg', creationReq: '秋冬大片', poseCount: 1 },
+      { images: [{ base64: 'aGk=', mime: 'image/jpeg' }], creationReq: '秋冬大片', poseCount: 1 },
       { ...optsRun, styleProfile },
     );
 
@@ -285,7 +285,7 @@ describe('AiOrchestratorService.run', () => {
   it('调用方未传 styleProfile → 编排内自行兜底解析一次', async () => {
     const { service, optsRun } = build();
 
-    const res = await service.run({ imageBase64: 'aGk=', imageMime: 'image/jpeg', poseCount: 1 }, optsRun);
+    const res = await service.run({ images: [{ base64: 'aGk=', mime: 'image/jpeg' }], poseCount: 1 }, optsRun);
 
     expect(res.trace.map((t) => t.step)).toContain('styleProfile');
     expect(res.draft.styleProfile).toBeDefined();
@@ -305,7 +305,7 @@ describe('AiOrchestratorService.run', () => {
       poseRefSheet as unknown as PoseRefSheetService, paramValidate, score as unknown as ImageScoreService, draftRefine,
     );
 
-    const res = await service.run({ imageBase64: 'aGk=', imageMime: 'image/jpeg', poseCount: 1 }, { categories: CATEGORIES });
+    const res = await service.run({ images: [{ base64: 'aGk=', mime: 'image/jpeg' }], poseCount: 1 }, { categories: CATEGORIES });
 
     expect(score.score).toHaveBeenCalledTimes(1); // 失败即停，不进入再判循环
     expect(draftRefine.refine).not.toHaveBeenCalled(); // 不做草稿细化空转
@@ -336,7 +336,7 @@ describe('AiOrchestratorService.run', () => {
       poseRefSheet as unknown as PoseRefSheetService, paramValidate, score as unknown as ImageScoreService, draftRefine,
     );
 
-    const res = await service.run({ imageBase64: 'aGk=', imageMime: 'image/jpeg', poseCount: 1 }, { categories: CATEGORIES });
+    const res = await service.run({ images: [{ base64: 'aGk=', mime: 'image/jpeg' }], poseCount: 1 }, { categories: CATEGORIES });
 
     expect(score.score).toHaveBeenCalledTimes(1); // 失败即停，不进入再判循环
     expect(draftRefine.refine).not.toHaveBeenCalled(); // 不做草稿细化空转

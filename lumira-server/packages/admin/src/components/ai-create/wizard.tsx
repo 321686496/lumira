@@ -36,6 +36,7 @@ import { Upload } from '@phosphor-icons/react/dist/csr/Upload';
 import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
 import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
 import { Check } from '@phosphor-icons/react/dist/csr/Check';
+import { X } from '@phosphor-icons/react/dist/csr/X';
 import { CaretDown } from '@phosphor-icons/react/dist/csr/CaretDown';
 import { cn } from '@/lib/utils';
 
@@ -70,10 +71,10 @@ export function AiCreateWizard({
   const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [maxStep, setMaxStep] = useState(1);
-  const [exampleFile, setExampleFile] = useState<File | null>(null);
-  const [exampleUrl, setExampleUrl] = useState<string | null>(null);
-  const [poseReferenceFile, setPoseReferenceFile] = useState<File | null>(null);
-  const [poseReferenceUrl, setPoseReferenceUrl] = useState<string | null>(null);
+  const [exampleFiles, setExampleFiles] = useState<File[]>([]);
+  const [exampleUrls, setExampleUrls] = useState<string[]>([]);
+  const [poseReferenceFiles, setPoseReferenceFiles] = useState<File[]>([]);
+  const [poseReferenceUrls, setPoseReferenceUrls] = useState<string[]>([]);
   /** Step1 示例图拖拽悬停中 */
   const [exampleDragActive, setExampleDragActive] = useState(false);
   const [inputText, setInputText] = useState('');
@@ -143,7 +144,7 @@ export function AiCreateWizard({
   }, []);
 
   const busy = analyzing || Boolean(autoState?.running);
-  const hasInput = Boolean(exampleFile) || inputText.trim() !== '';
+  const hasInput = exampleFiles.length > 0 || inputText.trim() !== '';
   /** 高级设置已填项数（用于折叠态提示） */
   const advancedFilledCount =
     (creationReq.trim() !== '' ? 1 : 0) + (poseCount !== 'auto' ? 1 : 0) + (subjectCount !== 'auto' ? 1 : 0);
@@ -189,48 +190,60 @@ export function AiCreateWizard({
     setInjection(null);
     setFormActivated(false);
     setAutoState(null);
-    setPoseReferenceFile(null);
-    setPoseReferenceUrl(null);
+    setPoseReferenceFiles([]);
+    setPoseReferenceUrls([]);
     setStep(1);
     setMaxStep(1);
   };
 
-  /** 处理已选/拖入的示例图：校验 + 压缩 + 重开流程（点击选择与拖拽上传共用） */
-  const processExampleFile = async (file: File) => {
+  /** 处理已选/拖入的示例图：逐张校验 + 压缩后追加（点击选择与拖拽上传共用；换图 = 重开流程） */
+  const processExampleFiles = async (files: File[]) => {
     setErrorText(null);
-    if (!ACCEPTED_MIME.includes(file.type)) {
-      toast({ variant: 'destructive', title: '格式不支持', description: '仅支持 jpg / png / webp 图片' });
-      return;
+    const accepted: File[] = [];
+    for (const file of files) {
+      if (!ACCEPTED_MIME.includes(file.type)) {
+        toast({ variant: 'destructive', title: '格式不支持', description: '仅支持 jpg / png / webp 图片' });
+        continue;
+      }
+      if (file.size > MAX_EXAMPLE_BYTES) {
+        toast({ variant: 'destructive', title: '文件过大', description: '示例图不能超过 8MB' });
+        continue;
+      }
+      // Vercel Serverless 4.5MB 请求体限制：先压缩；仍 >3MB 则二次更激进压缩
+      let processed = await compressImage(file, { maxDim: 1280, quality: 0.8 });
+      if (processed.size > 3 * 1024 * 1024) {
+        processed = await compressImage(processed, { maxDim: 1024, quality: 0.7 });
+      }
+      accepted.push(processed);
     }
-    if (file.size > MAX_EXAMPLE_BYTES) {
-      toast({ variant: 'destructive', title: '文件过大', description: '示例图不能超过 8MB' });
-      return;
-    }
-    // Vercel Serverless 4.5MB 请求体限制：先压缩；仍 >3MB 则二次更激进压缩
-    let processed = await compressImage(file, { maxDim: 1280, quality: 0.8 });
-    if (processed.size > 3 * 1024 * 1024) {
-      processed = await compressImage(processed, { maxDim: 1024, quality: 0.7 });
-    }
-    setExampleFile(processed);
-    setExampleUrl(URL.createObjectURL(processed));
+    if (accepted.length === 0) return;
+    setExampleFiles((prev) => [...prev, ...accepted]);
+    setExampleUrls((prev) => [...prev, ...accepted.map((f) => URL.createObjectURL(f))]);
     // 换图 = 重新开始整个流程
     resetFlow();
   };
 
+  /** 删除一张示例图（变更参考集合 → 重开流程） */
+  const removeExampleFile = (i: number) => {
+    URL.revokeObjectURL(exampleUrls[i]);
+    setExampleFiles((prev) => prev.filter((_, idx) => idx !== i));
+    setExampleUrls((prev) => prev.filter((_, idx) => idx !== i));
+    resetFlow();
+  };
+
   const handleExamplePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await processExampleFile(file);
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length > 0) await processExampleFiles(files);
     if (e.target) e.target.value = '';
   };
 
-  /** 拖拽上传示例图（Step1） */
+  /** 拖拽上传示例图（Step1，支持多张） */
   const handleExampleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setExampleDragActive(false);
     if (busy) return;
-    const file = e.dataTransfer.files?.[0];
-    if (file) await processExampleFile(file);
+    const files = e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+    if (files.length > 0) await processExampleFiles(files);
   };
 
   const handleTextChange = (v: string) => {
@@ -260,7 +273,7 @@ export function AiCreateWizard({
     setProgressPanelHidden(false);
     try {
       const analyzeFd = new FormData();
-      if (exampleFile) analyzeFd.set('image', exampleFile);
+      for (const f of exampleFiles) analyzeFd.append('image', f);
       if (inputText.trim()) analyzeFd.set('text', inputText.trim());
       setAnalyzeExtras(analyzeFd);
       const started = await aiAnalyzeStartAction(analyzeFd);
@@ -278,14 +291,16 @@ export function AiCreateWizard({
       setWarnings(result.warnings ?? []);
       setTrace(result.trace ?? null);
       setAnalyzeDetail(result);
-      if (exampleFile) {
-        setCandidates([{
-          id: 'example',
-          file: exampleFile,
-          url: URL.createObjectURL(exampleFile),
-          source: 'example',
-        }]);
-        inject({ json: result.draft, images: [exampleFile], replaceImages: true });
+      if (exampleFiles.length > 0) {
+        setCandidates(
+          exampleFiles.map((f, i) => ({
+            id: i === 0 ? 'example' : `example-${i}`,
+            file: f,
+            url: URL.createObjectURL(f),
+            source: 'example',
+          })),
+        );
+        inject({ json: result.draft, images: exampleFiles, replaceImages: true });
       } else {
         setCandidates([]);
         inject({ json: result.draft });
@@ -318,7 +333,7 @@ export function AiCreateWizard({
     try {
       // ① 识别（含 Step1 附加输入：创作要求 / 姿势个数；主文字描述同时作为 textDesc）
       const analyzeFd = new FormData();
-      if (exampleFile) analyzeFd.set('image', exampleFile);
+      for (const f of exampleFiles) analyzeFd.append('image', f);
       if (inputText.trim()) analyzeFd.set('text', inputText.trim());
       setAnalyzeExtras(analyzeFd);
       const started = await aiAnalyzeStartAction(analyzeFd);
@@ -339,14 +354,12 @@ export function AiCreateWizard({
       setTrace(analyzeResult.trace ?? null);
       setAnalyzeDetail(analyzeResult);
       setFormActivated(true);
-      const exampleCandidate: CoverCandidate | null = exampleFile
-        ? {
-            id: 'example',
-            file: exampleFile,
-            url: URL.createObjectURL(exampleFile),
-            source: 'example',
-          }
-        : null;
+      const exampleCandidates: CoverCandidate[] = exampleFiles.map((f, i) => ({
+        id: i === 0 ? 'example' : `example-${i}`,
+        file: f,
+        url: URL.createObjectURL(f),
+        source: 'example',
+      }));
       const generatedPoseFiles = new Map<number, File>();
       const appendGeneratedPose = (result: { index: number; file?: File }) => {
         if (!result.file) return;
@@ -362,12 +375,12 @@ export function AiCreateWizard({
         }));
         setCandidates([
           ...generatedCandidates,
-          ...(exampleCandidate ? [exampleCandidate] : []),
+          ...exampleCandidates,
         ]);
       };
       const promoteExampleCandidate = () => {
         setCandidates((prev) => [
-          ...(exampleCandidate ? [exampleCandidate] : []),
+          ...exampleCandidates,
           ...prev.filter((item) => item.source === 'ai'),
         ]);
       };
@@ -376,9 +389,9 @@ export function AiCreateWizard({
       stage = 'generating-image';
       setAutoState({ running: true, stage });
       const failGenerate = (err: string) => {
-        setCandidates(exampleCandidate ? [exampleCandidate] : []);
-        if (exampleFile) {
-          inject({ json: draftLocal, images: [exampleFile], replaceImages: true });
+        setCandidates(exampleCandidates.length > 0 ? exampleCandidates : []);
+        if (exampleFiles.length > 0) {
+          inject({ json: draftLocal, images: exampleFiles, replaceImages: true });
         } else {
           inject({ json: draftLocal });
         }
@@ -389,7 +402,7 @@ export function AiCreateWizard({
         draft: draftLocal,
         // 全自动从 Step1 触发，此时用户尚未选择姿势参考图 → 一律不带参考图；
         // 绝不用风格识别的示例图兜底（示例图只用于识别风格，不作为生图参考）
-        referenceFile: poseReferenceFile,
+        referenceFiles: poseReferenceFiles,
         research: analyzeResult.research,
         researchBrief: analyzeResult.researchBrief ?? null,
         researchVision: analyzeResult.researchVision ?? null,
@@ -409,7 +422,7 @@ export function AiCreateWizard({
       }
       if (poseErrors.length > 0) {
         promoteExampleCandidate();
-        if (exampleFile) {
+        if (exampleFiles.length > 0) {
           inject({ json: draftLocal, images: poseFiles, replaceImages: true });
         } else {
           inject({ json: draftLocal });
@@ -635,13 +648,14 @@ export function AiCreateWizard({
           <Card>
             <CardHeader>
               <CardTitle>上传示例图</CardTitle>
-              <CardDescription>jpg / png / webp，≤ 8MB；上传后自动压缩（服务端请求体限制）。</CardDescription>
+              <CardDescription>jpg / png / webp，≤ 8MB；可多张，上传后自动压缩（服务端请求体限制）。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
+                multiple
                 className="hidden"
                 onChange={handleExamplePick}
               />
@@ -663,11 +677,11 @@ export function AiCreateWizard({
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium text-foreground">示例图（可选，该风格的成片参考）</p>
+                    <p className="text-sm font-medium text-foreground">示例图（可选，该风格的成片参考，可多张）</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      AI 将分析画面中的风格 / 构图 / 光线 / 主体，生成可上线的模板表单草稿
+                      AI 将分析全部画面中的风格 / 构图 / 光线 / 主体，生成可上线的模板表单草稿
                     </p>
-                    <p className="mt-1 text-xs text-muted-foreground/80">支持将图片拖拽到此处上传</p>
+                    <p className="mt-1 text-xs text-muted-foreground/80">支持多张；或将图片拖拽到此处上传</p>
                   </div>
                   <Button
                     type="button"
@@ -676,17 +690,30 @@ export function AiCreateWizard({
                     disabled={busy}
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    <Upload size={14} className="mr-1" /> {exampleFile ? '重新选择' : '选择图片'}
+                    <Upload size={14} className="mr-1" /> {exampleFiles.length > 0 ? '继续添加' : '选择图片'}
                   </Button>
                 </div>
-                {exampleUrl && (
-                  <div className="mt-3">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={exampleUrl}
-                      alt="示例图预览"
-                      className="max-h-72 rounded-md border border-border object-contain"
-                    />
+                {exampleUrls.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {exampleUrls.map((url, i) => (
+                      <div key={i} className="relative">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={url}
+                          alt={`示例图 ${i + 1}`}
+                          className="h-24 w-24 rounded-md border object-cover"
+                        />
+                        <button
+                          type="button"
+                          title={`删除第 ${i + 1} 张示例图`}
+                          aria-label={`删除第 ${i + 1} 张示例图`}
+                          className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-foreground/70 text-background transition-colors hover:bg-destructive"
+                          onClick={() => removeExampleFile(i)}
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -896,12 +923,12 @@ export function AiCreateWizard({
         {/* Step3 封面决策 */}
         {step === 3 && (
           <StepCover
-            exampleFile={exampleFile}
-            referenceFile={poseReferenceFile}
-            referenceUrl={poseReferenceUrl}
-            onReferenceChange={(file, url) => {
-              setPoseReferenceFile(file);
-              setPoseReferenceUrl(url);
+            exampleFiles={exampleFiles}
+            referenceFiles={poseReferenceFiles}
+            referenceUrls={poseReferenceUrls}
+            onReferenceChange={(files, urls) => {
+              setPoseReferenceFiles(files);
+              setPoseReferenceUrls(urls);
             }}
             draft={draft}
             research={analyzeDetail?.research ?? null}

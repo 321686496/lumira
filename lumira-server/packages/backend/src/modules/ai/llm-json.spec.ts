@@ -1,7 +1,12 @@
 // lumira-server/packages/backend/src/modules/ai/llm-json.spec.ts
 // 识别链路 JSON 重试封装（Task 4，TDD）：解析失败 / 超时 / 5xx / 空输出 → 有界重试；鉴权类错误不重试
 
-import { LlmJsonError, runJsonChat } from './llm-json';
+import { LlmJsonError, runJsonChat, visionChatJsonMulti } from './llm-json';
+import type { LlmEndpoint } from './llm-client';
+
+jest.mock('./llm-client', () => ({
+  visionChatMulti: jest.fn(async () => '{"ok":true}'),
+}));
 
 const RT = { retryCount: 2, timeoutMs: 300_000, maxTokens: 8192 };
 
@@ -56,5 +61,57 @@ describe('runJsonChat', () => {
     const call = jest.fn(async () => '不是 JSON');
     await expect(runJsonChat({ ...RT, retryCount: 0 }, call, 'u')).rejects.toBeInstanceOf(LlmJsonError);
     expect(call).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('visionChatJsonMulti', () => {
+  const VISION: LlmEndpoint = {
+    provider: 'qwen',
+    baseUrl: 'https://x.example/v1',
+    apiKey: 'sk',
+    model: 'qwen-vl-max',
+  };
+  const { visionChatMulti } = jest.requireMock('./llm-client') as { visionChatMulti: jest.Mock };
+
+  beforeEach(() => visionChatMulti.mockClear());
+
+  it('多张 images 一次性交给 visionChatMulti（jsonMode）并解析 JSON', async () => {
+    const json = await visionChatJsonMulti(
+      VISION,
+      {
+        systemPrompt: 's',
+        userText: '请识别这些参考图',
+        images: [
+          { base64: 'aGk=', mime: 'image/jpeg' },
+          { base64: 'aG8=', mime: 'image/png' },
+        ],
+      },
+      RT,
+    );
+
+    expect(json).toEqual({ ok: true });
+    expect(visionChatMulti).toHaveBeenCalledTimes(1);
+    const [endpoint, input] = visionChatMulti.mock.calls[0];
+    expect(endpoint).toEqual(VISION);
+    expect(input).toMatchObject({
+      systemPrompt: 's',
+      images: [
+        { base64: 'aGk=', mime: 'image/jpeg' },
+        { base64: 'aG8=', mime: 'image/png' },
+      ],
+      jsonMode: true,
+    });
+  });
+
+  it('输出不可解析 → 用尽重试后抛 LlmJsonError', async () => {
+    visionChatMulti.mockResolvedValue('不是 JSON');
+    await expect(
+      visionChatJsonMulti(
+        VISION,
+        { systemPrompt: 's', userText: 'u', images: [{ base64: 'aGk=', mime: 'image/jpeg' }] },
+        RT,
+      ),
+    ).rejects.toBeInstanceOf(LlmJsonError);
+    expect(visionChatMulti).toHaveBeenCalledTimes(3); // 首轮 + 2 次重试
   });
 });

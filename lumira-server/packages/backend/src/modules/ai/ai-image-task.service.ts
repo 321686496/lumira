@@ -149,7 +149,7 @@ export class AiImageTaskService implements OnModuleDestroy {
    * 创建 pending 任务后后台执行并立即返回 taskId。
    */
   async submit(
-    reference: UploadFile | undefined,
+    references: UploadFile[] | undefined,
     metaJson: string | null,
     extraPrompt?: string | null,
     research?: string | null,
@@ -157,7 +157,7 @@ export class AiImageTaskService implements OnModuleDestroy {
     await this.aiConfigService.getActiveConfig();
     const id = `img_${nanoid(16)}`;
     this.tasks.set(id, { id, status: 'pending', createdAt: Date.now() });
-    void this.run(id, reference, metaJson, extraPrompt, research);
+    void this.run(id, references, metaJson, extraPrompt, research);
     return { taskId: id };
   }
 
@@ -167,7 +167,7 @@ export class AiImageTaskService implements OnModuleDestroy {
    * 逐张完成时实时刷新批次进度；前端据 completed/total 展示「第 X/Y 张」。
    */
   async submitBatch(
-    reference: UploadFile | undefined,
+    references: UploadFile[] | undefined,
     metaJson: string | null,
     extraPrompt?: string | null,
     research?: string | null,
@@ -245,7 +245,7 @@ export class AiImageTaskService implements OnModuleDestroy {
     if (!anchor?.batch) throw new BadRequestException('批量姿势任务初始化失败');
     void this.run(
       firstTaskId,
-      reference,
+      references,
       anchor.batch.metaJson,
       anchor.batch.extraPrompt,
       anchor.batch.research,
@@ -258,7 +258,7 @@ export class AiImageTaskService implements OnModuleDestroy {
   /** 后台执行（复用 AiGenerateImageService.generate，内部已有各类超时兜底，不会无限挂起） */
   private async run(
     id: string,
-    reference: UploadFile | undefined,
+    references: UploadFile[] | undefined,
     metaJson: string | null,
     extraPrompt?: string | null,
     research?: string | null,
@@ -308,7 +308,7 @@ export class AiImageTaskService implements OnModuleDestroy {
       this.refreshBatch(task.batchId);
       let r: { base64: string; mimeType: string; prompt: string; model: string } | null = null;
       try {
-        r = await runWithTrace(sink, () => this.generateWithRetry(reference, metaJson, extraPrompt, research));
+        r = await runWithTrace(sink, () => this.generateWithRetry(references, metaJson, extraPrompt, research));
       } finally {
         this.aiGenerateImageService.releaseImageSlot?.();
       }
@@ -343,7 +343,7 @@ export class AiImageTaskService implements OnModuleDestroy {
   }
 
   private async generateWithRetry(
-    reference: UploadFile | undefined,
+    references: UploadFile[] | undefined,
     metaJson: string | null,
     extraPrompt?: string | null,
     research?: string | null,
@@ -351,7 +351,7 @@ export class AiImageTaskService implements OnModuleDestroy {
     let lastError: unknown;
     for (let attempt = 1; attempt <= GENERATE_RETRY_LIMIT; attempt += 1) {
       try {
-        return await this.aiGenerateImageService.generate(reference, metaJson, extraPrompt, research);
+        return await this.aiGenerateImageService.generate(references, metaJson, extraPrompt, research);
       } catch (err) {
         lastError = err;
         const message = (err as Error)?.message || '';
@@ -441,7 +441,8 @@ export class AiImageTaskService implements OnModuleDestroy {
 
     // 锚点完成后，剩余依赖图一次性全量并发（不设并发上限）——
     // 所有 run 同步内即置 running 并触发 generate，真正的多路上游并行调用，互不阻塞。
-    const reference: UploadFile = {
+    // 依赖图仍以锚点成片作为唯一参考（多图场景只在首张任务用用户上传的全部参考图）。
+    const anchorRef: UploadFile = {
       buffer: Buffer.from(anchor.result.image, 'base64'),
       filename: 'anchor.png',
       mimetype: anchor.result.mimeType,
@@ -450,7 +451,7 @@ export class AiImageTaskService implements OnModuleDestroy {
       const dependent = this.tasks.get(dependentId);
       const batch = dependent?.batch;
       if (!dependent || !batch) return null;
-      return this.run(dependentId, reference, batch.metaJson, batch.extraPrompt, batch.research);
+      return this.run(dependentId, [anchorRef], batch.metaJson, batch.extraPrompt, batch.research);
     });
     void Promise.all(started.filter((p): p is Promise<void> => p !== null)).catch(() => undefined);
   }

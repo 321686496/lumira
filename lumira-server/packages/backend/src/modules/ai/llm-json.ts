@@ -6,7 +6,7 @@
 // 鉴权与请求错误（401/403/400/404）原样抛出，不做无意义重试。
 // 每次尝试都会经 visionChat / textChat 落一条 llm 事件，实时过程面板因此天然可见。
 
-import { textChat, visionChat, type LlmEndpoint } from './llm-client';
+import { textChat, visionChat, visionChatMulti, type LlmEndpoint, type VisionMessageImage } from './llm-client';
 import { chatWithTools } from './tools/text-tool-loop';
 import type { TextToolContext } from './tools/text-tool-loop';
 import { extractJson } from './normalize';
@@ -106,6 +106,29 @@ export async function visionChatJson(
         userText,
         imageBase64: input.imageBase64,
         imageMime: input.imageMime,
+        temperature: input.temperature,
+        jsonMode: true,
+        timeoutMs: input.timeoutMs ?? runtime.timeoutMs,
+        maxTokens: input.maxTokens ?? runtime.maxTokens,
+      }),
+    input.userText,
+  );
+}
+
+/** 多图 JSON 识别：visionChatMulti(jsonMode，一次携带多张 image_url) → extractJson → 失败按 runtime 有界重试。
+ *  用于「用户上传多张参考图 → 图片识别大模型一次性识别全部图片」的场景（Step1 示例图 / Step3 姿势参考图）。 */
+export async function visionChatJsonMulti(
+  endpoint: LlmEndpoint,
+  input: JsonChatInput & { images: VisionMessageImage[] },
+  runtime: LlmJsonRuntime,
+): Promise<Record<string, unknown>> {
+  return runJsonChat(
+    runtime,
+    (userText) =>
+      visionChatMulti(endpoint, {
+        systemPrompt: input.systemPrompt,
+        userText,
+        images: input.images,
         temperature: input.temperature,
         jsonMode: true,
         timeoutMs: input.timeoutMs ?? runtime.timeoutMs,

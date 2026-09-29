@@ -148,7 +148,8 @@ function base64ToFile(b64: string, mime: string, name: string): File {
 /** 生成姿势图：一次性提交 → 后端返回单个 batchId → 只轮询 GET batch/:batchId，实时回调进度。 */
 export function generateAiPoseImages(options: {
   draft: Record<string, unknown>;
-  referenceFile?: File | null;
+  /** 姿势参考图（可多张）：第一张作为图生图直接锚点，全部参考图另交由图片识别大模型识别后注入提示词 */
+  referenceFiles?: File[];
   extraPrompt?: string | null;
   /** 识别阶段的网络趋势研究结果（透传给后端生图提示词组织器，与草稿同源保持一致） */
   research?: AiResearchRef[] | null;
@@ -163,7 +164,7 @@ export function generateAiPoseImages(options: {
   /** 逐张实时过程事件（按 seq 增量累积；用于可溯源的姿势图过程展示） */
   onEvents?: (events: AiBatchImageTraceEvent[]) => void;
 }): Promise<AiTaskFileResult[]> {
-  const { draft, referenceFile, extraPrompt, research, researchBrief, researchVision, signal, onResult, onProgress, onEvents } = options;
+  const { draft, referenceFiles, extraPrompt, research, researchBrief, researchVision, signal, onResult, onProgress, onEvents } = options;
   return (async () => {
     throwIfAborted(signal);
     const fd = new FormData();
@@ -171,7 +172,7 @@ export function generateAiPoseImages(options: {
       ...draft,
       consistency: { mode: 'strict' },
     }));
-    if (referenceFile) fd.set('reference', referenceFile);
+    for (const referenceFile of referenceFiles ?? []) fd.append('reference', referenceFile);
     const extra = typeof extraPrompt === 'string' ? extraPrompt.trim() : '';
     if (extra) fd.set('extraPrompt', extra);
     if ((research && research.length > 0) || researchBrief || researchVision) {

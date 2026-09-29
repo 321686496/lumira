@@ -245,8 +245,7 @@ export class GoldenSetService {
         const input: OrchestratorInput = {
           text: g.intent,
           creationReq: g.creationReq,
-          imageBase64: g.imageBase64,
-          imageMime: g.imageMime,
+          images: g.imageBase64 && g.imageMime ? [{ base64: g.imageBase64, mime: g.imageMime }] : undefined,
           poseCount: g.poseCount,
         };
         const opts: OrchestratorRunOptions = { categories: g.categories };

@@ -9,7 +9,7 @@ import { DatabaseService } from '../../database/database.service';
 import { templateCategories } from '../../database/schema';
 import { MAX_IMAGE_BYTES, UploadFile } from '../templates/admin-templates.service';
 import { AiConfigService } from './ai-config.service';
-import { visionChatJson, textChatJson, LlmJsonError } from './llm-json';
+import { visionChatJsonMulti, textChatJson, LlmJsonError } from './llm-json';
 import {
   buildAnalyzeSystemPrompt,
   buildAnalyzeUserPrompt,
@@ -77,12 +77,12 @@ export class AiAnalyzeService {
   ) {}
 
   /**
-   * 示例图（可选）+ 文字描述（可选）+ Step1 附加输入 → 模板草稿：
+   * 示例图（可选，可多张）+ 文字描述（可选）+ Step1 附加输入 → 模板草稿：
    * 校验（至少一项；text ≤ 1500 字；poseCount 1~9）→ 读活跃分类树 → 取启用配置（未配置 503）→
-   * 图存在走 visionChatJson（extras 注入识别指令）/ 仅文字走 textChatJson → JSON 容错提取 → 归一化
+   * 图存在走 visionChatJsonMulti（多张示例图一次性识别全部；extras 注入识别指令）/ 仅文字走 textChatJson → JSON 容错提取 → 归一化
    */
   async analyze(
-    image: UploadFile | undefined,
+    images: UploadFile[] | undefined,
     text: string | undefined,
     extra: { textDesc?: string | null; creationReq?: string | null; poseCount?: string | null; subjectCount?: string | null } = {},
   ): Promise<AiAnalyzeResult> {
@@ -110,20 +110,22 @@ export class AiAnalyzeService {
     // 系统提示的措辞分档：显式指定优先，否则从用户输入预判（情侣/全家福等关键词）
     const subjectCountHint = subjectCount ?? inferSubjectCountHint(extra.creationReq, extra.textDesc, trimmedText);
 
-    // 1. 输入校验：至少一项；text 长度；图 mimetype / 大小
-    if (!image && !trimmedText) {
+    // 1. 输入校验：至少一项；text 长度；图 mimetype / 大小（每张分别校验）
+    if (!images?.length && !trimmedText) {
       throw new BadRequestException('请至少提供示例图或文字描述之一');
     }
     if (trimmedText.length > 1500) {
       throw new BadRequestException('文字描述不能超过 1500 字');
     }
-    if (image) {
-      if (!ALLOWED_IMAGE_MIMES.includes(image.mimetype)) {
-        throw new BadRequestException('仅支持 jpg/png/webp 图片');
-      }
-      if (image.buffer.byteLength > MAX_IMAGE_BYTES) {
-        const mb = (MAX_IMAGE_BYTES / 1024 / 1024).toFixed(0);
-        throw new BadRequestException(`示例图不能超过 ${mb}MB（当前${(image.buffer.byteLength / 1024 / 1024).toFixed(2)}MB）`);
+    if (images) {
+      for (const img of images) {
+        if (!ALLOWED_IMAGE_MIMES.includes(img.mimetype)) {
+          throw new BadRequestException('仅支持 jpg/png/webp 图片');
+        }
+        if (img.buffer.byteLength > MAX_IMAGE_BYTES) {
+          const mb = (MAX_IMAGE_BYTES / 1024 / 1024).toFixed(0);
+          throw new BadRequestException(`示例图不能超过 ${mb}MB（当前${(img.buffer.byteLength / 1024 / 1024).toFixed(2)}MB）`);
+        }
       }
     }
 
@@ -236,15 +238,15 @@ export class AiAnalyzeService {
       researchVision = userVision ?? researchVision;
     }
 
-    // 4. 按输入组合分叉：有图走视觉模型，仅文字走文本模型；两者均带 JSON 有界重试
+    // 4. 按输入组合分叉：有图走视觉模型（多张一次性识别全部），仅文字走文本模型；两者均带 JSON 有界重试
     let json: Record<string, unknown>;
     try {
-      if (image) {
+      if (images?.length) {
         json = await traceStep(
           'analyze',
           '识图生成模板草稿',
           () =>
-            visionChatJson(
+            visionChatJsonMulti(
               cfg.vision,
               {
                 systemPrompt: buildAnalyzeSystemPrompt(categories, styleProfile, subjectCountHint),
@@ -256,8 +258,10 @@ export class AiAnalyzeService {
                   researchDigest,
                   researchUnavailable,
                 }),
-                imageBase64: image.buffer.toString('base64'),
-                imageMime: image.mimetype,
+                images: images.map((i) => ({
+                  base64: i.buffer.toString('base64'),
+                  mime: i.mimetype,
+                })),
                 temperature: 0.3,
               },
               cfg.runtime,
@@ -310,8 +314,7 @@ export class AiAnalyzeService {
     //    否则（研究关闭 / 未接入）保留原单次路径，向后兼容。
     if (cfg.search?.enabled && this.orchestrator) {
       const input: OrchestratorInput = {
-        imageBase64: image ? image.buffer.toString('base64') : undefined,
-        imageMime: image ? image.mimetype : undefined,
+        images: images?.map((i) => ({ base64: i.buffer.toString('base64'), mime: i.mimetype })),
         text: trimmedText,
         creationReq: extra.creationReq ?? undefined,
         poseCount: poseCount ?? undefined,

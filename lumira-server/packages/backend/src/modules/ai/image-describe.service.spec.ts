@@ -1,7 +1,7 @@
 // lumira-server/packages/backend/src/modules/ai/image-describe.service.spec.ts
 // T2 穷尽式图像识别服务（Task 5，TDD）：mock visionChat → 解析 ImageDescription；非法 JSON → 抛可读错误
 
-import { ImageDescribeService } from './image-describe.service';
+import { ImageDescribeService, mergeImageDescriptions, type ImageDescription } from './image-describe.service';
 import { buildExhaustiveSystemPrompt } from './image-describe.prompt';
 import { LlmJsonError, visionChatJson } from './llm-json';
 import type { LlmEndpoint } from './llm-client';
@@ -114,5 +114,90 @@ describe('ImageDescribeService.describe', () => {
     const desc = await buildService().describe({ base64: 'aGk=', mime: 'image/png' });
     expect(typeof desc.global.styleRead).toBe('string');
     expect(typeof desc.people[0].expression).toBe('string');
+  });
+});
+
+describe('ImageDescribeService.describeMany', () => {
+  beforeEach(() => visionChatJsonMock.mockReset());
+
+  const SECOND_DESC = {
+    global: {
+      subject: '第二张主体：户外野餐',
+      mood: '温馨',
+      season: '夏', timeOfDay: 'noon',
+      palette: { dominant: ['#ffffff'], tone: '亮', brightness: '亮' },
+      light: {},
+      composition: { leadLines: '', framing: '', symmetry: '', subjectFrame: {}, cropRatio: '', negativeSpace: '', depthOfField: '' },
+      reproducibility: { level: '', reason: '', enableFillLight: false, lightHint: '' },
+    },
+    people: [
+      { role: '陪体', face: {}, body: {}, limbs: {}, outfit: {}, anchors: { positionInFrame: { x: 0, y: 0 }, scaleRatio: 1, rotationDegree: 0 }, lightOnPerson: {} },
+    ],
+    scene: { location: '户外草地', depthLayers: { near: ['草地'], middle: ['帐篷'], far: ['远山'] }, props: ['风筝'], furniture: [], texture: '草', cleanliness: '自然' },
+    cameraLike: { lightSuggestion: 'x', wbSuggestion: 'shade', evSuggestion: '0', focusDepth: 'y' },
+  };
+
+  it('两张图逐张识别后合并：global/cameraLike 取第一张、people concat、scene.props/depthLayers 并集', async () => {
+    visionChatJsonMock
+      .mockResolvedValueOnce(LEGAL_DESC as Record<string, unknown>)
+      .mockResolvedValueOnce(SECOND_DESC as Record<string, unknown>);
+    const svc = buildService();
+
+    const merged = await svc.describeMany([
+      { base64: 'aGk=', mime: 'image/jpeg' },
+      { base64: 'aG8=', mime: 'image/png' },
+    ]);
+
+    // describe 内部逐张调用 visionChatJson（各一次），携带对应图字段
+    expect(visionChatJsonMock).toHaveBeenCalledTimes(2);
+    expect(visionChatJsonMock.mock.calls[0][1].imageBase64).toBe('aGk=');
+    expect(visionChatJsonMock.mock.calls[1][1].imageBase64).toBe('aG8=');
+    // global / cameraLike 取第一张
+    expect(merged.global.subject).toBe('年轻女性，坐姿，望向窗外');
+    expect(merged.cameraLike.wbSuggestion).toBe('daylight');
+    // people concat：第一张 1 人 + 第二张 1 人 = 2 人（保持顺序）
+    expect(merged.people.map((p) => p.role)).toEqual(['主体', '陪体']);
+    // scene.props / furniture 并集
+    expect(merged.scene.props).toEqual(['风筝']);
+    // depthLayers 三层各自并集（去重保留顺序）
+    expect(merged.scene.depthLayers.near).toEqual(['窗台', '草地']);
+    expect(merged.scene.depthLayers.middle).toEqual(['人', '帐篷']);
+    expect(merged.scene.depthLayers.far).toEqual(['窗外景', '远山']);
+    // 场景基调仍取第一张（location/texture/cleanliness）
+    expect(merged.scene.location).toBe('室内飘窗');
+  });
+
+  it('任一张识别失败 → describeMany 抛错（调用方整体兜底）', async () => {
+    visionChatJsonMock
+      .mockResolvedValueOnce(LEGAL_DESC as Record<string, unknown>)
+      .mockRejectedValueOnce(new LlmJsonError('AI 输出无法解析为 JSON'));
+    const svc = buildService();
+
+    await expect(svc.describeMany([{ base64: 'aGk=', mime: 'image/jpeg' }, { base64: 'aG8=', mime: 'image/png' }]))
+      .rejects.toThrow(/无法解析为 JSON/);
+  });
+});
+
+describe('mergeImageDescriptions', () => {
+  const baseDesc: ImageDescription = {
+    global: {
+      subject: 's', mood: 'm', season: 'se', timeOfDay: 't',
+      palette: { dominant: [], tone: '', brightness: '' },
+      light: {},
+      composition: { leadLines: '', framing: '', symmetry: '', subjectFrame: {}, cropRatio: '', negativeSpace: '', depthOfField: '' },
+      reproducibility: { level: '', reason: '', enableFillLight: false, lightHint: '' },
+    },
+    people: [],
+    scene: { location: '', depthLayers: { near: [], middle: [], far: [] }, props: [], furniture: [], texture: '', cleanliness: '' },
+    cameraLike: { lightSuggestion: '', wbSuggestion: '', evSuggestion: '', focusDepth: '' },
+  };
+
+  it('单张列表短路：直接返回原对象（同一引用，不再复制）', () => {
+    const out = mergeImageDescriptions([baseDesc]);
+    expect(out).toBe(baseDesc);
+  });
+
+  it('空数组抛「无可合并的图片描述」', () => {
+    expect(() => mergeImageDescriptions([])).toThrow('无可合并的图片描述');
   });
 });

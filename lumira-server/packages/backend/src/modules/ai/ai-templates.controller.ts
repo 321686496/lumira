@@ -27,8 +27,8 @@ export class AiTemplatesController {
    */
   @Post('ai-analyze')
   async analyze(@Req() req: FastifyRequest) {
-    const { image, text, textDesc, creationReq, poseCount, subjectCount } = await parseAiMultipart(req);
-    return this.aiAnalyzeTaskService.submit(image, text ?? textDesc ?? undefined, {
+    const { images, text, textDesc, creationReq, poseCount, subjectCount } = await parseAiMultipart(req);
+    return this.aiAnalyzeTaskService.submit(images, text ?? textDesc ?? undefined, {
       textDesc,
       creationReq,
       poseCount,
@@ -72,8 +72,8 @@ export class AiTemplatesController {
    */
   @Post('ai-generate-image')
   async generateImage(@Req() req: FastifyRequest) {
-    const { meta, reference, extraPrompt, research } = await parseAiMultipart(req);
-    return this.aiImageTaskService.submit(reference, meta, extraPrompt, research);
+    const { references, meta, extraPrompt, research } = await parseAiMultipart(req);
+    return this.aiImageTaskService.submit(references, meta, extraPrompt, research);
   }
 
   /**
@@ -83,8 +83,8 @@ export class AiTemplatesController {
    */
   @Post('ai-generate-image/batch')
   async generateImageBatch(@Req() req: FastifyRequest) {
-    const { meta, reference, extraPrompt, research } = await parseAiMultipart(req);
-    return this.aiImageTaskService.submitBatch(reference, meta, extraPrompt, research);
+    const { references, meta, extraPrompt, research } = await parseAiMultipart(req);
+    return this.aiImageTaskService.submitBatch(references, meta, extraPrompt, research);
   }
 
   /** 查询批量姿势图进度（total/completed/current/status/results/events）；支持 ?since= 增量拉取事件；批次不存在则 404 */
@@ -175,8 +175,14 @@ export interface ParsedAiMultipart {
   extraPrompt: string | null;
   /** 识别阶段研究结果 JSON（可选，`{ items, brief }`，兼容旧的纯数组 ResearchItem[]；透传给生图提示词组织器） */
   research: string | null;
+  /** 风格识别参考图（示例图）文件：兼容单文件（首张）；多图识别走 images */
   image?: UploadFile;
+  /** 风格识别参考图（示例图）多文件集合（Step1 多图上传 → 图片识别大模型识别全部） */
+  images?: UploadFile[];
+  /** 姿势参考图文件：兼容单文件（首张）；多图识别走 references */
   reference?: UploadFile;
+  /** 姿势参考图多文件集合（Step3 多图上传 → 图片识别大模型识别全部） */
+  references?: UploadFile[];
 }
 
 /** 文本字段名集合（multipart 循环内按字段名收集） */
@@ -210,9 +216,12 @@ export async function parseAiMultipart(req: FastifyRequest): Promise<ParsedAiMul
         mimetype: part.mimetype || '',
       };
       if (fieldname === 'image') {
-        result.image = file;
+        // 兼容单文件读取（剪影等端点仍用 image）；多图场景收集进 images 数组
+        if (!result.image) result.image = file;
+        (result.images ??= []).push(file);
       } else if (fieldname === 'reference') {
-        result.reference = file;
+        if (!result.reference) result.reference = file;
+        (result.references ??= []).push(file);
       }
       // 其他字段名忽略
     }

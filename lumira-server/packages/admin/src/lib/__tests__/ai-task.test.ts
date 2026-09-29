@@ -164,7 +164,7 @@ describe('generateAiPoseImages', () => {
     expect(results.map((result) => result.index)).toEqual([0, 1, 2]);
   });
 
-  it('提交指定姿势参考图时传给后端', async () => {
+  it('提交指定姿势参考图（多张）时传给后端', async () => {
     const draft = { pose: [{ index: 0 }] };
     batchStartMock.mockResolvedValue({ batchId: 'batch-1' });
     batchStatusMock.mockResolvedValue({
@@ -173,11 +173,12 @@ describe('generateAiPoseImages', () => {
       results: [{ index: 0, status: 'done' as const, image: 'aGVsbG8=', mimeType: 'image/png' }],
     });
     const reference = new File(['reference'], 'pose.png', { type: 'image/png' });
+    const reference2 = new File(['reference2'], 'pose2.png', { type: 'image/png' });
 
-    await generateAiPoseImages({ draft, referenceFile: reference });
+    await generateAiPoseImages({ draft, referenceFiles: [reference, reference2] });
 
     const formData = batchStartMock.mock.calls[0]?.[0];
-    expect(formData?.get('reference')).toBe(reference);
+    expect(formData?.getAll('reference')).toEqual([reference, reference2]);
   });
 
   it('传入研究结果时序列化为 { items, brief, vision } 提交；均为空时不提交该字段', async () => {

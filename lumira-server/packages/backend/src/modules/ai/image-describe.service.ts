@@ -216,4 +216,46 @@ export class ImageDescribeService {
     );
     return normalizeImageDescription(json);
   }
+
+  /** 多图穷尽识别：用户上传多张参考图时逐张识别后合并为一份描述
+   *  （全局/相机取第一张，人物取并集，场景道具/层次取并集；任一张失败由调用方整体兜底）。 */
+  async describeMany(images: { base64: string; mime: string }[]): Promise<ImageDescription> {
+    const list: ImageDescription[] = [];
+    for (const img of images) {
+      list.push(await this.describe(img));
+    }
+    return mergeImageDescriptions(list);
+  }
+}
+
+/** 去重保留顺序的字符串数组并集 */
+function uniqStr(arr: string[]): string[] {
+  return [...new Set(arr)];
+}
+
+/** 合并多份穷尽识别描述：全局/相机取第一张（同风格多图共享一份基调），人物 concat，场景道具/家具/层次取并集 */
+export function mergeImageDescriptions(list: ImageDescription[]): ImageDescription {
+  if (list.length === 0) {
+    throw new Error('无可合并的图片描述');
+  }
+  if (list.length === 1) return list[0];
+  const [first, ...rest] = list;
+  const scene = {
+    location: first.scene.location,
+    depthLayers: {
+      near: uniqStr([...first.scene.depthLayers.near, ...rest.flatMap((d) => d.scene.depthLayers.near)]),
+      middle: uniqStr([...first.scene.depthLayers.middle, ...rest.flatMap((d) => d.scene.depthLayers.middle)]),
+      far: uniqStr([...first.scene.depthLayers.far, ...rest.flatMap((d) => d.scene.depthLayers.far)]),
+    },
+    props: uniqStr([...first.scene.props, ...rest.flatMap((d) => d.scene.props)]),
+    furniture: uniqStr([...first.scene.furniture, ...rest.flatMap((d) => d.scene.furniture)]),
+    texture: first.scene.texture,
+    cleanliness: first.scene.cleanliness,
+  };
+  return {
+    global: first.global,
+    people: list.flatMap((d) => d.people),
+    scene,
+    cameraLike: first.cameraLike,
+  };
 }

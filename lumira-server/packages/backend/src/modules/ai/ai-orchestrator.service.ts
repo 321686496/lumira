@@ -52,8 +52,8 @@ type ScoreOutcome = {
 };
 
 export interface OrchestratorInput {
-  imageBase64?: string;
-  imageMime?: string;
+  /** 用户上传的风格识别参考图（示例图）集合：多图时逐张识别后合并描述，供姿势面片 / 评分使用 */
+  images?: { base64: string; mime: string }[];
   text?: string;
   creationReq?: string;
   poseCount?: number;
@@ -170,11 +170,11 @@ export class AiOrchestratorService {
       }
     }
 
-    // (3) 有图 → 穷尽识别；无图 → 跳过
+    // (3) 有图 → 穷尽识别（多张时逐张识别后合并）；无图 → 跳过
     let desc: ImageDescription | undefined;
-    if (input.imageBase64 && input.imageMime) {
+    if (input.images?.length) {
       desc = await this.wrapStep<ImageDescription>('describe', 'image-describe', trace, () =>
-        this.imageDescribe.describe({ base64: input.imageBase64 as string, mime: input.imageMime as string }),
+        this.imageDescribe.describeMany(input.images as { base64: string; mime: string }[]),
       );
     } else {
       trace.push({ step: 'describe', resultBrief: 'skip-describe（无图）' });
@@ -217,7 +217,7 @@ export class AiOrchestratorService {
         research,
         draft: workingDraft,
         styleProfile: profile,
-        textOnly: !input.imageBase64,
+        textOnly: !input.images?.length,
       };
       const scored = await this.wrapStep<ScoreOutcome>(
         'imageScore', 'image-score', trace, () => this.imageScore.score(scoreInput),
