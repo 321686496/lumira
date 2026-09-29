@@ -1,7 +1,7 @@
 // lumira-server/packages/backend/src/modules/ai/trend-research/trend-research.service.spec.ts
 // T1 trend-research 服务编排（Task 4，TDD）：来源并行 + allSettled 降级、source+title+snippet 去重、研究关闭返回 []
 
-import { TrendResearchService, extractExplicitUrls } from './trend-research.service';
+import { TrendResearchService, extractExplicitUrls, rankByRelevance } from './trend-research.service';
 import type { SearchProviderFactory } from './trend-research.service';
 import { AiConfigService } from '../ai-config.service';
 import { ResearchDigestService } from './research-digest.service';
@@ -59,6 +59,25 @@ describe('extractExplicitUrls', () => {
   it('无 URL / 非 http 协议 → 空数组', () => {
     expect(extractExplicitUrls('就想要清新风格')).toEqual([]);
     expect(extractExplicitUrls('ftp://a.com/x')).toEqual([]);
+  });
+});
+
+describe('rankByRelevance', () => {
+  const items: ResearchItem[] = [
+    item('sogou', '国庆假期出游穿搭', { snippet: '国庆 出游 穿搭 拍照姿势 氛围感', url: 'https://a.com/1' }),
+    item('sogou', '北京天气与限行公告', { snippet: '限行 天气 交通', url: 'https://a.com/2' }),
+    item('searxng', '秋日氛围感人像怎么拍', { snippet: '秋日 人像 逆光 拍照姿势', url: 'https://a.com/3' }),
+  ];
+
+  it('与创作意图/查询词相关的条目前置，无关条目排到队尾', () => {
+    const ranked = rankByRelevance(items, '秋日氛围感出游人像，竖构图侧拍', ['秋日 氛围感 人像 出游']);
+    expect(ranked[0].url).toBe('https://a.com/3'); // 命中「秋日/氛围感/人像」
+    expect(ranked[1].url).toBe('https://a.com/1'); // 命中「出游/氛围感」
+    expect(ranked[2].url).toBe('https://a.com/2'); // 完全无关
+  });
+
+  it('无 token 可提取时保持原顺序', () => {
+    expect(rankByRelevance(items, '', [''])).toEqual(items);
   });
 });
 

@@ -731,7 +731,7 @@ export function AiCreateWizard({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="auto">AI 自动判断</SelectItem>
-                          {[1, 2, 3, 4, 5, 6].map((n) => (
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
                             <SelectItem key={n} value={String(n)}>
                               固定 {n} 个
                             </SelectItem>
@@ -739,7 +739,7 @@ export function AiCreateWizard({
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
-                        选「AI 自动判断」时，将结合文字描述 / 补充创作要求（含示例图中可见的文字要求）在 1~6 个范围内决定姿势数量
+                        选「AI 自动判断」时，将结合文字描述 / 补充创作要求（含示例图中可见的文字要求）在 1~9 个范围内决定姿势数量
                       </p>
                     </div>
 

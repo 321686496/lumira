@@ -167,7 +167,7 @@ export interface ParsedAiMultipart {
   textDesc: string | null;
   /** Step1 创作要求（可选，注入识别提示词） */
   creationReq: string | null;
-  /** Step1 姿势个数（可选：'1'~'6' 固定指定；空 = AI 自动判断） */
+  /** Step1 姿势个数（可选：'1'~'9' 固定指定；空 = AI 自动判断） */
   poseCount: string | null;
   /** Step1 主体人数（可选：'1'~'8' 固定指定；空 = AI 自动推断） */
   subjectCount: string | null;

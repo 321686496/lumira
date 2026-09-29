@@ -498,7 +498,7 @@ describe('AiAnalyzeService — 多输入', () => {
   it('poseCount 非法（越界 / 非整数）→ 400，不调用模型', async () => {
     const { service } = buildService();
 
-    for (const bad of ['0', '7', '2.5', 'abc']) {
+    for (const bad of ['0', '10', '2.5', 'abc']) {
       await expect(service.analyze(imageFile(), undefined, { poseCount: bad })).rejects.toThrow('poseCount');
     }
     expect(visionChatJsonMock).not.toHaveBeenCalled();

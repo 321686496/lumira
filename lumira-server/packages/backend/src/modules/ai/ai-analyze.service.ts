@@ -78,7 +78,7 @@ export class AiAnalyzeService {
 
   /**
    * 示例图（可选）+ 文字描述（可选）+ Step1 附加输入 → 模板草稿：
-   * 校验（至少一项；text ≤ 1500 字；poseCount 1~6）→ 读活跃分类树 → 取启用配置（未配置 503）→
+   * 校验（至少一项；text ≤ 1500 字；poseCount 1~9）→ 读活跃分类树 → 取启用配置（未配置 503）→
    * 图存在走 visionChatJson（extras 注入识别指令）/ 仅文字走 textChatJson → JSON 容错提取 → 归一化
    */
   async analyze(
@@ -86,12 +86,12 @@ export class AiAnalyzeService {
     text: string | undefined,
     extra: { textDesc?: string | null; creationReq?: string | null; poseCount?: string | null; subjectCount?: string | null } = {},
   ): Promise<AiAnalyzeResult> {
-    // 0. 姿势个数：'1'~'6' 整数字符串合法；其余（空/非法）= AI 自动判断
+    // 0. 姿势个数：'1'~'9' 整数字符串合法；其余（空/非法）= AI 自动判断
     let poseCount: number | null = null;
     if (extra.poseCount !== null && extra.poseCount !== undefined && extra.poseCount !== '') {
       const n = Number(extra.poseCount);
-      if (!Number.isInteger(n) || n < 1 || n > 6) {
-        throw new BadRequestException('poseCount 必须是 1~6 的整数（留空则由 AI 自动判断）');
+      if (!Number.isInteger(n) || n < 1 || n > 9) {
+        throw new BadRequestException('poseCount 必须是 1~9 的整数（留空则由 AI 自动判断）');
       }
       poseCount = n;
     }

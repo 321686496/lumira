@@ -252,7 +252,7 @@ export interface AnalyzeUserPromptInput {
   textDesc?: string | null;
   /** 创作要求：对 AI 的额外创作指令 */
   creationReq?: string | null;
-  /** 姿势个数：1~6 固定指定；空/undefined = AI 自动判断 */
+  /** 姿势个数：1~9 固定指定；空/undefined = AI 自动判断 */
   poseCount?: number | null;
   /** 主体人数：1~8 显式指定；空/undefined = AI 自动推断 */
   subjectCount?: number | null;
@@ -264,12 +264,12 @@ export interface AnalyzeUserPromptInput {
 
 /** 构造姿势数量指令行（vision / text-only 共用） */
 function poseCountLine(poseCount: number | null | undefined): string {
-  if (typeof poseCount === 'number' && Number.isInteger(poseCount) && poseCount >= 1 && poseCount <= 6) {
+  if (typeof poseCount === 'number' && Number.isInteger(poseCount) && poseCount >= 1 && poseCount <= 9) {
     return `pose 数组必须恰好输出 ${poseCount} 个姿势，每个姿势有独立的 name / description / position / cameraDirection。`;
   }
   return (
     '请根据用户文字描述与创作要求（包括示例图中可见的文字要求，如「三连拍」等）判断需要多少个姿势，' +
-    '在 1~6 个范围内输出，每个姿势有独立的 name / description / position / cameraDirection；无明确要求时输出 1 个。'
+    '在 1~9 个范围内输出，每个姿势有独立的 name / description / position / cameraDirection；无明确要求时输出 1 个。'
   );
 }
 

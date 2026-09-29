@@ -92,7 +92,7 @@ const STEP_TITLES: Record<string, string> = {
 };
 
 /**
- * poseRefSheet 的姿势数量：用户显式指定（1~6）优先；未指定时跟随草稿中模型实际判断的
+ * poseRefSheet 的姿势数量：用户显式指定（1~9）优先；未指定时跟随草稿中模型实际判断的
  * 姿势数（AI 自动判断结果），避免「留空 = 固定 1」；兜底 1。
  */
 function resolvePoseCount(explicit: number | undefined, draft: Record<string, unknown> | undefined): number {

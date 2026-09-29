@@ -340,8 +340,8 @@ describe('normalizeDraft', () => {
     raw.meta.shortDesc = '这是一条超过二十个字的情绪化文案会超过二十个字吗是的超过';
     // name 超长（表单 schema max 100）
     raw.meta.name = '超'.repeat(120);
-    // pose 失控输出 8 个
-    raw.pose = Array.from({ length: 8 }, (_, i) => ({
+    // pose 失控输出 10 个
+    raw.pose = Array.from({ length: 10 }, (_, i) => ({
       name: `姿势${i + 1}`,
       description: 'desc',
       position: { x: 0.5, y: 0.5 },
@@ -368,9 +368,9 @@ describe('normalizeDraft', () => {
     expect(joined).toContain('meta.name');
     expect(joined).toContain('100');
 
-    // pose 截断为 6 个 + warning
-    expect(draft.pose).toHaveLength(6);
-    expect(joined).toContain('pose 数量 8 超过上限 6');
+    // pose 截断为 9 个 + warning
+    expect(draft.pose).toHaveLength(9);
+    expect(joined).toContain('pose 数量 10 超过上限 9');
   });
 
   it('21. Task9 白名单：fillLight/legStretch 进 postProcess、pose.cameraDirection、poseRefSheet 透传；越界夹取', () => {

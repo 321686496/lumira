@@ -326,8 +326,8 @@ function clampOrDefault(
   return clamped;
 }
 
-/** pose 数量上限：与提示词约定 1~6 个一致，防 LLM 失控输出（表单姿势编辑器规模也按 6 设计） */
-const MAX_POSES = 6;
+/** pose 数量上限：与提示词约定 1~9 个一致（社交平台九宫格），防 LLM 失控输出（表单姿势编辑器规模也按 9 设计） */
+const MAX_POSES = 9;
 
 // ===== 草稿归一化主入口 =====
 

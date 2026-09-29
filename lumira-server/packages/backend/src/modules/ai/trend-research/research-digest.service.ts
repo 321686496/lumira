@@ -102,7 +102,7 @@ export class ResearchDigestService {
               userText: `${describeTodayUtc8()}\n创作意图：${(topic || '').trim() || '（未提供）'}\n\n检索条目（共 ${items.length} 条）：\n${renderSourceItems(items)}`,
               temperature: 0.3,
               jsonMode: true,
-              timeoutMs: 30_000,
+              timeoutMs: 600_000,
             },
             resolveTextTools(cfg),
           );

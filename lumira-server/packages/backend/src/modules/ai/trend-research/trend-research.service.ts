@@ -35,6 +35,53 @@ export function splitQueries(query: string, groupSize = 3, maxGroups = 4): strin
 }
 
 /**
+ * 轻量相关性打分：条目标题/摘要与「创作意图 + 重组查询词」的文本重叠度。
+ * 中文不做分词，采用子串包含计数（标题命中 +2、摘要命中 +1），得分降序稳定排列；
+ * 无任何可提取 token 时保持原顺序。用于把「与创作意图相关」的条目前置，
+ * 无关命中排到队尾（超过整理上限自然被截断），避免优质内容被无关条目挤掉。
+ */
+export function rankByRelevance(items: ResearchItem[], topic: string, queries: string[]): ResearchItem[] {
+  const tokens = collectQueryTokens(topic, queries);
+  if (!tokens.length) return items;
+  return items
+    .map((it) => ({ it, score: relevanceScore(it, tokens) }))
+    .sort((a, b) => b.score - a.score)
+    .map((x) => x.it);
+}
+
+/** 收集相关性 token：重组查询词按空白拆词 + 创作意图的 2~4 字连续子串（总量 ≤ 48） */
+function collectQueryTokens(topic: string, queries: string[]): string[] {
+  const set = new Set<string>();
+  for (const q of queries) {
+    for (const w of (q || '').split(/\s+/)) {
+      const s = w.trim();
+      if (s.length >= 2) set.add(s);
+    }
+  }
+  const t = (topic || '').trim();
+  if (t.length >= 2) {
+    for (let len = 2; len <= 4 && set.size < 48; len++) {
+      for (let i = 0; i + len <= t.length && set.size < 48; i++) set.add(t.slice(i, i + len));
+    }
+  }
+  return [...set];
+}
+
+/** 条目相关性得分：token 在标题（+2）/ 摘要（+1）中出现次数之和 */
+function relevanceScore(it: ResearchItem, tokens: string[]): number {
+  const title = (it.title || '').toLowerCase();
+  const snippet = (it.snippet || '').toLowerCase();
+  let score = 0;
+  for (const raw of tokens) {
+    const t = raw.toLowerCase();
+    if (t.length < 2) continue;
+    if (title.includes(t)) score += 2;
+    if (snippet.includes(t)) score += 1;
+  }
+  return score;
+}
+
+/**
  * 从创作要求文本中提取用户显式给出的参考页面 URL（http/https）。
  * 只消费 URL 合法字符，遇到中文/全角标点即停（避免把「参考这个网站：URL，风格类似」的后续文字吞进 URL）；
  * 尾部 ASCII 标点容忍去除；结果去重。
@@ -149,7 +196,7 @@ export class TrendResearchService {
               userText: `${describeTodayUtc8()}\n创作意图：${trimmed}`,
               temperature: 0.3,
               jsonMode: true,
-              timeoutMs: 30_000,
+              timeoutMs: 600_000,
             },
             resolveTextTools(cfg),
           ),
@@ -221,9 +268,13 @@ export class TrendResearchService {
       }
     }
 
+    // 按与创作意图/查询词的相关性降序排列：让「相关且有价值」的条目先进入资料整理与参考图抓取，
+    // 无关命中被推到队尾（超过整理上限自然被截断），避免优质内容被无关条目挤掉。
+    const ranked = rankByRelevance(out, topic, queries);
+
     // 二次整理：把原始条目交给文本模型提炼成结构化结论（内部以 traceStep 记录为「趋势研究」的
     // 子步骤「资料整理」）。失败/无有效内容 → null，由调用方回退规则摘要 buildResearchDigest。
-    const brief = out.length ? await this.researchDigest.summarize(topic, out) : null;
+    const brief = ranked.length ? await this.researchDigest.summarize(topic, ranked) : null;
 
     // ===== 参考图支路：三层递进抓取 → 多模态解读 =====
     // 两阶段都包在 traceStep 内，因 research() 自身已在 traceStep('research') 上下文里，
@@ -245,7 +296,7 @@ export class TrendResearchService {
         const r = await traceStep(
           'researchImages',
           '参考图抓取',
-          () => this.researchImages.collect({ items: out, queries, imagesSearch, cfg: imagesCfg }),
+          () => this.researchImages.collect({ items: ranked, queries, imagesSearch, cfg: imagesCfg }),
           (res) => (res.images.length ? `抓取 ${res.images.length} 张参考图${res.errors.length ? `（${res.errors.length} 处失败）` : ''}` : '未抓到参考图'),
           (res) => ({ images: toTraceImages(res.images) }),
         );
