@@ -41,6 +41,9 @@ import type {
   AiImageStatusResult,
   AiSilhouetteTaskId,
   AiSilhouetteStatusResult,
+  AiPipelineJobId,
+  AiPipelineStatusResult,
+  AiPipelineResumeResult,
   MigrationRecordView,
   MigrationRunningView,
   StorageConfigView,
@@ -617,6 +620,34 @@ export const api = {
       method: 'POST',
       body: formData,
     }, AI_ENDPOINT_TIMEOUT_MS),
+
+  // ===== AI 流水线 job（识别 → 姿势图 → 剪影，断点续跑）=====
+  /** multipart：示例图 image/image + text/textDesc + creationReq/poseCount/subjectCount + 参考图 reference/references
+   *  + extraPrompt + jobMode（auto / analyze-only）+ silMode/silCrop/silEngine → 立即返回 jobId */
+  aiPipelineStart: (formData: FormData) =>
+    adminFetch<AiPipelineJobId>('/templates/ai-job', {
+      method: 'POST',
+      body: formData,
+    }, AI_ENDPOINT_TIMEOUT_MS),
+
+  /** 查询 job：since>0 只取增量事件；verbose=1 强制返回全量事件与 base64 产物（job 不存在 → 404） */
+  aiPipelineStatus: (jobId: string, since?: number, verbose?: boolean) =>
+    adminFetch<AiPipelineStatusResult>(
+      `/templates/ai-job/${jobId}?since=${typeof since === 'number' && since > 0 ? since : 0}${
+        verbose ? '&verbose=1' : ''
+      }`,
+    ),
+
+  /** 续跑：running → 仅重连（resumed=false）；error → 从失败阶段重跑并复用上游产物（resumed=true） */
+  aiPipelineResume: (jobId: string) =>
+    adminFetch<AiPipelineResumeResult>(`/templates/ai-job/${jobId}/resume`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+
+  /** 放弃本次生成：删除 job（幂等，不存在也返回 ok） */
+  aiPipelineCancel: (jobId: string) =>
+    adminFetch<{ ok: true }>(`/templates/ai-job/${jobId}`, { method: 'DELETE' }),
 
   // ===== 图片存储迁移（R2 迁移）=====
   startMigration: (triggerBy: string, target?: string) =>
