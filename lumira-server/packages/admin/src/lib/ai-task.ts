@@ -28,9 +28,10 @@ export class AiTaskPollError extends Error {}
 const DEFAULT_INTERVAL_MS = 2000;
 const DEFAULT_TIMEOUT_MS = 600_000;
 /** 识别任务总预算：链路含「评分→细化」最多 3 轮迭代且单次 LLM 调用可达 10 分钟，
- *  实测单轮 16~26 分钟；900s 会被经常顶穿导致前端误报「识别超时」，放宽到 45 分钟。
- *  后端任务保留期（RESULT_TTL_MS）已同步放宽到 60 分钟，保证超长流程结果可取。 */
-const ANALYZE_TIMEOUT_MS = 2700_000;
+ *  实测单轮 16~26 分钟、整体可达 40+ 分钟。前端预算必须覆盖后端任务保留期
+ *  （后端 RESULT_TTL_MS = 60 分钟，超期任务会被清理），否则会出现「前端已放弃、
+ *  后端仍在跑、结果取不回来」的错位 → 直接对齐 60 分钟。 */
+const ANALYZE_TIMEOUT_MS = 3600_000;
 
 function sleep(intervalMs: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, intervalMs));
