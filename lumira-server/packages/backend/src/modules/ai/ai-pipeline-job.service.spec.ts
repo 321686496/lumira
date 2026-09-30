@@ -485,3 +485,97 @@ describe('AiPipelineJobService（三阶段与续跑）', () => {
     expect(job.artifacts.poseFiles).toEqual([]);
   });
 });
+
+describe('AiPipelineJobService（停止：在飞张产物计入终态快照）', () => {
+  let service: AiPipelineJobService;
+  let analyzeMock: jest.Mock;
+  let generateMock: jest.Mock;
+  let updateJobMock: jest.Mock;
+  let writeDetailMock: jest.Mock;
+  /** 记录关键落库调用的先后顺序（用于断言终态写入晚于在飞张回写） */
+  let callOrder: string[];
+
+  // 3 张目标：锚点 #1 立即成功；#2 生图触发有界重试等待（1s 后在检查点抛 JobStoppedError）；
+  // #3 生图慢速成功（1.5s），用于验证停止时仍在飞行的兄弟张产物能计入终态快照。
+  const DRAFT3 = { pose: [{ index: 0 }, { index: 1 }, { index: 2 }] };
+
+  beforeEach(() => {
+    callOrder = [];
+    analyzeMock = jest.fn().mockResolvedValue({
+      draft: DRAFT3, warnings: [], trace: [], raw: {}, research: [], brief: null, researchVision: null,
+    });
+    generateMock = jest.fn((_refs: unknown, metaJson: string) => {
+      const meta = JSON.parse(metaJson) as { pose?: { index?: number } };
+      if (meta.pose?.index === 1) return Promise.reject(new Error('AI 请求超时，请稍后重试'));
+      if (meta.pose?.index === 2) {
+        return new Promise((resolve) =>
+          setTimeout(() => resolve({ base64: 'aW1n', mimeType: 'image/png', prompt: 'p', model: 'm' }), 1500),
+        );
+      }
+      return Promise.resolve({ base64: 'aW1n', mimeType: 'image/png', prompt: 'p', model: 'm' });
+    });
+    updateJobMock = jest.fn(async (_id: string, patch: { currentStage?: string }) => {
+      callOrder.push(patch.currentStage === 'image' ? 'updateJob:image' : 'updateJob');
+      return undefined;
+    });
+    writeDetailMock = jest.fn(async () => {
+      callOrder.push('writeDetail');
+      return undefined;
+    });
+    service = new AiPipelineJobService(
+      { analyze: analyzeMock } as unknown as AiAnalyzeService,
+      {
+        acquireImageSlot: jest.fn().mockResolvedValue(0),
+        releaseImageSlot: jest.fn(),
+        generate: generateMock,
+      } as unknown as AiGenerateImageService,
+      { generate: jest.fn().mockResolvedValue({ image: 'c2ls', mimeType: 'image/png' }) } as unknown as AiSilhouetteService,
+      {
+        insertJob: jest.fn().mockResolvedValue(undefined),
+        updateJob: updateJobMock,
+        writeInput: jest.fn().mockResolvedValue('/uploads/ai-jobs/job_x/input/example-0.png'),
+        writeArtifact: jest.fn(async (id: string, kind: string, index: number) => ({
+          index, mimeType: 'image/png',
+          storageKey: `/uploads/ai-jobs/${id}/${kind}-${index}.png`,
+          url: `/uploads/ai-jobs/${id}/${kind}-${index}.png`,
+        })),
+        writeDetail: writeDetailMock,
+        writeEvents: jest.fn().mockResolvedValue(undefined),
+        readDetail: jest.fn().mockResolvedValue(null),
+        readInputs: jest.fn().mockResolvedValue([]),
+        findJob: jest.fn().mockResolvedValue(null),
+        detailKeyOf: (id: string) => `/uploads/ai-jobs/${id}/`,
+      } as never,
+    );
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it(
+    '停止时仍在飞行的兄弟张（#3）产物计入终态快照，且终态写入晚于在飞张回写',
+    async () => {
+      const { jobId } = await service.create({ text: '文字描述', mode: 'auto' });
+      const runP = service.startJob(jobId);
+      // 等锚点 #1 完成（内存产物出现 index 0）后立即请求停止；此时 #2 在重试等待、#3 仍在飞行
+      for (let i = 0; i < 6000 && !service.get(jobId)!.artifacts.poseFiles.some((f) => f.index === 0); i += 1) {
+        await new Promise((r) => setTimeout(r, 2));
+      }
+      service.requestStop(jobId);
+      await runP;
+
+      const job = service.get(jobId)!;
+      // (a) 终态为 stopped
+      expect(job.status).toBe('stopped');
+      // (b) 最后一次 detail 快照包含停止前已完成的兄弟张 #3（Promise.all 旧实现会漏掉它）
+      const lastDetail = writeDetailMock.mock.calls[writeDetailMock.mock.calls.length - 1]![1] as {
+        artifacts: { poseFiles: Array<{ index: number }> };
+      };
+      expect(lastDetail.artifacts.poseFiles.map((f) => f.index)).toEqual([0, 2]);
+      // (c) 终态 detail 写入发生在飞行张 #3 的 updateJob({ currentStage: 'image' }) 之后
+      expect(callOrder.lastIndexOf('writeDetail')).toBeGreaterThan(callOrder.lastIndexOf('updateJob:image'));
+    },
+    30_000,
+  );
+});

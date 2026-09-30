@@ -530,6 +530,8 @@ export class AiPipelineJobService {
       const startedAt = Date.now();
       const queuedMs = await this.aiGenerateImageService.acquireImageSlot();
       try {
+        // 等待生图额度期间可能已请求停止：命中则不再发起生图（finally 会释放已获取的额度）
+        this.assertNotStopped(job);
         this.append(job, {
           stage: 'image',
           type: 'note',
@@ -622,7 +624,12 @@ export class AiPipelineJobService {
         mimetype: anchor.mimeType,
       };
       // 依赖张并发提交（真正的多路上游并行由生图服务内部并发额度控制）
-      await Promise.all(rest.map((index) => runOne(index, [anchorRef])));
+      const settled = await Promise.allSettled(rest.map((index) => runOne(index, [anchorRef])));
+      // 停止：等所有在飞张收口（期间不再启动新张），确保产物计入内存/DB 后再让停止冒泡落终态快照
+      const stoppedSibling = settled.find(
+        (s): s is PromiseRejectedResult => s.status === 'rejected' && s.reason instanceof JobStoppedError,
+      );
+      if (stoppedSibling) throw stoppedSibling.reason;
     }
 
     job.artifacts.poseFiles = [...byIndex.values()].sort((a, b) => a.index - b.index);
@@ -658,7 +665,7 @@ export class AiPipelineJobService {
     const failed: number[] = [];
     let firstError: unknown;
 
-    await Promise.all(
+    const settled = await Promise.allSettled(
       todo.map(async (index) => {
         const src = sources.find((s) => s.index === index)!;
         this.assertNotStopped(job);
@@ -720,6 +727,10 @@ export class AiPipelineJobService {
         }
       }),
     );
+    const stoppedSibling = settled.find(
+      (s): s is PromiseRejectedResult => s.status === 'rejected' && s.reason instanceof JobStoppedError,
+    );
+    if (stoppedSibling) throw stoppedSibling.reason;
 
     job.artifacts.silFiles = [...byIndex.values()].sort((a, b) => a.index - b.index);
     job.artifacts.silErrors = failed.map((index) => ({ index, error: '剪影生成失败' }));
