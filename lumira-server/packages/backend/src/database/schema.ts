@@ -392,6 +392,8 @@ export const aiProviderConfig = mysqlTable('ai_provider_config', {
   llmTimeoutMs: int('llm_timeout_ms').notNull().default(300_000),
   /** 单次 LLM 输出 token 上限 */
   llmMaxTokens: int('llm_max_tokens').notNull().default(8192),
+  /** AI 生成任务并发上限（1~5），默认 2 */
+  jobConcurrency: int('job_concurrency').notNull().default(2),
   /** 网页爬取工具开关：1=启用（文本模型可调用 crawl_website）；0=关闭 */
   crawlEnabled: int('crawl_enabled').notNull().default(0),
   /** 单次文本会话最多爬取次数（1~6） */
@@ -486,4 +488,24 @@ export const storageConfigs = mysqlTable('storage_config', {
   configJson: longtext('config_json'), // { endpoint, accessKeyId, secretAccessKey, bucket, region, publicUrl }
   isActive: int('is_active').notNull().default(0),
   updatedAt: int('updated_at'),
+});
+/** AI 生成任务队列（列表展示数据）：详情/事件流/产物落存储文件，见 detail_key */
+export const aiTemplateJobs = mysqlTable('ai_template_jobs', {
+  id: text('id').primaryKey(),
+  status: text('status').notNull(),
+  mode: text('mode').notNull(),
+  title: text('title').notNull(),
+  currentStage: text('current_stage'),
+  poseTotal: int('pose_total').notNull().default(0),
+  poseDone: int('pose_done').notNull().default(0),
+  silTotal: int('sil_total').notNull().default(0),
+  silDone: int('sil_done').notNull().default(0),
+  queuePos: int('queue_pos').notNull().default(0),
+  inputSummaryJson: longtext('input_summary_json'),
+  errorCode: text('error_code'),
+  errorMessage: text('error_message'),
+  detailKey: text('detail_key'),
+  createdAt: int('created_at').notNull(),
+  startedAt: int('started_at'),
+  finishedAt: int('finished_at'),
 });

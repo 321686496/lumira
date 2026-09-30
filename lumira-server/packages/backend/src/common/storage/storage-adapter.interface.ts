@@ -3,7 +3,7 @@
 
 // 'thumbs' 为缩略图派生目录（/uploads/thumbs/{templates|categories}/...），
 // 由 ThumbsService 预生成/按需生成后写入激活存储，供客户端直连存储域名取图。
-export type StorageCategory = 'templates' | 'categories' | 'banners' | 'feedback' | 'users' | 'thumbs';
+export type StorageCategory = 'templates' | 'categories' | 'banners' | 'feedback' | 'users' | 'thumbs' | 'ai-jobs';
 
 export const STORAGE_KEY_PREFIX = '/uploads';
 
