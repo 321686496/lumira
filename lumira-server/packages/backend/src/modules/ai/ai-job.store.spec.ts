@@ -4,8 +4,9 @@
 import { AiJobStoreService } from './ai-job.store';
 import type { AiJobRow } from './ai-job.store';
 
-const updateSetMock = jest.fn();
+const mockFiles = new Map<string, Buffer>();
 const updateWhereMock = jest.fn(() => Promise.resolve());
+const updateSetMock = jest.fn(() => ({ where: updateWhereMock }));
 const insertValuesMock = jest.fn(() => Promise.resolve());
 const findFirstMock = jest.fn();
 const selectRows: unknown[] = [];
@@ -13,9 +14,13 @@ const deleteMock = jest.fn();
 
 jest.mock('../../common/storage/runtime-storage', () => ({
   activeStorageAdapter: {
-    write: jest.fn(async (_c: string, id: string, filename: string) => `/uploads/ai-jobs/${id}/${filename}`),
+    write: jest.fn(async (_c: string, id: string, filename: string, buffer: Buffer) => {
+      const key = `/uploads/ai-jobs/${id}/${filename}`;
+      mockFiles.set(key, buffer);
+      return key;
+    }),
     deleteByDir: jest.fn(async () => undefined),
-    readBuffer: jest.fn(async () => Buffer.from('{"a":1}')),
+    readBuffer: jest.fn(async (key: string) => mockFiles.get(key) ?? Buffer.from('{"a":1}')),
     exists: jest.fn(async () => true),
     listKeys: jest.fn(async () => ['/uploads/ai-jobs/job_1/input/example-0.png']),
   },
@@ -51,6 +56,7 @@ describe('AiJobStoreService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockFiles.clear();
     const db = makeDb();
     store = new AiJobStoreService({ getDb: () => db } as never);
   });
@@ -73,9 +79,14 @@ describe('AiJobStoreService', () => {
   });
 
   it('writeDetail / readDetail 往返一致', async () => {
-    await store.writeDetail('job_1', { draft: { title: 'd' }, artifacts: { poseFiles: [], poseErrors: [], silFiles: [], silErrors: [] } } as never);
+    const detail = {
+      stages: null, error: null, warnings: [], draft: { title: 'd' }, trace: [],
+      raw: null, research: [], researchBrief: null, researchVision: null,
+      artifacts: { poseFiles: [], poseErrors: [], silFiles: [], silErrors: [] }, inputs: {},
+    };
+    await store.writeDetail('job_1', detail as never);
     const back = await store.readDetail('job_1');
-    expect(back).toMatchObject({ a: 1 }); // readBuffer mock 固定返回 {"a":1}
+    expect(back).toEqual(detail);
   });
 
   it('deleteJob 同时删 DB 行与存储目录', async () => {
