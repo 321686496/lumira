@@ -119,6 +119,9 @@ export class AiJobQueueService implements OnModuleInit {
   private async run(jobId: string): Promise<void> {
     this.running.add(jobId);
     try {
+      // 执行前先 hydrate：对已在内存的 job 立即返回（幂等）；对重启后 queued 的 job
+      // 从 detail.json 重建内存态（inputs/stages/pendingStages），否则 startJob 会因查无此 job 静默跳过
+      await this.pipeline.hydrate(jobId);
       await this.pipeline.startJob(jobId);
     } catch (err) {
       this.logger.error(`任务 ${jobId} 执行异常：${(err as Error).message}`);

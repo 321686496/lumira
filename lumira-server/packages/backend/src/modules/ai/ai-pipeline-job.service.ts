@@ -242,6 +242,8 @@ export class AiPipelineJobService {
       startedAt: null,
       finishedAt: null,
     });
+    // 创建即落 detail.json：冷启动 hydrate 依赖它重建 job.inputs / stages（重启后 queued 才能续跑）
+    await this.persistDetail(job);
   }
 
   /** 追加一条事件（分配 seq/ts；达上限静默丢弃） */
@@ -578,6 +580,7 @@ export class AiPipelineJobService {
         if (firstError === undefined) firstError = err;
         failed.push(index);
         byIndex.delete(index);
+        job.artifacts.poseErrors = failed.map((i) => ({ index: i, error: '姿势图生成失败' }));
         job.artifacts.poseFiles = [...byIndex.values()].sort((a, b) => a.index - b.index);
         this.append(job, {
           stage: 'image',
@@ -702,6 +705,7 @@ export class AiPipelineJobService {
           if (firstError === undefined) firstError = err;
           failed.push(index);
           byIndex.delete(index);
+          job.artifacts.silErrors = failed.map((i) => ({ index: i, error: '剪影生成失败' }));
           job.artifacts.silFiles = [...byIndex.values()].sort((a, b) => a.index - b.index);
           this.append(job, {
             stage: 'silhouette',
@@ -752,13 +756,22 @@ export class AiPipelineJobService {
       referenceAnchor?: boolean;
       silhouette?: AiPipelineJob['inputs']['silhouette'];
     };
+    // 重启后 queued 的任务需按默认全量阶段重建待跑计划（error/stopped 的续跑阶段由 prepareResume 计算）
+    const pendingStages: PipelineStage[] | undefined =
+      row.status === 'queued'
+        ? row.mode === 'analyze-only'
+          ? ['analyze']
+          : ['analyze', 'image', 'silhouette']
+        : undefined;
     const job: AiPipelineJob = {
       id: jobId,
       createdAt: row.createdAt * 1000,
-      // DB 的 interrupted 只是「待续跑」的 error 语义，统一映射为 error；stopped 原样保留
-      status: row.status === 'stopped' ? 'stopped' : 'error',
+      // DB 的 interrupted 只是「待续跑」的 error 语义，统一映射为 error；stopped 原样保留，
+      // queued（重启后尚未开跑）原样保留，其待跑阶段由 pendingStages 给出
+      status: row.status === 'stopped' ? 'stopped' : row.status === 'queued' ? 'queued' : 'error',
       mode: row.mode,
       error: (detail.error as InterruptionInfo | null) ?? undefined,
+      pendingStages,
       inputs: {
         images: pick('example'),
         text: (inputFull.text ?? (detail.inputs.textPreview as string)) || undefined,
@@ -799,8 +812,16 @@ export class AiPipelineJobService {
     if (!job) return null;
     if (job.status === 'running' || job.status === 'done') return null;
 
-    const failedStage = job.error?.stage ?? 'analyze';
-    const requested: PipelineStage[] = job.mode === 'analyze-only' ? ['analyze'] : ['analyze', 'image', 'silhouette'];
+    const requested: PipelineStage[] =
+      job.mode === 'analyze-only' ? ['analyze'] : ['analyze', 'image', 'silhouette'];
+    // 失败阶段：优先取错误携带的阶段；停止/中断（无 error）时回退到首个未完成阶段
+    let failedStage: PipelineStage =
+      job.error?.stage ?? requested.find((s) => job.stages[s].status !== 'done') ?? 'analyze';
+    // 冷启动恢复的产物没有字节（base64 为空），无法充当锚点/剪影源图；
+    // 若仍从 image/silhouette 续跑会喂 0 字节图片，故退化为从 analyze 全量重跑（保守但正确）
+    if (failedStage !== 'analyze' && job.artifacts.poseFiles.some((f) => !f.base64)) {
+      failedStage = 'analyze';
+    }
     const stages = requested.slice(requested.indexOf(failedStage));
     if (!stages.length) return null;
 
@@ -812,20 +833,24 @@ export class AiPipelineJobService {
       job.artifacts.silFiles = [];
       job.artifacts.silErrors = [];
     } else if (failedStage === 'image') {
-      onlyIndexes.image = job.artifacts.poseErrors.length
-        ? job.artifacts.poseErrors.map((e) => e.index)
-        : undefined;
-      // 此处不预置 silhouette 下标：image 阶段失败时剪影阶段必未运行，且重跑会新增姿势图，
-      // 若用重跑前的 poseFiles 算「缺剪影的下标」会算死缺失集合（静默漏产出/一张不生成）。
+      // 只补「缺失下标」（= 未成功产出姿势图的下标），停止/失败两种入口语义一致
+      const total = this.targetsFor(job.artifacts.analyze?.draft).length;
+      const done = new Set(job.artifacts.poseFiles.map((f) => f.index));
+      const missing = Array.from({ length: total }, (_, i) => i).filter((i) => !done.has(i));
+      onlyIndexes.image = missing.length ? missing : undefined;
+      // 此处不预置 silhouette 下标：image 阶段重跑会新增姿势图，
+      // 若用重跑前的 poseFiles 算「缺剪影的下标」会算死缺失集合（静默漏产出）。
       // 交由 runSilhouetteStage 在只传 undefined 时对全部姿势图生成剪影。
     } else {
-      onlyIndexes.silhouette = job.artifacts.silErrors.length ? job.artifacts.silErrors.map((e) => e.index) : undefined;
+      onlyIndexes.silhouette = job.artifacts.silErrors.length
+        ? job.artifacts.silErrors.map((e) => e.index)
+        : undefined;
     }
 
     for (const stage of stages) job.stages[stage] = { status: 'pending' };
     job.pendingStages = stages;
     job.pendingOnlyIndexes = onlyIndexes;
-    job.status = 'error';
+    job.status = 'queued';
     job.error = undefined;
     return { stages, onlyIndexes };
   }

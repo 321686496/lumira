@@ -445,4 +445,43 @@ describe('AiPipelineJobService（三阶段与续跑）', () => {
     },
     30_000,
   );
+
+  it('prepareResume：停止后从停止阶段续跑，只补缺失下标且保留已产出', async () => {
+    const { jobId } = await service.create({ text: '文字描述', mode: 'auto' });
+    const job = service.get(jobId)!;
+    // 手工构造「识别完成、image 中途停止」的内存态（停止路径不写 error）
+    job.artifacts.analyze = {
+      draft: DRAFT, warnings: [], trace: [], raw: {}, research: [], brief: null, researchVision: null,
+    };
+    job.stages.analyze = { status: 'done' };
+    job.stages.image = { status: 'pending' };
+    job.stages.silhouette = { status: 'pending' };
+    job.artifacts.poseFiles = [{ index: 0, base64: 'aW1n', mimeType: 'image/png' }];
+    job.status = 'stopped';
+    job.error = undefined;
+
+    const plan = await service.prepareResume(jobId);
+    // 无 error 时从首个未完成阶段（image）续跑，而非全量重跑
+    expect(plan?.stages).toEqual(['image', 'silhouette']);
+    // 只补缺失下标（#2），已产出的 #1 保留、不重跑
+    expect(plan?.onlyIndexes.image).toEqual([1]);
+    expect(job.artifacts.poseFiles.map((f) => f.index)).toEqual([0]);
+  });
+
+  it('prepareResume：冷启动产物无字节 → 退化为从 analyze 全量重跑并清空产物', async () => {
+    const { jobId } = await service.create({ text: '文字描述', mode: 'auto' });
+    const job = service.get(jobId)!;
+    job.artifacts.analyze = {
+      draft: DRAFT, warnings: [], trace: [], raw: {}, research: [], brief: null, researchVision: null,
+    };
+    job.stages.analyze = { status: 'done' };
+    job.status = 'error';
+    job.error = { code: 'upstream_timeout', stage: 'image', message: '冷启动恢复', at: Date.now() };
+    // hydrate 重建的产物只有 storageKey/url，base64 恒为空 → 无法充当锚点
+    job.artifacts.poseFiles = [{ index: 0, base64: '', mimeType: 'image/png', storageKey: 'k', url: 'u' }];
+
+    const plan = await service.prepareResume(jobId);
+    expect(plan?.stages).toEqual(['analyze', 'image', 'silhouette']);
+    expect(job.artifacts.poseFiles).toEqual([]);
+  });
 });

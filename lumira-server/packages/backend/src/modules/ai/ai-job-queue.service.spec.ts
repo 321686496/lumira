@@ -115,4 +115,14 @@ describe('AiJobQueueService', () => {
     expect(markInterrupted).toHaveBeenCalledWith('running');
     expect(pipeline.startJob).toHaveBeenCalledWith('q1');
   });
+
+  it('run 执行前先 hydrate（重启后 queued 任务从 detail.json 重建后再 startJob）', async () => {
+    const queue = build(1);
+    await queue.enqueue('q1');
+    await new Promise((r) => setImmediate(r));
+    expect(pipeline.hydrate).toHaveBeenCalledWith('q1');
+    expect(pipeline.hydrate.mock.invocationCallOrder[0]).toBeLessThan(
+      pipeline.startJob.mock.invocationCallOrder[0]!,
+    );
+  });
 });
