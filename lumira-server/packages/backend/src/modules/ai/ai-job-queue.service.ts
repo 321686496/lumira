@@ -44,10 +44,10 @@ export class AiJobQueueService implements OnModuleInit {
     }
   }
 
-  /** 入队：有空位立即开跑，否则排队并刷新位次 */
+  /** 入队：仅当无人排队且有空位时才立即开跑；否则排到队尾，由 FIFO 出队决定何时开跑 */
   async enqueue(jobId: string): Promise<{ status: AiJobStatus; queuePos: number }> {
     const limit = await this.concurrency();
-    if (this.running.size < limit) {
+    if (this.running.size < limit && this.waiting.length === 0) {
       void this.run(jobId);
       return { status: 'running', queuePos: 0 };
     }
@@ -55,13 +55,17 @@ export class AiJobQueueService implements OnModuleInit {
     await this.store.setQueuePositions(this.waiting);
     const pos = this.waiting.indexOf(jobId) + 1;
     await this.store.updateJob(jobId, { status: 'queued', queuePos: pos });
-    return { status: 'queued', queuePos: pos };
+    // 出队填充统一走 FIFO 的 drain；若本次 drain 恰好把它拉起，需如实回报 running/0
+    await this.drain();
+    if (this.running.has(jobId)) return { status: 'running', queuePos: 0 };
+    const idx = this.waiting.indexOf(jobId);
+    return { status: 'queued', queuePos: idx >= 0 ? idx + 1 : 0 };
   }
 
   /** 停止：running → 置停止标记（停在检查点）；queued → 取消排队 */
   async stop(jobId: string): Promise<{ stopped: boolean; status: AiJobStatus }> {
-    if (this.running.has(jobId)) {
-      this.pipeline.requestStop(jobId);
+    if (this.running.has(jobId) && this.pipeline.requestStop(jobId)) {
+      // 协作式停止：置停止标记，DB 行在 pipeline 的下一个检查点落库
       return { stopped: true, status: 'stopped' };
     }
     const idx = this.waiting.indexOf(jobId);

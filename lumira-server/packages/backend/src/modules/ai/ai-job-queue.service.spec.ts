@@ -22,9 +22,11 @@ describe('AiJobQueueService', () => {
     prepareResume: (id: string) => Promise<{ stages: string[]; onlyIndexes: Record<string, number[]> } | null>;
   }>;
   let release: Array<() => void>;
+  let config: { get: jest.Mock };
 
   function build(concurrency = 2) {
     release = [];
+    config = { get: jest.fn(async () => ({ configured: true, jobConcurrency: concurrency })) };
     pipeline = {
       startJob: jest.fn(
         () => new Promise<void>((resolve) => release.push(resolve)),
@@ -35,7 +37,7 @@ describe('AiJobQueueService', () => {
     };
     const queue = new AiJobQueueService(
       store as never,
-      { get: jest.fn(async () => ({ configured: true, jobConcurrency: concurrency })) } as never,
+      config as never,
       pipeline as never,
     );
     return queue;
@@ -73,6 +75,32 @@ describe('AiJobQueueService', () => {
     const queue = build(1);
     await queue.enqueue('a');
     await expect(queue.stop('a')).resolves.toEqual({ stopped: true, status: 'stopped' });
+    expect(pipeline.requestStop).toHaveBeenCalledWith('a');
+  });
+
+  it('stop：requestStop 返回 false 时不谎报成功，如实回报持久化状态', async () => {
+    const queue = build(1);
+    await queue.enqueue('a');
+    pipeline.requestStop.mockReturnValue(false);
+    store.findJob = jest.fn(async () => row('a', { status: 'running' }));
+    await expect(queue.stop('a')).resolves.toEqual({ stopped: false, status: 'running' });
+    expect(store.updateJob).not.toHaveBeenCalledWith('a', expect.objectContaining({ status: 'stopped' }));
+  });
+
+  it('FIFO：有空位但已有人排队时，新任务不得插队（排队尾，由出队按序拉起）', async () => {
+    const queue = build(1);
+    await queue.enqueue('a'); // running
+    await queue.enqueue('b'); // waiting=[b]
+    expect(pipeline.startJob).toHaveBeenCalledTimes(1);
+
+    // 并发上限被调高（AI 设置改动）后出现空位，但 a 仍占位、b 仍排队
+    config.get.mockResolvedValue({ configured: true, jobConcurrency: 2 });
+
+    await expect(queue.enqueue('c')).resolves.toEqual({ status: 'queued', queuePos: 1 });
+    // 新任务 c 不得先于 b 开跑：本次被拉起的是 b
+    expect(pipeline.startJob).toHaveBeenCalledTimes(2);
+    expect(pipeline.startJob).toHaveBeenLastCalledWith('b');
+    expect(pipeline.startJob).not.toHaveBeenCalledWith('c');
   });
 
   it('onModuleInit：queued 重新入队，running 置 interrupted', async () => {
