@@ -29,6 +29,9 @@ import {
   TIME_TONE_LABELS,
 } from './enums';
 
+/** 创作意图产出形态合法集合（与 creation-intent.ts 的 CreationIntentMode 对齐；此处本地定义避免循环依赖） */
+const CREATION_INTENT_MODES = new Set(['split-per-cell', 'single', 'multi-pose', 'merge-group']);
+
 export interface CategoryNode {
   key: string;
   name: string;
@@ -389,14 +392,15 @@ export function normalizeDraft(raw: unknown, categories: CategoryNode[]): Normal
   const description = toStr(rawMeta.description);
   if (description !== undefined) meta.description = description;
 
-  // subjectCount：画面主体人数（1~8 整数，缺省 1）。缺省不是中性值而是「单人」的明确断言，
+  // subjectCount：画面主体人数（1~9 整数，缺省 1）。缺省不是中性值而是「单人」的明确断言，
   // 因此模型未给出时必须记 warning，避免情侣/全家福场景被静默降级成单人模板。
+  // 上限 9：9 人合拍（九宫格合并）不应被夹成 8。
   const rawSubjectCount = rawMeta.subjectCount;
   if (typeof rawSubjectCount === 'number' && Number.isFinite(rawSubjectCount)) {
     const rounded = Math.round(rawSubjectCount);
-    const clamped = Math.min(8, Math.max(1, rounded));
+    const clamped = Math.min(9, Math.max(1, rounded));
     if (clamped !== rawSubjectCount) {
-      warnings.push(`meta.subjectCount ${rawSubjectCount} 不在 1~8 范围内，已夹取为 ${clamped}`);
+      warnings.push(`meta.subjectCount ${rawSubjectCount} 不在 1~9 范围内，已夹取为 ${clamped}`);
     }
     meta.subjectCount = clamped;
   } else {
@@ -584,6 +588,27 @@ export function normalizeDraft(raw: unknown, categories: CategoryNode[]): Normal
   // ===== styleProfile（风格档案，Task 12 新增）：形状校验（必须有合法 archetype 字符串），非法时丢弃 =====
   if (isPlainObject(src.styleProfile) && typeof (src.styleProfile as Record<string, unknown>).archetype === 'string') {
     draft.styleProfile = { ...(src.styleProfile as Record<string, unknown>) };
+  }
+
+  // ===== creationIntent（创作意图）：形状校验（合法 outputMode + 数值夹取 1~9），非法时丢弃 =====
+  const rawIntent = src.creationIntent;
+  if (isPlainObject(rawIntent)) {
+    const mode = typeof rawIntent.outputMode === 'string' ? rawIntent.outputMode : '';
+    if (CREATION_INTENT_MODES.has(mode)) {
+      const clampIntent = (v: unknown, fallback: number): number => {
+        const n = typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : fallback;
+        return Math.min(9, Math.max(1, n));
+      };
+      draft.creationIntent = {
+        outputMode: mode,
+        // merge-group（合并多人合拍）只有一个产出画面，张数恒为 1
+        imageCount: mode === 'merge-group' ? 1 : clampIntent(rawIntent.imageCount, 1),
+        subjectPerImage: clampIntent(rawIntent.subjectPerImage, 1),
+        sameSubjectAcross: rawIntent.sameSubjectAcross !== false,
+        reason: typeof rawIntent.reason === 'string' ? rawIntent.reason : '',
+        source: rawIntent.source === 'fallback' ? 'fallback' : 'llm',
+      };
+    }
   }
 
   return { draft, warnings };

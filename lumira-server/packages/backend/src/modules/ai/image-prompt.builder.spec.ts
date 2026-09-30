@@ -331,7 +331,47 @@ describe('多人物', () => {
   it('subjectCountOfDraft：缺省 1，超范围夹取', () => {
     expect(subjectCountOfDraft({})).toBe(1);
     expect(subjectCountOfDraft({ meta: { subjectCount: 3 } })).toBe(3);
-    expect(subjectCountOfDraft({ meta: { subjectCount: 99 } })).toBe(8);
+    expect(subjectCountOfDraft({ meta: { subjectCount: 99 } })).toBe(9);
+  });
+
+  it('创作意图 merge-group：单姿势产出改为多人同框合拍，不再写「只呈现一个姿势」', () => {
+    const prompt = buildImagePrompt({
+      singlePose: true,
+      pose: { name: '并肩而立', description: '九人并排站立' },
+      creationIntent: { outputMode: 'merge-group', imageCount: 1, subjectPerImage: 9, sameSubjectAcross: false },
+    });
+    expect(prompt).toContain('画面中有 9 位人物');
+    expect(prompt).toContain('同框合拍');
+    expect(prompt).toContain('不要生成多宫格、分屏、拼贴或姿势对比图');
+    expect(prompt).not.toContain('只呈现一个姿势');
+  });
+
+  it('创作意图 split-per-cell + 每张 1 人：追加「禁止同一人物重复出现」约束', () => {
+    const prompt = buildImagePrompt({
+      singlePose: true,
+      pose: { name: '侧身回眸', description: '身体微侧45度' },
+      creationIntent: { outputMode: 'split-per-cell', imageCount: 9, subjectPerImage: 1, sameSubjectAcross: true },
+    });
+    expect(prompt).toContain('画面中只有一位人物');
+    expect(prompt).toContain('禁止同一人物在画面中重复出现');
+  });
+
+  it('创作意图 sameSubjectAcross=false：跳过「跨图保持同一人物」约束句', () => {
+    const prompt = buildImagePrompt({
+      singlePose: true,
+      pose: { name: '侧身', description: '身体微侧45度' },
+      creationIntent: { outputMode: 'multi-pose', imageCount: 3, subjectPerImage: 1, sameSubjectAcross: false },
+    });
+    expect(prompt).not.toContain('同一套模板的连续拍摄');
+    expect(prompt).not.toContain('保持同一人物的长相、服装、发型、体型');
+  });
+
+  it('创作意图的每张人数优先于 meta.subjectCount', () => {
+    const draft = fullDraft();
+    (draft.meta as any).subjectCount = 1;
+    draft.singlePose = true;
+    draft.creationIntent = { outputMode: 'merge-group', imageCount: 1, subjectPerImage: 9, sameSubjectAcross: false };
+    expect(buildImagePrompt(draft)).toContain('画面中有 9 位人物');
   });
 
   it('单姿势人像：双人草稿不再写「只有一个人物」', () => {

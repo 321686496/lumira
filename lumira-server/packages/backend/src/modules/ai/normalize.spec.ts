@@ -425,12 +425,55 @@ describe('normalizeDraft', () => {
     expect(warnings.some((w) => w.includes('meta.subjectCount'))).toBe(false);
   });
 
-  it('meta.subjectCount：超范围夹取到 1~8 并记 warning', () => {
+  it('meta.subjectCount：超范围夹取到 1~9 并记 warning', () => {
     const draft: any = baseDraft();
     draft.meta.subjectCount = 99;
     const { draft: out, warnings } = normalizeDraft(draft, CATEGORIES);
-    expect((out.meta as any).subjectCount).toBe(8);
+    expect((out.meta as any).subjectCount).toBe(9);
     expect(warnings.some((w) => w.includes('meta.subjectCount'))).toBe(true);
+  });
+
+  it('meta.subjectCount：9 人（九宫格合成合影）原样保留', () => {
+    const draft: any = baseDraft();
+    draft.meta.subjectCount = 9;
+    const { draft: out, warnings } = normalizeDraft(draft, CATEGORIES);
+    expect((out.meta as any).subjectCount).toBe(9);
+    expect(warnings.some((w) => w.includes('meta.subjectCount'))).toBe(false);
+  });
+
+  it('creationIntent：合法意图原样保留（merge-group 张数收敛为 1）', () => {
+    const draft: any = baseDraft();
+    draft.creationIntent = {
+      outputMode: 'merge-group',
+      imageCount: 9,
+      subjectPerImage: 9,
+      sameSubjectAcross: false,
+      reason: '九个人合成一张合影',
+      source: 'llm',
+    };
+    const { draft: out } = normalizeDraft(draft, CATEGORIES);
+    const intent = (out as any).creationIntent;
+    expect(intent.outputMode).toBe('merge-group');
+    expect(intent.imageCount).toBe(1);
+    expect(intent.subjectPerImage).toBe(9);
+    expect(intent.sameSubjectAcross).toBe(false);
+  });
+
+  it('creationIntent：数值越界夹取到 1~9', () => {
+    const draft: any = baseDraft();
+    draft.creationIntent = { outputMode: 'multi-pose', imageCount: 99, subjectPerImage: 0 };
+    const { draft: out } = normalizeDraft(draft, CATEGORIES);
+    const intent = (out as any).creationIntent;
+    expect(intent.outputMode).toBe('multi-pose');
+    expect(intent.imageCount).toBe(9);
+    expect(intent.subjectPerImage).toBe(1);
+  });
+
+  it('creationIntent：非法枚举整体丢弃', () => {
+    const draft: any = baseDraft();
+    draft.creationIntent = { outputMode: 'not-a-mode', imageCount: 3 };
+    const { draft: out } = normalizeDraft(draft, CATEGORIES);
+    expect((out as any).creationIntent).toBeUndefined();
   });
 
   it('meta.subjectCount：非数字回落 1 并记 warning', () => {

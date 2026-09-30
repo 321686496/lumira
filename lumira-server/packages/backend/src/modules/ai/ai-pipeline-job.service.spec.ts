@@ -333,6 +333,32 @@ describe('AiPipelineJobService（三阶段与续跑）', () => {
     expect(job.events.map((e) => e.seq)).toEqual(job.events.map((_, i) => i + 1));
   });
 
+  it('auto：创作意图 sameSubjectAcross=false → 依赖张不传锚点图且 consistency=loose', async () => {
+    const draft = {
+      pose: [{ index: 0 }, { index: 1 }],
+      creationIntent: { outputMode: 'multi-pose', imageCount: 2, subjectPerImage: 1, sameSubjectAcross: false },
+    };
+    analyzeMock.mockResolvedValue({
+      draft, warnings: [], trace: [], raw: {}, research: [], brief: null, researchVision: null,
+    });
+    const { jobId } = await service.create({ text: '九种不同人物的姿势', mode: 'auto' });
+    await service.startJob(jobId);
+    expect(generateMock).toHaveBeenCalledTimes(2);
+    const [, firstMeta] = generateMock.mock.calls[0];
+    const [secondRefs, secondMeta] = generateMock.mock.calls[1];
+    expect(JSON.parse(firstMeta).consistency).toEqual({ mode: 'strict' });
+    expect(secondRefs).toBeUndefined();
+    expect(JSON.parse(secondMeta).consistency).toEqual({ mode: 'loose' });
+  });
+
+  it('auto：默认（跨图同一人物）→ 依赖张以首张成片为底图且 consistency=strict+anchor', async () => {
+    const { jobId } = await service.create({ text: '文字描述', mode: 'auto' });
+    await service.startJob(jobId);
+    const [secondRefs, secondMeta] = generateMock.mock.calls[1];
+    expect(Array.isArray(secondRefs)).toBe(true);
+    expect(JSON.parse(secondMeta).consistency).toEqual({ mode: 'strict', anchor: 'first' });
+  });
+
   it('auto：referenceAnchor=false（示例图仅作视觉识别）→ 首张 anchor=false，依赖张仍以锚点成片为底图', async () => {
     const ref = { buffer: Buffer.from('ref'), filename: 'example.png', mimetype: 'image/png' };
     const { jobId } = await service.create({

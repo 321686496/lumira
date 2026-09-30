@@ -14,6 +14,7 @@ import { AiGenerateImageService } from './ai-generate-image.service';
 import { AiSilhouetteService } from './ai-generate-silhouette.service';
 import { AiJobStoreService } from './ai-job.store';
 import { AiUpstreamError, classifyUpstreamError, isRetryableUpstream } from './ai-upstream-error';
+import { creationIntentOfDraft } from './creation-intent';
 import { runWithTrace, traceNote } from './llm-trace';
 import type { AiTraceEvent, TraceSink } from './llm-trace';
 
@@ -484,6 +485,8 @@ export class AiPipelineJobService {
         lastError = err;
         const c = classifyUpstreamError(err);
         if (!isRetryableUpstream(c.code, c.status) || attempt >= GENERATE_RETRY_LIMIT) break;
+        // 重试留痕：让后台时间线看得见「同一张图正在重试」，而不是停在「生成中」无变化
+        traceNote('pose', `生图重试第 ${attempt + 1} 次`, (err as Error)?.message || c.code);
         await new Promise((resolve) => setTimeout(resolve, attempt * attempt * 1000));
       }
     }
@@ -510,6 +513,9 @@ export class AiPipelineJobService {
 
     const references = job.inputs.references;
     const research = this.buildResearchJson(job);
+    // 创作意图：跨图是否同一人物决定「依赖张是否以首张成片为锚点」。
+    // sameSubjectAcross=false（每张不同人物）时不能用首张成片当底图，否则各张被强行画成同一个人。
+    const crossSameSubject = creationIntentOfDraft(draft)?.sameSubjectAcross ?? true;
     const failed: number[] = [];
     let firstError: unknown;
 
@@ -546,11 +552,17 @@ export class AiPipelineJobService {
           ...draft,
           pose: targets[index],
           singlePose: true,
-          consistency: index === 0 ? { mode: 'strict' } : { mode: 'strict', anchor: 'first' },
+          consistency:
+            index === 0
+              ? { mode: 'strict' }
+              : crossSameSubject
+                ? { mode: 'strict', anchor: 'first' }
+                : { mode: 'loose' },
         });
         // 首张用的是外部参考图，是否作底图由 referenceAnchor 决定；
-        // 依赖张（index>0）的 refs 是上一张锚点成片，必须保留底图以维持人物一致性。
-        const useAnchor = index === 0 ? job.inputs.referenceAnchor : true;
+        // 依赖张（index>0）的 refs 是首张锚点成片：跨图同一人物时保留底图以维持一致性，
+        // 每张不同人物（sameSubjectAcross=false）时不传锚点，各张独立按参考图/提示词生成。
+        const useAnchor = index === 0 ? job.inputs.referenceAnchor : crossSameSubject;
         const r = await runWithTrace(sink, () =>
           this.generateWithRetry(job, refs, meta, job.inputs.extraPrompt ?? null, research, useAnchor),
         );
@@ -603,8 +615,9 @@ export class AiPipelineJobService {
 
     const anchor = byIndex.get(0);
     const rest = todo.filter((i) => i !== 0);
-    if (!anchor) {
-      // 锚点不可用：依赖张全部标记失败（与既有批次语义一致），阶段整体失败
+    if (!anchor && crossSameSubject) {
+      // 跨图同一人物时锚点不可用：依赖张全部标记失败（与既有批次语义一致），阶段整体失败。
+      // 每张不同人物（crossSameSubject=false）时各张互不依赖，锚点缺失不阻塞后续张。
       for (const index of rest) {
         failed.push(index);
         this.append(job, {
@@ -618,13 +631,17 @@ export class AiPipelineJobService {
         });
       }
     } else {
-      const anchorRef: UploadFile = {
-        buffer: Buffer.from(anchor.base64, 'base64'),
-        filename: 'anchor.png',
-        mimetype: anchor.mimeType,
-      };
+      const anchorRef: UploadFile | undefined = anchor
+        ? {
+            buffer: Buffer.from(anchor.base64, 'base64'),
+            filename: 'anchor.png',
+            mimetype: anchor.mimeType,
+          }
+        : undefined;
       // 依赖张并发提交（真正的多路上游并行由生图服务内部并发额度控制）
-      const settled = await Promise.allSettled(rest.map((index) => runOne(index, [anchorRef])));
+      const settled = await Promise.allSettled(
+        rest.map((index) => runOne(index, crossSameSubject && anchorRef ? [anchorRef] : undefined)),
+      );
       // 停止：等所有在飞张收口（期间不再启动新张），确保产物计入内存/DB 后再让停止冒泡落终态快照
       const stoppedSibling = settled.find(
         (s): s is PromiseRejectedResult => s.status === 'rejected' && s.reason instanceof JobStoppedError,

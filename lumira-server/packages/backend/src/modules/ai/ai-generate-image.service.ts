@@ -243,7 +243,9 @@ export class AiGenerateImageService {
       const content = await visionChatMulti(cfg.vision, {
         systemPrompt:
           '你是资深人像摄影助理。用户上传了多张参考图，请逐一识别每张图中的：人物形象（长相/发型/服装/体型）、' +
-          '场景与道具、光线与色调、摄影风格与构图；最后总结这些参考图的共同点。输出中文，按「图1/图2…」分节，末尾附「共同点」小节。',
+          '场景与道具、光线与色调、摄影风格与构图；最后总结这些参考图的共同点。输出中文，按「图1/图2…」分节，末尾附「共同点」小节。' +
+          '注意：识别结论只用于描述人物形象、场景、光线与风格，不得据此推断或声明最终画面人数；' +
+          '画面人数与产出形态由创作要求决定（若参考图是多格拼图，同一个人出现在多个格子里只算同一主体，禁止按格子数累加人数）。',
         userText: `请逐一识别以下 ${references.length} 张参考图，输出结构化要点。`,
         images: references.map((r) => ({ base64: r.buffer.toString('base64'), mime: r.mimetype })),
         temperature: 0.3,

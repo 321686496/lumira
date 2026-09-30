@@ -7,6 +7,7 @@
 // 主体类型用一级 key → 中文名的小型内置映射（migration 003 预置 7 类），未知 key 跳过；tags 本身是中文直接用。
 
 import { LUT_LABELS, WHITE_BALANCE_LABELS } from './enums';
+import { creationIntentOfDraft } from './creation-intent';
 import {
   styleProfileOfDraft,
   STYLE_ARCHETYPE_LABELS,
@@ -52,14 +53,14 @@ export function retouchLevelOfDraft(draft: unknown): RetouchLevel {
   return level !== undefined && (RETOUCH_LEVELS as readonly string[]).includes(level) ? level : 'none';
 }
 
-/** 画面主体人数（1~8，缺省 1）：从草稿 meta.subjectCount 读取，缺失/非法回退 1 */
+/** 画面主体人数（1~9，缺省 1）：从草稿 meta.subjectCount 读取，缺失/非法回退 1 */
 export function subjectCountOfDraft(draft: unknown): number {
   if (!isPlainObject(draft)) return 1;
   const meta = isPlainObject(draft.meta) ? draft.meta : {};
   const n = toNum(meta.subjectCount);
   if (n === undefined) return 1;
   const rounded = Math.round(n);
-  return rounded < 1 ? 1 : rounded > 8 ? 8 : rounded;
+  return rounded < 1 ? 1 : rounded > 9 ? 9 : rounded;
 }
 
 /** 主体人数描述（生图硬约束行；builder 与 composer 共用同一口径） */
@@ -245,12 +246,29 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
     segments.push(description);
   }
 
+  // 创作意图（由创作要求解析）驱动单张产出形态：合并多人合拍 / 逐格拆分 / 单姿势，
+  // 避免「按参考图可见人数推断人数」与「不要生成多宫格」自相矛盾。
+  const intent = creationIntentOfDraft(draft);
+  const intentMode = intent?.outputMode;
+  const intentSubjectPerImage = intent?.subjectPerImage;
+
   if (isSinglePose) {
-    const subjectCount = describeSubjectCount(subjectCountOfDraft(draft));
-    segments.push(
-      posePhrase ? `${subjectCount}，只呈现姿势${posePhrase}` : `${subjectCount}，只呈现一个姿势`,
-    );
-    segments.push('不要合并多个姿势，不要生成连拍、多宫格或姿势对比图');
+    const subjectCountValue = intentSubjectPerImage ?? subjectCountOfDraft(draft);
+    const subjectCount = describeSubjectCount(subjectCountValue);
+    if (intentMode === 'merge-group') {
+      segments.push(
+        `${subjectCount}，同框合拍，画面只呈现这一场合拍：人物之间有自然的站位层次、前后错落与互动呼应，像真实拍下的一张合影`,
+      );
+      segments.push('不要生成多宫格、分屏、拼贴或姿势对比图');
+    } else {
+      segments.push(
+        posePhrase ? `${subjectCount}，只呈现姿势${posePhrase}` : `${subjectCount}，只呈现一个姿势`,
+      );
+      segments.push('不要合并多个姿势，不要生成连拍、多宫格或姿势对比图');
+      if (subjectCountValue === 1) {
+        segments.push('禁止同一人物在画面中重复出现（不是分身、不是连拍合成、不是多宫格拼贴）');
+      }
+    }
   }
 
   // ⑦.5 风格档案审美短语：有档案时把取向 / 穿搭 / 表情 / 姿势语言 / 光线 / 构图 / 色调补进 prompt
@@ -313,7 +331,10 @@ export function buildImagePrompt(draft: Record<string, unknown>, extraPrompt?: s
   const extra = typeof extraPrompt === 'string' ? extraPrompt.trim() : '';
   const allowInconsistentPose =
     consistency.mode === 'loose' || (extra.length > 0 && INCONSISTENT_POSE_PROMPT_PATTERN.test(extra));
-  if (isSinglePose && !allowInconsistentPose) {
+  // 意图为「每张不同人物」或「合并多人合拍」时不再要求跨图保持同一人物
+  const intentAllowsInconsistentSubject =
+    intent !== null && (!intent.sameSubjectAcross || intent.outputMode === 'merge-group');
+  if (isSinglePose && !allowInconsistentPose && !intentAllowsInconsistentSubject) {
     segments.push(
       consistency.anchor === 'first'
         ? '参考图是同一套模板的第一张姿势图：严格复用参考图中的同一人物长相、服装、发型、体型，以及场景、道具、光线和摄影风格；本张只改变姿势'

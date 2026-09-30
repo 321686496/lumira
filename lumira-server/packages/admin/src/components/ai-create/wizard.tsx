@@ -997,11 +997,22 @@ export function AiCreateWizard({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="auto">AI 自动判断</SelectItem>
-                          <SelectItem value="1">1 人</SelectItem>
-                          <SelectItem value="2">2 人（情侣 / 双人）</SelectItem>
-                          <SelectItem value="3">3 人（合影 / 全家福）</SelectItem>
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+                            <SelectItem key={n} value={String(n)}>
+                              {n === 1
+                                ? '1 人'
+                                : n === 2
+                                  ? '2 人（情侣 / 双人）'
+                                  : n === 3
+                                    ? '3 人（合影 / 全家福）'
+                                    : `${n} 人（多人合影）`}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
+                      <p className="text-xs text-muted-foreground">
+                        留「AI 自动判断」时，由补充创作要求解析（如「九宫格合成一张合影」按 9 人）；也可在此直接固定
+                      </p>
                     </div>
                   </div>
                 )}

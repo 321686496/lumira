@@ -174,4 +174,29 @@ describe('多人物支持', () => {
   it('用户提示：未指定人数时输出推断口径', () => {
     expect(buildAnalyzeUserPrompt({})).toContain('请根据用户描述与示例图中实际可见的人物数量给出 meta.subjectCount');
   });
+
+  it('创作意图：注入识别提示词（产出形态 / 张数 / 每张人数）', () => {
+    const prompt = buildAnalyzeUserPrompt({
+      creationIntent: {
+        outputMode: 'split-per-cell',
+        imageCount: 9,
+        subjectPerImage: 1,
+        sameSubjectAcross: true,
+        reason: '按每格拆一张',
+        source: 'llm',
+      },
+    });
+    expect(prompt).toContain('创作意图');
+    expect(prompt).toContain('逐格拆分');
+    expect(prompt).toContain('目标张数：9 张');
+    expect(prompt).toContain('每张画面人数：1 位');
+  });
+
+  it('创作意图：未提供时不注入意图块', () => {
+    expect(buildAnalyzeUserPrompt({})).not.toContain('创作意图');
+  });
+
+  it('系统提示：九宫格参考图不得按格子累加人数', () => {
+    expect(buildAnalyzeSystemPrompt(CATEGORIES)).toContain('同一个人出现在多个格子里只算同一主体');
+  });
 });

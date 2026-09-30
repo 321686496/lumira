@@ -27,6 +27,7 @@ import {
   TIME_TONE_LABELS,
 } from './enums';
 import type { CategoryNode } from './normalize';
+import { renderCreationIntentLines, type CreationIntent } from './creation-intent';
 import { renderStyleProfileBlock, STYLE_CATEGORY_LABELS, type StyleProfile } from './style-profile.presets';
 
 /** 枚举行文本：`key（中文标签）、key（中文标签）…`；无标签的 key 原样输出 */
@@ -247,7 +248,8 @@ ${qualityRequirements(category, hasExample)}
 - meta.description 概述光线 / 氛围 / 主体 / 背景 / 构图；composition.description 专写构图（构图法则 + 主体位置与占比 + 留白与层次），
   两者都不包含数量或多图指令；
 - pose 数组中的每个 description 必须是「单张画面内可独立生成」的姿势，不要把多个姿势合并到同一个 description 里；
-- meta.subjectCount 必须给出 1~8 的整数：按用户描述与参考图中实际可见的人物数量填写；出现「情侣 / 结婚 / 婚纱 / 闺蜜 / 全家福 / 合影 / 多人 / 聚餐 / 聚会」等场景时不得写 1；
+- meta.subjectCount 必须给出 1~9 的整数：按用户描述与参考图中实际可见的人物数量填写；出现「情侣 / 结婚 / 婚纱 / 闺蜜 / 全家福 / 合影 / 多人 / 聚餐 / 聚会」等场景时不得写 1；
+- 参考图是多格拼图（如九宫格）时：同一个人出现在多个格子里只算同一主体，人数按「单格内的人数」计，禁止按格子数累加；
 - ${poseConsistencyLine}
 - 自拍模板（cameraDirection="front"）的 composition.description、sceneGuide.shootingDistance、tips 也必须按第一人称自拍口径写：
   机位在面部一臂之内、景别为近景 / 半身 / 特写，画面中不出现手机、相机、三脚架、自拍杆等拍摄设备与举着设备的手臂；
@@ -282,8 +284,10 @@ export interface AnalyzeUserPromptInput {
   creationReq?: string | null;
   /** 姿势个数：1~9 固定指定；空/undefined = AI 自动判断 */
   poseCount?: number | null;
-  /** 主体人数：1~8 显式指定；空/undefined = AI 自动推断 */
+  /** 主体人数：1~9 显式指定；空/undefined = AI 自动推断 */
   subjectCount?: number | null;
+  /** 创作意图（由创作要求解析；缺省不注入意图块） */
+  creationIntent?: CreationIntent | null;
   /** 趋势研究摘要（识别前已搜索命中；结构化数据构思时贴合当下流行趋势） */
   researchDigest?: string | null;
   /** 已开启联网搜索但本次未取到任何来源/摘要 → 提示词显式声明，禁止凭训练知识编造时效信息 */
@@ -303,11 +307,11 @@ function poseCountLine(poseCount: number | null | undefined): string {
 
 /** 构造主体人数指令行（vision / text-only 共用） */
 function subjectCountLine(subjectCount: number | null | undefined): string {
-  if (typeof subjectCount === 'number' && Number.isInteger(subjectCount) && subjectCount >= 1 && subjectCount <= 8) {
+  if (typeof subjectCount === 'number' && Number.isInteger(subjectCount) && subjectCount >= 1 && subjectCount <= 9) {
     return `meta.subjectCount 必须为 ${subjectCount}：画面中要有 ${subjectCount} 位人物，姿势描述需体现人物之间的相对位置与互动关系。`;
   }
   return (
-    '请根据用户描述与示例图中实际可见的人物数量给出 meta.subjectCount（1~8 整数）：' +
+    '请根据用户描述与示例图中实际可见的人物数量给出 meta.subjectCount（1~9 整数）：' +
     '单人写 1；情侣 / 双人 / 闺蜜写 2；全家福 / 合影 / 多人聚餐写 3 及以上；无明确线索时写 1。'
   );
 }
@@ -319,6 +323,7 @@ function extrasLines(input: AnalyzeUserPromptInput): string[] {
   if (textDesc) lines.push(`用户文字描述：${textDesc}`);
   const creationReq = typeof input.creationReq === 'string' ? input.creationReq.trim() : '';
   if (creationReq) lines.push(`创作要求：${creationReq}（识别/构思结果需向该要求倾斜）`);
+  if (input.creationIntent) lines.push(...renderCreationIntentLines(input.creationIntent), '');
   const digest = typeof input.researchDigest === 'string' ? input.researchDigest.trim() : '';
   if (digest) {
     lines.push(

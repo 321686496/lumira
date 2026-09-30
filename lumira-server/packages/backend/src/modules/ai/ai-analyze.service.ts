@@ -18,6 +18,7 @@ import {
   inferSubjectCountHint,
 } from './analyze.prompt';
 import { normalizeDraft, CategoryNode } from './normalize';
+import { describeCreationIntent, parseCreationIntent } from './creation-intent';
 import { AiOrchestratorService } from './ai-orchestrator.service';
 import type { OrchestratorInput, OrchestratorTraceEntry } from './ai-orchestrator.service';
 import type { ResearchItem } from './trend-research/research-item';
@@ -117,17 +118,17 @@ export class AiAnalyzeService {
 
     const trimmedText = (text ?? '').trim();
 
-    // 0.5 主体人数：'1'~'8' 整数字符串合法；其余（空/非法）= AI 自动推断
+    // 0.5 主体人数：'1'~'9' 整数字符串合法；其余（空/非法）= AI 自动推断
     let subjectCount: number | null = null;
     if (extra.subjectCount !== null && extra.subjectCount !== undefined && extra.subjectCount !== '') {
       const n = Number(extra.subjectCount);
-      if (!Number.isInteger(n) || n < 1 || n > 8) {
-        throw new BadRequestException('subjectCount 必须是 1~8 的整数（留空则由 AI 自动推断）');
+      if (!Number.isInteger(n) || n < 1 || n > 9) {
+        throw new BadRequestException('subjectCount 必须是 1~9 的整数（留空则由 AI 自动推断）');
       }
       subjectCount = n;
     }
-    // 系统提示的措辞分档：显式指定优先，否则从用户输入预判（情侣/全家福等关键词）
-    const subjectCountHint = subjectCount ?? inferSubjectCountHint(extra.creationReq, extra.textDesc, trimmedText);
+    // 系统提示的措辞分档：显式指定优先，否则从用户输入预判（情侣/全家福等关键词）。
+    // 待「创作意图解析」完成后，会被意图的「每张画面人数」替换（见 3.2）。
 
     // 1. 输入校验：至少一项；text 长度；图 mimetype / 大小（每张分别校验）
     if (!images?.length && !trimmedText) {
@@ -160,6 +161,27 @@ export class AiAnalyzeService {
 
     // 3. 取启用配置（未配置/未启用 → 503 透传）
     const cfg = await this.aiConfigService.getActiveConfig();
+
+    // 3.2 创作意图解析：把创作要求解析成显式意图（产出形态 / 张数 / 每张人数 / 跨图是否同一人物），
+    //     作为识别与生图的权威指令来源（面板以「创作意图解析」阶段呈现）。
+    //     无创作要求或解析失败 → fallback（不强制数量，行为与改动前一致）。
+    const intent = await traceStep(
+      'intent',
+      '创作意图解析',
+      () =>
+        parseCreationIntent(cfg.text, cfg.runtime, {
+          creationReq: extra.creationReq,
+          textDesc: extra.textDesc?.trim() || trimmedText,
+          poseCount,
+          subjectCount,
+          refImageCount: images?.length ?? 0,
+        }),
+      (r) => describeCreationIntent(r),
+    );
+    // 只有 LLM 解析结果才作为强制值：fallback 值不得把「模型自行判断姿势数」的既有能力写死
+    const forcedPoseCount = poseCount ?? (intent.source === 'llm' ? intent.imageCount : null);
+    const forcedSubjectCount = subjectCount ?? (intent.source === 'llm' ? intent.subjectPerImage : null);
+    const subjectCountHint = forcedSubjectCount ?? inferSubjectCountHint(extra.creationReq, extra.textDesc, trimmedText);
 
     // 3.4 风格定位：只判定一次，供草稿生成 / 编排 / 评审 / 生图分流（失败降级不阻断链路）
     let styleResolve: StyleProfileResolveResult | undefined;
@@ -277,8 +299,9 @@ export class AiAnalyzeService {
                 userText: buildAnalyzeUserPrompt({
                   textDesc: extra.textDesc?.trim() || trimmedText || undefined,
                   creationReq: extra.creationReq,
-                  poseCount,
-                  subjectCount,
+                  poseCount: forcedPoseCount,
+                  subjectCount: forcedSubjectCount,
+                  creationIntent: intent,
                   researchDigest,
                   researchUnavailable,
                 }),
@@ -304,8 +327,9 @@ export class AiAnalyzeService {
                 userText: buildTextOnlyUserPrompt({
                   textDesc: trimmedText,
                   creationReq: extra.creationReq,
-                  poseCount,
-                  subjectCount,
+                  poseCount: forcedPoseCount,
+                  subjectCount: forcedSubjectCount,
+                  creationIntent: intent,
                   researchDigest,
                   researchUnavailable,
                 }),
@@ -331,6 +355,8 @@ export class AiAnalyzeService {
     // 6. 归一化（枚举校验 / 分类链校验 / 数值夹取，非法值丢弃并收集 warnings）
     //    风格档案写入草稿顶层，normalizeDraft 白名单已放行
     if (styleResolve) json.styleProfile = styleResolve.profile;
+    // 创作意图写入草稿顶层（normalizeDraft 白名单已放行），供生图阶段与面板读取
+    json.creationIntent = intent;
     const normalized = normalizeDraft(json, categories);
 
     // 7. 研究管线开启（orchestrator 已接入）→ 走 Agentic 再判：以单次识别草稿为基，
@@ -341,9 +367,12 @@ export class AiAnalyzeService {
         images: images?.map((i) => ({ base64: i.buffer.toString('base64'), mime: i.mimetype })),
         text: trimmedText,
         creationReq: extra.creationReq ?? undefined,
-        poseCount: poseCount ?? undefined,
+        poseCount: forcedPoseCount ?? undefined,
       };
       const r = await this.orchestrator.run(input, { categories, draft: json, research, styleProfile: styleResolve });
+      // 细化轮次可能丢字段：定稿后强制回写意图，并按实际产出对齐张数
+      r.draft.creationIntent = intent;
+      reconcileCreationIntent(r.draft, r.warnings);
       return {
         draft: r.draft,
         warnings: r.warnings,
@@ -356,7 +385,33 @@ export class AiAnalyzeService {
       };
     }
 
+    reconcileCreationIntent(normalized.draft, normalized.warnings);
     traceNote('finalize', '定稿归一化', `草稿就绪；修正提示 ${normalized.warnings.length} 条`);
     return { ...normalized, trace: [], raw: json, research, brief: researchBrief, researchImages, researchVision };
   }
+}
+
+/** 草稿姿势条数（数组按长度；单个对象按 1；缺失 0）——与生图阶段 targetsFor 同口径 */
+function poseCountOfDraft(draft: Record<string, unknown>): number {
+  const raw = draft.pose;
+  if (Array.isArray(raw)) return raw.length;
+  return raw !== null && typeof raw === 'object' ? 1 : 0;
+}
+
+/**
+ * 意图与实际产出对齐：模型实际输出的姿势条数就是最终张数（意图只是上游指令）。
+ * 仅当意图来自 LLM 解析且与产出不符时记 warning，让「模型没照办」在面板可见。
+ */
+function reconcileCreationIntent(draft: Record<string, unknown>, warnings: string[]): void {
+  const raw = draft.creationIntent;
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return;
+  const intent = raw as Record<string, unknown>;
+  const actual = poseCountOfDraft(draft);
+  if (actual <= 0) return;
+  const declared = typeof intent.imageCount === 'number' ? intent.imageCount : actual;
+  if (declared === actual) return;
+  if (intent.source === 'llm') {
+    warnings.push(`创作意图要求 ${declared} 张，模型实际输出 ${actual} 张，已按实际输出对齐`);
+  }
+  intent.imageCount = Math.min(9, Math.max(1, actual));
 }

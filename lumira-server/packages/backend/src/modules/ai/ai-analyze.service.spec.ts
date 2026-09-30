@@ -19,6 +19,17 @@ jest.mock('./llm-json', () => ({
   LlmJsonError: class LlmJsonError extends Error {},
 }));
 
+// 创作意图解析默认走 fallback（零 LLM 调用）：让既有用例无需额外 stub intent 值，
+// 仅当用例显式断言意图行为时再覆盖。
+jest.mock('./creation-intent', () => ({
+  ...jest.requireActual('./creation-intent'),
+  parseCreationIntent: jest.fn(),
+}));
+
+import { parseCreationIntent } from './creation-intent';
+
+const parseCreationIntentMock = parseCreationIntent as jest.MockedFunction<typeof parseCreationIntent>;
+
 const visionChatJsonMultiMock = visionChatJsonMulti as jest.MockedFunction<typeof visionChatJsonMulti>;
 const textChatJsonMock = textChatJson as jest.MockedFunction<typeof textChatJson>;
 
@@ -98,6 +109,19 @@ function imageFile(opts: { mimetype?: string; size?: number } = {}): UploadFile 
 beforeEach(() => {
   visionChatJsonMultiMock.mockReset();
   textChatJsonMock.mockReset();
+  parseCreationIntentMock.mockReset();
+  // 默认：意图 fallback（不强制张数/人数，行为与改动前一致），既有用例不用逐条 stub
+  parseCreationIntentMock.mockImplementation(async (_endpoint, _runtime, input) => {
+    const pose = input?.poseCount ?? undefined;
+    return {
+      outputMode: pose !== undefined && pose > 1 ? 'multi-pose' : 'single',
+      imageCount: pose !== undefined ? pose : 1,
+      subjectPerImage: input?.subjectCount ?? 1,
+      sameSubjectAcross: true,
+      reason: '测试默认 fallback',
+      source: 'fallback',
+    };
+  });
 });
 
 describe('AiAnalyzeService', () => {
@@ -483,6 +507,36 @@ describe('AiAnalyzeService — 多输入', () => {
     expect(input.userText).toContain('用户文字描述：三连拍姿势，适合闺蜜出游');
     expect(input.userText).toContain('创作要求：偏胶片感');
     expect(input.userText).toContain('pose 数组必须恰好输出 3 个姿势');
+  });
+
+  it('创作意图（LLM 解析）：强制人数/张数进入识别提示词，并写入草稿顶层', async () => {
+    const { service } = buildService();
+    visionChatJsonMultiMock.mockResolvedValueOnce({
+      meta: { name: '九宫格合成合影', category: 'portrait', subjectCount: 1 },
+    });
+    parseCreationIntentMock.mockResolvedValueOnce({
+      outputMode: 'merge-group',
+      imageCount: 1,
+      subjectPerImage: 9,
+      sameSubjectAcross: false,
+      reason: '九个人合成一张合影',
+      source: 'llm',
+    });
+
+    const res = await service.analyze([imageFile()], undefined, {
+      creationReq: '把参考图九宫格里的九个人合成一张多人合拍合影',
+    });
+
+    const [, input] = visionChatJsonMultiMock.mock.calls[0];
+    expect(input.userText).toContain('创作意图');
+    expect(input.userText).toContain('合并多人合拍');
+    expect(input.userText).toContain('meta.subjectCount 必须为 9');
+    expect(res.draft.creationIntent).toMatchObject({
+      outputMode: 'merge-group',
+      imageCount: 1,
+      subjectPerImage: 9,
+      sameSubjectAcross: false,
+    });
   });
 
   it('姿势个数缺省/自动：userText 含自动判断指令而非固定数量', async () => {
