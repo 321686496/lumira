@@ -4,16 +4,17 @@
 
 流程:
   1. 读取 N 张输入图(保持顺序);
-  2. 按 `--max-per-call`(默认4)分批, 批次串行;
-     - 第一批: 最多 `max_per_call` 张目标图(无锚点);
-     - 后续批: 每批 `max_per_call-1` 张目标图 + 追加 1 张"衣着锚点"(第一批首张成片), 用于统一衣着;
-  3. 每批把目标图(及锚点参考图)通过 gpt_image2.py 的 hapi 图生图接口一次发出,
-     要求模型把每张的修改结果按 2x2 四宫格排成一张图;
-  4. 用 crop_grid.py 识别裁剪四宫格 → 得到各单张成片;
+  2. 按引擎预设的单次上限分批(--engine qwen3pro 上限3 / gpt2k 上限4; --max-per-call 可覆盖):
+     - 第一批: 最多 `上限` 张目标图(无锚点);
+     - 后续批: 每批 `上限-1` 张目标图 + 追加 1 张"衣着锚点"(第一批首张成片), 用于统一衣着;
+     - 批内只剩 1 张时不走宫格, 直接单图编辑(仍附锚点);
+  3. 每批按批内张数与模板比例选布局(1x2 / 1x3 / 2x2 / 竖排镜像), 一次发出,
+     要求模型把每张的修改结果按该布局排成一张图;
+  4. 用 crop_grid.py 按布局裁剪 → 归一化到统一的目标单格像素(短边 768, 比例=模板比例);
   5. 裁不干净/空白的格 → 对该目标图单独跑一次单图编辑兜底;
-  6. 输出与输入顺序对齐的单张成片到 --out。
+  6. 输出与输入顺序对齐、尺寸完全一致的单张成片到 --out。
 
-运行前提: 环境变量 HAPI_API_KEY(或 --api-key) 已配置。
+运行前提: 环境变量 MASS_API_KEY(默认引擎 qwen3pro) 或 HAPI_API_KEY(gpt2k) 已配置。
 """
 from __future__ import annotations
 
@@ -46,12 +47,12 @@ BASE_PROMPT = (
     "仅修改人物面部与衣着，使其完全看不出与原图是同一个人，以避免侵权；"
     "并统一这几张图中人物的衣着。"
 )
-# 多图打包成 2x2 四宫格的指令
-GRID_SUFFIX = (
-    "请将每张输入图的修改结果，按2x2四宫格整齐排列为一张输出图"
-    "（顺序：左上、右上、左下、右下，与输入顺序一致），四格之间留清晰边框/分隔线，便于拆分。"
-    "人物保持原姿势与构图，仅修改面部与衣着。"
-)
+# 多图打包成宫格的指令(布局在运行时按批内张数生成)
+def grid_suffix(rows: int, cols: int) -> str:
+    return (f"请将每张输入图的修改结果，按{rows}行{cols}列整齐排列为一张输出图"
+            f"（顺序：从左到右、从上到下，与输入顺序一致），"
+            f"格与格之间留清晰边框/分隔线，便于拆分。"
+            f"人物保持原姿势与构图，仅修改面部与衣着。")
 # 追加锚点参考图的说明(锚点放在图片列表末尾, 不渲染进网格)
 ANCHOR_NOTE = (
     "注意：本次输入的最后一张图是「衣着锚点参考图」，仅用于参考其服饰的颜色/款式/整体风格，"
@@ -192,11 +193,16 @@ def split_and_normalize(grid_img, n: int, ratio: float) -> tuple:
 
 
 def run_single(client, model, target: str, out_dir: str, prefix: str,
-               size_single: str, timeout: int) -> str | None:
-    """单图编辑兜底: 直接产出一张成片。"""
+               size_single: str, timeout: int, ratio: float,
+               anchor: str | None = None, custom_prompt: bool = False) -> str | None:
+    """单图编辑: 直接产出一张成片(附锚点参考以统一衣着), 并归一化到目标尺寸。"""
     imgs = [_load_tuple(target)]
+    prompt = SINGLE_PROMPT + gpt_image2.ratio_note(ratio)
+    if anchor and not custom_prompt:
+        prompt += ANCHOR_NOTE
+        imgs.append(_load_tuple(anchor))
     size = gpt_image2.resolve_size(size_single, imgs[0][2])
-    status, resp = client.edit(model, SINGLE_PROMPT, imgs, size=size, n=1, timeout=timeout)
+    status, resp = client.edit(model, prompt, imgs, size=size, n=1, timeout=timeout)
     if status != 200 or not resp.get("data"):
         print(f"    [回退失败] HTTP {status}: {resp}", file=sys.stderr)
         return None
@@ -205,8 +211,9 @@ def run_single(client, model, target: str, out_dir: str, prefix: str,
         p = _decode_item(item, td, "s_")
         ext = os.path.splitext(p)[1]
         out = os.path.join(out_dir, f"{prefix}{ext or '.png'}")
-        shutil.move(p, out)
-    print(f"    [单图回退] {target} -> {out}")
+        with Image.open(p) as im:
+            normalize_image(im.convert("RGB"), gpt_image2.cell_size(ratio)).save(out)
+    print(f"    [单图] {target} -> {out} {gpt_image2.cell_size_str(ratio)}")
     return out
 
 
@@ -229,6 +236,8 @@ def main() -> int:
                     help="模板宽高比(如 3:4 / 3/4 / 0.75)。缺省按输入图比例推断(全部一致用该比例, 否则取多数), 再缺省 3:4")
     ap.add_argument("--size-single", default="from-image", help="单图路径的输出尺寸")
     ap.add_argument("--timeout", type=int, default=300)
+    ap.add_argument("--no-grid", action="store_true",
+                    help="不做宫格打包, 每张图单独跑一次单图编辑(部分渠道对多图输入会上游超时时使用)")
     ap.add_argument("--keep-grids", action="store_true", help="保留中间四宫格到 out/_grids")
     ap.add_argument("--dry-run", action="store_true", help="只打印分批/锚点计划, 不调接口")
     args = ap.parse_args()
@@ -268,16 +277,41 @@ def main() -> int:
     grids_dir = os.path.join(args.out, "_grids")
     os.makedirs(grids_dir, exist_ok=True)
 
-    base_prompt = args.prompt or BASE_PROMPT
+    base_prompt = (args.prompt or BASE_PROMPT) + gpt_image2.ratio_note(ratio)
 
     outputs: list[str | None] = [None] * len(args.images)  # 与输入顺序对齐
+
+    # --no-grid: 每张图单独一次单图编辑, 不做宫格打包/裁剪
+    if args.no_grid:
+        for i, src in enumerate(args.images):
+            print(f"[单图 {i+1}/{len(args.images)}] {src}")
+            outputs[i] = run_single(client, model, src, args.out, f"out{i+1}",
+                                    args.size_single, args.timeout, ratio,
+                                    None, bool(args.prompt))
+        print("\n==== 结果(按输入顺序) ====")
+        for i, (src, out) in enumerate(zip(args.images, outputs), 1):
+            print(f"  {i}. {os.path.abspath(src)} -> {out or '[失败]'}")
+        failed = sum(1 for o in outputs if o is None)
+        print(f"\n[完成] 出品 {len(outputs)-failed}/{len(outputs)} 张, 保存于 {os.path.abspath(args.out)}")
+        return 0 if failed == 0 else 2
+
     anchor_path: str | None = None  # 首批首张成片, 用作后续批次衣着锚点
 
     for bi, idxs in enumerate(batches, 1):
         targets = [args.images[i] for i in idxs]
-        print(f"[批次 {bi}/{len(batches)}] 目标 {len(targets)} 张 -> {targets}")
+        rows, cols = pick_layout(len(targets), ratio)
+        print(f"[批次 {bi}/{len(batches)}] 目标 {len(targets)} 张 "
+              f"{rows}行{cols}列 -> {targets}")
 
-        prompt = base_prompt + GRID_SUFFIX
+        # 单张批次: 不走宫格, 直接单图编辑(仍附锚点)
+        if len(targets) == 1:
+            gi = idxs[0]
+            outputs[gi] = run_single(client, model, targets[0], args.out,
+                                     f"out{gi+1}", args.size_single, args.timeout,
+                                     ratio, anchor_path, bool(args.prompt))
+            continue
+
+        prompt = base_prompt + grid_suffix(rows, cols)
         imgs = [_load_tuple(t) for t in targets]
         if anchor_path and not args.prompt:
             # 仅在使用默认提示词时注入锚点说明(自定义 prompt 时不叠加, 避免措辞冲突)
@@ -285,20 +319,21 @@ def main() -> int:
             imgs.append(_load_tuple(anchor_path))
             print(f"    锚点参考图: {anchor_path}")
 
-        rows, cols = pick_layout(len(targets), ratio)
         size_arg = canvas_size(ratio, rows, cols)
         size = gpt_image2.resolve_size(size_arg)
+        print(f"    画布 {size_arg}")
         status, resp = client.edit(model, prompt, imgs, size=size, n=1, timeout=args.timeout)
         if status != 200 or not resp.get("data"):
             print(f"    [批次失败] HTTP {status}: {resp}", file=sys.stderr)
             # 逐张回退
             for t in targets:
                 gi = args.images.index(t)
-                outputs[gi] = run_single(client, model, t, args.out, f"r{gi+1}_",
-                                         args.size_single, args.timeout)
+                outputs[gi] = run_single(client, model, t, args.out, f"out{gi+1}",
+                                         args.size_single, args.timeout, ratio,
+                                         anchor_path, bool(args.prompt))
             continue
 
-        # 解码四宫格
+        # 解码宫格 -> 按布局裁剪 -> 归一化
         grid_path = os.path.join(grids_dir, f"batch{bi}.png")
         with tempfile.TemporaryDirectory() as td:
             decoded = _decode_item(resp["data"][0], td, f"g{bi}_")
@@ -312,11 +347,10 @@ def main() -> int:
         # 把裁剪格按读取顺序映射到目标图
         for j, cell in enumerate(cells):
             gi = idxs[j]
-            cell = cell.convert("RGB")
             out = os.path.join(args.out, f"out{gi+1}.png")
-            cell.save(out)
+            cell.convert("RGB").save(out)
             outputs[gi] = out
-            print(f"    格{j+1} -> {out}  valid={validity[j]}")
+            print(f"    格{j+1} -> {out}  {cell.size[0]}x{cell.size[1]}  valid={validity[j]}")
 
         # 未覆盖/空白的: 单图回退
         for j, ok in enumerate(validity):
@@ -324,7 +358,8 @@ def main() -> int:
                 gi = idxs[j]
                 print(f"    格{j+1} 空白/低质, 单图回退 {targets[j]}")
                 outputs[gi] = run_single(client, model, targets[j], args.out,
-                                         f"r{gi+1}_", args.size_single, args.timeout)
+                                         f"out{gi+1}", args.size_single, args.timeout,
+                                         ratio, anchor_path, bool(args.prompt))
 
         # 记录锚点: 第一批的首张成片
         if bi == 1 and outputs[idxs[0]]:
