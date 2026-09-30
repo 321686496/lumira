@@ -18,7 +18,7 @@ description: >
 
 ## 运行前提
 
-- 环境变量 `HAPI_API_KEY`（或 `--api-key`）——复用于 `gpt_image2.py` hapi 图生图/文生图。
+- 环境变量 API Key（或 `--api-key`）：默认引擎 `qwen3pro` 走 `MASS_API_KEY`；`--engine gpt2k` 走 `HAPI_API_KEY`——复用于 `gpt_image2.py` hapi 图生图/文生图。
 - `requests`、`Pillow` 可用；反侵权技能的 `run_batch_edit.py` 在同一仓库内。
 - 联网搜索/爬取：**由 agent 自带联网工具完成**（无独立爬虫脚本）。
 
@@ -68,6 +68,21 @@ python scripts/run_template.py --key my_tpl --cfg config.json --auto-gen --count
 python scripts/run_template.py --key my_tpl --cfg config.json --dry-run
 ```
 
+## 生图引擎
+
+默认走 **`qwen-image-3.0-pro`（MaaS，单次最多 3 张输入图）**；需要 GPT-Image-2 2K 时显式指定 `--engine gpt2k`（HAPI，单次最多 4 张）：
+
+```bash
+# 默认: qwen3pro
+python scripts/run_template.py --key my_tpl --cfg config.json --inputs ref1.png ref2.png
+
+# 指定 gpt-image2 2K
+python scripts/run_template.py --key my_tpl --cfg config.json --inputs ref1.png ref2.png --engine gpt2k
+```
+
+引擎决定平台、模型与「单次请求图片上限」三件事，并自动透传给反侵权子步骤；`--platform` / `--model` / `--max-per-call` 可单独覆盖。
+另有 `--ratio`（覆盖 config.json 的 aspect_ratio）与 `--anti-no-grid`（反侵权不做宫格打包、每张单独编辑；渠道对多图输入超时时使用）。
+
 ## config.json 结构
 
 ```json
@@ -78,6 +93,7 @@ python scripts/run_template.py --key my_tpl --cfg config.json --dry-run
   "description": "长描述",
   "tags": ["人像","旅拍"],
   "reference_source": "来源说明",
+  "aspect_ratio": "3:4",
   "classification": {"majorStyle": "outdoor_travel", "style": "snow_cloud_hike", "method": ""},
   "ambience": {"seasons": ["autumn"], "weathers": ["sunny"], "timeTones": ["day"]},
   "style_prompt": "（auto-gen 时用）人物/场景/穿搭统一描述",
@@ -92,6 +108,7 @@ python scripts/run_template.py --key my_tpl --cfg config.json --dry-run
 
 - 姿势图数量 = 参考图拆分后张数，或 `--count` 指定；`cfg.poses` 与之对齐。
 - `scene_guide` / `post_process` 选填，直接透写入 `template.pptpl`。
+- `aspect_ratio`：模板宽高比，**必须依据参考内容（链接正文/参考图/创作要求）判定后写入**，取值 `3:4 | 4:3 | 16:9 | 9:16 | 1:1`。它统一决定姿势图与剪影的出图尺寸、反侵权宫格画布、成片的最终像素与 `template.pptpl` 的 `composition.aspectRatio`。缺省时脚本按参考图比例推断，再缺省 `3:4`。
 
 ## 已知假设与局限
 
