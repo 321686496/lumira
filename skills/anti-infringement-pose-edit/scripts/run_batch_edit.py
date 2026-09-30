@@ -209,8 +209,7 @@ def run_single(client, model, target: str, out_dir: str, prefix: str,
     with tempfile.TemporaryDirectory() as td:
         item = resp["data"][0]
         p = _decode_item(item, td, "s_")
-        ext = os.path.splitext(p)[1]
-        out = os.path.join(out_dir, f"{prefix}{ext or '.png'}")
+        out = os.path.join(out_dir, f"{prefix}.png")
         with Image.open(p) as im:
             normalize_image(im.convert("RGB"), gpt_image2.cell_size(ratio)).save(out)
     print(f"    [单图] {target} -> {out} {gpt_image2.cell_size_str(ratio)}")
