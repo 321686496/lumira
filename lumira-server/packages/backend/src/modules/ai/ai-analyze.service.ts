@@ -38,15 +38,34 @@ const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
 const SEARCH_INTENT_RE = /(搜索|联网|搜一|查一下|查一查|查找|上网搜|参考网络|网络趋势|看看网上)/;
 
 /**
+ * 明确禁止联网检索的意图（否定词 + 检索动作；命中 → 即便同时出现「搜索/联网」等字样也判定不搜）。
+ * 例：不要联网搜索 / 无需联网 / 不用搜索 / 别搜了 / 禁止联网 / 取消联网搜索 / 不联网 / 请勿联网。
+ * - 否定词与检索词之间容 0~3 个非标点字符（如「不要再联网搜索」）；
+ * - `别` 用负向断言排除「特别 / 分别 / 区别 / 分类 / 个别」等非否定词。
+ */
+const NO_SEARCH_INTENT_RE =
+  /(不要|不用|不需要|没必要|无需|无须|不必|不再|不许|不准|严禁|禁止|关闭|取消|避免|拒绝|勿|莫|(?<![特区分类个])别)[^，。；！？、,.;!?\s]{0,3}?(联网|上网|网上|搜索|检索|查询|搜|查)|不(联网|上网|网上|搜索|检索|查询|搜|查)/;
+
+/**
  * 联网检索必要性判定（纯启发式，规则即用户口径，零额外 LLM 调用）：
+ * - 创作要求明确禁止联网检索 → 不搜（最高优先，覆盖其它一切规则）；
  * - 明确要求搜索 → 搜（无论是否给了参考 URL）；
  * - 提供了参考 URL 且未要求搜索 → 不搜（直接爬 URL 按网页内容创作）；
  * - 常规要求（无 URL）→ 搜。
  */
 export function searchDecided(creationReq: string | null | undefined, textDesc: string): boolean {
   const req = `${creationReq ?? ''} ${textDesc}`;
+  if (NO_SEARCH_INTENT_RE.test(req)) return false;
   if (SEARCH_INTENT_RE.test(req)) return true;
   return extractExplicitUrls(req).length === 0;
+}
+
+/** 跳过联网检索的原因（面板展示用）；未跳过返回 null */
+export function searchSkipReason(creationReq: string | null | undefined, textDesc: string): string | null {
+  const req = `${creationReq ?? ''} ${textDesc}`;
+  if (NO_SEARCH_INTENT_RE.test(req)) return '创作要求明确要求不联网检索，已按你的要求跳过';
+  if (extractExplicitUrls(req).length > 0) return '已提供参考 URL，直接按网页内容创作';
+  return null;
 }
 
 export interface AiAnalyzeResult {
@@ -157,8 +176,9 @@ export class AiAnalyzeService {
     //     草稿生成提示词，让结构性数据（主题/风格/场景/姿势描述）贴合当下趋势；
     //     整理失败回退规则摘要，搜索失败静默降级（均不阻断识别）。
     //     主题口径与 orchestrator 一致：创作要求 ?? 文字描述。
-    //     是否真正走搜索由 searchDecided 判定：明确要求搜索 → 搜；提供了参考 URL 且未要求
-    //     搜索 → 跳过（直接依赖 3.6 参考网页抓取，按网页内容创作）；常规要求 → 搜。
+    //     是否真正走搜索由 searchDecided 判定：创作要求明确禁止联网 → 不搜（最高优先）；
+    //     明确要求搜索 → 搜；提供了参考 URL 且未要求搜索 → 跳过（直接依赖 3.6 参考网页抓取，
+    //     按网页内容创作）；常规要求（未提及）→ 搜。
     let research: ResearchItem[] = [];
     let researchBrief: ResearchBrief | null = null;
     let researchDigest = '';
@@ -187,8 +207,12 @@ export class AiAnalyzeService {
         }
         researchUnavailable = research.length === 0;
       } else if (topic) {
-        // 提供了参考 URL 且未要求搜索：跳过联网检索，让面板可见原因
-        traceNote('research', '跳过联网检索', '已提供参考 URL，直接按网页内容创作');
+        // 跳过联网检索：明确要求不联网 / 已提供参考 URL，让面板可见真实原因
+        traceNote(
+          'research',
+          '跳过联网检索',
+          searchSkipReason(extra.creationReq, trimmedText) ?? '无需联网检索',
+        );
       }
     }
 
