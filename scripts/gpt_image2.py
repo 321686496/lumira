@@ -78,7 +78,7 @@ PLATFORMS = {
         "size_sep": "x",
         "edit_multi": "image[]",
         "models": ["gpt-image-2", "gpt-image-1", "dall-e-3", "seedream-4.0",
-                   "flux-1.1-pro", "wan2.7-image-pro", "qwen-image-2.0-pro"],
+                   "flux-1.1-pro", "wan2.7-image-pro", "qwen-image-3.0-pro"],
     },
     "qianwen_payg": {
         "name": "千问 AI · 按量付费",
@@ -105,6 +105,59 @@ PLATFORMS = {
                    "qwen-image-3.0-pro", "qwen-image-3.0", "wan2.6-image"],
     },
 }
+
+# ---------------------------------------------------------------- 生图引擎预设
+
+ENGINES = {
+    "qwen3pro": {
+        "label": "Qwen Image 3.0 Pro (MaaS)",
+        "platform": "mass",
+        "model": "qwen-image-3.0-pro",
+        "max_input_images": 3,        # 该模型单次请求最多接受 3 张输入图
+    },
+    "gpt2k": {
+        "label": "GPT-Image-2 2K (HAPI)",
+        "platform": "hapi",
+        "model": "gpt-image-2.5-sunburst-2k",
+        "max_input_images": 4,
+    },
+}
+DEFAULT_ENGINE = "qwen3pro"
+FALLBACK_MAX_INPUT_IMAGES = 4   # 显式换平台/手填模型且未指定上限时的兜底
+
+
+def resolve_engine(engine: str = None, platform: str = None, model: str = None,
+                   max_input_images: int = None) -> dict:
+    """解析「引擎预设 + 显式覆盖」, 返回最终生效的调用参数。
+
+    优先级: 显式 platform/model/max_input_images > ENGINES[engine] > DEFAULT_ENGINE。
+    - 显式换平台但没给模型 → 用该平台 models[0], 避免出现 platform/model 不匹配的组合;
+    - 生效模型不是预设模型(手填或换平台得来) → 输入上限取 FALLBACK_MAX_INPUT_IMAGES。
+
+    返回 {"engine","platform","model","max_input_images","key_env"}。
+    """
+    name = (engine or DEFAULT_ENGINE).strip()
+    preset = ENGINES.get(name)
+    if preset is None:
+        raise ValueError(f"未知引擎: {name} (可选 {', '.join(ENGINES)})")
+    p = (platform or preset["platform"]).strip()
+    pcfg = PLATFORMS.get(p)
+    if pcfg is None:
+        raise ValueError(f"不支持的平台: {p} (可选 {', '.join(PLATFORMS)})")
+    if model:
+        m = model.strip()
+    elif platform:
+        m = pcfg["models"][0] if pcfg.get("models") else preset["model"]
+    else:
+        m = preset["model"]
+    if max_input_images:
+        cap = int(max_input_images)
+    elif m != preset["model"]:
+        cap = FALLBACK_MAX_INPUT_IMAGES
+    else:
+        cap = preset["max_input_images"]
+    return {"engine": name, "platform": p, "model": m,
+            "max_input_images": max(1, cap), "key_env": pcfg["key_env"]}
 
 # 兼容旧环境变量
 DEFAULT_MODEL = os.environ.get("HAPI_MODEL", "gpt-image-2.5-sunburst-2k")
@@ -198,6 +251,52 @@ def size_from_ratio(ratio_w: int, ratio_h: int) -> str:
         ratio_h = int(round(ratio_w * MAX_RATIO))
     base = math.sqrt(TARGET_PIXELS / (ratio_w * ratio_h))
     w, h = _clamp_size(int(round(ratio_w * base)), int(round(ratio_h * base)))
+    return f"{w}x{h}"
+
+
+# ---------------------------------------------------------------- 比例 / 单张尺寸
+
+CELL_SHORT = 768        # 单张成片目标短边: 决定成片分辨率与宫格画布大小
+
+_RATIO_DESC_RE = re.compile(r"^([\d.]+)\s*[:/x]\s*([\d.]+)$")
+_RATIO_NUM_RE = re.compile(r"^([\d.]+)$")
+
+
+def parse_ratio(s) -> float:
+    """解析比例描述为宽高比 w/h。支持 '3:4' / '3/4' / '3x4' / '0.75' 与数值。"""
+    if isinstance(s, (int, float)):
+        return float(s)
+    s = str(s).strip().lower()
+    m = _RATIO_DESC_RE.match(s)
+    if m:
+        return float(m.group(1)) / float(m.group(2))
+    m = _RATIO_NUM_RE.match(s)
+    if m:
+        return float(m.group(1))
+    raise ValueError(f"无法识别的比例: {s} (可用 3:4 / 3/4 / 3x4 / 0.75)")
+
+
+def ratio_label(r: float) -> str:
+    """把宽高比还原成显示用 'w:h' 文本(如 0.75 -> '3:4')。"""
+    from fractions import Fraction
+    fr = Fraction(float(r)).limit_denominator(50)
+    return f"{fr.numerator}:{fr.denominator}"
+
+
+def ratio_note(r: float) -> str:
+    """注入出图提示词的比例约束句。"""
+    return f"画面比例严格为 {ratio_label(r)}，不要改变画幅比例。"
+
+
+def cell_size(ratio: float, short: int = CELL_SHORT) -> tuple:
+    """按模板比例给出单张成片目标像素(短边 short, 16 对齐)。"""
+    r = max(float(ratio), 1e-6)
+    w, h = (short * r, short) if r >= 1 else (short, short / r)
+    return (_round16(w), _round16(h))
+
+
+def cell_size_str(ratio: float, short: int = CELL_SHORT) -> str:
+    w, h = cell_size(ratio, short)
     return f"{w}x{h}"
 
 
