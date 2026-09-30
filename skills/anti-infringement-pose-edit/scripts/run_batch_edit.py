@@ -66,19 +66,6 @@ SINGLE_PROMPT = (
 )
 
 
-def parse_ratio(s: str) -> float:
-    """解析比例描述为宽高比 w/h。支持 '3:4' / '3/4' / '3x4' / '0.75'。"""
-    s = str(s).strip().lower()
-    import re
-    m = re.match(r"^([\d.]+)\s*[:/x]\s*([\d.]+)$", s)
-    if m:
-        return float(m.group(1)) / float(m.group(2))
-    m = re.match(r"^([\d.]+)$", s)
-    if m:
-        return float(m.group(1))
-    raise ValueError(f"无法识别的比例: {s} (可用 3:4 / 3/4 / 3x4 / 0.75)")
-
-
 def infer_ratio(paths: list[str]) -> float | None:
     """从输入图推断目标比例: 全部一致→该比例; 不一致→占比最多的比例; 读不出→None。"""
     ratios: list[float] = []
@@ -102,16 +89,6 @@ def infer_ratio(paths: list[str]) -> float | None:
         if v > bestn:
             best, bestn = k, v
     return float(best)
-
-
-def ratio_to_grid_size(r: float, base: int = 1024) -> str:
-    """按宽高比给出 2x2 宫格的输出尺寸(短边 ~base, 保持比例, 不强制方形)。"""
-    r = max(r, 1e-6)
-    if r >= 1:  # 横向
-        w, h = base, max(1, int(round(base / r)))
-    else:       # 竖向
-        w, h = max(1, int(round(base * r))), base
-    return f"{w}x{h}"
 
 
 def _load_tuple(path: str) -> tuple[str, str, bytes]:
@@ -139,15 +116,15 @@ def _decode_item(item: dict, tmpdir: str, prefix: str) -> str:
     raise RuntimeError("接口未返回 url/b64_json")
 
 
-def make_client(cfg: argparse.Namespace):
-    platform = cfg.platform
-    pcfg = gpt_image2.PLATFORMS.get(platform, gpt_image2.PLATFORMS["hapi"])
-    api_key = cfg.api_key or os.environ.get(pcfg["key_env"], "")
-    if not api_key:
+def make_client(eng: dict, api_key: str = "", base_url: str = ""):
+    """按解析结果构造客户端, 返回 (client, model)。"""
+    pcfg = gpt_image2.PLATFORMS[eng["platform"]]
+    key = api_key or os.environ.get(pcfg["key_env"], "")
+    if not key:
         raise RuntimeError(
             f"未配置 API Key: 请设置环境变量 {pcfg['key_env']} 或使用 --api-key")
-    model = cfg.model or (pcfg["models"][0] if pcfg.get("models") else "gpt-image-2")
-    return gpt_image2.make_client(platform, api_key, cfg.base_url or pcfg["base_url"]), model
+    return gpt_image2.make_client(eng["platform"], key,
+                                  base_url or pcfg["base_url"]), eng["model"]
 
 
 def build_batches(total: int, max_per_call: int) -> list[list[int]]:
@@ -164,6 +141,54 @@ def build_batches(total: int, max_per_call: int) -> list[list[int]]:
     for i in range(0, len(rest), chunk):
         batches.append(rest[i:i + chunk])
     return [b for b in batches if b]
+
+
+def pick_layout(n: int, ratio: float) -> tuple:
+    """按本批目标数 n 与模板比例 r 选宫格布局 (rows, cols)。
+
+    n==4 用 2x2; n 为 2/3 时: 竖构图(r<=1)横排、横构图(r>1)竖排,
+    使画布长宽比 = n*r 或 r/n 不超过 gpt_image2.MAX_RATIO(3:1)。
+    """
+    if n <= 1:
+        return (1, 1)
+    if n >= 4:
+        return (2, 2)
+    return (1, n) if ratio <= 1 else (n, 1)
+
+
+def canvas_size(ratio: float, rows: int, cols: int) -> str:
+    """宫格画布尺寸 = 单格目标尺寸 × 布局, 再经既有尺寸约束归一。"""
+    cw, ch = gpt_image2.cell_size(ratio)
+    return gpt_image2.resolve_size(f"{cw * cols}x{ch * rows}")
+
+
+def normalize_image(im, target: tuple):
+    """居中裁剪到目标比例并缩放到目标像素, 保证所有单张尺寸完全一致。"""
+    from PIL import Image
+    tw, th = target
+    w, h = im.size
+    if (w, h) == (tw, th):
+        return im
+    if w / h > tw / th:          # 过宽 -> 裁左右
+        nw = min(w, max(1, int(round(h * tw / th))))
+        x = (w - nw) // 2
+        im = im.crop((x, 0, x + nw, h))
+    else:                        # 过高 -> 裁上下
+        nh = min(h, max(1, int(round(w * th / tw))))
+        y = (h - nh) // 2
+        im = im.crop((0, y, w, y + nh))
+    return im.resize((tw, th), Image.LANCZOS)
+
+
+def split_and_normalize(grid_img, n: int, ratio: float) -> tuple:
+    """按 n 对应的布局裁剪宫格, 并把每格归一化到统一的单格目标像素。
+
+    返回 (cells, validity), 长度均为 n。
+    """
+    rows, cols = pick_layout(n, ratio)
+    cells, validity = crop_grid(grid_img, rows, cols)
+    target = gpt_image2.cell_size(ratio)
+    return [normalize_image(c, target) for c in cells[:n]], validity[:n]
 
 
 def run_single(client, model, target: str, out_dir: str, prefix: str,
@@ -190,46 +215,51 @@ def main() -> int:
     ap.add_argument("images", nargs="+", help="输入图片路径(≥1 张, 顺序即输出顺序)")
     ap.add_argument("--out", default="./anti_infringement_outputs", help="输出目录")
     ap.add_argument("--prompt", default=None, help="覆盖默认编辑提示词")
-    ap.add_argument("--max-per-call", type=int, default=4, help="每批目标图上限(默认4)")
-    ap.add_argument("--platform", default="hapi", choices=list(gpt_image2.PLATFORMS))
-    ap.add_argument("--model", default=None)
+    ap.add_argument("--engine", default=gpt_image2.DEFAULT_ENGINE,
+                    choices=list(gpt_image2.ENGINES),
+                    help="生图引擎预设(默认 qwen3pro: mass/qwen-image-3.0-pro, 单次上限 3 张)")
+    ap.add_argument("--platform", default=None, choices=list(gpt_image2.PLATFORMS),
+                    help="覆盖引擎预设的平台")
+    ap.add_argument("--model", default=None, help="覆盖引擎预设的模型")
+    ap.add_argument("--max-per-call", type=int, default=None,
+                    help="每批图片上限(默认按引擎推导: qwen3pro=3 / gpt2k=4)")
     ap.add_argument("--api-key", default=None)
     ap.add_argument("--base-url", default=None)
-    ap.add_argument("--size-batch", default="1024x1024",
-                    help="多图批次的输出尺寸(未指定 --ratio 且无法推断时生效, 默认方形)")
     ap.add_argument("--ratio", default=None,
-                    help="宫格输出比例(如 3:4 / 3/4 / 0.75)。缺省时自动按原图比例推断(全部一致用该比例, 否则取多数)")
-    ap.add_argument("--size-single", default="from-image", help="单图回退的输出尺寸")
+                    help="模板宽高比(如 3:4 / 3/4 / 0.75)。缺省按输入图比例推断(全部一致用该比例, 否则取多数), 再缺省 3:4")
+    ap.add_argument("--size-single", default="from-image", help="单图路径的输出尺寸")
     ap.add_argument("--timeout", type=int, default=300)
     ap.add_argument("--keep-grids", action="store_true", help="保留中间四宫格到 out/_grids")
     ap.add_argument("--dry-run", action="store_true", help="只打印分批/锚点计划, 不调接口")
     args = ap.parse_args()
 
-    batches = build_batches(len(args.images), args.max_per_call)
+    try:
+        eng = gpt_image2.resolve_engine(args.engine, args.platform, args.model,
+                                        args.max_per_call)
+    except ValueError as e:
+        print(f"[错误] {e}", file=sys.stderr)
+        return 1
 
-    # 宫格输出尺寸: 优先 --ratio, 其次自动按原图比例推断(全部一致→该比例/不一致→多数), 否则回退 --size-batch
-    if args.ratio:
-        ratio = parse_ratio(args.ratio)
-    else:
-        ratio = infer_ratio(args.images)
-    if ratio:
-        size_batch = ratio_to_grid_size(ratio)
-        ratio_note = f"[尺寸] 宫格输出比例 w/h={ratio:.3f}, 尺寸 {size_batch} (跟随原图; 可用 --ratio 覆盖)"
-    else:
-        size_batch = args.size_batch
-        ratio_note = f"[尺寸] 宫格输出尺寸 {size_batch} (方形, 无法推断原图比例)"
+    # 模板宽高比: --ratio > 输入图推断 > 3:4
+    ratio = gpt_image2.parse_ratio(args.ratio) if args.ratio else (infer_ratio(args.images) or 0.75)
+    ratio_label = gpt_image2.ratio_label(ratio)
+    batches = build_batches(len(args.images), eng["max_input_images"])
 
     if args.dry_run:
+        print(f"[dry-run] 引擎 {eng['engine']}: platform={eng['platform']} "
+              f"model={eng['model']} 单次上限={eng['max_input_images']} 张")
+        print(f"[比例] {ratio_label}  单格 {gpt_image2.cell_size_str(ratio)}")
         print("[dry-run] 分批计划:")
         for bi, idxs in enumerate(batches, 1):
+            layout = "单图编辑" if len(idxs) == 1 else "%d行%d列" % pick_layout(len(idxs), ratio)
             anchor = "无(首批)" if bi == 1 else "上一批首张成片"
-            print(f"  批次{bi}: 输入 {[args.images[i] for i in idxs]}  锚点={anchor}")
-        print(ratio_note)
+            print(f"  批次{bi}: 目标 {len(idxs)} 张  布局 {layout}  锚点={anchor}")
+            print(f"          输入 {[args.images[i] for i in idxs]}")
         print("[dry-run] 结束, 未调接口")
         return 0
 
     try:
-        client, model = make_client(args)
+        client, model = make_client(eng, args.api_key or "", args.base_url or "")
     except RuntimeError as e:
         print(f"[错误] {e}", file=sys.stderr)
         return 1
@@ -255,7 +285,9 @@ def main() -> int:
             imgs.append(_load_tuple(anchor_path))
             print(f"    锚点参考图: {anchor_path}")
 
-        size = gpt_image2.resolve_size(size_batch)
+        rows, cols = pick_layout(len(targets), ratio)
+        size_arg = canvas_size(ratio, rows, cols)
+        size = gpt_image2.resolve_size(size_arg)
         status, resp = client.edit(model, prompt, imgs, size=size, n=1, timeout=args.timeout)
         if status != 200 or not resp.get("data"):
             print(f"    [批次失败] HTTP {status}: {resp}", file=sys.stderr)
@@ -275,11 +307,10 @@ def main() -> int:
             else:
                 grid_path = decoded
             with Image.open(grid_path) as im:
-                im = im.convert("RGB")
-                cells, validity = crop_grid(im, 2, 2)
+                cells, validity = split_and_normalize(im.convert("RGB"), len(targets), ratio)
 
         # 把裁剪格按读取顺序映射到目标图
-        for j, cell in enumerate(cells[:len(targets)]):
+        for j, cell in enumerate(cells):
             gi = idxs[j]
             cell = cell.convert("RGB")
             out = os.path.join(args.out, f"out{gi+1}.png")
@@ -288,7 +319,7 @@ def main() -> int:
             print(f"    格{j+1} -> {out}  valid={validity[j]}")
 
         # 未覆盖/空白的: 单图回退
-        for j, ok in enumerate(validity[:len(targets)]):
+        for j, ok in enumerate(validity):
             if not ok:
                 gi = idxs[j]
                 print(f"    格{j+1} 空白/低质, 单图回退 {targets[j]}")
