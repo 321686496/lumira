@@ -1,0 +1,42 @@
+{
+  "key": "gz_zoo_couple_date",
+  "name": "广州动物园情侣约会摆姿",
+  "short_desc": "定格动物园的甜蜜时刻",
+  "description": "广州动物园一天游的九宫携手拍模板。涵盖长颈鹿背景坐姿、伞下依偎、踢腿拥抱、头靠头、比心互动等九种情侣互动姿势。人物面部更精致帅气美丽、衣着时髦时尚且风格统一，适合情侣、闺蜜外出游玩时记录甜蜜瞬间，氛围阳光治愈。",
+  "tags": ["情侣", "动物园", "出游", "旅拍", "双人"],
+  "reference_source": "小红书笔记：广州动物园情侣约会攻略（https://www.xiaohongshu.com/discovery/item/6a06ac97000000003703784f）",
+  "classification": {"type": "portrait", "majorStyle": "scene_portrait", "style": "", "method": ""},
+  "ambience": {"seasons": ["autumn", "spring", "summer"], "weathers": ["sunny"], "timeTones": ["day"]},
+  "composition_description": "竖版 3:4，三分法构图。情侣双人置于画面中下部，动物雕塑/伞装置/景观框构成前后景层次，顶部保留绿树与天空留白，人物互动视线朝画面中心，体现甜蜜氛围。",
+  "scene_guide": {
+    "lightDirection": "明亮晴日的自然光，主光从画面左上方约 60° 柔柔打下，绿树与建筑形成均匀柔光，光比约 2:1，整体通透，皮肤保留自然质感",
+    "shootingDistance": "1-3m（双人全身入画）",
+    "background": "广州动物园的长颈鹿雕塑、条纹伞装置、心形鱼缸、植物绿墙、旋转木马等打卡点，避免杂乱人流入框",
+    "props": ["长颈鹿雕塑", "条纹伞", "心形鱼缸", "比心"],
+    "bestTime": "晴日 09:00-11:00 或 15:00-17:00（光线柔和、游客少）",
+    "tips": [
+      "双人互动要真实，牵着手抓拍更自然，别硬摆。",
+      "以动物雕塑为前景或后景，增加趣味与层次。",
+      "衣着色系统一时髦，与蓝天绿树更搭。",
+      "情侣动作要同步，眼神交汇或一起看镜头更有氛围。"
+    ]
+  },
+  "post_process": {
+    "cropRatio": "3:4",
+    "color": {"brightness": 4, "contrast": 6, "saturation": 6, "temperature": 4, "tint": 2, "highlights": -8, "shadows": 8},
+    "smoothStrength": 8, "sharpen": 14, "vignette": 6, "grain": 8, "lut": "warm_film"
+  },
+  "poses": [
+    {"name": "封面·长颈鹿后并坐", "description": "情侣并排坐在长颈鹿雕塑背景前的长椅上，双腿自然交叉伸展，身体放松倚靠，同步微微仰头露出笑容，双手轻搭在一起，氛围轻松惬意。"},
+    {"name": "伞下依偎探身", "description": "情侣站在红白条纹伞状装置下，肩并肩身体微侧依偎，一人略微靠向另一人，面带浅笑看向镜头，画面含蓄温柔。"},
+    {"name": "侧身踢腿拥抱", "description": "情侣站在长颈鹿雕塑旁相拥，女方侧向镜头单腿向后轻翘，男方环抱配合，动作活泼俏皮，视线带笑看镜头。"},
+    {"name": "竹林石凳头靠头", "description": "情侣坐在竹林绿意前的石凳上，身体靠近、头轻轻靠在一起，膝盖内收，营造依赖亲昵的氛围，视线温柔。"},
+    {"name": "心形鱼缸高举双手", "description": "情侣站在心形金鱼缸景观装置后，双双高举双臂比划，表情夸张兴奋，作为整组视觉焦点，活力满满。"},
+    {"name": "半身比V看镜头", "description": "情侣近距离半身入镜，女方对镜头比出V字手势，男方微笑看向镜头，表情自然生动，亲密又有趣。"},
+    {"name": "斑马圆框张开双臂", "description": "情侣站在斑马条纹圆形打卡相框装置中，双双张开双臂呈大字展开姿态，融入画框，动作舒展动态，笑容灿烂。"},
+    {"name": "伞下比心互动", "description": "情侣站在红白伞装置前，身体微侧，一人抬手比心或指向镜头，表情俏皮，互动感强，看向镜头。"},
+    {"name": "旋转木马旁依偎", "description": "情侣站在旋转木马与卡通人偶雕塑旁，女方轻搭男方肩膀、单腿微曲，男方配合倚靠，氛围元气治愈，面带微笑。"}
+  ],
+  "style_prompt": "读此模板生成的是一对年轻时尚情侣：男方帅气端正、女方精致美丽，衣着时髦有质感、配色协调统一，整体呈现温暖明亮的户外写真气质。",
+  "camera": {"exposureCompensation": 0.3, "isoMode": "auto", "iso": 200, "shutterSpeed": "1/500", "whiteBalance": "daylight", "whiteBalanceK": 5600, "flashMode": "off", "focusMode": "auto", "lensType": "26mm", "lensSuggestion": "main"}
+}

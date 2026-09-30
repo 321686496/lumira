@@ -1,0 +1,234 @@
+{
+  "format": "pptpl",
+  "version": "1.0.0",
+  "_meta": {
+    "name": "雪山云海觅橘人像",
+    "author": "Lumira",
+    "category": "portrait",
+    "price": 0,
+    "description": "写实户外雪山人像。花岗岩峰顶之上、脚下翻涌云海与连绵雪山，冷调天空漫射光叠加午后侧逆光，暖杏橘冲锋衣在冷调环境里成为唯一暖色主体，冷暖对比强烈。人物低马尾编发、清透淡妆，护目镜推在奶白针织帽檐上，深灰轻量背包与登山杖构成户外叙事。适合徒步、露营、雪山旅行等户外场景，人物全身入画，姿态松弛有力量感，画面干净有质感。",
+    "shortDesc": "把整个冬天穿在身上，站在云上面",
+    "tags": [
+      "人像",
+      "户外",
+      "雪山",
+      "云海",
+      "徒步",
+      "旅拍"
+    ],
+    "referenceSource": "小红书「雪山人像」「云海徒步」热门模板；户外旅拍姿势合集",
+    "classification": {
+      "type": "portrait",
+      "majorStyle": "outdoor_travel",
+      "style": "snow_cloud_hike",
+      "subStyle": "snow_cloud_hike",
+      "method": ""
+    },
+    "ambience": {
+      "seasons": [
+        "autumn",
+        "winter"
+      ],
+      "weathers": [
+        "sunny",
+        "cloudy",
+        "snow"
+      ],
+      "timeTones": [
+        "day",
+        "cool"
+      ]
+    }
+  },
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "aspectRatio": "3:4",
+    "opacity": 0.5,
+    "description": "竖版 3:4，三分法构图。人物全身置于画面中下部，顶部保留雪山与云海留白；峰顶岩石压住画面下缘形成前后景层次，云海水平线放在画面上 1/3 处。"
+  },
+  "pose": [
+    {
+      "name": "封面·伸手探镜",
+      "silhouette": {
+        "type": "image",
+        "data": "pose1_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物身体正对镜头略微后仰，屏幕右侧手臂向前伸出、五指最大限度张开直指镜头，形成超近景手部前景遮挡画面，屏幕左侧手臂自然下垂扶住背包肩带，重心略靠后，双腿自然站立，视线越过手掌看向镜头",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "头顶比框",
+      "silhouette": {
+        "type": "image",
+        "data": "pose2_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物正面站立，双臂在头顶两侧抬起，屏幕左侧手掌横放、屏幕右侧手掌竖放，两手组合成取景框手势置于额前上方，肩膀放松，双腿自然分开与肩同宽，下巴微抬，视线透过手势框看向镜头",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "岩石蹲踞双手前探",
+      "silhouette": {
+        "type": "image",
+        "data": "pose3_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物单膝蹲踞在峰顶岩石上，左腿屈膝下蹲、右膝抵近地面，上身向前倾，双臂向前伸出、双手掌心向上摊开朝向镜头，手指自然张开，肩膀前送，视线看向双手之间",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "半蹲比耶",
+      "silhouette": {
+        "type": "image",
+        "data": "pose4_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物半蹲，膝盖弯曲、重心下沉，屏幕右侧手在脸侧举起比出V字手势，屏幕左侧手臂横持登山杖搭在身前，身体微侧，头略向屏幕右侧倾，视线看向镜头",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "蹲姿横杖",
+      "silhouette": {
+        "type": "image",
+        "data": "pose5_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物下蹲，双膝弯曲使身体贴近岩石，双手握住同一根登山杖的两端横放在膝盖前方，手肘自然外展，上身直立略前倾，视线平视镜头",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "马步双杖",
+      "silhouette": {
+        "type": "image",
+        "data": "pose6_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物下蹲成马步，双腿分开、膝盖外展，双手各握一根登山杖垂直于身体两侧、杖尖点地作支撑，手臂半伸直，上身挺直，头略微低下，视线看向画面前方",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "单腿后踢欢呼",
+      "silhouette": {
+        "type": "image",
+        "data": "pose7_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物以左腿单腿站立，右腿向后上方抬起并屈膝，屏幕右侧手臂向后上方高高举起、手掌摊开，屏幕左侧手握着登山杖向侧下方伸展，上身随之后仰，头抬起，视线看向斜上方，情绪兴奋",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "侧身持杖望远",
+      "silhouette": {
+        "type": "image",
+        "data": "pose8_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物侧身站立（身体朝向屏幕右侧约90度），双手一上一下握住同一根竖直的登山杖立于身前，肩膀放松下沉，双腿前后自然错开站立，头部转向画面外远方，侧脸轮廓清晰，视线望向远山",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "坐岩扶帽",
+      "silhouette": {
+        "type": "image",
+        "data": "pose9_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物坐在峰顶岩石上，上身微微后仰，双臂在头顶两侧抬起、双手扶住帽檐做整理帽子的动作，屏幕左侧手臂手肘朝上、屏幕右侧手臂手肘朝外，屏幕左侧腿向前伸直、鞋底正对镜头形成前景，另一腿屈膝收起，视线看向镜头",
+      "cameraDirection": "back"
+    }
+  ],
+  "camera": {
+    "exposureCompensation": 0.3,
+    "isoMode": "auto",
+    "iso": 200,
+    "shutterSpeed": "1/500",
+    "whiteBalance": "daylight",
+    "whiteBalanceK": 5600,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "26mm",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "午后侧逆光，主光从画面左后方约 135° 打来，人物边缘勾出轮廓光，正面由雪地与云海的高反射补光，光比约 3:1，整体冷调、皮肤保留暖色",
+    "shootingDistance": "2.5-4m",
+    "background": "花岗岩峰顶、连绵雪山与翻涌云海，冷调天空带少量云层；避免杂乱植被与人群",
+    "props": [
+      "登山杖",
+      "轻量登山背包",
+      "针织帽",
+      "雪山护目镜"
+    ],
+    "bestTime": "晴日午后 14:00-17:00（云海最稳定）",
+    "tips": [
+      "长按锁定对焦，云海与雪山明暗反差大时略微降低曝光补偿保住天空层次。",
+      "人物尽量落在岩石边缘并留出身后云海，避免与山体轮廓重叠糊在一起。",
+      "侧逆光时开启 HDR 或补一点正面反光板，别让面部完全压暗。",
+      "穿暖色外衣与冷调环境形成冷暖对比，避免全身同色系淹没在背景里。",
+      "注意脚下与风力，峰顶岩石湿滑，优先保证安全与稳定握持。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "3:4",
+    "color": {
+      "brightness": 3,
+      "contrast": 12,
+      "saturation": -6,
+      "temperature": -8,
+      "tint": 2,
+      "highlights": -18,
+      "shadows": 12
+    },
+    "smoothStrength": 10,
+    "sharpen": 18,
+    "vignette": 14,
+    "grain": 14,
+    "lut": "cool_film"
+  }
+}

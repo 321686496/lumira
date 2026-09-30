@@ -66,7 +66,8 @@ PLATFORMS = {
         "mode": "sync",          # sync: 同步 OpenAI 兼容; async: 异步任务轮询
         "size_sep": "x",         # 尺寸分隔符 (OpenAI 风格用 x)
         "edit_multi": "image[]", # 多图编辑时参考图字段名
-        "models": ["gpt-image-2"],
+        # 默认模型: gpt-image-2.5-sunburst-2k(低价档); 需要时可 --model 换回 gpt-image-2
+        "models": ["gpt-image-2.5-sunburst-2k", "gpt-image-2"],
     },
     "mass": {
         "name": "MaaS (mass.hzxmfg.com)",
@@ -106,7 +107,7 @@ PLATFORMS = {
 }
 
 # 兼容旧环境变量
-DEFAULT_MODEL = os.environ.get("HAPI_MODEL", "gpt-image-2")
+DEFAULT_MODEL = os.environ.get("HAPI_MODEL", "gpt-image-2.5-sunburst-2k")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 HTML_PATH = os.path.join(SCRIPT_DIR, "gpt_image2.html")

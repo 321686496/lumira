@@ -1,0 +1,247 @@
+{
+  "format": "1.0",
+  "version": "1.0.0",
+  "_meta": {
+    "name": "日系可爱少女火锅探店打卡",
+    "author": "如画 Lumira",
+    "category": "portrait",
+    "price": 0,
+    "description": "暖蓝灯光下的火锅店卡座，日系可爱少女女仆头饰配浅色蕾丝连衣裙，拿筷夹菜、比耶、托腮、盼贴贴，九种姿势随手一拍都是可爱治愈的探店打卡照。",
+    "shortDesc": "钻进热腾腾的火锅里，可爱出片",
+    "tags": [
+      "人像",
+      "日系",
+      "可爱",
+      "火锅",
+      "探店",
+      "美食打卡"
+    ],
+    "referenceSource": "用户提供的九宫格参考图（日系可爱少女火锅探店打卡）",
+    "classification": {
+      "type": "portrait",
+      "majorStyle": "scene_portrait",
+      "style": "elegant_lady",
+      "subStyle": "elegant_lady",
+      "method": ""
+    },
+    "ambience": {
+      "seasons": [
+        "autumn",
+        "winter",
+        "spring"
+      ],
+      "weathers": [
+        "sunny",
+        "cloudy"
+      ],
+      "timeTones": [
+        "night",
+        "warm"
+      ]
+    },
+    "id": "hotpot_cute_girl",
+    "gender": "female",
+    "tagIds": []
+  },
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "aspectRatio": "3:4",
+    "opacity": 0.5,
+    "description": "火锅店内卡座三分法取景，人物居中占据主画面，前景桌面铺满火锅与食材，身后蓝色灯光环境衬托，暖黄食物光与冷蓝环境形成冷暖对比，日系可爱氛围。",
+    "subjectFrame": {
+      "x": 0.2,
+      "y": 0.05,
+      "w": 0.6,
+      "h": 0.9
+    }
+  },
+  "pose": [
+    {
+      "name": "面具遮脸打开俏皮",
+      "silhouette": {
+        "type": "file",
+        "url": "silhouette/silhouette_01.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "双手举起白色卡通面具遮住半张脸，只露出眼睛，表情俏皮灵动",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "举筷惊喜张开手",
+      "silhouette": {
+        "type": "file",
+        "url": "silhouette/silhouette_02.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "一手举着筷子，另一手自然张开，表情惊喜，活泼有张力",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "脸颊比耶咬筷子",
+      "silhouette": {
+        "type": "file",
+        "url": "silhouette/silhouette_03.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "双手在脸颊两侧比耶，嘴里横咬着一根筷子，乖巧可爱",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "夹菜托腮望向镜头",
+      "silhouette": {
+        "type": "file",
+        "url": "silhouette/silhouette_04.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "一手持筷子夹起粉色的爱心食物，另一手轻轻托腮，眼神望镜头",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "双手张开元气满满",
+      "silhouette": {
+        "type": "file",
+        "url": "silhouette/silhouette_05.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "双手在身体两侧张开，元气活泼的庆祝姿势",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "双手合十祈求满足",
+      "silhouette": {
+        "type": "file",
+        "url": "silhouette/silhouette_06.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "双手在胸前合十做祈祷状，乖巧温顺，眉眼弯弯",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "专注用餐手持餐具",
+      "silhouette": {
+        "type": "file",
+        "url": "silhouette/silhouette_07.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "双手握着餐具，专注享受美食的用餐状态，自然舒服",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "双手捧饭团无辜眨眼",
+      "silhouette": {
+        "type": "file",
+        "url": "silhouette/silhouette_08.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "双手捧着一团白色的小饭团凑到身前，眼神无辜，惹人怜爱",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "龙虾钳举脸旁搞怪",
+      "silhouette": {
+        "type": "file",
+        "url": "silhouette/silhouette_09.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "双手各举着一只鲜红的龙虾钳放到脸颊两侧，表情搞怪可爱",
+      "cameraDirection": "back"
+    }
+  ],
+  "camera": {
+    "exposureCompensation": 0.3,
+    "isoMode": "auto",
+    "iso": 200,
+    "shutterSpeed": "1/500",
+    "whiteBalance": "daylight",
+    "whiteBalanceK": 5600,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "26mm",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "桌面暖黄食物光 + 身后蓝色环境光",
+    "lightDirectionAngle": 0,
+    "shootingDistance": "1-1.5m 中近景半身",
+    "background": "火锅店卡座，蓝色调灯光，桌号标识与店铺招牌背景",
+    "props": [
+      "火锅",
+      "牛肉片",
+      "海鲜",
+      "烤串",
+      "蔬菜",
+      "火锅汤底",
+      "饮料罐",
+      "筷子",
+      "餐具",
+      "玩偶",
+      "卡通面具",
+      "饭团"
+    ],
+    "bestTime": "晚餐时段",
+    "tips": [
+      "人物居中占主画面，桌面食物铺满前景形成层次",
+      "用筷子、食物、玩偶等道具互动，避免空手尴尬",
+      "冷蓝色环境光与暖黄食物光对比，日系上镜感强"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "3:4",
+    "color": {
+      "brightness": 5,
+      "contrast": 4,
+      "saturation": 8,
+      "temperature": -2,
+      "tint": 0,
+      "highlights": 0,
+      "shadows": 3
+    },
+    "smoothStrength": 18,
+    "lut": "japanese_fresh"
+  }
+}

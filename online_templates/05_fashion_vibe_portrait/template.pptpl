@@ -1,0 +1,233 @@
+{
+  "format": "pptpl",
+  "version": "1.0.0",
+  "_meta": {
+    "name": "多场景万能氛围人像",
+    "author": "Lumira",
+    "category": "portrait",
+    "price": 0,
+    "description": "氛围感人像万能模板，跨三套轻奢造型与三种空间：蓝绿粗花呢小香风套装配奢华酒店走廊/客房，香槟金亮闪粗花呢叠蕾丝内搭配黑金法式餐吧，燕麦白绒大衣搭波点丝袜配暖黄日式居酒屋。姿势覆盖坐姿托腮、靠墙低头、优雅蹲姿、镜前翘腿、倚台歪头、跪坐搭盘、举机眨眼等各类出片动作，室内暖光氛围、简约高级构图。适合约会下午茶、酒店打卡、餐厅氛围感写真，穿搭贴场景即可松弛出片。",
+    "shortDesc": "三套小香风穿搭，藏进光影里松弛出片",
+    "tags": [
+      "人像",
+      "小香风",
+      "氛围感",
+      "咖啡厅",
+      "居酒屋",
+      "都市",
+      "写真"
+    ],
+    "referenceSource": "什么值得买帖子「显身材的万能拍照姿势」（源自公众号：学点拍照姿势）",
+    "classification": {
+      "type": "portrait",
+      "majorStyle": "scene_portrait",
+      "style": "elegant_lady",
+      "subStyle": "elegant_lady",
+      "method": ""
+    },
+    "ambience": {
+      "seasons": [
+        "autumn",
+        "winter"
+      ],
+      "weathers": [
+        "sunny",
+        "cloudy"
+      ],
+      "timeTones": [
+        "night",
+        "warm"
+      ]
+    }
+  },
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "aspectRatio": "3:4",
+    "opacity": 0.5,
+    "description": "竖版 3:4，三分法构图。人物多集中于中下部，不同姿势按其在原场景中的位置自然分布，空间纵深与暖光氛围作为背景留白，人物作为清晰前景主体。"
+  },
+  "pose": [
+    {
+      "name": "坐姿托腮",
+      "silhouette": {
+        "type": "image",
+        "data": "pose1_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物侧坐于软包长凳上，双腿一上一下交叉翘二郎腿，右手肘撑面托腮，左手向后撑凳面，面朝镜头",
+      "cameraDirection": "front"
+    },
+    {
+      "name": "靠墙低头拎包",
+      "silhouette": {
+        "type": "image",
+        "data": "pose2_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物重心在右腿，左腿前伸点地微屈，右手轻触身侧大理石墙，左手自然下垂拎包，头微低目视下方",
+      "cameraDirection": "three_quarter"
+    },
+    {
+      "name": "优雅蹲姿",
+      "silhouette": {
+        "type": "image",
+        "data": "pose3_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物并拢屈膝优雅下蹲，重心下沉，左手搭在左膝，右手向下轻触地面上的手提包，上身挺直抬头看镜头",
+      "cameraDirection": "front"
+    },
+    {
+      "name": "镜前翘腿站姿",
+      "silhouette": {
+        "type": "image",
+        "data": "pose4_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物左腿直立支撑，右腿屈膝抬起脚尖轻点左小腿后侧，左手自然垂拎包，右手向后轻扶镜面墙，面朝镜头",
+      "cameraDirection": "front"
+    },
+    {
+      "name": "咖啡厅托腮",
+      "silhouette": {
+        "type": "image",
+        "data": "pose5_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物侧坐于藤编椅上，双腿大腿交叠翘二郎腿，右手抬起轻托腮，左手自然放腿侧，面朝镜头",
+      "cameraDirection": "front"
+    },
+    {
+      "name": "倚台歪头",
+      "silhouette": {
+        "type": "image",
+        "data": "pose6_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物侧身倚靠黑色台面，右手自然搭在台沿、左手微抬贴于胸前，身体微侧，头微歪面朝镜头",
+      "cameraDirection": "three_quarter"
+    },
+    {
+      "name": "站立双手交叠",
+      "silhouette": {
+        "type": "image",
+        "data": "pose7_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物站立，身体微侧，双手交叠轻拢于身前，头微歪、下巴轻收，直视角镜头",
+      "cameraDirection": "front"
+    },
+    {
+      "name": "居酒屋跪坐搭盘",
+      "silhouette": {
+        "type": "image",
+        "data": "pose8_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物跪坐于木质餐位前，双腿并拢斜放，右手自然伸展轻触矮桌上的餐盘，面朝镜头",
+      "cameraDirection": "front"
+    },
+    {
+      "name": "台阶举手机眨眼",
+      "silhouette": {
+        "type": "image",
+        "data": "pose9_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物坐于木质台阶，双腿并拢微收，右手举起持手机、左手轻搭腿侧，面带微笑右眼眨眼",
+      "cameraDirection": "front"
+    }
+  ],
+  "camera": {
+    "exposureCompensation": 0.3,
+    "isoMode": "auto",
+    "iso": 200,
+    "shutterSpeed": "1/250",
+    "whiteBalance": "shade",
+    "whiteBalanceK": 6500,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "35mm",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "室内暖调氛围光，暖黄灯源为主光，画面柔和包裹人物，皮肤透亮",
+    "shootingDistance": "1.2-2.5m",
+    "background": "奢华酒店走廊/客房、黑金法式餐吧、暖黄日式居酒屋三种场景，按姿势分布",
+    "props": [
+      "迷你手提包",
+      "手机",
+      "咖啡/餐盘",
+      "陶杯"
+    ],
+    "bestTime": "室内任意时段（餐厅/酒店/居酒屋夜间氛围更佳）",
+    "tips": [
+      "穿搭贴场景：小香风配餐吧、毛绒大衣配居酒屋，风格适配才出氛围。",
+      "姿势别僵：轻靠墙面、手搭桌沿、拎包抬腿，松弛小动作更自然。",
+      "角度随场景：餐吧微俯拍显精致，开阔空间稍低机位衬身形。",
+      "暖光下多露穿搭细节与外套质感更出片。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "3:4",
+    "color": {
+      "brightness": 3,
+      "contrast": 5,
+      "saturation": 3,
+      "temperature": 4,
+      "tint": 4,
+      "highlights": -6,
+      "shadows": 6
+    },
+    "smoothStrength": 12,
+    "sharpen": 14,
+    "vignette": 8,
+    "grain": 12,
+    "lut": "warm_film"
+  }
+}

@@ -1,0 +1,232 @@
+{
+  "format": "pptpl",
+  "version": "1.0.0",
+  "_meta": {
+    "name": "国庆大花篮红旗人像",
+    "author": "Lumira",
+    "category": "portrait",
+    "price": 0,
+    "description": "写实国庆天安门人像。巨型国庆编织大花篮（黄红暖调，缀满石榴、葡萄、向日葵、菊花、月季）居于画面主体，远景为天安门城楼与长安街，深秋通透蓝天下洋溢着国庆喜庆氛围。人物作黑/白/红或牛仔配色穿搭，手持一面小红旗，借助花篮与花坛遮挡人流、抬升的低机位视角，避开人群也能拍出大气干净的国庆纪念照。人物全身入画，姿态自然舒展，画面喜庆、干净且有质感。",
+    "shortDesc": "把国庆的喜庆和小红旗一起，定格成最体面的纪念",
+    "tags": [
+      "人像",
+      "国庆",
+      "天安门",
+      "大花篮",
+      "城市地标",
+      "旅拍",
+      "纪念照"
+    ],
+    "referenceSource": "小红书《9.23实拍大花篮进入完全体！附避开人群机位》爆款笔记；天安门大花篮旅拍姿势",
+    "classification": {
+      "type": "portrait",
+      "majorStyle": "holiday_travel",
+      "style": "tiananmen_basket",
+      "subStyle": "tiananmen_basket",
+      "method": ""
+    },
+    "ambience": {
+      "seasons": [
+        "autumn"
+      ],
+      "weathers": [
+        "sunny"
+      ],
+      "timeTones": [
+        "day",
+        "warm"
+      ]
+    }
+  },
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "aspectRatio": "3:4",
+    "opacity": 0.5,
+    "description": "竖版 3:4，三分法构图。人物全身置于画面中下部，巨型国庆大花篮作为前景填满画面中上部并带入天安门城楼；借花篮与花坛的低机位遮挡人流，画面顶部保留花篮与天空留白。"
+  },
+  "pose": [
+    {
+      "name": "封面·持旗回眸",
+      "silhouette": {
+        "type": "image",
+        "data": "pose1_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物侧身回眸看向镜头，双手将小红旗举在肩侧，微侧身让身后的大花篮遮住人流，重心放后脚，衣角被风带起，身后为国庆大花篮与远景天安门城楼",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "花坛前蹲举旗",
+      "silhouette": {
+        "type": "image",
+        "data": "pose2_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物蹲在大花坛前，身前花坛的花卉挡住身后人群，一手将小红旗高高举起，另一手托腮，下巴微抬看向镜头，低机位仰拍，大花篮与天安门作背景",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "侧身依花篮",
+      "silhouette": {
+        "type": "image",
+        "data": "pose3_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物侧身轻靠大花篮外围栏杆，一手搭在栏杆上，另一手持旗自然垂放，一腿微弯靠近镜头，近景花篮遮去背景人流，视线看向镜头",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "仰头看花篮",
+      "silhouette": {
+        "type": "image",
+        "data": "pose4_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物站大花篮正下方，半侧身仰头望向巨型花篮，一手举起小红旗指向花篮顶部，构图带到天安门城楼，人物取小景别留白，大花篮填满画面中上部",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "举旗欢呼",
+      "silhouette": {
+        "type": "image",
+        "data": "pose5_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物正面站立，双手高举小红旗欢呼，双脚分开与肩同宽，表情明朗，大花篮与天安门城楼完整作背景，低机位借花篮遮挡人流",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "插兜闲站",
+      "silhouette": {
+        "type": "image",
+        "data": "pose6_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物站在大花篮侧面（背景为大理石基座），一手插兜一手持旗自然垂放，身体微侧面对镜头，以近景花篮局部遮挡身后人群，表情放松，点缀喜庆氛围",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "坐姿曲腿低角度",
+      "silhouette": {
+        "type": "image",
+        "data": "pose7_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物坐在花坛边沿，一脚向前伸出、一脚屈膝，双手自然在上方持旗，低角度拍摄使大花篮填满身后画面上部、挡住人流，视线看向镜头",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "背影望城楼",
+      "silhouette": {
+        "type": "image",
+        "data": "pose8_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物背对镜头望向天安门城楼方向，手持小红旗自然垂于身侧，长发与旗角被风带起，构图以大花篮为前景、天安门城楼为远景",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "正面比心持旗",
+      "silhouette": {
+        "type": "image",
+        "data": "pose9_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物正面站立，一手将小红旗置于胸前，另一手在脸侧比出心形，站姿板正，大花篮与天安门城楼同框取景，喜庆庄重",
+      "cameraDirection": "back"
+    }
+  ],
+  "camera": {
+    "exposureCompensation": 0.3,
+    "isoMode": "auto",
+    "iso": 200,
+    "shutterSpeed": "1/500",
+    "whiteBalance": "daylight",
+    "whiteBalanceK": 5600,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "26mm",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "白天顺光/侧光，主光来自人物前方约 30°，面部受光均匀；上午面对大花篮一侧顺光、午后背面一侧顺光，光比约 2:1，整体暖调喜庆、皮肤保留暖色",
+    "shootingDistance": "2-5m",
+    "background": "天安门广场巨型国庆编织大花篮（黄红暖调缀满花果花卉）、远景天安门城楼或国博、长安街；避开密集人流，以花篮/花坛为前景遮挡",
+    "props": [
+      "小红旗",
+      "小花篮",
+      "牛仔外套",
+      "白衬衫"
+    ],
+    "bestTime": "深秋国庆，天气通透时；上午面对大花篮一侧顺光，或下午换另一侧顺光",
+    "tips": [
+      "借大花篮与花坛做前景遮挡人流，低机位把花篮填满画面上部。",
+      "黑白红或牛仔配色更容易在喜庆花篮前出片。",
+      "长按锁定对焦，背景天安门与花篮明暗反差大时略微降曝光保住高光。",
+      "人物尽量与花篮、天安门形成纵深感，避免被背景人流穿帮。",
+      "提前预约、带身份证与防晒，尽量错峰或选侧面机位避开人群。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "3:4",
+    "color": {
+      "brightness": 2,
+      "contrast": 10,
+      "saturation": 8,
+      "temperature": 3,
+      "tint": 1,
+      "highlights": -12,
+      "shadows": 8
+    },
+    "smoothStrength": 8,
+    "sharpen": 16,
+    "vignette": 8,
+    "grain": 6,
+    "lut": "warm_film"
+  }
+}

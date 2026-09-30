@@ -1,0 +1,194 @@
+{
+  "format": "pptpl",
+  "version": "1.0.0",
+  "_meta": {
+    "name": "慵懒氛围感穿搭自拍",
+    "author": "Lumira",
+    "category": "portrait",
+    "price": 0,
+    "description": "告别僵硬与千篇一律的游客照。通过松弛姿态、场景与穿搭的精准适配，加上合适的镜头角度与精致小道具，让日常穿搭在不同空间中焕发光彩，拍出富有情绪与故事感的质感大片。",
+    "shortDesc": "场景与姿势适配，随手定格慵懒画报大片",
+    "tags": [
+      "人像",
+      "慵懒",
+      "氛围感",
+      "穿搭",
+      "室内"
+    ],
+    "referenceSource": "源于微信公众号文《显身材的万能拍照姿势》及 smzdm 转载",
+    "classification": {
+      "majorStyle": "outdoor_travel",
+      "style": "scenery_card",
+      "method": ""
+    },
+    "ambience": {
+      "seasons": [
+        "all"
+      ],
+      "weathers": [
+        "indoor"
+      ],
+      "timeTones": [
+        "night",
+        "day"
+      ]
+    }
+  },
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "aspectRatio": "3:4",
+    "opacity": 0.5,
+    "description": ""
+  },
+  "pose": [
+    {
+      "name": "随性托下巴坐着",
+      "silhouette": {
+        "type": "image",
+        "data": "pose1_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "侧身落座，腿自然交叠，手肘轻撑台面、手指轻触下颌与脸颊，慵懒中带精致松弛感",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "慵懒靠墙站着",
+      "silhouette": {
+        "type": "image",
+        "data": "pose2_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "轻靠墙面，一腿微屈、手拎小包，平视稍低机位拉长身形，松弛站姿舒展高挑",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "蹲姿迷人看镜头",
+      "silhouette": {
+        "type": "image",
+        "data": "pose3_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "半蹲姿态，一腿收拢一腿轻展，手搭膝头，重心落单侧，静态中捕捉生动动态美",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "倚镜翘腿看镜头",
+      "silhouette": {
+        "type": "image",
+        "data": "pose4_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "借力镜面摆姿，一腿轻抬、手拎小包，平视机位配合镜像放大穿搭细节与互动氛围",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "自然惬意坐着托下巴看",
+      "silhouette": {
+        "type": "image",
+        "data": "pose5_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "侧身落座，手肘轻搭桌面、指尖轻触脖颈，微俯拍衬出穿搭层次，慵懒姿态藏着精致松弛感",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "歪头甜美惬意看镜头",
+      "silhouette": {
+        "type": "image",
+        "data": "pose6_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "轻倚台面，一手搭肩一手微伸，近景平视放大蕾丝亮闪穿搭细节，灵动中带亲昵互动感",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "站着可爱歪头看远处",
+      "silhouette": {
+        "type": "image",
+        "data": "pose7_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "轻立镜前，双手轻拢身前，平视近景借镜面放大氛围感，松弛站姿柔美舒展",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "坐着气质迷人看镜头",
+      "silhouette": {
+        "type": "image",
+        "data": "pose8_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "侧身落座，一手轻触脖颈、腿自然交叠，微俯拍衬出穿搭层次，慵懒优雅气质迷人",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "坐着甜美自然看镜头",
+      "silhouette": {
+        "type": "image",
+        "data": "pose9_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "跪坐于餐台旁，一手轻搭餐盘，平视近景衬出毛绒外套柔糯质感与背景烟火气，姿态松弛娇憨",
+      "cameraDirection": "back"
+    }
+  ],
+  "camera": {
+    "exposureCompensation": 0.3,
+    "isoMode": "auto",
+    "iso": 200,
+    "shutterSpeed": "1/500",
+    "whiteBalance": "daylight",
+    "whiteBalanceK": 5600,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "26mm",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {},
+  "postProcess": {}
+}

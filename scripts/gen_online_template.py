@@ -202,79 +202,77 @@ TEMPLATES = {
         },
         # 面板路线：source_grid.png（3×3）每格对应一个姿势的参考图；本模板不生成中间锚点。
         "refine_prompt": (
-            "以参考图为准重绘这张蓝调时刻海边人像：严格保持参考图中同一个人物的姿势动作、表情神态、"
-            "身形比例与站位方向，保持同一套穿搭的整体风格（裙装长短与版型、发型、宽檐草帽/复古煤油灯/"
-            "纱巾/花朵等道具）、同一蓝调海边场景、同一光线方向与机位、人物在画面中的位置大小比例，"
-            "以上任何一项都不得改变。为避免与原图雷同侵权，仅对人物五官（脸型、五官位置、妆容）以及"
-            "服装的颜色与细节（水染色调、印花花色、面料质感）做轻微调整，但姿态、场景与氛围必须保持一致。"
-            "把它变成真实相机直出的高清蓝调海边旅拍照片：3:4竖构图，黄昏后蓝调时刻，深蓝紫渐变海天，"
-            "冷调光线，海风微动发丝与裙摆；皮肤与衣物保留真实物理质感（皮肤自然纹理与肤色不均、面料"
-            "褶皱与光泽），轻微胶片颗粒。手部结构准确：五指比例正确、指节清晰、无多指、无手指融合或残缺。"
-            "禁止磨皮与塑料感，禁止CG或3D渲染感，禁止插画感与过度锐化，禁止完美对称的网红脸，"
-            "禁止改变人物姿势、场景与道具，禁止添加文字水印。"
+            "以参考图为准重绘这张蓝调时刻海边人像：严格保持参考图中人物的姿势动作、表情神态、身材身形、"
+            "发型与站位方向不变，严格保持同一套穿搭（裙装长短与版型、配饰道具）与同一蓝调海边场景、"
+            "光线方向、构图机位不变，以上任何一项都不得改变。为避免与原图雷同侵权，仅轻微调整人物五官"
+            "脸型与妆容、以及服装的颜色与花色，但姿态、场景、穿搭与氛围必须保持一致。人物要年轻精致："
+            "约20岁年轻东亚女性，五官精致立体、皮肤细腻有光泽、身材匀称柔美、发型时尚自然。"
+            "把它变成真实相机直出的高清蓝调海边人像照片：黄昏后蓝调时刻，深蓝紫渐变海天，冷调光线与轮廓光，"
+            "海风微动发丝与裙摆，皮肤细腻柔软，轻微胶片颗粒。手部结构准确：五指比例正确、指节清晰、"
+            "无多指、无手指融合或残缺。禁止改变人物姿势、场景与道具，禁止添加文字水印。"
         ),
         "poses": [
             {
-                "name": "侧身曳裙",
+                "name": "纱裙回眸",
                 "description": (
-                    "人物侧身站立，黑色吊带长裙，左手自然下垂、右手轻放腹前，花朵别在耳侧，"
-                    "身体微微侧转，冷艳红唇，目视前方偏左，冷调氛围"
+                    "人物侧身站立回眸看向镜头，浅绿色吊带抹胸纱裙、极细肩带、低胸设计，裙摆随风飘逸，"
+                    "湿发贴合颈部肌肤，一手轻触发际，眼神勾连，S形侧身曲线，撩人又优雅"
                 ),
             },
             {
-                "name": "举纱踏浪",
+                "name": "撩发踏浪",
                 "description": (
-                    "人物立于浅水海浪中，黑色吊带上衣配黑色短裤，双手把黑色薄纱举过头顶、"
-                    "纱巾在头顶随风飘扬，自然略带微笑、正视镜头，动感十足"
+                    "人物立于浅水海浪中，黑色比基尼式套装（短上衣+短裤）露腰腹，一手高举过头顶拨弄湿发"
+                    "撩发，另一手自然下垂，海浪环绕脚下，湿身诱惑，活力十足"
                 ),
             },
             {
-                "name": "背影听海",
+                "name": "卧沙托腮",
                 "description": (
-                    "人物背对镜头立于海边，白色短上衣配深色短裤，浅色外套搭在手臂上，长发披肩，"
-                    "面向大海远望，背影孤独而宁静"
+                    "人物侧身蜷缩卧于沙滩，白色吊带长裙，一手托腮作沉思状，另一手轻搭身前，腰臀曲线"
+                    "自然折叠、比例突出，发间点缀花朵，少女人畜无害的纯欲感，望向镜头"
                 ),
             },
             {
-                "name": "迎风而立",
+                "name": "敞衣回眸",
                 "description": (
-                    "人物正面站立，白色无袖短上衣配白色长裙，双手自然垂在身侧，身体微侧，"
-                    "微笑温柔、正视镜头，裙摆被海风微微吹动"
+                    "人物侧身转头凝视镜头，黑色深V敞开式长外套，内搭若隐若现，海风吹起外套下摆与长发，"
+                    "眼神极具气场，女王范与野性魅力并存的性感"
                 ),
             },
             {
-                "name": "戴帽拾光",
+                "name": "持花回眸",
                 "description": (
-                    "人物正面立于沙滩，白色吊带长裙，头戴宽檐草帽，双手自然垂落、裙摆飘逸，"
-                    "恬静微笑、正视镜头，度假氛围"
-                ),
-            },
-            {
-                "name": "执帽回眸",
-                "description": (
-                    "人物背对镜头站立，红色吊带长裙开叉设计，头戴/手持宽檐草帽，侧脸转向一侧，"
-                    "长发披肩，望向远方，浪漫而神秘"
-                ),
-            },
-            {
-                "name": "提灯夜行",
-                "description": (
-                    "人物背对镜头立于海边，米白色露背吊带长裙，手提发光的复古煤油灯于身侧、"
-                    "暖光打亮裙摆，与冷调夜色形成冷暖对比，半剪影氛围"
+                    "人物背对镜头头部大角度侧转回望，黑色深沉吊带长裙露背设计，低挽发髻露出颈背线条，"
+                    "手持一束花于身侧，含蓄性感的成熟风韵，海风轻拂"
                 ),
             },
             {
                 "name": "坐沙仰天",
                 "description": (
-                    "人物坐在沙滩上，白色抹胸蓬蓬长裙，右腿屈膝、左手撑地、右手放膝上，"
-                    "仰头望向夜空，神情陶醉、嘴唇微张，裙摆铺展"
+                    "人物侧坐沙滩，白色抹胸长裙，一手撑地、一手轻放膝上，仰头望向夜空拉长颈部线条露出"
+                    "天鹅颈，锁骨与肩胸轮廓清晰，裙摆铺开如花瓣，纯洁的脆弱与撩人并存"
                 ),
             },
             {
-                "name": "举臂逐浪",
+                "name": "红裙踏沙",
                 "description": (
-                    "人物立于海滩，粉色吊带长裙带红色花纹，黄色花朵别在发间，右手高举向天空、"
-                    "左手自然下垂，身体微倾，笑容明媚灿烂、看向镜头"
+                    "人物背对镜头行走于沙滩，红色吊带长裙高开叉设计，行走中路侧首望向一侧，手持宽檐草帽，"
+                    "海风吹动裙摆露出修长腿线，动态风情、热烈性感"
+                ),
+            },
+            {
+                "name": "侧影掠风",
+                "description": (
+                    "人物侧身站立于海边，黑色细吊带短裙，一手轻触胸前，视线凝视镜头，海风勾勒出侧乳线"
+                    "与腰身曲线，冷调蓝光下神秘而性感"
+                ),
+            },
+            {
+                "name": "背影听风",
+                "description": (
+                    "人物背对镜头立于海边，白色短上衣配黑色及膝裙、外搭半脱露出肩背线条，海风吹起衣摆与"
+                    "长发，面向大海，背影杀/露背短裙，随性又撩人"
                 ),
             },
         ],
@@ -710,7 +708,8 @@ def step_pose(cfg, out_dir: Path, idx: int, force: bool, source: str = "panel", 
         if not valid(ref):
             print(f"!! panel{idx}.png 缺失，先执行 panels", flush=True)
             return False
-        prompt = cfg.get("refine_prompt") or REFINE_PROMPT
+        prompt = (cfg.get("refine_prompt") or REFINE_PROMPT) + \
+            f"。该图人物唯一的姿势动作与穿着：{pose['description']}。"
         if pform == "maas":
             print(f"生成 pose{idx} · {pose['name']}（MaaS 图生图·参考图整格提质）…", flush=True)
             f = gen_maas(prompt, out_dir, f"pose{idx} {pose['name']}", ref=ref)
@@ -722,8 +721,12 @@ def step_pose(cfg, out_dir: Path, idx: int, force: bool, source: str = "panel", 
         if not valid(anchor):
             print("!! 锚点缺失，先执行 anchor", flush=True)
             return False
-        print(f"生成 pose{idx} · {pose['name']}（HAPI 图生图·锚点换姿势）…", flush=True)
-        f = gen_hapi(pose_prompt(cfg, pose), out_dir, f"pose{idx} {pose['name']}", ref=anchor)
+        if pform == "maas":
+            print(f"生成 pose{idx} · {pose['name']}（MaaS 图生图·锚点换姿势）…", flush=True)
+            f = gen_maas(pose_prompt(cfg, pose), out_dir, f"pose{idx} {pose['name']}", ref=anchor)
+        else:
+            print(f"生成 pose{idx} · {pose['name']}（HAPI 图生图·锚点换姿势）…", flush=True)
+            f = gen_hapi(pose_prompt(cfg, pose), out_dir, f"pose{idx} {pose['name']}", ref=anchor)
     if not f:
         return False
     f.replace(target)
@@ -731,7 +734,7 @@ def step_pose(cfg, out_dir: Path, idx: int, force: bool, source: str = "panel", 
     return True
 
 
-def step_sil(cfg, out_dir: Path, idx: int, force: bool) -> bool:
+def step_sil(cfg, out_dir: Path, idx: int, force: bool, pform: str = "hapi") -> bool:
     """由 pose{idx}.png 生成 pose{idx}_sil.png（白底黑线稿 → 透明底黑线）"""
     target = out_dir / f"pose{idx}_sil.png"
     if valid(target) and not force:
@@ -741,8 +744,15 @@ def step_sil(cfg, out_dir: Path, idx: int, force: bool) -> bool:
     if not valid(src):
         print(f"!! pose{idx}.png 缺失，先执行 poses", flush=True)
         return False
-    print(f"生成 pose{idx} 剪影（HAPI 图生图 + 本地二值化）…", flush=True)
-    raw = gen_hapi(SIL_PROMPT, out_dir, f"pose{idx} 剪影", ref=src)
+    if pform == "maas":
+        print(f"生成 pose{idx} 剪影（MaaS 文生图·按姿势描述 + 本地二值化）…", flush=True)
+        pose_desc = cfg["poses"][idx - 1]["description"]
+        raw = gen_maas(
+            SIL_PROMPT + "。" + f"人物姿势：{pose_desc}。",
+            out_dir, f"pose{idx} 剪影")
+    else:
+        print(f"生成 pose{idx} 剪影（HAPI 图生图 + 本地二值化）…", flush=True)
+        raw = gen_hapi(SIL_PROMPT, out_dir, f"pose{idx} 剪影", ref=src)
     if not raw:
         return False
     # 原始白底图留档，便于不重复调用接口重新后处理
@@ -897,7 +907,7 @@ def main():
         # 样张：底图 + 第 1 张姿势图 + 第 1 张剪影
         if ensure_ready():
             if step_pose(cfg, out_dir, 1, args.force, source=src, pform=args.pose_platform):
-                step_sil(cfg, out_dir, 1, args.force)
+                step_sil(cfg, out_dir, 1, args.force, pform=args.pose_platform)
     elif args.step == "poses":
         if not ensure_ready():
             sys.exit(1)
@@ -905,7 +915,7 @@ def main():
             step_pose(cfg, out_dir, i, args.force, source=src, pform=args.pose_platform)
     elif args.step == "sil":
         for i in range(1, n + 1):
-            step_sil(cfg, out_dir, i, args.force)
+            step_sil(cfg, out_dir, i, args.force, pform=args.pose_platform)
     elif args.step == "doc":
         write_docs(cfg, out_dir)
     else:  # all
@@ -913,7 +923,7 @@ def main():
             for i in range(1, n + 1):
                 step_pose(cfg, out_dir, i, args.force, source=src, pform=args.pose_platform)
             for i in range(1, n + 1):
-                step_sil(cfg, out_dir, i, args.force)
+                step_sil(cfg, out_dir, i, args.force, pform=args.pose_platform)
             write_docs(cfg, out_dir)
 
     print(f"输出目录: {out_dir}", flush=True)

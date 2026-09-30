@@ -98,3 +98,31 @@ scripts/results/
 
 # Flutter HAR 构建临时产物（不入库）
 .tmp_flutter_har.bin
+
+# ===== 模板生成/联调临时产物（不入库，仅忽略不删除）=====
+.build-bin/
+.tmp_har_extract/
+output.log
+ohpm_clean_test.txt
+*.dmp
+create_templates/
+
+# .trae 子代理工作产物（简报/报告/评审包，不入库）
+.trae/skills/subagent-driven-development/briefs/
+.trae/skills/subagent-driven-development/reports/
+.trae/skills/subagent-driven-development/packages/
+
+# online_templates 内部临时产物（原始剪影/网格切片/抓取参考/拆分脚本）
+online_templates/**/_sil_raw/
+online_templates/**/_cells/
+online_templates/**/_fetch/
+online_templates/**/_refs/
+online_templates/**/_*.py
+
+# skills 内部临时产物
+skills/**/__pycache__/
+skills/**/test_output/
+skills/**/_down/
+skills/**/_pose*/
+skills/**/_*
+skills/**/*.pyc

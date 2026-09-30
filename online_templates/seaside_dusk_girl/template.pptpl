@@ -1,0 +1,230 @@
+{
+  "format": "pptpl",
+  "version": "1.0.0",
+  "_meta": {
+    "name": "蓝调海滨少女人像",
+    "author": "Lumira",
+    "category": "portrait",
+    "price": 0,
+    "description": "蓝调海滨单人像写真模板。暮色天光漫过海面，浅色衣裙少女在海风与浪声里松弛出片：低眉触发、撩发浅垂、回眸浅笑，到背身持花回望、跪坐凝望远方，九种姿势都围绕水岸取景展开。中景全身，人物置于画面中下部，头顶天空留白带着呼吸感。适合海边的清晨与黄昏、夏日旅拍，随手一拍都是干净清透的质感。",
+    "shortDesc": "把蓝调海天的暮色装进裙摆里",
+    "tags": [
+      "人像",
+      "海边",
+      "暮色",
+      "蓝调",
+      "旅拍",
+      "天空"
+    ],
+    "referenceSource": "网上收集的水岸海天人像姿势（经反侵权换脸统一衣着加工）",
+    "classification": {
+      "type": "portrait",
+      "majorStyle": "outdoor_travel",
+      "style": "seaside_dusk",
+      "subStyle": "seaside_dusk",
+      "method": ""
+    },
+    "ambience": {
+      "seasons": [
+        "spring",
+        "summer"
+      ],
+      "weathers": [
+        "sunny",
+        "cloudy"
+      ],
+      "timeTones": [
+        "day",
+        "cool"
+      ]
+    }
+  },
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "aspectRatio": "3:4",
+    "opacity": 0.5,
+    "description": "竖版 3:4，居中三分法。人物全身置于画面中下部，头顶保留海平面线与天空留白，水面波光在人物下方延展成前景层次。"
+  },
+  "pose": [
+    {
+      "name": "封面·低眉触发",
+      "silhouette": {
+        "type": "image",
+        "data": "pose1_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "站姿略侧身，右臂屈肘抬手轻触发际、耳侧发丝，头部微低、视线垂落，神情清冷淡然，裙摆与发丝被海风轻轻拂动",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "撩发浅垂",
+      "silhouette": {
+        "type": "image",
+        "data": "pose2_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "身体微侧向镜头，右臂抬至头侧若有若无地撩起发丝，头略低、眼神看向右下，姿态含蓄温柔，白衣在蓝调海天间更显清透",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "回眸浅笑",
+      "silhouette": {
+        "type": "image",
+        "data": "pose3_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "侧身面向海面，头回转面向镜头、单手曲肘托触颌下，另一臂横于身前，嘴角浅笑、眼神直视镜头，站姿松弛又有故事感",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "回望凝眸",
+      "silhouette": {
+        "type": "image",
+        "data": "pose4_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "站姿，身体转向一侧，头回转望向镜头、眼神直视神情中性疏离，双臂自然垂放身侧、无多余手势，清冷克制",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "背身持花回望",
+      "silhouette": {
+        "type": "image",
+        "data": "pose5_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "背对镜头立于水岸边，手握一束干花置于身前，头微回转向一侧望向海平线，酒红长裙在蓝调海天里成为焦点，情绪远阔",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "倚坐仰面望天",
+      "silhouette": {
+        "type": "image",
+        "data": "pose6_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "侧坐于沙滩，双腿收拢一侧，上身微微后仰、头部抬起仰望天空，双眼轻闭，手臂自然搭于膝上，松弛又带冥想般的静谧",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "持帽侧立远望",
+      "silhouette": {
+        "type": "image",
+        "data": "pose7_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "站姿重心落于一侧腿、另一腿微微前伸，手持一顶草编宽檐帽自然垂落，另一手轻触裙边开衩，侧脸望向远方、不看镜头，度假雅致",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "闭眼侧望扶心",
+      "silhouette": {
+        "type": "image",
+        "data": "pose8_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "大半身侧立，脸完全侧向海面远方、双眼闭合，一手轻覆胸口，颈部微扬，神情沉浸感受海风，安静而从容",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "跪坐凝望远方",
+      "silhouette": {
+        "type": "image",
+        "data": "pose9_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "双膝跪坐于湿润沙岸，背对镜头面向大海，双臂自然垂放两侧，长卷发披背，定格凝望远方、收尾静谧辽阔",
+      "cameraDirection": "back"
+    }
+  ],
+  "camera": {
+    "exposureCompensation": 0.3,
+    "isoMode": "auto",
+    "iso": 100,
+    "shutterSpeed": "1/500",
+    "whiteBalance": "daylight",
+    "whiteBalanceK": 5600,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "26mm",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "晴日漫射天空光为主，辅以前侧自然光，人物面部柔和受光，水面与浅色衣着反光提亮肤色",
+    "shootingDistance": "2.5-4m",
+    "background": "开阔湖面、水平线与蓝天白云留白，避免杂乱人群与杂乱前景",
+    "props": [
+      "浅色衣裙",
+      "草帽（可选）"
+    ],
+    "bestTime": "晴日午后或清晨光线柔和时",
+    "tips": [
+      "人物多放画面中下部留出天空, 构图清爽透气。",
+      "水岸风大, 抓拍裙摆与发丝飞扬更出氛围。",
+      "逆光时略降曝光守住天空层次, 正面可轻补光。",
+      "避免杂乱的湖岸植被与程人群入画。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "3:4",
+    "color": {
+      "brightness": 4,
+      "contrast": 8,
+      "saturation": -4,
+      "temperature": -6,
+      "tint": 2,
+      "highlights": -12,
+      "shadows": 8
+    },
+    "smoothStrength": 8,
+    "sharpen": 15,
+    "vignette": 10,
+    "grain": 12,
+    "lut": "fresh_air"
+  }
+}

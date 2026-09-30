@@ -1,0 +1,232 @@
+{
+  "format": "pptpl",
+  "version": "1.0.0",
+  "_meta": {
+    "name": "清新动物园治愈人像",
+    "author": "Lumira",
+    "category": "portrait",
+    "price": 0,
+    "description": "写实清新治愈动物园人像。明亮晴日下的动物园，错落的绿树、木质围栏与灰白石墙构成清爽背景，柔和自然光叠加林间透光，画面通透明亮。人物浅色轻薄夏装、齐肩发微卷、清透淡妆，与小鹿、长颈鹿、鹦鹉等小动物自然互动，姿态松弛、眼神温柔，整体清新治愈、干净有质感。适合亲子出游、情侣约会、闺蜜同游等动物园场景，人物全身入画，氛围慵懒美好。",
+    "shortDesc": "和小动物撞个满怀，治愈一整天",
+    "tags": [
+      "人像",
+      "动物园",
+      "萌宠",
+      "治愈",
+      "清新",
+      "周末游"
+    ],
+    "referenceSource": "小红书博主「虫子拍照啦📸」《存一些去动物园的拍照姿势》；动物园拍照姿势合集",
+    "classification": {
+      "type": "portrait",
+      "majorStyle": "fresh_healing",
+      "style": "zoo_healing",
+      "subStyle": "zoo_healing",
+      "method": ""
+    },
+    "ambience": {
+      "seasons": [
+        "spring",
+        "summer"
+      ],
+      "weathers": [
+        "sunny",
+        "cloudy"
+      ],
+      "timeTones": [
+        "day",
+        "warm"
+      ]
+    }
+  },
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "aspectRatio": "3:4",
+    "opacity": 0.5,
+    "description": "竖版 3:4，三分法构图。人物全身置于画面中下部，主体与栅栏/石墙/观景台构成前后景层次；顶部保留绿树与天空留白，动物互动的视线方向尽量朝画面中心，形成人物与动物的呼应关系。"
+  },
+  "pose": [
+    {
+      "name": "封面·隔栏喂鹿",
+      "silhouette": {
+        "type": "image",
+        "data": "pose1_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物蹲在木质栅栏外侧，屏幕右侧手臂向前伸出、手掌握着一小把饲料递向栅栏里的小鹿，屏幕左侧手自然搭在膝上，上身微微前倾，双腿屈膝下蹲，头微低，视线温柔地看向小鹿",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "伸手摸小鹿脸颊",
+      "silhouette": {
+        "type": "image",
+        "data": "pose2_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物站在半开放的鹿园旁，身体微微俯身向前，屏幕右侧手轻轻向前托着小鹿的脸颊，屏幕左侧手自然垂在身侧，头微倾，眉眼带笑视线看向小鹿，双腿自然前后站立",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "石墙侧倚回眸",
+      "silhouette": {
+        "type": "image",
+        "data": "pose3_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物身体侧面轻靠在浅灰石墙上，屏幕左侧肩膀与手臂搭在墙面，屏幕右侧手臂自然垂于体侧，双腿在脚踝处自然交叉，头转向镜头回眸浅笑，神情松弛，视线看向镜头",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "木台与长颈鹿同框",
+      "silhouette": {
+        "type": "image",
+        "data": "pose4_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物站在木质观景平台上，微微踮脚伸长脖子看向远处低头吃树叶的长颈鹿，屏幕右侧手臂举到胸前做扶望姿势，屏幕左侧手自然垂落，身体微微后仰，双腿自然分立，侧脸轮廓清晰，视线望向长颈鹿",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "戴草帽坐观长颈鹿",
+      "silhouette": {
+        "type": "image",
+        "data": "pose5_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物戴着米色宽檐草帽坐在石凳上，双膝并拢自然侧坐，双手交叠搭在膝上，上身微微前倾，头转向画面右侧看向长颈鹿展区，侧脸清晰，视线望向前方，神情悠闲",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "红伞优雅站",
+      "silhouette": {
+        "type": "image",
+        "data": "pose6_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物右手举着一把红白波点小阳伞搭在右肩上方，伞面微微倾斜，左手自然垂在身侧，身体笔直微微侧转，双腿前后错落站立，头微扬，视线带笑看向镜头，姿态优雅松弛",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "白裙栅栏远眺",
+      "silhouette": {
+        "type": "image",
+        "data": "pose7_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物穿白色轻盈长裙、戴宽檐帽，背对围栏而站，屏幕右侧手轻轻搭在栅栏横木上，屏幕左侧手臂自然下垂，身体微侧并回头看向镜头，另一侧视线望向远处，裙摆随微风轻扬",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "蹲地逗梅花鹿",
+      "silhouette": {
+        "type": "image",
+        "data": "pose8_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物蹲在鹿园栅栏边的草坪上，双臂向前伸出、手指微张做逗引姿势朝向草地上低头撒娇的小鹿，身体前倾压低，双腿屈膝下蹲，头微低，视线温柔地看向小鹿，神情宠溺",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "张臂迎鹦鹉",
+      "silhouette": {
+        "type": "image",
+        "data": "pose9_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物站在鹦鹉园前，双臂向两侧自然张开、掌心向上做出迎接姿势，头微扬看向停在肩侧的彩色鹦鹉，上身微微后仰，双腿自然站立与肩同宽，表情惊喜又放松，视线看向鹦鹉",
+      "cameraDirection": "back"
+    }
+  ],
+  "camera": {
+    "exposureCompensation": 0.3,
+    "isoMode": "auto",
+    "iso": 200,
+    "shutterSpeed": "1/500",
+    "whiteBalance": "daylight",
+    "whiteBalanceK": 5600,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "26mm",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "明亮晴日的林间自然光，主光从画面上方约 60° 柔柔打下，绿树与石墙形成均匀柔光，少量逆光勾出人物发丝轮廓，光比约 2:1，整体通透清新、皮肤保留自然暖色",
+    "shootingDistance": "1-2.5m（与动物互动时保持安全距离，蹲姿/俯身可更近）",
+    "background": "动物园的绿树、木质围栏与灰白石墙，远处隐约露出展区；避免杂乱人流与其他动物入框",
+    "props": [
+      "小鹿饲料",
+      "米色宽檐草帽",
+      "红白波点小阳伞"
+    ],
+    "bestTime": "晴日 09:00-11:00 或 15:00-17:00（光线柔和、动物精神好）",
+    "tips": [
+      "长按锁定对焦在人脸，动物动得快时连拍抓拍更稳，别让动物糊掉。",
+      "蹲下或俯身到与动物平视的高度，互动感更强，背景也不容易拍到人群。",
+      "穿浅色系穿搭与绿树石墙更搭，避免与背景融为一体。",
+      "尊重动物，保持安静与安全距离，用饲料、帽伞等道具自然引导互动。",
+      "优先选择清晨或傍晚，避免正午强光导致动物眯眼、面部过曝。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "3:4",
+    "color": {
+      "brightness": 4,
+      "contrast": 6,
+      "saturation": 6,
+      "temperature": 4,
+      "tint": 2,
+      "highlights": -10,
+      "shadows": 8
+    },
+    "smoothStrength": 8,
+    "sharpen": 14,
+    "vignette": 6,
+    "grain": 8,
+    "lut": "warm_film"
+  }
+}

@@ -1,0 +1,188 @@
+{
+  "format": "pptpl",
+  "version": "1.0.0",
+  "_meta": {
+    "name": "樱花和服扇影人像",
+    "author": "Lumira",
+    "category": "portrait",
+    "price": 0,
+    "description": "写实日式和风樱花季人像。暖调室内和风空间，榻榻米铺地，仿真樱花树缀满粉白瓣朵、障子门透出暖光、点缀灯笼与茶具，浅粉樱花仙鹤纹和服、粉意腰带与白色太鼓结，发髻高挽插花簪。人物或执扇遮面、或跪坐弈棋、或背坐赏樱攀枝、或横刀架肩，姿态端庄含蓄、含情脉脉，画面暖粉柔和、电影质感。适合和风写真、樱花季体验、室内古风等场景，人物肢体与情绪入画自然，氛围治愈唯美。",
+    "shortDesc": "一扇一花，把春日樱花季穿在身上",
+    "tags": [
+      "人像",
+      "和服",
+      "樱花",
+      "和风",
+      "写真",
+      "春季"
+    ],
+    "referenceSource": "小红书「和服 - KIKI」和风樱花写真姿势合集",
+    "classification": {
+      "type": "portrait",
+      "majorStyle": "hanfu_kimono",
+      "style": "sakura_kimono",
+      "subStyle": "sakura_kimono",
+      "method": ""
+    },
+    "ambience": {
+      "seasons": [
+        "spring"
+      ],
+      "weathers": [
+        "sunny",
+        "cloudy"
+      ],
+      "timeTones": [
+        "day",
+        "warm"
+      ]
+    }
+  },
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "aspectRatio": "3:4",
+    "opacity": 0.5,
+    "description": "竖版 3:4，三分法构图。人物全身/半身置于画面中下部，top 部保留樱花树与障子门的留白；榻榻米水平线放在画面下 1/3 处，人物作为前景与和风道具形成前后景层次。"
+  },
+  "pose": [
+    {
+      "name": "封面·扇遮面斜坐",
+      "silhouette": {
+        "type": "image",
+        "data": "pose1_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物侧身斜坐在榻榻米上，身体朝向屏幕左侧约四分之三角度、背部稍对镜头，双腿向左侧斜伸其中一腿伸直一腿屈膝收起，左手撑在身后榻榻米上微微后仰支撑，右手举到面前持一把展开的粉紫渐变折扇半遮面，扇面靠近一侧脸颊与眼睛，另一侧眼睛与眉目露于扇外，视线含蓄地下垂，发髻高挽配粉色花卉发饰",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "跪坐执扇弈棋",
+      "silhouette": {
+        "type": "image",
+        "data": "pose2_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物跪坐(双腿并拢跪在榻榻米上、脚背贴地)于围棋矮盘前，上身挺直微侧、背部稍对镜头，左手举到侧脸旁持一把半开的粉紫渐变折扇半掩侧脸，右手轻轻抬起悬于棋盘上方做落子前的停顿动作，发髻高挽插粉色花朵发饰，姿态端庄含蓄",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "背坐赏樱",
+      "silhouette": {
+        "type": "image",
+        "data": "pose3_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物完全背对镜头跪坐在榻榻米上，双膝并拢脚背贴地、上身挺直，头部微仰朝向右上方的樱花树枝，双手自然放于大腿前或身前，发髻高挽插白色百合与粉色小花发饰，背景是仿真樱花树、障子门与茶具，呈现宁静的赏花姿态",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "背坐攀枝",
+      "silhouette": {
+        "type": "image",
+        "data": "pose4_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物背对镜头跪坐在榻榻米上，上身微微侧转向画面左侧，右臂向上高高举起、右手轻触攀折几枝探入画面的樱花枝，左臂自然垂落或扶在膝上，头微转向侧上方望向右手与花朵，发髻高挽配花卉发饰",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "持机自拍",
+      "silhouette": {
+        "type": "image",
+        "data": "pose5_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物半侧面站立/坐姿，手持一部手机举到面前做近距自拍姿势，头部微低并向画面一侧侧转约30度，视线向下看向手机屏幕，肩部自然放松，发髻高挽配粉色花卉发饰，身穿樱花纹浅粉和服",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "背坐横刀",
+      "silhouette": {
+        "type": "image",
+        "data": "pose6_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "人物背对镜头跪坐，双膝并拢脚背贴地、上身挺直微侧，双臂向身体两侧平伸、双手握持一柄长刀横架于肩后，刀身横过肩背，头部微低视线朝下，和服肩部滑落露出后颈与部分肩背，腰间系白色太鼓结，发髻插白色百合与粉色垂坠花饰，呈现蓄势安静的姬武者姿态",
+      "cameraDirection": "back"
+    }
+  ],
+  "camera": {
+    "exposureCompensation": 0.3,
+    "isoMode": "auto",
+    "iso": 200,
+    "shutterSpeed": "1/250",
+    "whiteBalance": "shade",
+    "whiteBalanceK": 6500,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "26mm",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "室内暖调柔光，主光来自画面前上方，经障子门与纸灯柔化，人物面部与和服受光均匀，光比约 2:1，整体暖粉色调、皮肤透亮",
+    "shootingDistance": "1.5-2.5m",
+    "background": "榻榻米地面、障子木格纸门、仿真樱花树、暖色纸灯笼与茶具/围棋盘等和风道具；避免杂乱杂物与人群",
+    "props": [
+      "粉紫折扇",
+      "樱花枝",
+      "围棋盘",
+      "长刀",
+      "茶具"
+    ],
+    "bestTime": "日间室内自然光（阴天/室内布灯均可）",
+    "tips": [
+      "用暖光（低色温）让和服樱粉色调更温润柔和。",
+      "人物落到榻榻米中线并留出身后樱花树，避免与盆栽轮廓重叠。",
+      "扇遮面时对焦眼睛一侧，保证露出的眉眼清晰锐利。",
+      "跪坐/正坐时稍微侧身，让和服腰带与太鼓结形成好看的立体层次。",
+      "发簪花簇与樱花树同向摆放，让人与景的'花'遥相呼应更出片。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "3:4",
+    "color": {
+      "brightness": 5,
+      "contrast": 6,
+      "saturation": 4,
+      "temperature": 4,
+      "tint": 6,
+      "highlights": -10,
+      "shadows": 8
+    },
+    "smoothStrength": 14,
+    "sharpen": 16,
+    "vignette": 10,
+    "grain": 12,
+    "lut": "warm_film"
+  }
+}
