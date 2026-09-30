@@ -1,14 +1,22 @@
 // src/lib/__tests__/pipeline-task.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { AiJobDetail } from '@/lib/ai-jobs';
 
 vi.mock('@/actions/ai', () => ({
   aiPipelineStartAction: vi.fn(),
-  aiPipelineStatusAction: vi.fn(),
-  aiPipelineResumeAction: vi.fn(),
-  aiPipelineCancelAction: vi.fn(),
 }));
 
-import { aiPipelineStatusAction } from '@/actions/ai';
+vi.mock('@/lib/ai-jobs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/ai-jobs')>();
+  return {
+    ...actual,
+    getAiJobDetail: vi.fn(),
+    resumeAiJob: vi.fn(),
+    deleteAiJob: vi.fn(),
+  };
+});
+
+import { getAiJobDetail } from '@/lib/ai-jobs';
 import type {
   AiBatchImageTraceEvent,
   AiPipelineEvent,
@@ -20,7 +28,7 @@ import {
   classifyPipelineError,
   currentPipelineStage,
   isRetryablePipelineError,
-  pipelineFiles,
+  pipelineFilesFromUrls,
   pollPipelineJob,
   poseProgressFromEvents,
   toAnalyzeDetail,
@@ -29,14 +37,24 @@ import {
   withRetry,
 } from '../pipeline-task';
 
-const statusMock = vi.mocked(aiPipelineStatusAction);
+const detailMock = vi.mocked(getAiJobDetail);
 
-/** 造一个最小可用的 AiPipelineStatusResult */
-function mkStatus(over: Partial<AiPipelineStatusResult> = {}): AiPipelineStatusResult {
+/** 造一个最小可用的 AiJobDetail（轮询数据源已从旧 AiPipelineStatusResult 换为任务详情） */
+function mkDetail(over: Partial<AiJobDetail> = {}): AiJobDetail {
   return {
+    id: 'job_1',
     jobId: 'job_1',
+    title: 'task',
     status: 'running',
     mode: 'auto',
+    currentStage: 'analyze',
+    progress: { poseTotal: 0, poseDone: 0, silTotal: 0, silDone: 0 },
+    queuePos: 0,
+    errorCode: null,
+    errorMessage: null,
+    createdAt: 1,
+    startedAt: 1,
+    finishedAt: null,
     stages: {
       analyze: { status: 'pending' },
       image: { status: 'pending' },
@@ -46,13 +64,6 @@ function mkStatus(over: Partial<AiPipelineStatusResult> = {}): AiPipelineStatusR
     events: [],
     lastSeq: 0,
     draft: null,
-    warnings: [],
-    trace: [],
-    raw: null,
-    research: [],
-    researchBrief: null,
-    researchImages: [],
-    researchVision: null,
     poseImages: [],
     poseErrors: [],
     silhouetteImages: [],
@@ -132,13 +143,13 @@ describe('withRetry', () => {
 });
 
 describe('pollPipelineJob', () => {
-  beforeEach(() => statusMock.mockReset());
+  beforeEach(() => detailMock.mockReset());
 
   it('单次查询抖动不中断：重试后继续轮询到 done', async () => {
-    statusMock
+    detailMock
       .mockRejectedValueOnce(new Error('无法连接后端服务，请检查网络与后端状态'))
       .mockResolvedValueOnce(
-        mkStatus({
+        mkDetail({
           status: 'done',
           stages: {
             analyze: { status: 'done' },
@@ -146,7 +157,7 @@ describe('pollPipelineJob', () => {
             silhouette: { status: 'done' },
           },
           draft: { name: 'd' },
-          poseImages: [{ index: 0, base64: 'AAA', mimeType: 'image/png' }],
+          poseImages: [{ index: 0, mimeType: 'image/png', storageKey: 'k0', url: '/uploads/ai-jobs/job_1/pose-0.png' }],
         }),
       );
     const res = await pollPipelineJob('job_1', {
@@ -160,15 +171,15 @@ describe('pollPipelineJob', () => {
 
   it('job 不存在（404）→ 抛 PipelinePollError 且 code=job_missing', async () => {
     // 真实链路：server action 捕获 api 抛错后返回 { error }（不抛出），故此处 mock resolve
-    statusMock.mockResolvedValue({ error: 'API_ERROR: 404 AI pipeline job not found' });
+    detailMock.mockResolvedValue({ error: 'API_ERROR: 404 AI pipeline job not found' });
     await expect(
       pollPipelineJob('job_x', { intervalMs: 1, timeoutMs: 500, retryDelaysMs: [1] }),
     ).rejects.toMatchObject({ code: 'job_missing' });
   });
 
   it('job 阶段失败（status=error）时返回结果而非抛错（由调用方展示中断详情）', async () => {
-    statusMock.mockResolvedValue(
-      mkStatus({
+    detailMock.mockResolvedValue(
+      mkDetail({
         status: 'error',
         stages: {
           analyze: { status: 'done' },
@@ -189,11 +200,19 @@ describe('pollPipelineJob', () => {
     expect(res.error?.code).toBe('upstream_timeout');
   });
 
+  it('stopped / interrupted 也视作终态立即返回（isSettled 覆盖新终态）', async () => {
+    detailMock.mockResolvedValue(mkDetail({ status: 'stopped' }));
+    const res = await pollPipelineJob('job_1', { intervalMs: 1, timeoutMs: 2000 });
+    expect(res.status).toBe('stopped');
+    // 仅查询一次即返回，不再继续轮询
+    expect(detailMock).toHaveBeenCalledTimes(1);
+  });
+
   it('增量事件按 seq 累积并回调', async () => {
-    statusMock
-      .mockResolvedValueOnce(mkStatus({ events: [mkEvent({ seq: 1 })], lastSeq: 1 }))
-      .mockResolvedValueOnce(mkStatus({ events: [mkEvent({ seq: 2 })], lastSeq: 2 }))
-      .mockResolvedValueOnce(mkStatus({ status: 'done', events: [], lastSeq: 2 }));
+    detailMock
+      .mockResolvedValueOnce(mkDetail({ events: [mkEvent({ seq: 1 })], lastSeq: 1 }))
+      .mockResolvedValueOnce(mkDetail({ events: [mkEvent({ seq: 2 })], lastSeq: 2 }))
+      .mockResolvedValueOnce(mkDetail({ status: 'done', events: [], lastSeq: 2 }));
     const seen: number[] = [];
     const res = await pollPipelineJob('job_1', {
       intervalMs: 1,
@@ -203,15 +222,15 @@ describe('pollPipelineJob', () => {
     expect(res.status).toBe('done');
     expect(seen[seen.length - 1]).toBe(2);
     // 第二次查询带 since=1（增量）
-    expect(statusMock.mock.calls[1]?.[1]).toBe(1);
+    expect(detailMock.mock.calls[1]?.[1]).toBe(1);
   });
 
   it('终态为全量事件：整体替换运行期收敛版（截断正文被完整版覆盖）', async () => {
     const truncated = mkEvent({ seq: 1, stage: 'analyze', response: 'a'.repeat(2000) + '…（已截断，原长 5000 字）' });
-    statusMock
-      .mockResolvedValueOnce(mkStatus({ events: [truncated], lastSeq: 1 }))
+    detailMock
+      .mockResolvedValueOnce(mkDetail({ events: [truncated], lastSeq: 1 }))
       .mockResolvedValueOnce(
-        mkStatus({
+        mkDetail({
           status: 'done',
           events: [
             mkEvent({ seq: 1, stage: 'analyze', response: 'a'.repeat(5000), rawResponse: 'raw' }),
@@ -272,7 +291,7 @@ describe('事件转换', () => {
   it('currentPipelineStage 优先 running，其次 error，再次最后 done', () => {
     expect(
       currentPipelineStage(
-        mkStatus({
+        mkDetail({
           stages: {
             analyze: { status: 'done' },
             image: { status: 'running' },
@@ -283,7 +302,7 @@ describe('事件转换', () => {
     ).toBe('image');
     expect(
       currentPipelineStage(
-        mkStatus({
+        mkDetail({
           stages: {
             analyze: { status: 'done' },
             image: { status: 'error' },
@@ -294,7 +313,7 @@ describe('事件转换', () => {
     ).toBe('image');
     expect(
       currentPipelineStage(
-        mkStatus({
+        mkDetail({
           stages: {
             analyze: { status: 'done' },
             image: { status: 'pending' },
@@ -307,25 +326,27 @@ describe('事件转换', () => {
 
   it('toAnalyzeDetail 把 job 结果映射成识别详情结构', () => {
     const detail = toAnalyzeDetail(
-      mkStatus({
+      mkDetail({
         status: 'done',
         draft: { name: 'd' },
         warnings: ['w'],
         events: [mkEvent({ seq: 1, stage: 'analyze', step: 'describe' })],
         lastSeq: 1,
-      }),
+      }) as unknown as AiPipelineStatusResult,
     );
     expect(detail.status).toBe('done');
     expect(detail.draft).toEqual({ name: 'd' });
     expect(detail.events?.map((e) => e.seq)).toEqual([1]);
   });
 
-  it('pipelineFiles 按 index 排序并转 File', () => {
-    const files = pipelineFiles([
-      { index: 1, base64: btoa('b'), mimeType: 'image/png' },
-      { index: 0, base64: btoa('a'), mimeType: 'image/png' },
+  it('pipelineFilesFromUrls：按 URL 取回并包装 File，忽略空 url', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(new Blob(['x'], { type: 'image/png' }), { status: 200 })) as never);
+    const out = await pipelineFilesFromUrls([
+      { index: 0, url: '/uploads/ai-jobs/job_1/pose-0.png', mimeType: 'image/png' },
+      { index: 1, url: '', mimeType: 'image/png' },
     ]);
-    expect(files.map((f) => f.index)).toEqual([0, 1]);
-    expect(files[0]!.file).toBeInstanceOf(File);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.file.name).toContain('pose');
+    vi.unstubAllGlobals();
   });
 });

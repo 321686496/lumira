@@ -1,5 +1,6 @@
 // src/app/dashboard/templates/ai-create/page.tsx
 // AI 一键建模向导页：上传示例图 → 识别回填 → 封面/剪影决策 → 提交
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { api } from '@/lib/api';
 import { UnauthenticatedError } from '@/lib/auth';
@@ -25,7 +26,10 @@ export default async function AiCreatePage() {
 
   return (
     <div className="space-y-4">
-      <AiCreateWizard categories={categories} backendUrl={BACKEND_URL} />
+      {/* 向导用 useSearchParams() 读取 ?job= 恢复锚点，需 Suspense 边界 */}
+      <Suspense fallback={<div className="text-sm text-muted-foreground">加载中…</div>}>
+        <AiCreateWizard categories={categories} backendUrl={BACKEND_URL} />
+      </Suspense>
     </div>
   );
 }

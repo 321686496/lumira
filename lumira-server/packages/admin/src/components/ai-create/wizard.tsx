@@ -20,39 +20,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { compressImage } from '@/lib/image-compress';
 import {
   getAiConfigAction,
 } from '@/actions/ai';
-import { type AiPoseProgress } from '@/lib/ai-task';
 import {
-  cancelPipelineJob,
-  currentPipelineStage,
-  fetchPipelineStatus,
+  getAiJobDetail,
+  isSettled,
+  listAiJobs,
+  type AiJobDetail,
+  type AiJobStatus,
+} from '@/lib/ai-jobs';
+import {
   interruptionFromPollError,
-  pipelineFiles,
-  pipelineStageLabel,
-  PipelinePollError,
-  pollPipelineJob,
-  poseProgressFromEvents,
-  resumePipelineJob,
+  pipelineFilesFromUrls,
   startPipelineJob,
   toAnalyzeDetail,
   toPoseEvents,
   toRecogEvents,
 } from '@/lib/pipeline-task';
-import { clearJobRef, readJobRef, saveJobRef } from '@/lib/ai-job-storage';
-import { InterruptionBanner } from './interruption-banner';
 import type {
   TemplateCategory,
   AiAnalyzeTraceEntry,
   AiAnalyzeStatusResult,
   AiBatchImageTraceEvent,
-  AiInterruptionInfo,
   AiPipelineEvent,
   AiPipelineJobMode,
-  AiPipelineStage,
   AiPipelineStatusResult,
   AiTraceEvent,
 } from '@/types/admin';
@@ -76,23 +71,6 @@ const WIZARD_STEPS = [
   { n: 5, title: '提交' },
 ] as const;
 
-type AutoStage = 'analyzing' | 'generating-image' | 'generating-silhouette' | 'submitting';
-const AUTO_STAGES: AutoStage[] = ['analyzing', 'generating-image', 'generating-silhouette', 'submitting'];
-
-const AUTO_STAGE_TEXT: Record<AutoStage, string> = {
-  analyzing: '① 正在识别示例图风格…',
-  'generating-image': '② 正在生成封面效果图…',
-  'generating-silhouette': '③ 正在生成剪影…',
-  submitting: '④ 正在提交上架…',
-};
-
-/** AiPipelineStage → 全自动进度条阶段文案键 */
-const AUTO_STAGE_OF: Record<AiPipelineStage, AutoStage> = {
-  analyze: 'analyzing',
-  image: 'generating-image',
-  silhouette: 'generating-silhouette',
-};
-
 const ACCEPTED_MIME = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_EXAMPLE_BYTES = 8 * 1024 * 1024;
 
@@ -104,6 +82,9 @@ export function AiCreateWizard({
   backendUrl: string;
 }) {
   const { toast } = useToast();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const recoverJobId = searchParams.get('job');
   const [step, setStep] = useState(1);
   const [maxStep, setMaxStep] = useState(1);
   const [exampleFiles, setExampleFiles] = useState<File[]>([]);
@@ -129,27 +110,15 @@ export function AiCreateWizard({
   const [injection, setInjection] = useState<TemplateFormAiInjection | null>(null);
   /** 首次识别成功后常驻渲染 TemplateForm（切回 Step1 也不丢表单状态） */
   const [formActivated, setFormActivated] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
-  const [autoState, setAutoState] = useState<{ running: boolean; stage: AutoStage; error?: string } | null>(null);
-  /** 全自动「生成封面」阶段实时进度（第 X/Y 张） */
-  const [poseProgress, setPoseProgress] = useState<AiPoseProgress | null>(null);
+  /** 顶部提示（如「任务仍在进行中」），非错误态 */
+  const [notice, setNotice] = useState<string | null>(null);
+  /** 提交中（按钮置灰防重复点击；成功后跳转任务详情页） */
+  const [submitting, setSubmitting] = useState(false);
+  /** 是否存在进行中的任务（挂载时由任务列表判断；供顶部提示条） */
+  const [runningJob, setRunningJob] = useState<{ id: string; status: AiJobStatus } | null>(null);
   /** 生成姿势图逐张实时过程事件（喂给常驻面板「姿势图生成」Tab） */
   const [poseTraceEvents, setPoseTraceEvents] = useState<AiBatchImageTraceEvent[]>([]);
-  /** 手动 Step3 生成姿势图是否进行中（喂给常驻面板「姿势图生成」Tab） */
-  const [poseTraceRunning, setPoseTraceRunning] = useState(false);
-  /** 进行中的 pipeline jobId（断点续跑与刷新恢复的锚点） */
-  const [jobId, setJobId] = useState<string | null>(null);
-  /** 本次 job 的模式（决定识别完成后如何应用产物） */
-  const [jobMode, setJobMode] = useState<AiPipelineJobMode>('auto');
-  /** 当前 pipeline 阶段（喂进度文案） */
-  const [pipelineStage, setPipelineStage] = useState<AiPipelineStage | null>(null);
-  /** 中断详情（非空 = 展示断点 Banner 与「继续」） */
-  const [interruption, setInterruption] = useState<AiInterruptionInfo | null>(null);
-  /** 「继续」请求中 */
-  const [resuming, setResuming] = useState(false);
-  /** abort 时记录当前阶段（供异常合成为中断详情） */
-  const stageRef = useRef<AiPipelineStage>('analyze');
   /** 「AI 生成过程」面板本次是否被手动关闭（仅隐藏展示，不清空已采集过程） */
   const [progressPanelHidden, setProgressPanelHidden] = useState(false);
   /** Step1 附加输入：创作要求 / 姿势个数 / 人物数量（'auto' = AI 自动判断）；主文字描述复用 inputText（同时作为 textDesc 附加输入） */
@@ -164,8 +133,6 @@ export function AiCreateWizard({
   /** 生效的剪影模型名（未单独指定 = 生图模型），Step4 展示 */
   const [silhouetteModelName, setSilhouetteModelName] = useState<string | null>(null);
   const stampRef = useRef(0);
-  /** 全自动流程的中止控制器（每次 runAutoAll 新建；结束/中止后清空） */
-  const abortRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleImagesChange = useCallback((files: File[]) => setFormImages(files), []);
 
@@ -190,7 +157,7 @@ export function AiCreateWizard({
     return () => mq.removeEventListener('change', update);
   }, []);
 
-  const busy = analyzing || Boolean(autoState?.running);
+  const busy = submitting;
   const hasInput = exampleFiles.length > 0 || inputText.trim() !== '';
   /** 高级设置已填项数（用于折叠态提示） */
   const advancedFilledCount =
@@ -229,23 +196,18 @@ export function AiCreateWizard({
     setAnalyzeDetail(null);
     setTraceEvents([]);
     setPoseTraceEvents([]);
-    setPoseTraceRunning(false);
     setProgressPanelHidden(false);
     setDetailDialogOpen(false);
     setCandidates([]);
     setSilhouetteFile(null);
     setInjection(null);
     setFormActivated(false);
-    setAutoState(null);
     setPoseReferenceFiles([]);
     setPoseReferenceUrls([]);
     setStep(1);
     setMaxStep(1);
-    setJobId(null);
-    setPipelineStage(null);
-    setInterruption(null);
-    setResuming(false);
-    clearJobRef();
+    setErrorText(null);
+    setNotice(null);
   };
 
   /** 处理已选/拖入的示例图：逐张校验 + 压缩后追加（点击选择与拖拽上传共用；换图 = 重开流程） */
@@ -335,30 +297,30 @@ export function AiCreateWizard({
     return fd;
   };
 
-  /** 把 job 增量事件分流到两个 Tab 并更新阶段/进度（两入口共用） */
+  /** 把 job 事件分流到两个 Tab（提交后已跳转详情页；此仅用于 ?job= 恢复时回填过程面板） */
   const drivePipelineEvents = (events: AiPipelineEvent[]) => {
     setTraceEvents(toRecogEvents(events));
     setPoseTraceEvents(toPoseEvents(events));
-    const p = poseProgressFromEvents(events);
-    if (p) setPoseProgress(p);
   };
 
   /** 把识别产物回填草稿/研究过程（返回是否有草稿） */
-  const applyAnalyze = (res: AiPipelineStatusResult): boolean => {
-    if (!res.draft) return false;
-    setDraft(res.draft);
-    setWarnings(res.warnings ?? []);
-    setTrace(res.trace ?? []);
-    setAnalyzeDetail(toAnalyzeDetail(res));
+  const applyAnalyze = (res: AiJobDetail): boolean => {
+    const draftLocal = res.draft as Record<string, unknown> | null;
+    if (!draftLocal) return false;
+    setDraft(draftLocal);
+    setWarnings((res.warnings as string[] | undefined) ?? []);
+    setTrace((res.trace as AiAnalyzeTraceEntry[] | undefined) ?? []);
+    setAnalyzeDetail(toAnalyzeDetail(res as unknown as AiPipelineStatusResult));
     return true;
   };
 
   /** 识别完成 → 示例图作默认封面候选并回填表单（纯文模式候选为空） */
-  const finishAnalyzeOnly = (res: AiPipelineStatusResult) => {
+  const finishAnalyzeOnly = (res: AiJobDetail) => {
     if (!applyAnalyze(res)) {
       setErrorText('识别结果为空，请重试');
       return;
     }
+    const draftLocal = res.draft as Record<string, unknown>;
     if (exampleFiles.length > 0) {
       setCandidates(
         exampleFiles.map((f, i) => ({
@@ -368,86 +330,60 @@ export function AiCreateWizard({
           source: 'example',
         })),
       );
-      inject({ json: res.draft!, images: exampleFiles, replaceImages: true });
+      inject({ json: draftLocal, images: exampleFiles, replaceImages: true });
     } else {
       setCandidates([]);
-      inject({ json: res.draft! });
+      inject({ json: draftLocal });
     }
     setFormActivated(true);
-    setJobId(null);
-    setPipelineStage(null);
-    setInterruption(null);
-    clearJobRef();
     goto(2);
   };
 
-  /** 手动识别（analyze-only job）：只产出草稿，后续步骤走既有手动端点 */
-  const handleAnalyze = async () => {
-    if (!hasInput) return;
-    setAnalyzing(true);
+  /** 提交 pipeline job（analyze-only / auto 共用）：入队后跳转任务详情页，不在本页挂轮询 */
+  const submitJob = async (mode: AiPipelineJobMode) => {
+    if (!hasInput || submitting) return;
     setErrorText(null);
-    setInterruption(null);
-    setJobId(null);
-    setTraceEvents([]);
-    setPoseTraceEvents([]);
-    setProgressPanelHidden(false);
-    setJobMode('analyze-only');
-    stageRef.current = 'analyze';
+    setNotice(null);
+    setSubmitting(true);
     try {
-      const jobIdLocal = await startPipelineJob(buildPipelineFormData('analyze-only'));
-      setJobId(jobIdLocal);
-      saveJobRef({ jobId: jobIdLocal, mode: 'analyze-only' });
-      const res = await pollPipelineJob(jobIdLocal, {
-        onEvents: drivePipelineEvents,
-        // 内联 onStatus：避免引用 jobMode state 造成 stale closure（此时 jobMode 仍是上一次的值）
-        onStatus: (r) => {
-          const stage = currentPipelineStage(r);
-          stageRef.current = stage;
-          setPipelineStage(stage);
-        },
+      const { jobId: id, status, queuePos } = await startPipelineJob(buildPipelineFormData(mode));
+      toast({
+        title: status === 'queued' ? '已加入队列' : '任务已开始',
+        description:
+          status === 'queued'
+            ? `排队第 ${queuePos} 位，可离开此页，进度在任务详情页查看`
+            : '可离开此页，进度在任务详情页查看',
       });
-      if (res.status === 'error') {
-        // 阶段失败：保留已完成草稿（若可用则允许直接进下一步），展示详细中断并提供「继续」
-        if (applyAnalyze(res)) setFormActivated(true);
-        setInterruption(res.error ?? interruptionFromPollError(new Error('识别失败'), currentPipelineStage(res)));
-        const msg = res.error?.message || '识别失败';
-        setErrorText(msg);
-        toast({ variant: 'destructive', title: '识别中断', description: msg });
-        return;
-      }
-      finishAnalyzeOnly(res);
+      router.push(`/dashboard/templates/ai-tasks/${id}`);
     } catch (e) {
-      const info = interruptionFromPollError(e, stageRef.current);
-      setInterruption(info);
+      const info = interruptionFromPollError(e, 'analyze');
       setErrorText(info.message);
-      toast({ variant: 'destructive', title: '识别失败', description: info.message });
-    } finally {
-      setAnalyzing(false);
+      toast({ variant: 'destructive', title: '提交失败', description: info.message });
+      setSubmitting(false);
     }
   };
 
-  /** 全自动 job 跑完后应用产物：候选封面 + 注入表单 + 剪影 + 触发提交 */
-  const finishAuto = (res: AiPipelineStatusResult) => {
+  /** 全自动任务完成后应用产物：候选封面 + 注入表单 + 剪影 + 触发提交（?job= 恢复时复用） */
+  const finishAuto = async (res: AiJobDetail) => {
     if (!applyAnalyze(res)) {
-      setAutoState(null);
       setErrorText('识别结果为空，请重试');
       return;
     }
     setFormActivated(true);
-    const draftLocal = res.draft!;
+    const draftLocal = res.draft as Record<string, unknown>;
     const exampleCandidates: CoverCandidate[] = exampleFiles.map((f, i) => ({
       id: i === 0 ? 'example' : `example-${i}`,
       file: f,
       url: URL.createObjectURL(f),
       source: 'example',
     }));
-    const poseFiles = pipelineFiles(res.poseImages);
+    const poseFiles = await pipelineFilesFromUrls(res.poseImages);
     if (poseFiles.length === 0) {
       setCandidates(exampleCandidates);
       if (exampleFiles.length > 0) inject({ json: draftLocal, images: exampleFiles, replaceImages: true });
       else inject({ json: draftLocal });
       goto(3);
-      setAutoState({ running: false, stage: 'generating-image', error: '姿势图生成失败' });
+      setErrorText('姿势图生成失败，请基于示例图选择封面后继续');
       return;
     }
     const generatedCandidates: CoverCandidate[] = poseFiles.map((p) => ({
@@ -459,231 +395,72 @@ export function AiCreateWizard({
     setCandidates([...generatedCandidates, ...exampleCandidates]);
     inject({ json: draftLocal, images: poseFiles.map((p) => p.file), replaceImages: true });
 
-    const silFiles = pipelineFiles(res.silhouetteImages);
+    const silFiles = await pipelineFilesFromUrls(res.silhouetteImages);
     if (silFiles.length !== poseFiles.length) {
       goto(4);
-      setAutoState({
-        running: false,
-        stage: 'generating-silhouette',
-        error: res.silhouetteErrors[0]?.error || '部分剪影生成失败',
-      });
+      setErrorText(res.silhouetteErrors[0]?.error || '部分剪影生成失败，请手动补充剪影');
       return;
     }
     setSilhouetteFile(silFiles[0]!.file);
     goto(5);
-    setJobId(null);
-    setPipelineStage(null);
-    setInterruption(null);
-    clearJobRef();
-    setAutoState({ running: true, stage: 'submitting' });
     inject({ silhouettes: silFiles.map((p) => p.file), isActive: true, autoSubmit: true });
   };
 
-  /** 全自动：一个 auto job 提交后只轮询（识别 → 姿势图 → 剪影 → 触发上架） */
-  const runAutoAll = async () => {
-    if (!hasInput) return;
-    setErrorText(null);
-    setInterruption(null);
-    setJobId(null);
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const { signal } = controller;
-    setTraceEvents([]);
-    setPoseTraceEvents([]);
-    setPoseTraceRunning(false);
-    setPoseProgress(null);
-    setProgressPanelHidden(false);
-    setJobMode('auto');
-    stageRef.current = 'analyze';
-    setPipelineStage('analyze');
-    setAutoState({ running: true, stage: 'analyzing' });
-    try {
-      const jobIdLocal = await startPipelineJob(buildPipelineFormData('auto'));
-      setJobId(jobIdLocal);
-      saveJobRef({ jobId: jobIdLocal, mode: 'auto' });
-      const res = await pollPipelineJob(jobIdLocal, {
-        signal,
-        onEvents: drivePipelineEvents,
-        onStatus: (r) => {
-          const stage = currentPipelineStage(r);
-          stageRef.current = stage;
-          setPipelineStage(stage);
-          setAutoState({ running: true, stage: AUTO_STAGE_OF[stage] });
-        },
-      });
-      if (res.status === 'error') {
-        applyAnalyze(res);
-        setFormActivated(true);
-        const info = res.error ?? interruptionFromPollError(new Error('生成中断'), currentPipelineStage(res));
-        setInterruption(info);
-        const stage = currentPipelineStage(res);
-        stageRef.current = stage;
-        setAutoState({ running: false, stage: AUTO_STAGE_OF[stage], error: info.message });
-        // 已生成的姿势图/剪影尽量保留在候选与表单里
-        if (res.poseImages.length > 0) {
-          const poseFiles = pipelineFiles(res.poseImages);
-          const exampleCandidates: CoverCandidate[] = exampleFiles.map((f, i) => ({
-            id: i === 0 ? 'example' : `example-${i}`,
-            file: f,
-            url: URL.createObjectURL(f),
-            source: 'example',
-          }));
-          setCandidates([
-            ...poseFiles.map((p) => ({
-              id: `ai-${Date.now()}-${p.index}`,
-              file: p.file,
-              url: URL.createObjectURL(p.file),
-              source: 'ai' as const,
-            })),
-            ...exampleCandidates,
-          ]);
-          inject({ json: res.draft!, images: poseFiles.map((p) => p.file), replaceImages: true });
-          setFormActivated(true);
-          // 已生成可用姿势图且失败在生图阶段：推进到封面选择步骤，让用户基于已产出图继续
-          if (stage === 'image') goto(3);
-        }
-        toast({ variant: 'destructive', title: `生成中断（${info.code}）`, description: info.message });
-        return;
-      }
-      finishAuto(res);
-    } catch (e) {
-      const aborted = e instanceof PipelinePollError && e.code === 'aborted';
-      const info = interruptionFromPollError(e, stageRef.current);
-      setInterruption(info);
-      setAutoState({ running: false, stage: AUTO_STAGE_OF[stageRef.current], error: info.message });
-      if (!aborted) {
-        toast({
-          variant: 'destructive',
-          title: `全自动在「${AUTO_STAGE_TEXT[AUTO_STAGE_OF[stageRef.current]]}」阶段异常`,
-          description: info.message,
-        });
-      }
-    } finally {
-      abortRef.current = null;
-    }
-  };
-
-  /** 断点「继续」：优先重连（后端仍在跑），否则从失败阶段重跑并复用已完成成果 */
-  const resumeFromInterruption = async () => {
-    if (!jobId) return;
-    setResuming(true);
-    const wasAuto = jobMode === 'auto';
-    const controller = new AbortController();
-    abortRef.current = controller;
-    try {
-      // 后端语义：running → 仅重连；error → 从失败阶段重跑并复用已完成成果。前端只需要结果
-      await resumePipelineJob(jobId);
-      setInterruption(null);
-      if (!wasAuto) setAnalyzing(true);
-      else setAutoState({ running: true, stage: AUTO_STAGE_OF[stageRef.current] });
-      const res = await pollPipelineJob(jobId, {
-        signal: controller.signal,
-        onEvents: drivePipelineEvents,
-        onStatus: (s) => {
-          const stage = currentPipelineStage(s);
-          stageRef.current = stage;
-          setPipelineStage(stage);
-          if (wasAuto) setAutoState({ running: true, stage: AUTO_STAGE_OF[stage] });
-        },
-      });
-      if (res.status === 'error') {
-        applyAnalyze(res);
-        const info = res.error ?? interruptionFromPollError(new Error('续跑中断'), currentPipelineStage(res));
-        setInterruption(info);
-        if (wasAuto) setAutoState({ running: false, stage: AUTO_STAGE_OF[currentPipelineStage(res)], error: info.message });
-        else setErrorText(info.message);
-        return;
-      }
-      if (wasAuto) finishAuto(res);
-      else finishAnalyzeOnly(res);
-    } catch (e) {
-      const info = interruptionFromPollError(e, stageRef.current);
-      setInterruption(info);
-      if (wasAuto) setAutoState({ running: false, stage: AUTO_STAGE_OF[stageRef.current], error: info.message });
-      else setErrorText(info.message);
-    } finally {
-      setResuming(false);
-      setAnalyzing(false);
-      abortRef.current = null;
-    }
-  };
-
-  /** 放弃本次生成：删除后端 job + 清本地引用 + 重置流程 */
-  const discardJob = async () => {
-    if (jobId) {
-      try {
-        await cancelPipelineJob(jobId);
-      } catch {
-        // 删除失败不影响本地重置（后端有 1 小时 TTL 兜底）
-      }
-    }
-    setInterruption(null);
-    resetFlow();
-  };
-
-  /** 挂载时恢复上次未完成的 job：running → 重连轮询；error → 展示断点；done → 回填后清理 */
+  /** 挂载时按 ?job= 从任务详情恢复：已完成 → 回填并推进；未终态 → 提示仍在进行中 */
   useEffect(() => {
-    const ref = readJobRef();
-    if (!ref) return;
+    if (!recoverJobId) return;
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetchPipelineStatus(ref.jobId, 0, true);
+        const res = await getAiJobDetail(recoverJobId, 0);
         if (cancelled) return;
-        setJobId(ref.jobId);
-        setJobMode(res.mode);
-        const stage = currentPipelineStage(res);
-        stageRef.current = stage;
-        setPipelineStage(stage);
-        if (res.mode === 'auto') setAutoState({ running: res.status === 'running', stage: AUTO_STAGE_OF[stage] });
-        else setAnalyzing(res.status === 'running');
-        drivePipelineEvents(res.events);
-        if (res.status === 'error') {
-          applyAnalyze(res);
-          setInterruption(res.error ?? interruptionFromPollError(new Error('生成中断'), stage));
+        if (!('jobId' in res)) {
+          setErrorText(res.error || '加载任务详情失败');
+          return;
+        }
+        drivePipelineEvents((res.events ?? []) as AiPipelineEvent[]);
+        if (!isSettled(res.status)) {
+          setRunningJob({ id: recoverJobId, status: res.status });
+          setNotice('任务仍在进行中，可前往任务详情页查看实时进度');
           return;
         }
         if (res.status === 'done') {
-          if (res.mode === 'auto') finishAuto(res);
+          if (res.stages.analyze.status !== 'done') {
+            setErrorText('任务已完成，但识别阶段未产出结果，请重新开始');
+            return;
+          }
+          if (res.mode === 'auto') await finishAuto(res);
           else finishAnalyzeOnly(res);
           return;
         }
-        // running：立即重连轮询（job 输入在后端，无需重传）
-        const polled = await pollPipelineJob(ref.jobId, {
-          onEvents: drivePipelineEvents,
-          onStatus: (r) => {
-            const s = currentPipelineStage(r);
-            stageRef.current = s;
-            setPipelineStage(s);
-            if (res.mode === 'auto') setAutoState({ running: true, stage: AUTO_STAGE_OF[s] });
-          },
-        });
-        if (cancelled) return;
-        if (polled.status === 'error') {
-          applyAnalyze(polled);
-          setInterruption(polled.error ?? interruptionFromPollError(new Error('生成中断'), currentPipelineStage(polled)));
-          return;
-        }
-        if (polled.mode === 'auto') finishAuto(polled);
-        else finishAnalyzeOnly(polled);
+        setErrorText(res.error?.message || '任务已中断，可前往任务详情页继续，或重新开始');
       } catch (e) {
         if (cancelled) return;
-        // 失效/网络等问题：保留 job 引用并展示断点，让用户决定「继续」或「重新开始」
-        setJobId(ref.jobId);
-        setJobMode(ref.mode);
-        setInterruption(interruptionFromPollError(e, stageRef.current));
-      } finally {
-        if (!cancelled) {
-          setAnalyzing(false);
-          setAutoState((prev) => (prev ? { ...prev, running: false } : prev));
-        }
+        setErrorText(interruptionFromPollError(e, 'analyze').message);
       }
     })();
     return () => {
       cancelled = true;
     };
-    // 仅在挂载时恢复一次（jobId 锚点来自 localStorage，不需要进依赖）
+    // 仅在 recoverJobId 变化时按 ?job= 恢复一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recoverJobId]);
+
+  /** 挂载时查最近任务，若有非终态任务则在顶部提示并提供详情入口 */
+  useEffect(() => {
+    let cancelled = false;
+    listAiJobs({ limit: 5 })
+      .then((res) => {
+        if (cancelled || !res || 'error' in res) return;
+        const active = res.items.find((it) => !isSettled(it.status));
+        if (active) setRunningJob({ id: active.id, status: active.status });
+      })
+      .catch(() => {
+        // best-effort：列表查询失败不影响向导使用
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /** Step3 应用封面：替换 imageFiles（首图 = 封面）→ Step4 */
@@ -700,25 +477,6 @@ export function AiCreateWizard({
     }
     goto(5);
   };
-
-  const stageIndex = autoState ? AUTO_STAGES.indexOf(autoState.stage) : -1;
-
-  /** 面板收拢态展示的进度文案（运行中优先，缺省回落 Tab 计数；失败时显示「已失败」） */
-  const progressStatusText = analyzing
-    ? `正在识别…${pipelineStage ? `（${pipelineStageLabel(pipelineStage)}）` : ''}`
-    : autoState?.running
-      ? `进行中 · ${AUTO_STAGE_TEXT[autoState.stage]}${
-          autoState.stage === 'generating-image' && poseProgress
-            ? ` ${poseProgress.current}/${poseProgress.total}`
-            : ''
-        }`
-      : interruption
-        ? `已中断 · ${interruption.code}`
-        : errorText
-          ? '识别失败'
-          : autoState?.error
-            ? '已失败'
-            : null;
 
   /** 常驻预览面板：识别前占位，识别后由 TemplateForm portal 填充宿主 */
   const previewPanel = (
@@ -762,15 +520,41 @@ export function AiCreateWizard({
           </p>
         </div>
 
+        {/* 顶部工具条：任务队列入口 + 进行中任务提示 + 提示/错误 */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/dashboard/templates/ai-tasks"
+            className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            任务队列
+          </Link>
+          {runningJob && (
+            <Link
+              href={`/dashboard/templates/ai-tasks/${runningJob.id}`}
+              className="rounded-md border border-primary/40 bg-primary/5 px-2.5 py-1 text-xs text-primary transition-colors hover:bg-primary/10"
+            >
+              {runningJob.status === 'queued' ? '有任务排队中' : '有任务进行中'} · 查看进度
+            </Link>
+          )}
+        </div>
+        {notice && (
+          <div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm text-primary">{notice}</div>
+        )}
+        {errorText && step !== 1 && (
+          <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            {errorText}
+          </div>
+        )}
+
         {/* 常驻 AI 生成过程面板（步骤栏上方、跨步骤可见；运行中展开/结束后收拢；关闭仅隐藏不清空） */}
         {!progressPanelHidden && (
           <GenerateProgressPanel
             recogEvents={traceEvents}
-            recogRunning={analyzing || (autoState?.running === true && autoState.stage === 'analyzing')}
+            recogRunning={false}
             poseEvents={poseTraceEvents}
-            poseRunning={poseTraceRunning || (autoState?.running === true && autoState.stage === 'generating-image')}
-            statusText={progressStatusText}
-            hadError={Boolean(errorText) || Boolean(autoState?.error)}
+            poseRunning={false}
+            statusText={notice}
+            hadError={Boolean(errorText)}
             onOpenDetail={() => setDetailDialogOpen(true)}
             onClose={() => setProgressPanelHidden(true)}
           />
@@ -814,53 +598,6 @@ export function AiCreateWizard({
 
         {/* 非 xl：预览面板置于 stepper 下方 */}
         {!isXl && previewPanel}
-
-        {/* 全自动进度 / 失败提示 */}
-        {autoState?.running && (
-          <div className="rounded-md border border-primary/40 bg-primary/5 p-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-primary">
-              <MagicWand size={16} /> 全自动进行中：{AUTO_STAGE_TEXT[autoState.stage]}
-              {autoState.stage === 'generating-image' && poseProgress
-                ? `（第 ${poseProgress.current}/${poseProgress.total} 张）`
-                : ''}
-              <button
-                type="button"
-                onClick={() => abortRef.current?.abort()}
-                className="ml-auto shrink-0 rounded border border-primary/40 px-2 py-0.5 text-xs text-primary transition-colors hover:bg-primary/10"
-              >
-                中止
-              </button>
-            </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-primary/20">
-              <div
-                className="h-full bg-primary transition-all"
-                style={{
-                  width: `${
-                    autoState.stage === 'generating-image' && poseProgress
-                      ? (poseProgress.current / Math.max(poseProgress.total, 1)) * 100
-                      : ((stageIndex + 1) / AUTO_STAGES.length) * 100
-                  }%`,
-                }}
-              />
-            </div>
-          </div>
-        )}
-        {interruption && !busy && (
-          <InterruptionBanner
-            info={interruption}
-            resuming={resuming}
-            canResume={Boolean(jobId)}
-            onResume={resumeFromInterruption}
-            onRestart={resetFlow}
-            onDismiss={discardJob}
-          />
-        )}
-        {autoState && !autoState.running && autoState.error && !interruption && (
-          <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-            全自动在「{AUTO_STAGE_TEXT[autoState.stage]}」阶段失败：{autoState.error}
-            。已停在当前步骤，可人工继续或调整后重试，已生成的草稿 / 封面已保留。
-          </div>
-        )}
 
         {/* Step1 上传示例图 */}
         {step === 1 && (
@@ -1053,13 +790,13 @@ export function AiCreateWizard({
 
               <div className="flex flex-wrap items-start gap-4">
                 <div className="space-y-1">
-                  <Button disabled={!hasInput || busy} onClick={handleAnalyze}>
-                    {analyzing ? '识别中…' : '开始识别'}
+                  <Button disabled={!hasInput || busy} onClick={() => submitJob('analyze-only')}>
+                    {submitting ? '提交中…' : '开始识别'}
                   </Button>
                   <p className="text-xs text-muted-foreground">只产出草稿，后续步骤可逐步确认</p>
                 </div>
                 <div className="space-y-1">
-                  <Button variant="outline" disabled={!hasInput || busy} onClick={runAutoAll}>
+                  <Button variant="outline" disabled={!hasInput || busy} onClick={() => submitJob('auto')}>
                     <MagicWand size={14} className="mr-1" /> 一键生成并上架
                   </Button>
                   <p className="max-w-xs text-xs text-muted-foreground">
@@ -1169,7 +906,6 @@ export function AiCreateWizard({
             busy={busy}
             onApply={applyCover}
             onPoseEvents={setPoseTraceEvents}
-            onPoseRunningChange={setPoseTraceRunning}
           />
         )}
 

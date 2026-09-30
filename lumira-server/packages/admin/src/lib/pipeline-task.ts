@@ -1,21 +1,24 @@
 // src/lib/pipeline-task.ts
 // AI 流水线 job 的前端驱动：提交 / 轮询（增量事件 + 退避重试）/ 续跑 / 放弃，
 // 并把 job 事件转换为既有「风格识别」「姿势图生成」两个 Tab 所需的既有事件类型。
+import { aiPipelineStartAction } from '@/actions/ai';
 import {
-  aiPipelineCancelAction,
-  aiPipelineResumeAction,
-  aiPipelineStartAction,
-  aiPipelineStatusAction,
-} from '@/actions/ai';
-import { base64ToFile, formatSec, type AiPoseProgress } from '@/lib/ai-task';
+  deleteAiJob,
+  fetchJobFile,
+  getAiJobDetail,
+  isSettled,
+  resumeAiJob,
+  type AiJobDetail,
+  type AiJobStatus,
+} from '@/lib/ai-jobs';
+import { formatSec, type AiPoseProgress } from '@/lib/ai-task';
 import type {
   AiAnalyzeStatusResult,
   AiBatchImageTraceEvent,
   AiInterruptionCode,
   AiInterruptionInfo,
   AiPipelineEvent,
-  AiPipelinePoseFile,
-  AiPipelineResumeResult,
+  AiPipelineJobMode,
   AiPipelineStage,
   AiPipelineStatusResult,
   AiTraceEvent,
@@ -126,26 +129,24 @@ export async function withRetry<T>(
   throw last;
 }
 
-/** 提交 job → jobId（提交本身失败直接抛，不做重试：入参错误重试无意义） */
-export async function startPipelineJob(formData: FormData): Promise<string> {
+/** 提交 job → { jobId, status, queuePos }（提交本身失败直接抛，不做重试：入参错误重试无意义） */
+export async function startPipelineJob(
+  formData: FormData,
+): Promise<{ jobId: string; status: AiJobStatus; queuePos: number }> {
   const started = await aiPipelineStartAction(formData);
   if ('error' in started) {
     // server action 只透传 message（收敛 #5）：在此按自有稳定文案补分类，供 Banner 展示与「继续」判定
     const message = started.error || '提交生成任务失败';
     throw new PipelinePollError(message, classifyPipelineError(message));
   }
-  return started.jobId;
+  return { jobId: started.jobId, status: started.status, queuePos: started.queuePos };
 }
 
-/** 单次查询 job 状态（verbose=true 取全量事件与 base64 产物） */
-export async function fetchPipelineStatus(
-  jobId: string,
-  since = 0,
-  verbose = false,
-): Promise<AiPipelineStatusResult> {
-  const res = await aiPipelineStatusAction(jobId, since, verbose);
-  // 注意：AiPipelineStatusResult 自带 `error: AiInterruptionInfo | null` 字段，
-  // 不能以 `'error' in res` 判定失败（成功响应也为 true）；以成功必备的 jobId 作判别。
+/** 单次拉取 job 详情（失败 → 抛 PipelinePollError）；供轮询复用 */
+async function fetchJobDetail(jobId: string, since: number): Promise<AiJobDetail> {
+  const res = await getAiJobDetail(jobId, since);
+  // 注意：AiJobDetail 自带 `error` 字段（失败详情，可为 null），不能以 `'error' in res` 判定失败；
+  // 以成功必备的 `jobId` 作判别（与详情页 JobDetail.load 同策略）。
   if (!('jobId' in res)) {
     const message = res.error || '查询生成任务失败';
     throw new PipelinePollError(message, classifyPipelineError(message));
@@ -160,23 +161,23 @@ export interface PollPipelineOptions {
   /** 增量事件累积回调（供两个 Tab 实时渲染） */
   onEvents?: (events: AiPipelineEvent[]) => void;
   /** 每次成功查询回调（供阶段栏 / 进度更新） */
-  onStatus?: (result: AiPipelineStatusResult) => void;
+  onStatus?: (result: AiJobDetail) => void;
   /** 传输层重试退避（测试注入小值） */
   retryDelaysMs?: number[];
 }
 
 /**
- * 轮询 job 到终态：
+ * 轮询 job 到终态（done/error/stopped/interrupted 统一用 isSettled 判定）：
  * - 单次查询失败 → 退避重试（1/2/4/8s），不因一次抖动就中断（原「查询识别任务失败」的致盲点）
- * - running → 按 since 增量吸收事件后继续
- * - done/error → 直接返回该次响应（终态响应为全量：含完整事件 / draft / 产物 / error 详情，
+ * - 未终态 → 按 since 增量吸收事件后继续
+ * - 终态 → 直接返回该次响应（终态响应为全量：含完整事件 / draft / 产物 / error 详情，
  *   前端据 status 整体替换累积事件，避免运行期收敛版残留）
  * - 超过总预算 → 抛 PipelinePollError(code=poll_timeout)，前端展示「继续」重连
  */
 export async function pollPipelineJob(
   jobId: string,
   options: PollPipelineOptions = {},
-): Promise<AiPipelineStatusResult> {
+): Promise<AiJobDetail> {
   const { intervalMs = DEFAULT_INTERVAL_MS, timeoutMs = PIPELINE_TIMEOUT_MS, signal, onEvents, onStatus, retryDelaysMs } =
     options;
   const startedAt = Date.now();
@@ -184,13 +185,13 @@ export async function pollPipelineJob(
   let since = 0;
   const events: AiPipelineEvent[] = [];
 
-  const absorb = (res: AiPipelineStatusResult) => {
-    const incoming = res.events ?? [];
+  const absorb = (res: AiJobDetail) => {
+    const incoming = (res.events ?? []) as AiPipelineEvent[];
     if (!incoming.length) return;
     since = res.lastSeq ?? since;
     // 终态响应为全量事件（后端忽略 since 返回完整正文）：整体替换，
     // 让运行期收到的收敛版（长文本截断 / 无 rawResponse）被完整版覆盖，而不是继续增量累积。
-    if (res.status === 'done' || res.status === 'error') {
+    if (isSettled(res.status)) {
       events.splice(0, events.length, ...incoming);
     } else {
       events.push(...incoming);
@@ -200,13 +201,13 @@ export async function pollPipelineJob(
 
   while (Date.now() < deadline) {
     throwIfAborted(signal);
-    const res = await withRetry(() => fetchPipelineStatus(jobId, since), {
+    const res = await withRetry(() => fetchJobDetail(jobId, since), {
       signal,
       delaysMs: retryDelaysMs,
     });
     absorb(res);
     onStatus?.(res);
-    if (res.status === 'done' || res.status === 'error') return res;
+    if (isSettled(res.status)) return res;
     await sleep(intervalMs);
   }
   throw new PipelinePollError(
@@ -215,9 +216,9 @@ export async function pollPipelineJob(
   );
 }
 
-/** 续跑：running → resumed=false（仅重连）；error → resumed=true（从失败阶段重跑） */
-export async function resumePipelineJob(jobId: string): Promise<AiPipelineResumeResult> {
-  const res = await aiPipelineResumeAction(jobId);
+/** 续跑：running → resumed=false（仅重连）；error/stopped/interrupted → resumed=true（从失败阶段重跑） */
+export async function resumePipelineJob(jobId: string): Promise<{ resumed: boolean; status: string }> {
+  const res = await resumeAiJob(jobId);
   if ('error' in res) {
     const message = res.error || '续跑请求失败';
     throw new PipelinePollError(message, classifyPipelineError(message));
@@ -227,7 +228,7 @@ export async function resumePipelineJob(jobId: string): Promise<AiPipelineResume
 
 /** 放弃本次生成（删除 job，幂等） */
 export async function cancelPipelineJob(jobId: string): Promise<void> {
-  const res = await aiPipelineCancelAction(jobId);
+  const res = await deleteAiJob(jobId);
   if ('error' in res) {
     const message = res.error || '放弃任务失败';
     throw new PipelinePollError(message, classifyPipelineError(message));
@@ -279,9 +280,9 @@ export function poseProgressFromEvents(events: AiPipelineEvent[]): AiPoseProgres
   };
 }
 
-/** 当前阶段：优先 running，其次 error，再次最后一个 done，缺省首个阶段 */
+/** 当前阶段：优先 running，其次 error，再次最后一个 done，缺省首个阶段（兼容 AiJobDetail 与 AiPipelineStatusResult） */
 export function currentPipelineStage(
-  result: Pick<AiPipelineStatusResult, 'stages' | 'mode'>,
+  result: { stages: Record<AiPipelineStage, { status: string }>; mode: AiPipelineJobMode },
 ): AiPipelineStage {
   const order: AiPipelineStage[] =
     result.mode === 'analyze-only' ? ['analyze'] : ['analyze', 'image', 'silhouette'];
@@ -293,14 +294,17 @@ export function currentPipelineStage(
   return lastDone ?? order[0]!;
 }
 
-/** job 产物（base64）→ File[]（按 index 升序，剪影需与姿势图同序） */
-export function pipelineFiles(files: AiPipelinePoseFile[]): Array<{ index: number; file: File }> {
-  return [...files]
-    .sort((a, b) => a.index - b.index)
-    .map((f) => ({
-      index: f.index,
-      file: base64ToFile(f.base64, f.mimeType, `ai-pipeline-${Date.now()}-${f.index}.png`),
-    }));
+/** 按 URL 取回产物并包装为 File（替代旧 base64 版 pipelineFiles）；空 url 跳过，保持输入顺序 */
+export async function pipelineFilesFromUrls(
+  files: Array<{ index: number; url: string; mimeType: string }>,
+): Promise<Array<{ index: number; file: File }>> {
+  const out: Array<{ index: number; file: File }> = [];
+  for (const f of files) {
+    if (!f.url) continue;
+    const name = f.url.split('/').pop() ?? `pose-${f.index}.png`;
+    out.push({ index: f.index, file: await fetchJobFile(f.url, name) });
+  }
+  return out;
 }
 
 /** job 结果 → 既有「识别详情」弹窗所需结构 */
