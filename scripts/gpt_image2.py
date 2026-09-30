@@ -1632,4 +1632,4 @@ def run_server(host, port):
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
