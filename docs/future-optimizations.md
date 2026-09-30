@@ -1277,3 +1277,39 @@
 - **背景/动机**：本轮任务切分未含 controller 集成测试。
 - **目标状态**：为 4 个新端点补薄集成测试（含 job 不存在 → 404、DELETE 幂等、增量事件 `since`）。
 - **状态**：⏳ 待优化
+
+---
+
+## AI 生成任务队列（2026-09-30）
+
+### P1 · 任务详情产物文件鉴权读取（服务端代理，屏蔽存储桶直链）
+
+- **模块**：后端 AI（`ai-job.store.ts` 的 `writeArtifact` / `AiJobDetailFile.artifacts` + `common/storage/uploads.route.ts`）
+- **优化点**：任务详情页的产物图 URL 目前由存储适配器直接给出——`StoredArtifact.url` 即 `storageKey`（本地为 `/uploads/ai-jobs/{id}/{kind}-{index}.{ext}`，远端为存储桶公开直链），`GET /uploads/*` 读取路由无鉴权，任何拿到 URL 的人都能直接读取任务产物与输入图。
+- **背景/动机**：本轮任务队列以「详情页可直接查看产物」为先，方案是复用既有 `/uploads/*` 读取路由（跟随当前激活存储、强缓存），未引入按任务归属的访问控制；仅「列表 / 详情 / 操作」端点受 `AdminAuthGuard` 保护，产物文件本身是裸直链。
+- **目标状态**：新增受鉴权的「任务文件读取」端点（如 `GET /api/v1/admin/ai-jobs/:id/artifact/:index`，经 `AdminAuthGuard` + 任务归属校验后由服务端流式代理），详情返回的产物 URL 指向该代理端点；对远端存储生成带签名的短时效 URL，使产物无法绕过鉴权直接访问。
+- **状态**：⏳ 待优化
+
+### P2 · 运行中事件流周期性快照（降低后端重启的信息损失）
+
+- **模块**：后端 AI（`ai-pipeline-job.service.ts` 的 `persistTerminal` / `ai-job.store.ts` 的 `writeEvents`）
+- **优化点**：事件流平时只存在进程内 `job.events`，仅在终态收尾 `persistTerminal` 时才 `writeEvents` 落 `events.jsonl`；后端在任务运行中重启时，运行增量事件（含已完成阶段的进展轨迹）全部丢失，该任务被标记 `interrupted`，详情页只能看到阶段/进度快照而看不到中断前的事件轨迹。
+- **背景/动机**：本轮以「终态落盘 + 内存事件流」换取写入量最小、实现简单；重启恢复（`onModuleInit` → `markInterrupted`）只保证状态与进度不撒谎，事件正文不追求无损。
+- **目标状态**：运行中按时间 / 事件数阈值（如每 N 秒或每 M 条）周期性把事件快照写 `events.jsonl`（追加或覆盖均可，保持 `lastSeq` 单调），使重启后仍能读到中断前的部分事件轨迹，并与 `readEvents` 的 `since` 增量读取配合使用。
+- **状态**：⏳ 待优化
+
+### P2 · 任务优先级 / 任务改名 / 终态任务自动过期清理
+
+- **模块**：后端 AI（`ai-job-queue.service.ts` 的 `waiting` FIFO + `ai-job.store.ts`）与后台任务列表页
+- **优化点**：① 队列为纯 FIFO（`waiting` 按 `created_at` 升序），无优先级，后提交的紧急任务也只能排在队尾等待；② 任务名 `title` 只在 `insertJob` 时写入，无改名入口，只能沿用向导提交时的默认标题；③ 终态任务（`done` / `error` / `stopped` / `interrupted`）只能手动批量清理（`deleteSettled()`），无自动过期回收，DB 行与产物文件会长期堆积。
+- **背景/动机**：本轮先把 FIFO + 并发闸门 + 重启恢复跑通，优先级 / 改名 / 自动回收属增强项，未纳入本期范围；终态清理当前依赖人工触发。
+- **目标状态**：① 支持创建时或入队后调整优先级（如按优先级 + `created_at` 排序出队，或为 `waiting` 维护优先级队列并刷新 `queue_pos`）；② 提供任务改名端点并同步列表 / 详情；③ 为终态任务引入自动过期（如超过 N 天由定时 sweeper 调 `deleteJob` 清理 DB 行 + 存储文件），TTL 可配置。
+- **状态**：⏳ 待优化
+
+### P2 · pollPipelineJob / resumePipelineJob / cancelPipelineJob 生产无消费方
+
+- **模块**：后台（`lumira-server/packages/admin/src/lib/pipeline-task.ts`）
+- **优化点**：向导改造（Task 10）改为按任务 id 轮询详情后，这三个阻塞式封装函数在 `src/` 下已无调用方，仅被 `src/lib/__tests__/pipeline-task.test.ts` 引用；继续保留会增加死代码与维护成本，也使测试覆盖的是「无人使用的路径」。
+- **背景/动机**：本轮向导改造把「客户端长轮询整个管线」改为「提交任务 → 列表 / 详情按 id 增量拉取」，`pollPipelineJob` 等随之失去生产消费方；因属既有代码且移除会连带删除对应单测，本轮先登记不改。
+- **目标状态**：二选一——① 若详情页需要「续跑 / 放弃」的统一封装，则改由详情页复用这三个函数（保留并补生产用例）；② 若确认无用，则连同其单测一并移除，避免死代码。
+- **状态**：⏳ 待优化
