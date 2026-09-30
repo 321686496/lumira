@@ -404,9 +404,14 @@ def main() -> int:
     ap.add_argument("--engine", default=gpt_image2.DEFAULT_ENGINE,
                     choices=list(gpt_image2.ENGINES),
                     help="生图引擎预设(默认 qwen3pro: mass/qwen-image-3.0-pro)")
+    ap.add_argument("--sil-engine", default=None, choices=list(gpt_image2.ENGINES),
+                    help="剪影生图引擎预设(默认跟随 --engine); "
+                         "如 --engine gpt2k --sil-engine qwen3pro 让姿势图走 HAPI、剪影走 MaaS")
     ap.add_argument("--platform", default=None, choices=list(gpt_image2.PLATFORMS),
                     help="覆盖引擎预设的平台")
     ap.add_argument("--model", default=None, help="覆盖引擎预设的模型")
+    ap.add_argument("--sil-model", default=None, help="覆盖剪影引擎的模型")
+    ap.add_argument("--sil-api-key", default=None, help="剪影引擎的 API Key(缺省读该引擎的环境变量)")
     ap.add_argument("--max-per-call", type=int, default=None,
                     help="反侵权每批图片上限(默认按引擎推导)")
     ap.add_argument("--ratio", default=None,
@@ -447,6 +452,21 @@ def main() -> int:
     except RuntimeError as e:
         print(f"[错误] {e}", file=sys.stderr)
         return 1
+
+    # 剪影可单独指定引擎: 姿势图走 hapi/gpt2k, 剪影走 mass/qwen3pro
+    sil_engine = args.sil_engine or args.engine
+    if sil_engine == args.engine:
+        sil_client, sil_model = client, model
+    else:
+        try:
+            sil_eng = gpt_image2.resolve_engine(sil_engine, None, args.sil_model, None)
+            sil_client, sil_model = make_client(
+                sil_eng, args.sil_api_key or os.environ.get(sil_eng["key_env"], ""), "")
+        except (ValueError, RuntimeError) as e:
+            print(f"[错误] --sil-engine {sil_engine}: {e}", file=sys.stderr)
+            return 1
+        print(f"  [引擎] 姿势图={eng['platform']}/{model}  剪影={sil_eng['platform']}/{sil_model}",
+              flush=True)
 
     # 1) 输入
     refs = resolve_inputs(args, out_dir)
@@ -510,7 +530,7 @@ def main() -> int:
     # 3) 剪影(逐个生成, 保证质量与姿势一致)
     print("\n[剪影] 逐张生成…", flush=True)
     for i, pose in enumerate(final_poses, 1):
-        gen_silhouette(client, model, pose, out_dir)
+        gen_silhouette(sil_client, sil_model, pose, out_dir)
 
     # 4) 文档
     poses_cfg = cfg.get("poses", [])[:n]
