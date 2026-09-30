@@ -114,6 +114,51 @@ def _sep_line(prof: list[float]) -> tuple[int, int] | None:
     return a, b
 
 
+def _sep_lines(prof: list[float], count: int) -> list[tuple[int, int]]:
+    """定位 count-1 条内部分隔线, 返回各分隔带 [start, end) (升序, 半开)。
+
+    count==2 时沿用 _sep_line 的中央带逻辑(保持 2x2 行为完全不变);
+    count>=3 时按等分位置推出预期边界, 在每个预期边界附近的小窗口内
+    套用同一套「最小方差 + 容差扩展 + 过宽退化窄切」逻辑。
+    定位不到的分隔线返回该等分位置的零宽退化带, 调用方得到紧邻的两格。
+    """
+    n = len(prof)
+    if count <= 1:
+        return []
+    if count == 2:
+        band = _sep_line(prof)
+        return [band if band else (n // 2, n // 2)]
+    span = n / count
+    win = max(3, int(span * 0.35))
+    out: list[tuple[int, int]] = []
+    for i in range(1, count):
+        center = int(round(span * i))
+        lo = max(1, center - win)
+        hi = min(n - 1, center + win)
+        seg = prof[lo:hi + 1]
+        ref = max(seg) if seg else 0.0
+        if ref <= 1e-6 or min(seg) > GUTTER_VAR_RATIO * ref:
+            out.append((center, center))     # 无明显分隔线 -> 零宽退化带
+            continue
+        pos = lo + seg.index(min(seg))
+        tol = max(SEP_TOL, min(seg) * 1.5)
+        a, b = pos, pos
+        while a - 1 >= lo and prof[a - 1] < min(seg) + tol:
+            a -= 1
+        while b + 1 <= hi and prof[b + 1] < min(seg) + tol:
+            b += 1
+        b += 1
+        max_w = max(1, int(n * SEP_MAX_W_RATIO))
+        if b - a > max_w:
+            a, b = pos, pos + 1
+        out.append((a, b))
+    # 保证严格升序且不重叠
+    for i in range(1, len(out)):
+        if out[i][0] < out[i - 1][1]:
+            out[i] = (out[i - 1][1], max(out[i - 1][1] + 1, out[i][1]))
+    return out
+
+
 def _edge_rim(prof: list[float]) -> int | None:
     """从 idx0 起连续的低方差外白边, 返回其结束下标(相对该轴). 过窄/不存在返回 None."""
     n = len(prof)
@@ -202,9 +247,9 @@ def crop_grid(img: Image.Image, rows: int = 2, cols: int = 2):
     col_sm = _smooth(col_var, max(3, sw // 30))
     W, H = img.size
 
-    # 中央分隔线 (det 坐标, [start,end))
-    band_y = _sep_line(row_sep)  # 横向分隔线(行方向)
-    band_x = _sep_line(col_sep)  # 纵向分隔线(列方向)
+    # 内部分隔线 (det 坐标, [start,end))
+    row_bands = _sep_lines(row_sep, rows)   # 横向分隔带(行方向)
+    col_bands = _sep_lines(col_sep, cols)   # 纵向分隔带(列方向)
 
     def sx(i) -> int:
         return int(round(i * W / sw))
@@ -218,32 +263,33 @@ def crop_grid(img: Image.Image, rows: int = 2, cols: int = 2):
     left_trim = _edge_rim(col_sm)
     right_trim = _edge_rim(list(reversed(col_sm)))
 
-    cx_sep_start = sx(band_x[0]) if band_x else None   # 左列末尾(不含白线)
-    cx_sep_end = sx(band_x[1]) if band_x else None     # 右列开头
-    cy_sep_start = sy(band_y[0]) if band_y else None   # 上行末尾(不含白线)
-    cy_sep_end = sy(band_y[1]) if band_y else None     # 下行开头
+    def col_edge(c: int, left: bool) -> int:
+        """第 c 列的左/右边界(不含白线); c 超出范围时退回整幅边界。"""
+        if left:
+            if c <= 0:
+                return sx(left_trim) if left_trim is not None else 0
+            return sx(col_bands[c - 1][1])
+        if c >= cols - 1:
+            return W - sx(right_trim) if right_trim is not None else W
+        return sx(col_bands[c][0])
+
+    def row_edge(r: int, top: bool) -> int:
+        """第 r 行的上/下边界(不含白线); r 超出范围时退回整幅边界。"""
+        if top:
+            if r <= 0:
+                return sy(top_trim) if top_trim is not None else 0
+            return sy(row_bands[r - 1][1])
+        if r >= rows - 1:
+            return H - sy(bottom_trim) if bottom_trim is not None else H
+        return sy(row_bands[r][0])
 
     boxes: list[tuple[int, int, int, int]] = []
     for r in range(rows):
         for c in range(cols):
-            # 纵向 x
-            if c == 0:
-                x0 = sx(left_trim) if left_trim is not None else 0
-            else:
-                x0 = cx_sep_end if cx_sep_end is not None else W // 2
-            if c == cols - 1:
-                x1 = W - sx(right_trim) if right_trim is not None else W
-            else:
-                x1 = cx_sep_start if cx_sep_start is not None else W // 2
-            # 横向 y
-            if r == 0:
-                y0 = sy(top_trim) if top_trim is not None else 0
-            else:
-                y0 = cy_sep_end if cy_sep_end is not None else H // 2
-            if r == rows - 1:
-                y1 = H - sy(bottom_trim) if bottom_trim is not None else H
-            else:
-                y1 = cy_sep_start if cy_sep_start is not None else H // 2
+            x0 = col_edge(c, True)
+            x1 = col_edge(c, False)
+            y0 = row_edge(r, True)
+            y1 = row_edge(r, False)
             boxes.append((x0, y0, x1, y1))
 
     cells = [img.crop(b) for b in boxes]
