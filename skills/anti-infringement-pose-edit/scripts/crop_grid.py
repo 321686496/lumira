@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""四宫格（2x2）智能识别与裁剪。
+"""宫格（k×k 或 1×n / n×1 排布）智能识别与裁剪。
 
 用法:
     python crop_grid.py <grid.png> [--rows 2] [--cols 2] [--out ./cells] [--prefix cell_]
@@ -301,7 +301,7 @@ def crop_grid(img: Image.Image, rows: int = 2, cols: int = 2):
 
 def main() -> int:
     global BLANK_STD_THRESHOLD
-    ap = argparse.ArgumentParser(description="四宫格智能识别与裁剪")
+    ap = argparse.ArgumentParser(description="宫格智能识别与裁剪")
     ap.add_argument("image", help="输入网格图片")
     ap.add_argument("--rows", type=int, default=2)
     ap.add_argument("--cols", type=int, default=2)

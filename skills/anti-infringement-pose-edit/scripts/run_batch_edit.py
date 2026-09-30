@@ -158,7 +158,11 @@ def pick_layout(n: int, ratio: float) -> tuple:
 
 
 def canvas_size(ratio: float, rows: int, cols: int) -> str:
-    """宫格画布尺寸 = 单格目标尺寸 × 布局, 再经既有尺寸约束归一。"""
+    """宫格画布尺寸 = 单格目标尺寸 × 布局。
+
+    单格尺寸已由 gpt_image2.cell_size 满足既有尺寸约束, 合法比例域内画布亦落在约束内
+    (如 16:9 三格 → 1360x2304)。
+    """
     cw, ch = gpt_image2.cell_size(ratio)
     return gpt_image2.resolve_size(f"{cw * cols}x{ch * rows}")
 
@@ -237,7 +241,7 @@ def main() -> int:
     ap.add_argument("--timeout", type=int, default=300)
     ap.add_argument("--no-grid", action="store_true",
                     help="不做宫格打包, 每张图单独跑一次单图编辑(部分渠道对多图输入会上游超时时使用)")
-    ap.add_argument("--keep-grids", action="store_true", help="保留中间四宫格到 out/_grids")
+    ap.add_argument("--keep-grids", action="store_true", help="保留中间宫格拼图到 out/_grids")
     ap.add_argument("--dry-run", action="store_true", help="只打印分批/锚点计划, 不调接口")
     args = ap.parse_args()
 
@@ -248,8 +252,16 @@ def main() -> int:
         print(f"[错误] {e}", file=sys.stderr)
         return 1
 
-    # 模板宽高比: --ratio > 输入图推断 > 3:4
-    ratio = gpt_image2.parse_ratio(args.ratio) if args.ratio else (infer_ratio(args.images) or 0.75)
+    # 模板宽高比: --ratio 必须属合法域; 未给则按输入图推断并吸附到最近合法域; 再兜底 3:4
+    if args.ratio:
+        r = gpt_image2.aspect_ratio_ok(args.ratio)
+        if r is None:
+            legal = "/".join(lbl for lbl, _ in gpt_image2.ASPECT_RATIOS)
+            print(f"[错误] --ratio 必须是 {legal} 之一: {args.ratio}", file=sys.stderr)
+            return 1
+        ratio = r
+    else:
+        ratio = gpt_image2.nearest_aspect_ratio(infer_ratio(args.images))[0]
     ratio_label = gpt_image2.ratio_label(ratio)
     batches = build_batches(len(args.images), eng["max_input_images"])
 
@@ -273,8 +285,6 @@ def main() -> int:
         return 1
 
     os.makedirs(args.out, exist_ok=True)
-    grids_dir = os.path.join(args.out, "_grids")
-    os.makedirs(grids_dir, exist_ok=True)
 
     base_prompt = (args.prompt or BASE_PROMPT) + gpt_image2.ratio_note(ratio)
 
@@ -293,6 +303,9 @@ def main() -> int:
         failed = sum(1 for o in outputs if o is None)
         print(f"\n[完成] 出品 {len(outputs)-failed}/{len(outputs)} 张, 保存于 {os.path.abspath(args.out)}")
         return 0 if failed == 0 else 2
+
+    grids_dir = os.path.join(args.out, "_grids")
+    os.makedirs(grids_dir, exist_ok=True)
 
     anchor_path: str | None = None  # 首批首张成片, 用作后续批次衣着锚点
 

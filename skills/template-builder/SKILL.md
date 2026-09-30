@@ -18,7 +18,7 @@ description: >
 
 ## 运行前提
 
-- 环境变量 API Key（或 `--api-key`）：默认引擎 `qwen3pro` 走 `MASS_API_KEY`；`--engine gpt2k` 走 `HAPI_API_KEY`——复用于 `gpt_image2.py` hapi 图生图/文生图。
+- 环境变量 API Key（或 `--api-key`）：默认引擎 `qwen3pro` 走 `MASS_API_KEY`；`--engine gpt2k` 走 `HAPI_API_KEY`——复用 `gpt_image2.py` 的图生图/文生图接口。
 - `requests`、`Pillow` 可用；反侵权技能的 `run_batch_edit.py` 在同一仓库内。
 - 联网搜索/爬取：**由 agent 自带联网工具完成**（无独立爬虫脚本）。
 
@@ -42,9 +42,9 @@ skills/template-builder/
 
 3. **姿势图加工**
    - **有真实参考图** → 脚本自动调用 `anti-infringement-pose-edit/run_batch_edit.py` 对姿势图做换脸防侵权 + 统一衣着，得到 N 张干净成片姿势图（`--skip-anti-infringement` 可跳过）。
-   - **无参考图** → 加 `--auto-gen`，脚本基于 `cfg.poses[i].description` 用 hapi 文生图自动补姿势。
+   - **无参考图** → 加 `--auto-gen`，脚本基于 `cfg.poses[i].description` 用引擎的文生图自动补姿势（默认 `qwen3pro`/MaaS，`--engine gpt2k` 走 HAPI）。
 
-4. **剪影**：对每张 `pose{i}.png` **单独一次 hapi 图生图**（提示词要求纯白底极简黑色线稿，只勾姿势轮廓），再用阈值 245 二值化转透明底线稿 → `pose{i}_sil.png`。逐个生成以保证姿势与姿势图一致、质量最高。
+4. **剪影**：对每张 `pose{i}.png` **单独一次图生图**（默认 `qwen3pro`/MaaS，`--engine gpt2k` 走 HAPI；提示词要求纯白底极简黑色线稿，只勾姿势轮廓），再用阈值 245 二值化转透明底线稿 → `pose{i}_sil.png`。逐个生成以保证姿势与姿势图一致、质量最高。
 
 5. **组装文档**：生成 `pose_images.json`（姿势名→文件）与 `template.pptpl`（与后端在线模板同构，可被导入）。
 
@@ -114,4 +114,4 @@ python scripts/run_template.py --key my_tpl --cfg config.json --inputs ref1.png 
 
 - 宫格检测为启发式（低方差分隔线），异常布局可能误判；必要时人工先拆好或用 `--inputs` 逐张传入。
 - 真实参考图必须经过反侵权加工，否则有侵权风险；`--skip-anti-infringement` 仅限素材本身已合规时用。
-- 剪影依赖 hapi 是否能忠实"只描轮廓"；若个别剪影含五官/衣服细节，自动二值化后应复查重试。
+- 剪影依赖生图引擎是否能忠实"只描轮廓"；若个别剪影含五官/衣服细节，自动二值化后应复查重试。

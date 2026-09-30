@@ -53,6 +53,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from fractions import Fraction
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # ---------------------------------------------------------------- 平台配置
@@ -126,8 +127,8 @@ DEFAULT_ENGINE = "qwen3pro"
 FALLBACK_MAX_INPUT_IMAGES = 4   # 显式换平台/手填模型且未指定上限时的兜底
 
 
-def resolve_engine(engine: str = None, platform: str = None, model: str = None,
-                   max_input_images: int = None) -> dict:
+def resolve_engine(engine: str | None = None, platform: str | None = None,
+                   model: str | None = None, max_input_images: int | None = None) -> dict:
     """解析「引擎预设 + 显式覆盖」, 返回最终生效的调用参数。
 
     优先级: 显式 platform/model/max_input_images > ENGINES[engine] > DEFAULT_ENGINE。
@@ -150,14 +151,16 @@ def resolve_engine(engine: str = None, platform: str = None, model: str = None,
         m = pcfg["models"][0] if pcfg.get("models") else preset["model"]
     else:
         m = preset["model"]
-    if max_input_images:
+    if max_input_images is not None:
         cap = int(max_input_images)
+        if not 2 <= cap <= 4:
+            raise ValueError(f"单次输入上限必须在 2~4 之间(宫格布局最多 2x2): {cap}")
     elif m != preset["model"]:
         cap = FALLBACK_MAX_INPUT_IMAGES
     else:
         cap = preset["max_input_images"]
     return {"engine": name, "platform": p, "model": m,
-            "max_input_images": max(1, cap), "key_env": pcfg["key_env"]}
+            "max_input_images": cap, "key_env": pcfg["key_env"]}
 
 # 兼容旧环境变量
 DEFAULT_MODEL = os.environ.get("HAPI_MODEL", "gpt-image-2.5-sunburst-2k")
@@ -276,9 +279,37 @@ def parse_ratio(s) -> float:
     raise ValueError(f"无法识别的比例: {s} (可用 3:4 / 3/4 / 3x4 / 0.75)")
 
 
+ASPECT_RATIOS = (("3:4", 0.75), ("4:3", 4 / 3), ("16:9", 16 / 9),
+                 ("9:16", 9 / 16), ("1:1", 1.0))
+DEFAULT_ASPECT_RATIO = "3:4"
+
+
+def aspect_ratio_ok(value):
+    """value 属合法比例域(3:4/4:3/16:9/9:16/1:1)则返回其比例, 否则 None。"""
+    try:
+        r = parse_ratio(value)
+    except ValueError:
+        return None
+    for _, lr in ASPECT_RATIOS:
+        if abs(r / lr - 1) < 1e-6:
+            return lr
+    return None
+
+
+def nearest_aspect_ratio(value) -> tuple:
+    """把任意比例描述吸附到最近的合法域值, 返回 (ratio, label)。"""
+    try:
+        r = parse_ratio(value)
+    except ValueError:
+        r = 0.0
+    if not r or r <= 0:
+        return 0.75, DEFAULT_ASPECT_RATIO
+    label, legal = min(ASPECT_RATIOS, key=lambda p: abs(math.log(r / p[1])))
+    return legal, label
+
+
 def ratio_label(r: float) -> str:
     """把宽高比还原成显示用 'w:h' 文本(如 0.75 -> '3:4')。"""
-    from fractions import Fraction
     fr = Fraction(float(r)).limit_denominator(50)
     return f"{fr.numerator}:{fr.denominator}"
 
@@ -289,10 +320,10 @@ def ratio_note(r: float) -> str:
 
 
 def cell_size(ratio: float, short: int = CELL_SHORT) -> tuple:
-    """按模板比例给出单张成片目标像素(短边 short, 16 对齐)。"""
+    """按模板比例给出单张成片目标像素(短边 short, 16 对齐, 且满足 MAX_SIDE/MIN_PIXELS/MAX_PIXELS/MAX_RATIO)。"""
     r = max(float(ratio), 1e-6)
     w, h = (short * r, short) if r >= 1 else (short, short / r)
-    return (_round16(w), _round16(h))
+    return _clamp_size(int(round(w)), int(round(h)))
 
 
 def cell_size_str(ratio: float, short: int = CELL_SHORT) -> str:

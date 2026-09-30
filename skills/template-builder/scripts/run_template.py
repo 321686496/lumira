@@ -115,29 +115,38 @@ SIL_PROMPT = (
 SIL_THRESHOLD = 245
 SIL_BBOX_RATIO = 0.3
 SIL_PAD_RATIO = 0.05
-SIZE = "768x1024"      # 竖构图(3:4), 与模板 aspectRatio 一致; hapi 需 WxH 像素格式
+SIZE = "768x1024"      # 参考图上传前的缩放盒(仅 load_ref_tuple 用); 出图尺寸见 pose_size()
 SIZE_TUPLE = tuple(int(v) for v in SIZE.split("x"))
 
 
 def resolve_aspect(explicit, cfg: dict, refs: list) -> tuple:
     """解析模板宽高比, 返回 (ratio 浮点, 显示标签 'w:h')。
 
-    优先级: --ratio > cfg.aspect_ratio > 参考图推断(全部一致用该比例, 否则取多数) > 3:4。
+    优先级: --ratio > cfg.aspect_ratio > 参考图推断(吸附到最近合法域) > 3:4。
+    合法域: 3:4 / 4:3 / 16:9 / 9:16 / 1:1; --ratio 不在域内直接报错。
     """
     if explicit:
-        r = gpt_image2.parse_ratio(explicit)
+        r = gpt_image2.aspect_ratio_ok(explicit)
+        if r is None:
+            legal = "/".join(lbl for lbl, _ in gpt_image2.ASPECT_RATIOS)
+            raise ValueError(f"--ratio 必须是 {legal} 之一: {explicit}")
         return r, gpt_image2.ratio_label(r)
     v = (cfg or {}).get("aspect_ratio")
     if v:
-        r = gpt_image2.parse_ratio(v)
-        return r, gpt_image2.ratio_label(r)
+        r = gpt_image2.aspect_ratio_ok(v)
+        if r is not None:
+            return r, gpt_image2.ratio_label(r)
+        print(f"  [比例] config.aspect_ratio={v!r} 不在合法域, 已忽略", flush=True)
     if refs:
         try:
-            sys.path.insert(0, str(_AIE_SCRIPTS))
             from run_batch_edit import infer_ratio   # 复用反侵权技能的参考图比例推断
             r = infer_ratio([str(p) for p in refs])
             if r:
-                return r, gpt_image2.ratio_label(r)
+                rr, lbl = gpt_image2.nearest_aspect_ratio(r)
+                if abs(rr - r) > 1e-6:
+                    print(f"  [比例] 参考图推断 {gpt_image2.ratio_label(r)} 非合法域, 吸附为 {lbl}",
+                          flush=True)
+                return rr, lbl
         except Exception as e:
             print(f"  [比例] 参考图推断失败, 回退 3:4: {e}", flush=True)
     return 0.75, "3:4"
@@ -252,7 +261,6 @@ def gen_hapi(client, model, prompt, out_dir: Path, label, ref: Path | None = Non
 
 
 def gen_silhouette(client, model, pose_path: Path, out_dir: Path) -> Path | None:
-    from PIL import Image
     final = out_dir / f"{pose_path.stem}_sil.png"
     raw = gen_hapi(client, model, SIL_PROMPT + gpt_image2.ratio_note(ASPECT[0]),
                    out_dir / "_sil_raw", "sil", ref=pose_path, size=pose_size(ASPECT[0]))
@@ -304,7 +312,7 @@ def run_anti_infringement(pose_sources: list[str], work: Path, api_key: str = ""
 
 # ---------------------------------------------------------------- 文档
 
-def write_docs(cfg: dict, out_dir: Path, poses: list[dict], aspect_ratio: str = None) -> None:
+def write_docs(cfg: dict, out_dir: Path, poses: list[dict], aspect_ratio: str | None = None) -> None:
     mapping = {p["name"]: f"pose{i}.png" for i, p in enumerate(poses, 1)}
     (out_dir / "pose_images.json").write_text(json.dumps(mapping, ensure_ascii=False, indent=2),
                                               encoding="utf-8")
@@ -397,7 +405,7 @@ def main() -> int:
     ap.add_argument("--no-split", action="store_true",
                     help="跳过宫格检测(输入已是逐张单图时使用, 避免纯色单图被误判拆分)")
     ap.add_argument("--keep-grids", action="store_true",
-                    help="保留反侵权步骤的中间四宫格原图到 <out>/_anti_infringe/_grids/")
+                    help="保留反侵权步骤的中间宫格拼图原图到 <out>/_anti_infringe/_grids/")
     ap.add_argument("--anti-no-grid", action="store_true",
                     help="反侵权加工不做宫格打包, 每张单独编辑(渠道对多图输入超时时使用)")
     ap.add_argument("--parent", default="create_templates", help="输出父目录(默认 create_templates)")
@@ -424,7 +432,13 @@ def main() -> int:
     if args.dry_run:
         print(f"[dry-run] key={args.key} 输出={Path(args.parent)/args.key} "
               f"count={args.count} inputs={len(args.inputs)} auto_gen={args.auto_gen}")
-        print(f"[dry-run] 引擎={args.engine} 平台/模型={gpt_image2.resolve_engine(args.engine, args.platform, args.model, args.max_per_call)}")
+        try:
+            eng_info = gpt_image2.resolve_engine(args.engine, args.platform, args.model,
+                                                 args.max_per_call)
+        except ValueError as e:
+            print(f"[错误] {e}", file=sys.stderr)
+            return 1
+        print(f"[dry-run] 引擎={args.engine} 平台/模型={eng_info}")
         return 0
 
     cfg = json.loads(Path(args.cfg).read_text(encoding="utf-8"))
@@ -470,7 +484,11 @@ def main() -> int:
 
     # 1) 输入
     refs = resolve_inputs(args, out_dir)
-    ASPECT[0], ASPECT[1] = resolve_aspect(args.ratio, cfg, refs)
+    try:
+        ASPECT[0], ASPECT[1] = resolve_aspect(args.ratio, cfg, refs)
+    except ValueError as e:
+        print(f"[错误] {e}", file=sys.stderr)
+        return 1
     print(f"  [比例] {ASPECT[1]}  单格 {pose_size(ASPECT[0])}", flush=True)
     if refs:
         if args.no_split:
