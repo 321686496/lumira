@@ -5,20 +5,21 @@
 // 直接复用 AiAnalyzeService / AiGenerateImageService / AiSilhouetteService，
 // 不经过既有 3 个 task service（避免任务嵌套与跨服务状态同步）。
 
-import { BadRequestException, Injectable, OnModuleDestroy } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { nanoid } from 'nanoid';
 import type { UploadFile } from '../templates/admin-templates.service';
 import { AiAnalyzeService } from './ai-analyze.service';
 import type { AiAnalyzeResult } from './ai-analyze.service';
 import { AiGenerateImageService } from './ai-generate-image.service';
 import { AiSilhouetteService } from './ai-generate-silhouette.service';
+import { AiJobStoreService } from './ai-job.store';
 import { AiUpstreamError, classifyUpstreamError, isRetryableUpstream } from './ai-upstream-error';
 import { runWithTrace, traceNote } from './llm-trace';
 import type { AiTraceEvent, TraceSink } from './llm-trace';
 
 export type PipelineStage = 'analyze' | 'image' | 'silhouette';
 export type StageStatus = 'pending' | 'running' | 'done' | 'error';
-export type JobStatus = 'running' | 'done' | 'error';
+export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'stopped';
 export type JobMode = 'auto' | 'analyze-only';
 
 /** 中断分类错误码（前端据此选文案与建议，不再靠中文正则猜） */
@@ -73,6 +74,9 @@ export interface PipelinePoseFile {
   index: number;
   base64: string;
   mimeType: string;
+  /** 落存储后的相对 key（序列化时以它构造 url） */
+  storageKey?: string;
+  url?: string;
 }
 
 export interface PipelineStageFailure {
@@ -114,6 +118,11 @@ export interface AiPipelineJob {
     silFiles: PipelinePoseFile[];
     silErrors: PipelineStageFailure[];
   };
+  /** 待执行阶段（create 后为全量待跑阶段；prepareResume 写入续跑阶段） */
+  pendingStages?: PipelineStage[];
+  pendingOnlyIndexes?: Partial<Record<PipelineStage, number[]>>;
+  /** 用户请求停止：在检查点抛 JobStoppedError */
+  stopRequested?: boolean;
 }
 
 export interface PipelineCreateInput {
@@ -133,9 +142,6 @@ export interface PipelineCreateInput {
   silhouette?: { mode: 'sketch' | 'solid'; crop: boolean; engine: 'ai' | 'local' };
 }
 
-/** 已完成/错误 job 保留时长（对齐既有 task service：60 分钟，覆盖前端 60 分钟轮询预算） */
-const RESULT_TTL_MS = 60 * 60 * 1000;
-const SWEEP_INTERVAL_MS = 60 * 1000;
 /** 单 job 事件上限（超出静默丢弃，兜住异常长流程的内存占用） */
 const MAX_JOB_EVENTS = 1200;
 /** running 态序列化时单个文本字段上限（终态 / verbose 沿用 llm-trace 的 50k 上限） */
@@ -162,6 +168,14 @@ const HINTS: Record<InterruptionCode, string> = {
   internal: '未归类异常；详情见上方事件流，可点「继续」重试该阶段',
 };
 
+/** 用户主动停止：不是失败，状态落 stopped 且保留已产出 */
+export class JobStoppedError extends Error {
+  constructor() {
+    super('任务已被用户停止');
+    this.name = 'JobStoppedError';
+  }
+}
+
 /** running 态事件收敛：长文本截断 + 丢弃原始响应体（终态会重新全量返回） */
 function capEvent(e: AiPipelineEvent): AiPipelineEvent {
   const cut = (s?: string): string | undefined =>
@@ -178,27 +192,15 @@ function capEvent(e: AiPipelineEvent): AiPipelineEvent {
 }
 
 @Injectable()
-export class AiPipelineJobService implements OnModuleDestroy {
+export class AiPipelineJobService {
   private readonly jobs = new Map<string, AiPipelineJob>();
-  private readonly sweeper: NodeJS.Timeout;
 
   constructor(
     private readonly aiAnalyzeService: AiAnalyzeService,
     private readonly aiGenerateImageService: AiGenerateImageService,
     private readonly aiSilhouetteService: AiSilhouetteService,
-  ) {
-    this.sweeper = setInterval(() => this.sweep(), SWEEP_INTERVAL_MS);
-    // unref：不因清理定时器阻止进程退出（测试友好）
-    this.sweeper.unref?.();
-  }
-
-  /** 惰性清理过期 job（含产物，防 base64 占用内存） */
-  private sweep(): void {
-    const now = Date.now();
-    for (const [id, job] of this.jobs) {
-      if (now - job.createdAt > RESULT_TTL_MS) this.jobs.delete(id);
-    }
-  }
+    private readonly store: AiJobStoreService,
+  ) {}
 
   private emptyStages(): Record<PipelineStage, StageState> {
     return {
@@ -206,6 +208,40 @@ export class AiPipelineJobService implements OnModuleDestroy {
       image: { status: 'pending' },
       silhouette: { status: 'pending' },
     };
+  }
+
+  /** 新任务落库 + 落输入文件（供停止后续跑 / 重启后续跑） */
+  private async persistNew(job: AiPipelineJob): Promise<void> {
+    const inputs = job.inputs;
+    let i = 0;
+    for (const img of inputs.images ?? []) {
+      await this.store.writeInput(job.id, 'example', i, img.mimetype, img.buffer);
+      i += 1;
+    }
+    let r = 0;
+    for (const img of inputs.references ?? []) {
+      await this.store.writeInput(job.id, 'ref', r, img.mimetype, img.buffer);
+      r += 1;
+    }
+    await this.store.insertJob({
+      id: job.id,
+      status: 'queued',
+      mode: job.mode,
+      title: buildJobTitle(job),
+      currentStage: job.pendingStages?.[0] ?? null,
+      poseTotal: 0,
+      poseDone: 0,
+      silTotal: 0,
+      silDone: 0,
+      queuePos: 0,
+      inputSummary: buildInputSummary(job),
+      errorCode: null,
+      errorMessage: null,
+      detailKey: this.store.detailKeyOf(job.id),
+      createdAt: Math.floor(job.createdAt / 1000),
+      startedAt: null,
+      finishedAt: null,
+    });
   }
 
   /** 追加一条事件（分配 seq/ts；达上限静默丢弃） */
@@ -228,7 +264,7 @@ export class AiPipelineJobService implements OnModuleDestroy {
     const job: AiPipelineJob = {
       id: `job_${nanoid(16)}`,
       createdAt: Date.now(),
-      status: 'running',
+      status: 'queued',
       mode,
       inputs: {
         images: input.images,
@@ -243,11 +279,38 @@ export class AiPipelineJobService implements OnModuleDestroy {
       events: [],
       artifacts: { poseFiles: [], poseErrors: [], silFiles: [], silErrors: [] },
     };
+    job.pendingStages = mode === 'analyze-only' ? ['analyze'] : ['analyze', 'image', 'silhouette'];
     this.jobs.set(job.id, job);
-    void this.runPipeline(job, {
-      stages: mode === 'analyze-only' ? ['analyze'] : ['analyze', 'image', 'silhouette'],
-    });
+    await this.persistNew(job);
     return { jobId: job.id };
+  }
+
+  /** 队列调度入口：执行 pendingStages，resolve 于终态（done / error / stopped） */
+  async startJob(jobId: string): Promise<void> {
+    const job = this.jobs.get(jobId);
+    if (!job) return;
+    const stages = job.pendingStages ?? [];
+    const onlyIndexes = job.pendingOnlyIndexes;
+    job.pendingStages = undefined;
+    job.pendingOnlyIndexes = undefined;
+    if (!stages.length) return;
+    job.stopRequested = false;
+    await this.store.updateJob(jobId, { status: 'running', startedAt: Math.floor(Date.now() / 1000) });
+    await this.runPipeline(job, { stages, onlyIndexes });
+    await this.persistTerminal(job);
+  }
+
+  /** 请求停止：置标记，实际停在下一个检查点 */
+  requestStop(jobId: string): boolean {
+    const job = this.jobs.get(jobId);
+    if (!job) return false;
+    job.stopRequested = true;
+    return true;
+  }
+
+  /** 检查点：命中停止请求则抛出 JobStoppedError */
+  private assertNotStopped(job: AiPipelineJob): void {
+    if (job.stopRequested) throw new JobStoppedError();
   }
 
   /**
@@ -266,6 +329,7 @@ export class AiPipelineJobService implements OnModuleDestroy {
       state.startedAt = Date.now();
       state.error = undefined;
       try {
+        this.assertNotStopped(job);
         const onlyIndexes = opts.onlyIndexes?.[stage];
         if (stage === 'analyze') await this.runAnalyzeStage(job);
         else if (stage === 'image') await this.runImageStage(job, onlyIndexes);
@@ -273,6 +337,20 @@ export class AiPipelineJobService implements OnModuleDestroy {
         state.status = 'done';
         state.finishedAt = Date.now();
       } catch (err) {
+        if (err instanceof JobStoppedError) {
+          state.status = 'pending';
+          state.finishedAt = Date.now();
+          job.status = 'stopped';
+          this.append(job, {
+            stage,
+            type: 'note',
+            step: 'stop',
+            title: '任务已停止',
+            status: 'fail',
+            resultBrief: '已保留当前产出，可点「继续」从该阶段续跑',
+          });
+          return;
+        }
         const info = this.buildInterruption(job, stage, err);
         state.status = 'error';
         state.finishedAt = Date.now();
@@ -358,6 +436,8 @@ export class AiPipelineJobService implements OnModuleDestroy {
       status: 'done',
       resultBrief: '草稿已生成，可进入下一步',
     });
+    await this.persistDetail(job);
+    await this.store.updateJob(job.id, { currentStage: job.mode === 'analyze-only' ? null : 'image' });
   }
 
   /** 草稿 → 姿势目标列表（与 AiImageTaskService.submitBatch 同口径） */
@@ -386,6 +466,7 @@ export class AiPipelineJobService implements OnModuleDestroy {
 
   /** 生图有界重试：仅对可重试分类重试（超时/空响应/网络/5xx/429） */
   private async generateWithRetry(
+    job: AiPipelineJob,
     references: UploadFile[] | undefined,
     metaJson: string,
     extraPrompt: string | null,
@@ -394,6 +475,7 @@ export class AiPipelineJobService implements OnModuleDestroy {
   ): Promise<{ base64: string; mimeType: string; prompt: string; model: string }> {
     let lastError: unknown;
     for (let attempt = 1; attempt <= GENERATE_RETRY_LIMIT; attempt += 1) {
+      this.assertNotStopped(job);
       try {
         return await this.aiGenerateImageService.generate(references, metaJson, extraPrompt, research, { anchor });
       } catch (err) {
@@ -442,6 +524,7 @@ export class AiPipelineJobService implements OnModuleDestroy {
     }
 
     const runOne = async (index: number, refs: UploadFile[] | undefined): Promise<void> => {
+      this.assertNotStopped(job);
       const startedAt = Date.now();
       const queuedMs = await this.aiGenerateImageService.acquireImageSlot();
       try {
@@ -465,9 +548,18 @@ export class AiPipelineJobService implements OnModuleDestroy {
         // 依赖张（index>0）的 refs 是上一张锚点成片，必须保留底图以维持人物一致性。
         const useAnchor = index === 0 ? job.inputs.referenceAnchor : true;
         const r = await runWithTrace(sink, () =>
-          this.generateWithRetry(refs, meta, job.inputs.extraPrompt ?? null, research, useAnchor),
+          this.generateWithRetry(job, refs, meta, job.inputs.extraPrompt ?? null, research, useAnchor),
         );
-        byIndex.set(index, { index, base64: r.base64, mimeType: r.mimeType });
+        const file: PipelinePoseFile = { index, base64: r.base64, mimeType: r.mimeType };
+        const stored = await this.store.writeArtifact(job.id, 'pose', index, file.mimeType, Buffer.from(file.base64, 'base64'));
+        file.storageKey = stored.storageKey;
+        file.url = stored.url;
+        byIndex.set(index, file);
+        await this.store.updateJob(job.id, {
+          poseDone: byIndex.size,
+          poseTotal: total,
+          currentStage: 'image',
+        });
         this.append(job, {
           stage: 'image',
           type: 'note',
@@ -480,6 +572,7 @@ export class AiPipelineJobService implements OnModuleDestroy {
           durationMs: Date.now() - startedAt,
         });
       } catch (err) {
+        if (err instanceof JobStoppedError) throw err;
         if (firstError === undefined) firstError = err;
         failed.push(index);
         byIndex.delete(index);
@@ -562,6 +655,7 @@ export class AiPipelineJobService implements OnModuleDestroy {
     await Promise.all(
       todo.map(async (index) => {
         const src = sources.find((s) => s.index === index)!;
+        this.assertNotStopped(job);
         const startedAt = Date.now();
         try {
           this.append(job, {
@@ -581,7 +675,16 @@ export class AiPipelineJobService implements OnModuleDestroy {
           const r = await runWithTrace(sink, () =>
             this.aiSilhouetteService.generate(file, JSON.stringify({ mode, crop, engine })),
           );
-          byIndex.set(index, { index, base64: r.image, mimeType: r.mimeType });
+          const out: PipelinePoseFile = { index, base64: r.image, mimeType: r.mimeType };
+          const stored = await this.store.writeArtifact(job.id, 'sil', index, out.mimeType, Buffer.from(out.base64, 'base64'));
+          out.storageKey = stored.storageKey;
+          out.url = stored.url;
+          byIndex.set(index, out);
+          await this.store.updateJob(job.id, {
+            silDone: byIndex.size,
+            silTotal: sources.length,
+            currentStage: 'silhouette',
+          });
           this.append(job, {
             stage: 'silhouette',
             type: 'note',
@@ -622,23 +725,69 @@ export class AiPipelineJobService implements OnModuleDestroy {
     }
   }
 
+  /** 冷启动恢复：从存储文件重建内存 job（后端重启后的「继续」用） */
+  async hydrate(jobId: string): Promise<boolean> {
+    if (this.jobs.has(jobId)) return true;
+    const row = await this.store.findJob(jobId);
+    if (!row) return false;
+    const detail = await this.store.readDetail(jobId);
+    if (!detail) return false;
+    const inputs = await this.store.readInputs(jobId);
+    const pick = (kind: 'example' | 'ref') =>
+      inputs
+        .map((f) => ({ f, m: /^(?:input\/)?(example|ref)-(\d+)\./.exec(f.name) }))
+        .filter((x) => x.m && x.m[1] === kind)
+        .sort((x, y) => Number(x.m![2]) - Number(y.m![2]))
+        .map((x) => ({ buffer: x.f.buffer, filename: x.f.name.split('/').pop() ?? x.f.name, mimetype: mimeFromName(x.f.name) }));
+    const job: AiPipelineJob = {
+      id: jobId,
+      createdAt: row.createdAt * 1000,
+      status: 'error',
+      mode: row.mode,
+      inputs: {
+        images: pick('example'),
+        text: (detail.inputs.textPreview as string) || undefined,
+        extra: {},
+        references: pick('ref'),
+        referenceAnchor: detail.inputs.refAnchor !== false,
+        extraPrompt: null,
+        silhouette: {
+          mode: (detail.inputs.silMode as 'sketch' | 'solid') ?? 'sketch',
+          crop: true,
+          engine: (detail.inputs.silEngine as 'ai' | 'local') ?? 'local',
+        },
+      },
+      stages: detail.stages as Record<PipelineStage, StageState>,
+      events: [],
+      artifacts: {
+        analyze: detail.draft
+          ? ({ draft: detail.draft, warnings: detail.warnings, trace: detail.trace, raw: detail.raw, research: detail.research, brief: detail.researchBrief, researchVision: detail.researchVision } as unknown as AiAnalyzeResult)
+          : undefined,
+        poseFiles: detail.artifacts.poseFiles.map((s) => ({ index: s.index, mimeType: s.mimeType, base64: '', storageKey: s.storageKey, url: s.url })),
+        poseErrors: detail.artifacts.poseErrors as never,
+        silFiles: detail.artifacts.silFiles.map((s) => ({ index: s.index, mimeType: s.mimeType, base64: '', storageKey: s.storageKey, url: s.url })),
+        silErrors: detail.artifacts.silErrors as never,
+      },
+    };
+    this.jobs.set(jobId, job);
+    return true;
+  }
+
   /**
-   * 续跑：
+   * 续跑准备：算出待重跑阶段并写入 pendingStages；实际执行由队列调度 startJob 触发。
    * - job 不存在 → null（控制器转 404，前端提示「任务已失效」并提供重新开始）
-   * - running → { resumed: false }（后端仍在跑，前端重新挂上轮询即可）
-   * - done   → { resumed: false }（无需续跑）
-   * - error  → 从失败阶段重跑（上游阶段与产物保留；image/silhouette 只补失败/缺失下标）
+   * - running / done → null（无需续跑）
+   * - error / stopped → 从失败阶段重跑（上游阶段与产物保留；image/silhouette 只补失败/缺失下标）
    */
-  async resume(jobId: string): Promise<{ resumed: boolean; status: JobStatus } | null> {
+  async prepareResume(jobId: string): Promise<{ stages: PipelineStage[]; onlyIndexes: Partial<Record<PipelineStage, number[]>> } | null> {
     const job = this.jobs.get(jobId);
     if (!job) return null;
-    if (job.status === 'running') return { resumed: false, status: 'running' };
-    if (job.status === 'done') return { resumed: false, status: 'done' };
+    if (job.status === 'running' || job.status === 'done') return null;
 
     const failedStage = job.error?.stage ?? 'analyze';
     const requested: PipelineStage[] = job.mode === 'analyze-only' ? ['analyze'] : ['analyze', 'image', 'silhouette'];
     const stages = requested.slice(requested.indexOf(failedStage));
-    if (!stages.length) return { resumed: false, status: job.status };
+    if (!stages.length) return null;
 
     const onlyIndexes: Partial<Record<PipelineStage, number[]>> = {};
     if (failedStage === 'analyze') {
@@ -659,18 +808,11 @@ export class AiPipelineJobService implements OnModuleDestroy {
     }
 
     for (const stage of stages) job.stages[stage] = { status: 'pending' };
-    job.status = 'running';
+    job.pendingStages = stages;
+    job.pendingOnlyIndexes = onlyIndexes;
+    job.status = 'error';
     job.error = undefined;
-    this.append(job, {
-      stage: failedStage,
-      type: 'note',
-      step: 'resume',
-      title: `从「${STAGE_TITLES[failedStage]}」继续`,
-      status: 'done',
-      resultBrief: '已保留上游产物，仅重跑失败部分',
-    });
-    void this.runPipeline(job, { stages, onlyIndexes });
-    return { resumed: true, status: 'running' };
+    return { stages, onlyIndexes };
   }
 
   /**
@@ -703,11 +845,49 @@ export class AiPipelineJobService implements OnModuleDestroy {
       researchBrief: compact ? null : (a?.brief ?? null),
       researchImages: compact ? [] : (a?.researchImages ?? []),
       researchVision: compact ? null : (a?.researchVision ?? null),
-      poseImages: compact ? [] : job.artifacts.poseFiles,
+      poseImages: compact ? [] : job.artifacts.poseFiles.map(toStored),
       poseErrors: compact ? [] : job.artifacts.poseErrors,
-      silhouetteImages: compact ? [] : job.artifacts.silFiles,
+      silhouetteImages: compact ? [] : job.artifacts.silFiles.map(toStored),
       silhouetteErrors: compact ? [] : job.artifacts.silErrors,
     };
+  }
+
+  /** 详情快照落存储（analyze 完成 / image 完成 / 终态调用；运行中详情页读内存，不读它） */
+  async persistDetail(job: AiPipelineJob): Promise<void> {
+    const a = job.artifacts.analyze;
+    await this.store.writeDetail(job.id, {
+      stages: job.stages,
+      error: job.error ?? null,
+      warnings: a?.warnings ?? [],
+      draft: a?.draft ?? null,
+      trace: a?.trace ?? [],
+      raw: a?.raw ?? null,
+      research: a?.research ?? [],
+      researchBrief: a?.brief ?? null,
+      researchVision: a?.researchVision ?? null,
+      artifacts: {
+        poseFiles: job.artifacts.poseFiles.map(toStored),
+        poseErrors: job.artifacts.poseErrors,
+        silFiles: job.artifacts.silFiles.map(toStored),
+        silErrors: job.artifacts.silErrors,
+      },
+      inputs: buildInputSummary(job),
+    });
+  }
+
+  /** 终态收尾：写 detail + events + DB 终态字段 */
+  private async persistTerminal(job: AiPipelineJob): Promise<void> {
+    await this.persistDetail(job);
+    await this.store.writeEvents(job.id, job.events);
+    const settledAt = Math.floor(Date.now() / 1000);
+    await this.store.updateJob(job.id, {
+      status: job.status,
+      errorCode: job.error?.code ?? null,
+      errorMessage: job.error?.message ?? null,
+      startedAt: null,
+      finishedAt: settledAt,
+      currentStage: null,
+    });
   }
 
   /** 查询 job；不存在返回 null（前端据此提示任务失效） */
@@ -719,8 +899,41 @@ export class AiPipelineJobService implements OnModuleDestroy {
   remove(jobId: string): void {
     this.jobs.delete(jobId);
   }
+}
 
-  onModuleDestroy(): void {
-    clearInterval(this.sweeper);
-  }
+/** 列表标题：文字描述前 20 字，否则「N 张示例图」 */
+export function buildJobTitle(job: AiPipelineJob): string {
+  const text = (job.inputs.text ?? job.inputs.extra.textDesc ?? '').trim();
+  if (text) return text.length > 20 ? `${text.slice(0, 20)}…` : text;
+  const n = job.inputs.images?.length ?? 0;
+  return n ? `${n} 张示例图` : '未命名任务';
+}
+
+/** 列表输入摘要（不含图片字节） */
+export function buildInputSummary(job: AiPipelineJob): Record<string, unknown> {
+  const text = (job.inputs.text ?? '').trim();
+  return {
+    imageCount: job.inputs.images?.length ?? 0,
+    refCount: job.inputs.references?.length ?? 0,
+    hasText: Boolean(text),
+    textPreview: text.slice(0, 80),
+    poseCount: job.inputs.extra.poseCount ?? null,
+    subjectCount: job.inputs.extra.subjectCount ?? null,
+    silMode: job.inputs.silhouette.mode,
+    silEngine: job.inputs.silhouette.engine,
+    refAnchor: job.inputs.referenceAnchor,
+  };
+}
+
+/** 产物引用（序列化 / detail 落盘共用，剔除 base64） */
+export function toStored(f: PipelinePoseFile) {
+  return { index: f.index, mimeType: f.mimeType, storageKey: f.storageKey ?? '', url: f.url ?? '' };
+}
+
+function mimeFromName(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase();
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+  if (ext === 'webp') return 'image/webp';
+  if (ext === 'gif') return 'image/gif';
+  return 'image/png';
 }
