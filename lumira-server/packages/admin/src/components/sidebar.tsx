@@ -14,6 +14,7 @@ import { Megaphone } from '@phosphor-icons/react/dist/csr/Megaphone';
 import { Images } from '@phosphor-icons/react/dist/csr/Images';
 import { Brain } from '@phosphor-icons/react/dist/csr/Brain';
 import { MagicWand } from '@phosphor-icons/react/dist/csr/MagicWand';
+import { ListChecks } from '@phosphor-icons/react/dist/csr/ListChecks';
 import { CloudArrowUp } from '@phosphor-icons/react/dist/csr/CloudArrowUp';
 import { Database } from '@phosphor-icons/react/dist/csr/Database';
 import { cn } from '@/lib/utils';
@@ -30,6 +31,7 @@ const navItems = [
   { href: '/dashboard/banners', label: 'Banner 运营', icon: Images },
   { href: '/dashboard/templates', label: '模板管理', icon: SquaresFour },
   { href: '/dashboard/templates/ai-create', label: 'AI 创建模板', icon: MagicWand },
+  { href: '/dashboard/templates/ai-tasks', label: '生成任务', icon: ListChecks },
   { href: '/dashboard/ai-config', label: 'AI 设置', icon: Brain },
   { href: '/dashboard/categories', label: '分类管理', icon: GridFour },
   { href: '/dashboard/scenes', label: '场景管理', icon: Camera },
