@@ -12,6 +12,9 @@ import { AiSilhouetteService } from './ai-generate-silhouette.service';
 import { AiSilhouetteTaskService } from './ai-silhouette-task.service';
 import { AiPipelineJobService } from './ai-pipeline-job.service';
 import type { JobMode } from './ai-pipeline-job.service';
+import { AiJobQueueService } from './ai-job-queue.service';
+import { AiJobStoreService, SETTLED_STATUSES } from './ai-job.store';
+import type { AiJobRow, AiJobStatus } from './ai-job.store';
 
 @Controller('admin/templates')
 @UseGuards(AdminAuthGuard)
@@ -22,6 +25,8 @@ export class AiTemplatesController {
     private readonly aiSilhouetteService: AiSilhouetteService,
     private readonly aiSilhouetteTaskService: AiSilhouetteTaskService,
     private readonly aiPipelineJobService: AiPipelineJobService,
+    private readonly aiJobQueueService: AiJobQueueService,
+    private readonly aiJobStoreService: AiJobStoreService,
   ) {}
 
   /**
@@ -156,63 +161,136 @@ export class AiTemplatesController {
     };
   }
 
-  /**
-   * 创建 AI 流水线 job（识别 → 姿势图 → 剪影）：multipart 字段同 ai-analyze（image/images + text/textDesc +
-   * creationReq/poseCount/subjectCount）+ reference/references（姿势参考图）+ extraPrompt，
-   * 另加 jobMode（auto / analyze-only）、silMode / silCrop / silEngine（剪影选项）。
-   * 立即返回 { jobId }，前端轮询 GET ai-job/:jobId。
-   */
+  // ===== AI 生成任务队列（spec 2026-09-30）=====
+
+  /** 提交生成任务 → 入队 */
   @Post('ai-job')
   async createAiJob(@Req() req: FastifyRequest) {
     const p = await parseAiMultipart(req);
     const mode: JobMode = p.jobMode === 'analyze-only' ? 'analyze-only' : 'auto';
-    return this.aiPipelineJobService.create({
+    const { jobId } = await this.aiPipelineJobService.create({
       images: p.images,
       text: p.text ?? p.textDesc ?? undefined,
-      extra: {
-        textDesc: p.textDesc,
-        creationReq: p.creationReq,
-        poseCount: p.poseCount,
-        subjectCount: p.subjectCount,
-      },
+      extra: { textDesc: p.textDesc, creationReq: p.creationReq, poseCount: p.poseCount, subjectCount: p.subjectCount },
       references: p.references,
       referenceAnchor: p.refAnchor !== '0',
       extraPrompt: p.extraPrompt,
       mode,
-      silhouette: {
-        mode: p.silMode === 'solid' ? 'solid' : 'sketch',
-        crop: p.silCrop !== '0',
-        engine: p.silEngine === 'ai' ? 'ai' : 'local',
-      },
+      silhouette: { mode: p.silMode === 'solid' ? 'solid' : 'sketch', crop: p.silCrop !== '0', engine: p.silEngine === 'ai' ? 'ai' : 'local' },
     });
+    const queued = await this.aiJobQueueService.enqueue(jobId);
+    return { jobId, status: queued.status, queuePos: queued.queuePos };
   }
 
-  /**
-   * 查询 job 状态：running 态响应体收敛（事件按 since 增量、长文本收紧、不返回 base64 产物），
-   * 终态或 verbose=1 返回完整事件与全部产物；job 不存在（后端重启/超期清理）→ 404。
-   */
-  @Get('ai-job/:jobId')
-  async getAiJob(@Param('jobId') jobId: string, @Query('since') since?: string, @Query('verbose') verbose?: string) {
-    const job = this.aiPipelineJobService.get(jobId);
-    if (!job) throw new NotFoundException('AI pipeline job not found');
+  /** 任务列表（分页 + 状态筛选） */
+  @Get('ai-jobs')
+  async listAiJobs(@Query('status') status?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    const rows = await this.aiJobStoreService.listJobs({
+      status: isJobStatus(status) ? status : undefined,
+      limit: clampInt(limit, 20, 1, 100),
+      offset: clampInt(offset, 0, 0, 100000),
+    });
+    return { items: rows.items.map(toListItem), total: rows.total };
+  }
+
+  /** 批量清理终态任务（含文件） */
+  @Post('ai-jobs/cleanup')
+  async cleanupAiJobs() {
+    return { removed: await this.aiJobStoreService.deleteSettled() };
+  }
+
+  /** 任务详情：运行中读内存（支持 since 增量），终态/重启后读存储文件 */
+  @Get('ai-jobs/:jobId')
+  async getAiJobDetail(@Param('jobId') jobId: string, @Query('since') since?: string) {
+    const row = await this.aiJobStoreService.findJob(jobId);
+    if (!row) throw new NotFoundException('AI pipeline job not found');
     const sinceSeq = Number.isFinite(Number(since)) ? Number(since) : 0;
-    return this.aiPipelineJobService.serialize(job, sinceSeq, verbose === '1');
+    const job = this.aiPipelineJobService.get(jobId);
+    if (job) {
+      return { ...toListItem(row), ...this.aiPipelineJobService.serialize(job, sinceSeq) };
+    }
+    const detail = await this.aiJobStoreService.readDetail(jobId);
+    const events = await this.aiJobStoreService.readEvents(jobId);
+    return {
+      ...toListItem(row),
+      jobId,
+      stages: (detail?.stages ?? { analyze: { status: 'pending' }, image: { status: 'pending' }, silhouette: { status: 'pending' } }) as unknown,
+      error: row.errorCode ? { code: row.errorCode, message: row.errorMessage ?? '', stage: 'analyze', at: (row.finishedAt ?? 0) * 1000 } : null,
+      events,
+      lastSeq: events.length,
+      draft: detail?.draft ?? null,
+      warnings: detail?.warnings ?? [],
+      trace: detail?.trace ?? [],
+      raw: detail?.raw ?? null,
+      research: detail?.research ?? [],
+      researchBrief: detail?.researchBrief ?? null,
+      researchImages: [],
+      researchVision: detail?.researchVision ?? null,
+      poseImages: detail?.artifacts.poseFiles ?? [],
+      poseErrors: detail?.artifacts.poseErrors ?? [],
+      silhouetteImages: detail?.artifacts.silFiles ?? [],
+      silhouetteErrors: detail?.artifacts.silErrors ?? [],
+    };
   }
 
-  /** 续跑：running → 不重跑（前端重连）；error → 从失败阶段重跑并复用上游产物；不存在 → 404 */
-  @Post('ai-job/:jobId/resume')
+  /** 停止：running 停在检查点，queued 取消排队 */
+  @Post('ai-jobs/:jobId/stop')
+  async stopAiJob(@Param('jobId') jobId: string) {
+    const row = await this.aiJobStoreService.findJob(jobId);
+    if (!row) throw new NotFoundException('AI pipeline job not found');
+    return this.aiJobQueueService.stop(jobId);
+  }
+
+  /** 继续：从存储恢复后重新入队 */
+  @Post('ai-jobs/:jobId/resume')
   async resumeAiJob(@Param('jobId') jobId: string) {
-    const result = await this.aiPipelineJobService.resume(jobId);
+    const result = await this.aiJobQueueService.resume(jobId);
     if (!result) throw new NotFoundException('AI pipeline job not found');
     return result;
   }
 
-  /** 放弃本次生成：删除 job（幂等） */
-  @Delete('ai-job/:jobId')
+  /** 删除终态任务（DB 行 + 任务文件夹） */
+  @Delete('ai-jobs/:jobId')
   async deleteAiJob(@Param('jobId') jobId: string) {
+    const row = await this.aiJobStoreService.findJob(jobId);
+    if (!row) return { ok: true };
+    if (!SETTLED_STATUSES.includes(row.status)) {
+      throw new BadRequestException('任务尚未结束，请先「停止」再删除');
+    }
     this.aiPipelineJobService.remove(jobId);
+    await this.aiJobStoreService.deleteJob(jobId);
     return { ok: true };
   }
+}
+
+const JOB_STATUSES = ['queued', 'running', 'done', 'error', 'stopped', 'interrupted'] as const;
+
+function isJobStatus(v: string | undefined): v is AiJobStatus {
+  return Boolean(v) && (JOB_STATUSES as readonly string[]).includes(v!);
+}
+
+function clampInt(v: string | undefined, fallback: number, min: number, max: number): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.trunc(n)));
+}
+
+/** 列表项：只暴露列表展示字段，不含详情大字段 */
+function toListItem(row: AiJobRow) {
+  return {
+    id: row.id,
+    title: row.title,
+    status: row.status,
+    mode: row.mode,
+    currentStage: row.currentStage,
+    progress: { poseTotal: row.poseTotal, poseDone: row.poseDone, silTotal: row.silTotal, silDone: row.silDone },
+    queuePos: row.queuePos,
+    errorCode: row.errorCode,
+    errorMessage: row.errorMessage,
+    createdAt: row.createdAt,
+    startedAt: row.startedAt,
+    finishedAt: row.finishedAt,
+  };
 }
 
 // ===== 模块内小型 multipart 助手 =====
