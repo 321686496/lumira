@@ -491,9 +491,9 @@ export const storageConfigs = mysqlTable('storage_config', {
 });
 /** AI 生成任务队列（列表展示数据）：详情/事件流/产物落存储文件，见 detail_key */
 export const aiTemplateJobs = mysqlTable('ai_template_jobs', {
-  id: text('id').primaryKey(),
-  status: text('status').notNull(),
-  mode: text('mode').notNull(),
+  id: varchar('id', { length: 64 }).primaryKey(),
+  status: varchar('status', { length: 32 }).notNull(),
+  mode: varchar('mode', { length: 32 }).notNull(),
   title: text('title').notNull(),
   currentStage: text('current_stage'),
   poseTotal: int('pose_total').notNull().default(0),

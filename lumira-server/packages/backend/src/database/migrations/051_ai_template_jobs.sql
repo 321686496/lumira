@@ -3,10 +3,12 @@
 -- DB 只存列表展示数据；详情/事件流/产物/输入落存储文件，由 detail_key 关联
 -- 幂等：由 _migrations 表记录，仅执行一次
 
+-- 注意：MySQL 8 不允许 TEXT 作为主键或索引列（报 ER_BLOB_KEY_WITHOUT_LENGTH），
+-- 故 id 用 VARCHAR、status 用 VARCHAR（用于索引）；其余非索引文本列保留 TEXT。
 CREATE TABLE IF NOT EXISTS `ai_template_jobs` (
-  `id` TEXT PRIMARY KEY,
-  `status` TEXT NOT NULL,
-  `mode` TEXT NOT NULL,
+  `id` VARCHAR(64) PRIMARY KEY,
+  `status` VARCHAR(32) NOT NULL,
+  `mode` VARCHAR(32) NOT NULL,
   `title` TEXT NOT NULL,
   `current_stage` TEXT,
   `pose_total` INT NOT NULL DEFAULT 0,
