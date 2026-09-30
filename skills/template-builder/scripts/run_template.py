@@ -12,7 +12,7 @@
   5. 结构: 产出 pose_images.json + template.pptpl(与后端在线模板同构);
   6. 输出: 全部写入 <parent>/<key>/ (默认 create_templates/<key>)。
 
-运行前提: 环境变量 HAPI_API_KEY(或 --api-key)、config.json(模板结构+姿态描述)。
+运行前提: 环境变量 MASS_API_KEY(默认引擎 qwen3pro) 或 HAPI_API_KEY(gpt2k) 已配置; 另需 config.json(模板结构+姿态描述)。
 """
 from __future__ import annotations
 
@@ -117,9 +117,41 @@ SIL_BBOX_RATIO = 0.3
 SIL_PAD_RATIO = 0.05
 SIZE = "768x1024"      # 竖构图(3:4), 与模板 aspectRatio 一致; hapi 需 WxH 像素格式
 SIZE_TUPLE = tuple(int(v) for v in SIZE.split("x"))
+
+
+def resolve_aspect(explicit, cfg: dict, refs: list) -> tuple:
+    """解析模板宽高比, 返回 (ratio 浮点, 显示标签 'w:h')。
+
+    优先级: --ratio > cfg.aspect_ratio > 参考图推断(全部一致用该比例, 否则取多数) > 3:4。
+    """
+    if explicit:
+        r = gpt_image2.parse_ratio(explicit)
+        return r, gpt_image2.ratio_label(r)
+    v = (cfg or {}).get("aspect_ratio")
+    if v:
+        r = gpt_image2.parse_ratio(v)
+        return r, gpt_image2.ratio_label(r)
+    if refs:
+        try:
+            sys.path.insert(0, str(_AIE_SCRIPTS))
+            from run_batch_edit import infer_ratio   # 复用反侵权技能的参考图比例推断
+            r = infer_ratio([str(p) for p in refs])
+            if r:
+                return r, gpt_image2.ratio_label(r)
+        except Exception as e:
+            print(f"  [比例] 参考图推断失败, 回退 3:4: {e}", flush=True)
+    return 0.75, "3:4"
+
+
+def pose_size(ratio: float) -> str:
+    """姿势图/剪影出图尺寸: 短边 768, 按模板比例(与反侵权技能保持一致)。"""
+    return gpt_image2.cell_size_str(ratio)
+
+
 REF_JPEG_QUALITY = 88  # 参考图上传前压成 JPEG: MaaS(qwen-image) 对大体积 base64 输入会上游超时
 MAX_TRY = 3
 TIMEOUT = 660
+ASPECT = [0.75, "3:4"]   # 运行时由 resolve_aspect 填入 (ratio 浮点, 显示标签)
 
 # 反侵权技能入口脚本(相对本文件)
 ANTI_INFRINGE = _AIE_SCRIPTS / "run_batch_edit.py"
@@ -183,17 +215,18 @@ def crop_to_content(img, pad: float = SIL_PAD_RATIO) -> object:
 
 # ---------------------------------------------------------------- 生成调用
 
-def make_client(cfg_args) -> tuple:
-    pcfg = gpt_image2.PLATFORMS.get(cfg_args.platform, gpt_image2.PLATFORMS["hapi"])
-    key = cfg_args.api_key or os.environ.get(pcfg["key_env"], "")
+def make_client(eng: dict, api_key: str = "", base_url: str = "") -> tuple:
+    pcfg = gpt_image2.PLATFORMS[eng["platform"]]
+    key = api_key or os.environ.get(pcfg["key_env"], "")
     if not key:
         raise RuntimeError(f"未配置 API Key: 设置环境变量 {pcfg['key_env']} 或使用 --api-key")
-    model = cfg_args.model or (pcfg["models"][0] if pcfg.get("models") else "gpt-image-2")
-    return gpt_image2.make_client(cfg_args.platform, key, cfg_args.base_url or pcfg["base_url"]), model
+    return gpt_image2.make_client(eng["platform"], key, base_url or pcfg["base_url"]), eng["model"]
 
 
 def gen_hapi(client, model, prompt, out_dir: Path, label, ref: Path | None = None,
-             size: str = SIZE) -> Path | None:
+             size: str = None) -> Path | None:
+    if size is None:
+        size = pose_size(ASPECT[0])
     for attempt in range(1, MAX_TRY + 1):
         tmp = out_dir / "_tmp" / f"{label}_{attempt}_{int(time.time()*1000)}"
         tmp.mkdir(parents=True, exist_ok=True)
@@ -221,8 +254,8 @@ def gen_hapi(client, model, prompt, out_dir: Path, label, ref: Path | None = Non
 def gen_silhouette(client, model, pose_path: Path, out_dir: Path) -> Path | None:
     from PIL import Image
     final = out_dir / f"{pose_path.stem}_sil.png"
-    raw = gen_hapi(client, model, SIL_PROMPT, out_dir / "_sil_raw", "sil",
-                   ref=pose_path, size=SIZE)
+    raw = gen_hapi(client, model, SIL_PROMPT + gpt_image2.ratio_note(ASPECT[0]),
+                   out_dir / "_sil_raw", "sil", ref=pose_path, size=pose_size(ASPECT[0]))
     if not raw:
         return None
     with Image.open(raw) as im:
@@ -235,21 +268,29 @@ def gen_silhouette(client, model, pose_path: Path, out_dir: Path) -> Path | None
 
 def run_anti_infringement(pose_sources: list[str], work: Path, api_key: str = "",
                           platform: str = "", model: str = "",
-                          keep_grids: bool = False) -> list[Path] | None:
+                          max_per_call: int = 0, ratio: str = "",
+                          keep_grids: bool = False, no_grid: bool = False) -> list[Path] | None:
     """调用反侵权技能加工真实参考姿势图, 返回 N 张成片(按输入顺序)。"""
     tmp = work / "_anti_infringe"
     tmp.mkdir(parents=True, exist_ok=True)
-    cmd = [sys.executable, str(ANTI_INFRINGE), *pose_sources, "--out", str(tmp)]
+    cmd = [sys.executable, str(ANTI_INFRINGE), *pose_sources, "--out", str(tmp),
+           "--size-single", pose_size(ASPECT[0])]
     if api_key:
         cmd += ["--api-key", api_key]
     if platform:
         cmd += ["--platform", platform]
     if model:
         cmd += ["--model", model]
+    if max_per_call:
+        cmd += ["--max-per-call", str(max_per_call)]
+    if ratio:
+        cmd += ["--ratio", ratio]
     if keep_grids:
         cmd += ["--keep-grids"]
+    if no_grid:
+        cmd += ["--no-grid"]
     r = subprocess.run(cmd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=900)
+                       encoding="utf-8", errors="replace", timeout=3600)
     if r.returncode != 0:
         print(f"  [反侵权] 失败 exit={r.returncode}: {(r.stderr or r.stdout)[-400:]}", flush=True)
         return None
@@ -263,7 +304,7 @@ def run_anti_infringement(pose_sources: list[str], work: Path, api_key: str = ""
 
 # ---------------------------------------------------------------- 文档
 
-def write_docs(cfg: dict, out_dir: Path, poses: list[dict]) -> None:
+def write_docs(cfg: dict, out_dir: Path, poses: list[dict], aspect_ratio: str = None) -> None:
     mapping = {p["name"]: f"pose{i}.png" for i, p in enumerate(poses, 1)}
     (out_dir / "pose_images.json").write_text(json.dumps(mapping, ensure_ascii=False, indent=2),
                                               encoding="utf-8")
@@ -278,7 +319,9 @@ def write_docs(cfg: dict, out_dir: Path, poses: list[dict]) -> None:
             "ambience": cfg.get("ambience", {}),
             "gender": cfg.get("gender", "unisex"),
         },
-        "composition": {"overlayType": "rule_of_thirds", "aspectRatio": "3:4", "opacity": 0.5,
+        "composition": {"overlayType": "rule_of_thirds",
+                        "aspectRatio": aspect_ratio or cfg.get("aspect_ratio") or "3:4",
+                        "opacity": 0.5,
                         "description": cfg.get("composition_description", "")},
         "pose": [
             {"name": p["name"], "silhouette": {"type": "image", "data": f"pose{i}_sil.png"},
@@ -355,9 +398,19 @@ def main() -> int:
                     help="跳过宫格检测(输入已是逐张单图时使用, 避免纯色单图被误判拆分)")
     ap.add_argument("--keep-grids", action="store_true",
                     help="保留反侵权步骤的中间四宫格原图到 <out>/_anti_infringe/_grids/")
+    ap.add_argument("--anti-no-grid", action="store_true",
+                    help="反侵权加工不做宫格打包, 每张单独编辑(渠道对多图输入超时时使用)")
     ap.add_argument("--parent", default="create_templates", help="输出父目录(默认 create_templates)")
-    ap.add_argument("--platform", default="hapi", choices=list(gpt_image2.PLATFORMS))
-    ap.add_argument("--model", default=None)
+    ap.add_argument("--engine", default=gpt_image2.DEFAULT_ENGINE,
+                    choices=list(gpt_image2.ENGINES),
+                    help="生图引擎预设(默认 qwen3pro: mass/qwen-image-3.0-pro)")
+    ap.add_argument("--platform", default=None, choices=list(gpt_image2.PLATFORMS),
+                    help="覆盖引擎预设的平台")
+    ap.add_argument("--model", default=None, help="覆盖引擎预设的模型")
+    ap.add_argument("--max-per-call", type=int, default=None,
+                    help="反侵权每批图片上限(默认按引擎推导)")
+    ap.add_argument("--ratio", default=None,
+                    help="模板宽高比(如 3:4 / 4:3 / 9:16 / 16:9 / 1:1), 缺省取 cfg.aspect_ratio")
     ap.add_argument("--api-key", default=None)
     ap.add_argument("--base-url", default=None)
     ap.add_argument("--dry-run", action="store_true")
@@ -366,6 +419,7 @@ def main() -> int:
     if args.dry_run:
         print(f"[dry-run] key={args.key} 输出={Path(args.parent)/args.key} "
               f"count={args.count} inputs={len(args.inputs)} auto_gen={args.auto_gen}")
+        print(f"[dry-run] 引擎={args.engine} 平台/模型={gpt_image2.resolve_engine(args.engine, args.platform, args.model, args.max_per_call)}")
         return 0
 
     cfg = json.loads(Path(args.cfg).read_text(encoding="utf-8"))
@@ -382,13 +436,22 @@ def main() -> int:
     (out_dir / "_sil_raw").mkdir(exist_ok=True)
 
     try:
-        client, model = make_client(args)
+        eng = gpt_image2.resolve_engine(args.engine, args.platform, args.model,
+                                        args.max_per_call)
+    except ValueError as e:
+        print(f"[错误] {e}", file=sys.stderr)
+        return 1
+
+    try:
+        client, model = make_client(eng, args.api_key or "", args.base_url or "")
     except RuntimeError as e:
         print(f"[错误] {e}", file=sys.stderr)
         return 1
 
     # 1) 输入
     refs = resolve_inputs(args, out_dir)
+    ASPECT[0], ASPECT[1] = resolve_aspect(args.ratio, cfg, refs)
+    print(f"  [比例] {ASPECT[1]}  单格 {pose_size(ASPECT[0])}", flush=True)
     if refs:
         if args.no_split:
             pose_sources = refs
@@ -406,10 +469,11 @@ def main() -> int:
             print(f"  [姿势] 跳过反侵权, 直接用 {len(final_poses)} 张", flush=True)
         else:
             print("  [姿势] 真实参考图 -> 反侵权加工…", flush=True)
-            key = args.api_key or os.environ.get(
-                gpt_image2.PLATFORMS.get(args.platform, gpt_image2.PLATFORMS["hapi"]).get("key_env", ""), "")
+            key = args.api_key or os.environ.get(eng["key_env"], "")
             done = run_anti_infringement([str(p) for p in pose_sources], out_dir, key,
-                                         args.platform, model, args.keep_grids)
+                                         eng["platform"], eng["model"],
+                                         eng["max_input_images"], ASPECT[1],
+                                         args.keep_grids, args.anti_no_grid)
             if done:
                 final_poses = done[:pose_count]
             else:
@@ -420,8 +484,9 @@ def main() -> int:
         style = cfg.get("style_prompt", "")
         for i in range(pose_count):
             desc = cfg["poses"][i].get("description", "")
-            prompt = f"{style}。姿势动作:{desc}。写实全身人像, 3:4竖构图, 保留皮肤毛孔与真实质感。"
-            p = gen_hapi(client, model, prompt, out_dir, f"pose{i+1}")
+            prompt = (f"{style}。姿势动作:{desc}。写实全身人像, "
+                      f"{gpt_image2.ratio_note(ASPECT[0])}保留皮肤毛孔与真实质感。")
+            p = gen_hapi(client, model, prompt, out_dir, f"pose{i+1}", size=pose_size(ASPECT[0]))
             if p:
                 final_poses.append(p)
     else:
@@ -453,7 +518,11 @@ def main() -> int:
     if len(poses_cfg) < n:
         poses_cfg = poses_cfg + [{"name": f"pose{i}", "description": ""} for i in
                                  range(len(poses_cfg) + 1, n + 1)]
-    write_docs(cfg, out_dir, poses_cfg)
+    write_docs(cfg, out_dir, poses_cfg, ASPECT[1])
+    from PIL import Image as _Image
+    for p in sorted(out_dir.glob("pose*.png")):
+        with _Image.open(p) as im:
+            print(f"  [尺寸] {p.name} {im.size[0]}x{im.size[1]}", flush=True)
     print(f"\n[完成] 模板产物在 {out_dir.resolve()}", flush=True)
     for f in sorted(out_dir.glob("pose*.png")) + [out_dir / "pose_images.json",
                                                   out_dir / "template.pptpl"]:
