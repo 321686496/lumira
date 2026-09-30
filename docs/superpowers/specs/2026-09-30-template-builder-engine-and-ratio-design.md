@@ -99,7 +99,7 @@ def resolve_engine(engine=None, platform=None, model=None, max_input_images=None
 
 选向规则的原因：单行/单列布局的画布长宽比 = `n × r`（横排）或 `r / n`（竖排），必须落在 `gpt_image2.MAX_RATIO = 3.0` 之内，否则 `_clamp_size()` 会触发比例钳制。按上表取向，`r ∈ [1/3, 3]` 时结果均 ≤ 2.25（`r = 1` 时为 3.0，取等号不触发钳制）。
 
-`crop_grid()` 已支持任意 `rows/cols`，只需把写死的 `2, 2` 改为本批布局；`cells[:len(targets)]` 的索引映射逻辑不变。
+`crop_grid()` **需要扩展后才能用**：当前实现每个轴只定位**一条**中央分隔带，并用它推出该轴所有格边界（`crop_grid.py` L205-L246）；`cols=3` 时中间那一格的左右边界会取到同一条分隔线，裁出零宽废格。改法：新增多分隔线定位——按等分位置推出 `k-1` 条内部低方差分隔带（在各预期边界附近的小窗口内复用既有 `_sep_line` 的容差扩展逻辑），以相邻分隔带的中点为格边界，定位不到时保留既有的等分退路。定位完成后 `cells[:len(targets)]` 的索引映射逻辑不变。
 
 ### 3.4 画布尺寸反算
 
@@ -149,6 +149,7 @@ def resolve_engine(engine=None, platform=None, model=None, max_input_images=None
 | 文件 | 改动 |
 |---|---|
 | `scripts/gpt_image2.py` | 新增 `ENGINES` / `DEFAULT_ENGINE` / `FALLBACK_MAX_INPUT_IMAGES` / `resolve_engine()`；`PLATFORMS["mass"]["models"]` 补 `qwen-image-3.0-pro` |
+| `skills/anti-infringement-pose-edit/scripts/crop_grid.py` | 新增多分隔线定位，使每个轴可切 3 格及以上（当前每轴仅支持一条中央分隔带，`rows/cols ≥ 3` 会裁出零宽废格）；`crop_grid()` 签名与 `validity` 语义不变 |
 | `skills/anti-infringement-pose-edit/scripts/run_batch_edit.py` | 新增 `--engine`；`--platform`/`--max-per-call` 默认改 `None` 并按引擎推导；按本批 `n` 选布局并把布局传给 `crop_grid`；画布尺寸改为「单格尺寸 × 布局」；成片归一化；提示词注入比例约束；单图路径支持附锚点；`--dry-run` 输出引擎/上限/分批/每批布局与画布尺寸 |
 | `skills/template-builder/scripts/run_template.py` | 新增 `--engine` / `--max-per-call` / `--ratio`；`SIZE` 改为按比例计算；`write_docs()` 的 `aspectRatio` 用该比例；文生图提示词去掉写死的「3:4竖构图」；调子进程时透传 `engine/platform/model/max-per-call/ratio`；完成时打印每张成片尺寸 |
 | `skills/anti-infringement-pose-edit/SKILL.md` | 同步引擎、上限、动态布局、比例约束的说明与示例命令 |

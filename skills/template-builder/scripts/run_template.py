@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import io
 import json
 import mimetypes
 import os
@@ -115,6 +116,8 @@ SIL_THRESHOLD = 245
 SIL_BBOX_RATIO = 0.3
 SIL_PAD_RATIO = 0.05
 SIZE = "768x1024"      # 竖构图(3:4), 与模板 aspectRatio 一致; hapi 需 WxH 像素格式
+SIZE_TUPLE = tuple(int(v) for v in SIZE.split("x"))
+REF_JPEG_QUALITY = 88  # 参考图上传前压成 JPEG: MaaS(qwen-image) 对大体积 base64 输入会上游超时
 MAX_TRY = 3
 TIMEOUT = 660
 
@@ -128,6 +131,17 @@ def load_tuple(path: str) -> tuple[str, str, bytes]:
     with open(path, "rb") as f:
         data = f.read()
     return (os.path.basename(path), mimetypes.guess_type(path)[0] or "image/png", data)
+
+
+def load_ref_tuple(path: str) -> tuple[str, str, bytes]:
+    """图生图参考图: 统一缩放并压成 JPEG 再上传。
+    部分渠道(MaaS/qwen-image-3.0-pro)对大体积 base64 输入会上游超时, 压缩后可稳定返回。"""
+    with Image.open(path) as im:
+        im = im.convert("RGB")
+        im.thumbnail(SIZE_TUPLE)
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=REF_JPEG_QUALITY)
+    return ("ref.jpg", "image/jpeg", buf.getvalue())
 
 
 def decode_item(item: dict, tmp: Path, prefix: str) -> Path:
@@ -185,7 +199,7 @@ def gen_hapi(client, model, prompt, out_dir: Path, label, ref: Path | None = Non
         tmp.mkdir(parents=True, exist_ok=True)
         try:
             if ref is not None:
-                imgs = [load_tuple(str(ref))]
+                imgs = [load_ref_tuple(str(ref))]
                 status, resp = client.edit(model, prompt, imgs, size=size, n=1, timeout=TIMEOUT)
             else:
                 status, resp = client.generate(model, prompt, size=size, n=1, timeout=TIMEOUT)
@@ -219,13 +233,21 @@ def gen_silhouette(client, model, pose_path: Path, out_dir: Path) -> Path | None
     return final
 
 
-def run_anti_infringement(pose_sources: list[str], work: Path, api_key: str = "") -> list[Path] | None:
+def run_anti_infringement(pose_sources: list[str], work: Path, api_key: str = "",
+                          platform: str = "", model: str = "",
+                          keep_grids: bool = False) -> list[Path] | None:
     """调用反侵权技能加工真实参考姿势图, 返回 N 张成片(按输入顺序)。"""
     tmp = work / "_anti_infringe"
     tmp.mkdir(parents=True, exist_ok=True)
     cmd = [sys.executable, str(ANTI_INFRINGE), *pose_sources, "--out", str(tmp)]
     if api_key:
         cmd += ["--api-key", api_key]
+    if platform:
+        cmd += ["--platform", platform]
+    if model:
+        cmd += ["--model", model]
+    if keep_grids:
+        cmd += ["--keep-grids"]
     r = subprocess.run(cmd, capture_output=True, text=True,
                        encoding="utf-8", errors="replace", timeout=900)
     if r.returncode != 0:
@@ -254,6 +276,7 @@ def write_docs(cfg: dict, out_dir: Path, poses: list[dict]) -> None:
             "referenceSource": cfg.get("reference_source", ""),
             "classification": cfg.get("classification", {}),
             "ambience": cfg.get("ambience", {}),
+            "gender": cfg.get("gender", "unisex"),
         },
         "composition": {"overlayType": "rule_of_thirds", "aspectRatio": "3:4", "opacity": 0.5,
                         "description": cfg.get("composition_description", "")},
@@ -330,6 +353,8 @@ def main() -> int:
                     help="有参考图时不走反侵权加工(直接当最终成片)")
     ap.add_argument("--no-split", action="store_true",
                     help="跳过宫格检测(输入已是逐张单图时使用, 避免纯色单图被误判拆分)")
+    ap.add_argument("--keep-grids", action="store_true",
+                    help="保留反侵权步骤的中间四宫格原图到 <out>/_anti_infringe/_grids/")
     ap.add_argument("--parent", default="create_templates", help="输出父目录(默认 create_templates)")
     ap.add_argument("--platform", default="hapi", choices=list(gpt_image2.PLATFORMS))
     ap.add_argument("--model", default=None)
@@ -383,7 +408,8 @@ def main() -> int:
             print("  [姿势] 真实参考图 -> 反侵权加工…", flush=True)
             key = args.api_key or os.environ.get(
                 gpt_image2.PLATFORMS.get(args.platform, gpt_image2.PLATFORMS["hapi"]).get("key_env", ""), "")
-            done = run_anti_infringement([str(p) for p in pose_sources], out_dir, key)
+            done = run_anti_infringement([str(p) for p in pose_sources], out_dir, key,
+                                         args.platform, model, args.keep_grids)
             if done:
                 final_poses = done[:pose_count]
             else:

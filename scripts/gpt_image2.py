@@ -539,15 +539,14 @@ class MassImages:
     def edit(self, model, prompt, images, size=None, n=1, quality=None,
              output_format=None, input_fidelity=None, background=None,
              moderation=None, timeout=600, cancel_check=None):
-        """images 转 base64 data URL 通过 image_url 传给异步任务"""
+        """images 转 base64 data URL 通过 images 数组字段传给异步任务"""
         n = max(1, int(n))
         data_urls = [_data_url(ct, data) for _, ct, data in images]
         results = []
         for i in range(n):
             if cancel_check and cancel_check():
                 raise TaskCancelled("任务已取消")
-            body = {"model": model, "prompt": prompt,
-                    "image_url": data_urls[0] if len(data_urls) == 1 else data_urls}
+            body = {"model": model, "prompt": prompt, "images": data_urls}
             if size:
                 body["size"] = self._norm_size(size)
             status, resp = self._run_job(body, timeout=timeout, cancel_check=cancel_check)

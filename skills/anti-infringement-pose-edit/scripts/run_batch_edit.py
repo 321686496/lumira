@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import io
 import mimetypes
 import os
 import shutil
@@ -114,10 +115,13 @@ def ratio_to_grid_size(r: float, base: int = 1024) -> str:
 
 
 def _load_tuple(path: str) -> tuple[str, str, bytes]:
-    with open(path, "rb") as f:
-        data = f.read()
-    ct = mimetypes.guess_type(path)[0] or "image/png"
-    return (os.path.basename(path), ct, data)
+    """上传前统一缩放并压成 JPEG: 部分渠道(MaaS/qwen-image)对大体积 base64 输入会上游超时。"""
+    with Image.open(path) as im:
+        im = im.convert("RGB")
+        im.thumbnail((1024, 1024))
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=88)
+    return ("ref.jpg", "image/jpeg", buf.getvalue())
 
 
 def _decode_item(item: dict, tmpdir: str, prefix: str) -> str:
