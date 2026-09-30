@@ -95,9 +95,22 @@ describe('AiPipelineJobService（生命周期与序列化）', () => {
   it('serialize 终态产物为 URL，不含 base64', async () => {
     const { jobId } = await service.create({ text: '文字', mode: 'analyze-only' });
     await service.startJob(jobId);
-    const out = service.serialize(service.get(jobId)!, 0, true);
+    const job = service.get(jobId)!;
+    job.artifacts.poseFiles = [
+      {
+        index: 0,
+        base64: 'AAA',
+        mimeType: 'image/png',
+        storageKey: '/uploads/ai-jobs/x/pose-0.png',
+        url: '/uploads/ai-jobs/x/pose-0.png',
+      },
+    ];
+    const out = service.serialize(job, 0, true);
+    expect(out.poseImages).toEqual([
+      { index: 0, mimeType: 'image/png', storageKey: '/uploads/ai-jobs/x/pose-0.png', url: '/uploads/ai-jobs/x/pose-0.png' },
+    ]);
     expect(JSON.stringify(out)).not.toContain('base64');
-    expect(out).toHaveProperty('poseImages');
+    expect(JSON.stringify(out)).not.toContain('AAA');
   });
 
   it('serialize：running 态收敛（丢弃 rawResponse、截断长文本、不返回 base64 产物）', async () => {
@@ -253,6 +266,7 @@ describe('AiPipelineJobService（三阶段与续跑）', () => {
   let analyzeMock: jest.Mock;
   let generateMock: jest.Mock;
   let silhouetteMock: jest.Mock;
+  let writeDetailMock: jest.Mock;
 
   const DRAFT = { pose: [{ index: 0 }, { index: 1 }] };
 
@@ -262,6 +276,7 @@ describe('AiPipelineJobService（三阶段与续跑）', () => {
     });
     generateMock = jest.fn().mockResolvedValue({ base64: 'aW1n', mimeType: 'image/png', prompt: 'p', model: 'm' });
     silhouetteMock = jest.fn().mockResolvedValue({ image: 'c2ls', mimeType: 'image/png' });
+    writeDetailMock = jest.fn().mockResolvedValue(undefined);
     service = new AiPipelineJobService(
       { analyze: analyzeMock } as unknown as AiAnalyzeService,
       {
@@ -279,7 +294,7 @@ describe('AiPipelineJobService（三阶段与续跑）', () => {
           storageKey: `/uploads/ai-jobs/${id}/${kind}-${index}.png`,
           url: `/uploads/ai-jobs/${id}/${kind}-${index}.png`,
         })),
-        writeDetail: jest.fn().mockResolvedValue(undefined),
+        writeDetail: writeDetailMock,
         writeEvents: jest.fn().mockResolvedValue(undefined),
         readDetail: jest.fn().mockResolvedValue(null),
         readInputs: jest.fn().mockResolvedValue([]),
@@ -398,4 +413,36 @@ describe('AiPipelineJobService（三阶段与续跑）', () => {
     expect(job.error?.stage).toBe('analyze');
     expect(job.error?.message).toContain('8MB');
   });
+
+  it(
+    'requestStop：image 阶段中途停止 → 已完成姿势图保留在内存与 detail.json',
+    async () => {
+      generateMock.mockImplementation((_refs: unknown, metaJson: string) => {
+        const meta = JSON.parse(metaJson) as { pose?: { index?: number } };
+        // 锚点（#1）立即成功；依赖张（#2）持续超时 → 有界重试在下一个检查点抛 JobStoppedError
+        if (meta.pose?.index === 1) return Promise.reject(new Error('AI 请求超时，请稍后重试'));
+        return Promise.resolve({ base64: 'aW1n', mimeType: 'image/png', prompt: 'p', model: 'm' });
+      });
+
+      const { jobId } = await service.create({ text: '文字描述', mode: 'auto' });
+      const runP = service.startJob(jobId);
+      // 锚点完成、依赖张进入约 1s 重试等待；此刻请求停止 → 停在 image 阶段
+      for (let i = 0; i < 6000 && service.get(jobId)!.artifacts.poseFiles.length < 1; i += 1) {
+        await new Promise((r) => setTimeout(r, 2));
+      }
+      service.requestStop(jobId);
+      await runP;
+
+      const job = service.get(jobId)!;
+      expect(job.status).toBe('stopped');
+      expect(job.stages.image.status).toBe('pending');
+      // 修复点：已产出即时回写内存，停止时不再为空（此前与 DB 的 poseDone=1 矛盾）
+      expect(job.artifacts.poseFiles.map((f) => f.index)).toEqual([0]);
+      const lastDetail = writeDetailMock.mock.calls[writeDetailMock.mock.calls.length - 1]![1] as {
+        artifacts: { poseFiles: Array<{ index: number }> };
+      };
+      expect(lastDetail.artifacts.poseFiles.map((f) => f.index)).toEqual([0]);
+    },
+    30_000,
+  );
 });

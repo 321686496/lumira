@@ -555,6 +555,8 @@ export class AiPipelineJobService {
         file.storageKey = stored.storageKey;
         file.url = stored.url;
         byIndex.set(index, file);
+        // 即时回写：任何时刻（含并发兄弟张抛 JobStoppedError）中断，内存产物都与 DB 计数一致
+        job.artifacts.poseFiles = [...byIndex.values()].sort((a, b) => a.index - b.index);
         await this.store.updateJob(job.id, {
           poseDone: byIndex.size,
           poseTotal: total,
@@ -576,6 +578,7 @@ export class AiPipelineJobService {
         if (firstError === undefined) firstError = err;
         failed.push(index);
         byIndex.delete(index);
+        job.artifacts.poseFiles = [...byIndex.values()].sort((a, b) => a.index - b.index);
         this.append(job, {
           stage: 'image',
           type: 'note',
@@ -680,6 +683,7 @@ export class AiPipelineJobService {
           out.storageKey = stored.storageKey;
           out.url = stored.url;
           byIndex.set(index, out);
+          job.artifacts.silFiles = [...byIndex.values()].sort((a, b) => a.index - b.index);
           await this.store.updateJob(job.id, {
             silDone: byIndex.size,
             silTotal: sources.length,
@@ -698,6 +702,7 @@ export class AiPipelineJobService {
           if (firstError === undefined) firstError = err;
           failed.push(index);
           byIndex.delete(index);
+          job.artifacts.silFiles = [...byIndex.values()].sort((a, b) => a.index - b.index);
           this.append(job, {
             stage: 'silhouette',
             type: 'note',
@@ -739,22 +744,32 @@ export class AiPipelineJobService {
         .filter((x) => x.m && x.m[1] === kind)
         .sort((x, y) => Number(x.m![2]) - Number(y.m![2]))
         .map((x) => ({ buffer: x.f.buffer, filename: x.f.name.split('/').pop() ?? x.f.name, mimetype: mimeFromName(x.f.name) }));
+    // 完整输入快照（新 detail 才有）；旧 detail.json 缺失时逐项回退到摘要字段
+    const inputFull = ((detail as { inputFull?: unknown }).inputFull ?? {}) as {
+      text?: string | null;
+      extra?: AiPipelineJob['inputs']['extra'] | null;
+      extraPrompt?: string | null;
+      referenceAnchor?: boolean;
+      silhouette?: AiPipelineJob['inputs']['silhouette'];
+    };
     const job: AiPipelineJob = {
       id: jobId,
       createdAt: row.createdAt * 1000,
-      status: 'error',
+      // DB 的 interrupted 只是「待续跑」的 error 语义，统一映射为 error；stopped 原样保留
+      status: row.status === 'stopped' ? 'stopped' : 'error',
       mode: row.mode,
+      error: (detail.error as InterruptionInfo | null) ?? undefined,
       inputs: {
         images: pick('example'),
-        text: (detail.inputs.textPreview as string) || undefined,
-        extra: {},
+        text: (inputFull.text ?? (detail.inputs.textPreview as string)) || undefined,
+        extra: inputFull.extra ?? {},
         references: pick('ref'),
-        referenceAnchor: detail.inputs.refAnchor !== false,
-        extraPrompt: null,
+        referenceAnchor: inputFull.referenceAnchor ?? detail.inputs.refAnchor !== false,
+        extraPrompt: inputFull.extraPrompt ?? null,
         silhouette: {
-          mode: (detail.inputs.silMode as 'sketch' | 'solid') ?? 'sketch',
-          crop: true,
-          engine: (detail.inputs.silEngine as 'ai' | 'local') ?? 'local',
+          mode: inputFull.silhouette?.mode ?? (detail.inputs.silMode as 'sketch' | 'solid') ?? 'sketch',
+          crop: inputFull.silhouette?.crop ?? true,
+          engine: inputFull.silhouette?.engine ?? (detail.inputs.silEngine as 'ai' | 'local') ?? 'local',
         },
       },
       stages: detail.stages as Record<PipelineStage, StageState>,
@@ -819,13 +834,13 @@ export class AiPipelineJobService {
    * 序列化（响应体收敛的关键）：
    * - running 且非 verbose：事件按 since 增量返回并收紧（长文本截断、丢弃 rawResponse），
    *   不返回 base64 产物与草稿（避免每轮整包回传导致响应体随耗时膨胀）。
-   * - 终态（done/error）：忽略 since，一次性返回**全量**完整事件（含 rawResponse）与全部产物；
+   * - 终态（done/error/stopped/interrupted）：忽略 since，一次性返回**全量**完整事件（含 rawResponse）与全部产物；
    *   运行期返回的是收敛版（截断 / 无 rawResponse），前端又按 seq 增量累积，
    *   终态若仍只返回增量，累积列表里的收敛版将永远无法被完整版覆盖（截断残留 bug）。
    * - verbose=1：按 since 返回增量，但按完整字段返回（供带 since 的显式全量查询）。
    */
   serialize(job: AiPipelineJob, since = 0, verbose = false) {
-    const terminal = job.status === 'done' || job.status === 'error';
+    const terminal = job.status !== 'running' && job.status !== 'queued';
     const compact = !terminal && !verbose;
     const from = terminal ? 0 : since;
     const a = job.artifacts.analyze;
@@ -855,7 +870,7 @@ export class AiPipelineJobService {
   /** 详情快照落存储（analyze 完成 / image 完成 / 终态调用；运行中详情页读内存，不读它） */
   async persistDetail(job: AiPipelineJob): Promise<void> {
     const a = job.artifacts.analyze;
-    await this.store.writeDetail(job.id, {
+    const detail = {
       stages: job.stages,
       error: job.error ?? null,
       warnings: a?.warnings ?? [],
@@ -872,7 +887,16 @@ export class AiPipelineJobService {
         silErrors: job.artifacts.silErrors,
       },
       inputs: buildInputSummary(job),
-    });
+      // 完整输入快照（供冷启动续跑还原，避免回退到截断摘要重跑 analyze）
+      inputFull: {
+        text: job.inputs.text ?? null,
+        extra: job.inputs.extra ?? null,
+        extraPrompt: job.inputs.extraPrompt ?? null,
+        referenceAnchor: job.inputs.referenceAnchor,
+        silhouette: job.inputs.silhouette,
+      },
+    };
+    await this.store.writeDetail(job.id, detail);
   }
 
   /** 终态收尾：写 detail + events + DB 终态字段 */
