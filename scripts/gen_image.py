@@ -158,6 +158,7 @@ def main():
     parser.add_argument("--size", default=None, help="图片尺寸, 如 1024x1024 / 9:16 / 1:1")
     parser.add_argument("--duration", type=int, default=None, help="视频时长(秒)")
     parser.add_argument("--image-url", default=None, help="输入参考图 URL(图生图/图生视频)")
+    parser.add_argument("--image-file", default=None, help="本地参考图文件(转为 data URL 供图生图/图生视频)")
     parser.add_argument("--seed", type=int, default=None, help="随机种子")
     parser.add_argument("--poll-interval", type=int, default=POLL_INTERVAL, help=f"轮询间隔秒, 默认 {POLL_INTERVAL}")
     parser.add_argument("--max-wait", type=int, default=MAX_WAIT, help=f"最大等待秒, 默认 {MAX_WAIT}")
@@ -173,9 +174,16 @@ def main():
 
     extra = {}
     for k, v in (("size", args.size), ("duration", args.duration),
-                 ("image_url", args.image_url), ("seed", args.seed)):
+                 ("seed", args.seed)):
         if v is not None:
             extra[k] = v
+    if args.image_file:
+        raw = open(args.image_file, "rb").read()
+        import mimetypes, pathlib
+        mime = mimetypes.guess_type(args.image_file)[0] or "image/png"
+        extra["image_url"] = f"data:{mime};base64," + base64.b64encode(raw).decode()
+    elif args.image_url:
+        extra["image_url"] = args.image_url
 
     submit = submit_task(args.model, args.prompt, extra)
     task = poll_task(submit["id"], args.poll_interval, args.max_wait)
