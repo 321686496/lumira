@@ -424,16 +424,28 @@ export function AiCreateWizard({
           setNotice('任务仍在进行中，可前往任务详情页查看实时进度');
           return;
         }
-        if (res.status === 'done') {
-          if (res.stages.analyze.status !== 'done') {
-            setErrorText('任务已完成，但识别阶段未产出结果，请重新开始');
-            return;
-          }
-          if (res.mode === 'auto') await finishAuto(res);
-          else finishAnalyzeOnly(res);
+        // 终态但识别阶段未产出：无草稿可恢复，按状态给出提示
+        if (res.stages.analyze.status !== 'done') {
+          setErrorText(
+            res.status === 'done'
+              ? '任务已完成，但识别阶段未产出结果，请重新开始'
+              : res.error?.message || '任务已中断，可前往任务详情页继续，或重新开始',
+          );
           return;
         }
-        setErrorText(res.error?.message || '任务已中断，可前往任务详情页继续，或重新开始');
+        // 识别已产出：brief Step 4.2 的恢复条件只要求 analyze 已 done，不限定 status === 'done'
+        // （finishAnalyzeOnly / finishAuto 内部均调用 applyAnalyze 回填草稿）
+        if (res.status === 'done') {
+          // 已完成：auto 推进到封面/剪影决策，analyze-only 停在识别结果态
+          if (res.mode === 'auto') await finishAuto(res);
+          else finishAnalyzeOnly(res);
+        } else {
+          // 非 done 的终态（error / stopped / interrupted）：仍回填已识别草稿并停在识别结果态，让用户继续使用
+          finishAnalyzeOnly(res);
+          setErrorText(res.error?.message || '任务已中断，可前往任务详情页继续，或重新开始');
+        }
+        // 恢复成功：清理 URL 的 ?job= 参数，避免刷新重放（尤其 auto 流程会重复创建模板）
+        router.replace('/dashboard/templates/ai-create');
       } catch (e) {
         if (cancelled) return;
         setErrorText(interruptionFromPollError(e, 'analyze').message);
