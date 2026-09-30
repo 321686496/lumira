@@ -144,7 +144,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
   const [busy, setBusy] = useState<null | 'stop' | 'resume' | 'delete'>(null);
   const [panelVisible, setPanelVisible] = useState(true);
   const [analyzeOpen, setAnalyzeOpen] = useState(false);
-  /** 下一次增量拉取的 since（只增不减） */
+  /** 下一次增量拉取的 since（轮询内递增；停止/继续成功后重置为 0 以重建事件） */
   const lastSeq = useRef(0);
 
   const load = useCallback(async () => {
@@ -212,6 +212,13 @@ export function JobDetail({ jobId }: { jobId: string }) {
           return;
         }
         setNotice(okText);
+        // 停止/继续成功后必须重置事件游标并清空已累积事件：后端内存态被淘汰/重启后会 hydrate
+        // 重建 job，其 events 从空开始、seq 从 1 重新计数（ai-pipeline-job.service.ts 中
+        // seq = job.events.length + 1）；若沿用上一轮终态的最大 seq 作为 since，新事件（seq ≤ N）
+        // 会被后端以 since 过滤掉而静默丢失，且旧 events 仍在 → 面板停在「进行中」却永不刷新。
+        // 置 0 后 since=0 走全量返回，配合 load() 的终态整体替换语义可安全重建事件列表。
+        lastSeq.current = 0;
+        setDetail((prev) => (prev ? { ...prev, events: [] } : prev));
         await load();
       } finally {
         setBusy(null);
