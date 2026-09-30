@@ -5,7 +5,7 @@ import type { AiJobListItem } from '@/lib/ai-jobs';
 
 function item(over: Partial<AiJobListItem> = {}): AiJobListItem {
   return {
-    id: 'job_1', title: 't', status: 'running', currentStage: 'image',
+    id: 'job_1', title: 't', status: 'running', mode: 'auto', currentStage: 'image',
     progress: { poseTotal: 3, poseDone: 1, silTotal: 3, silDone: 0 },
     queuePos: 0, errorCode: null, errorMessage: null,
     createdAt: 1, startedAt: 1, finishedAt: null, ...over,

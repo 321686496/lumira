@@ -830,7 +830,7 @@ export type AiPipelineStage = 'analyze' | 'image' | 'silhouette';
 /** 单阶段状态 */
 export type AiPipelineStageStatus = 'pending' | 'running' | 'done' | 'error';
 /** job 整体状态（后端仅维护三态） */
-export type AiPipelineJobStatus = 'queued' | 'running' | 'done' | 'error' | 'stopped';
+export type AiPipelineJobStatus = 'running' | 'done' | 'error';
 /** job 模式：auto 全自动（识别→姿势图→剪影）/ analyze-only 仅识别 */
 export type AiPipelineJobMode = 'auto' | 'analyze-only';
 
