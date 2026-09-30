@@ -41,14 +41,12 @@ import type {
   AiImageStatusResult,
   AiSilhouetteTaskId,
   AiSilhouetteStatusResult,
-  AiPipelineJobId,
-  AiPipelineStatusResult,
-  AiPipelineResumeResult,
   MigrationRecordView,
   MigrationRunningView,
   StorageConfigView,
   StorageConfigPayload,
 } from '@/types/admin';
+import type { AiJobDetail, AiJobListItem, AiJobStatus } from '@/lib/ai-jobs';
 
 // 重新导出纯函数，供 server-only 调用方使用（客户端组件请直接从 @/lib/category-tree 导入）
 export { buildCategoryTree };
@@ -625,29 +623,35 @@ export const api = {
   /** multipart：示例图 image/image + text/textDesc + creationReq/poseCount/subjectCount + 参考图 reference/references
    *  + extraPrompt + jobMode（auto / analyze-only）+ silMode/silCrop/silEngine → 立即返回 jobId */
   aiPipelineStart: (formData: FormData) =>
-    adminFetch<AiPipelineJobId>('/templates/ai-job', {
+    adminFetch<{ jobId: string; status: AiJobStatus; queuePos: number }>('/templates/ai-job', {
       method: 'POST',
       body: formData,
     }, AI_ENDPOINT_TIMEOUT_MS),
 
-  /** 查询 job：since>0 只取增量事件；verbose=1 强制返回全量事件与 base64 产物（job 不存在 → 404） */
-  aiPipelineStatus: (jobId: string, since?: number, verbose?: boolean) =>
-    adminFetch<AiPipelineStatusResult>(
-      `/templates/ai-job/${jobId}?since=${typeof since === 'number' && since > 0 ? since : 0}${
-        verbose ? '&verbose=1' : ''
-      }`,
-    ),
+  /** 任务列表（分页 + 状态筛选） */
+  aiJobList: (params: { status?: string; limit?: number; offset?: number } = {}) => {
+    const search = new URLSearchParams();
+    if (params.status) search.set('status', params.status);
+    search.set('limit', String(params.limit ?? 20));
+    search.set('offset', String(params.offset ?? 0));
+    return adminFetch<{ items: AiJobListItem[]; total: number }>(`/templates/ai-jobs?${search.toString()}`);
+  },
 
-  /** 续跑：running → 仅重连（resumed=false）；error → 从失败阶段重跑并复用上游产物（resumed=true） */
-  aiPipelineResume: (jobId: string) =>
-    adminFetch<AiPipelineResumeResult>(`/templates/ai-job/${jobId}/resume`, {
-      method: 'POST',
-      body: JSON.stringify({}),
-    }),
+  /** 任务详情：since>0 只取增量事件 */
+  aiJobDetail: (jobId: string, since = 0) =>
+    adminFetch<AiJobDetail>(`/templates/ai-jobs/${jobId}?since=${since > 0 ? since : 0}`),
 
-  /** 放弃本次生成：删除 job（幂等，不存在也返回 ok） */
-  aiPipelineCancel: (jobId: string) =>
-    adminFetch<{ ok: true }>(`/templates/ai-job/${jobId}`, { method: 'DELETE' }),
+  aiJobStop: (jobId: string) =>
+    adminFetch<{ stopped: boolean; status: string }>(`/templates/ai-jobs/${jobId}/stop`, { method: 'POST', body: JSON.stringify({}) }),
+
+  aiJobResume: (jobId: string) =>
+    adminFetch<{ resumed: boolean; status: string }>(`/templates/ai-jobs/${jobId}/resume`, { method: 'POST', body: JSON.stringify({}) }),
+
+  aiJobDelete: (jobId: string) =>
+    adminFetch<{ ok: true }>(`/templates/ai-jobs/${jobId}`, { method: 'DELETE' }),
+
+  aiJobsCleanup: () =>
+    adminFetch<{ removed: number }>('/templates/ai-jobs/cleanup', { method: 'POST', body: JSON.stringify({}) }),
 
   // ===== 图片存储迁移（R2 迁移）=====
   startMigration: (triggerBy: string, target?: string) =>
