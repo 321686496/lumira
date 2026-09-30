@@ -145,7 +145,7 @@ const DRAFT_JSON_EXAMPLE = `{
     "category": "portrait",                 // 必须命中分类树一级 key
     "subjectCount": 1,                      // 画面主体人数：1=单人；2=情侣/双人；3+=全家福/合影/聚餐；按参考图与用户描述推断
     "shortDesc": "把夏天拍进眼睛里",          // 情绪化文案，≤20字
-    "description": "午后四点的斜阳从右后方照进田野，女孩侧身站在没过膝盖的草丛里回头，浅金色逆光在发梢勾出轮廓光；三分法构图，人物落在左三分线上，右侧留出大片天空作呼吸空间，前景草叶虚化、远景田野层叠。",
+    "description": "午后四点的斜阳从右后方照进田野，女孩站在没过膝盖的草丛里回头，浅金色逆光在发梢勾出轮廓光，前景草叶虚化、远景田野层叠。",  // 面向 App 用户的画面感简介（≤80 字）：场景 + 主体与动作 + 光线氛围；不写机位/相机参数/后期参数，不用分节标签
     "tags": ["日系", "田园", "清新"],
     "ambience": { "seasons": ["summer"], "weathers": ["sunny"], "timeTones": ["day"] },
     "classification": { "type": "portrait", "majorStyle": "…", "style": "…", "method": "" }
@@ -245,7 +245,11 @@ ${qualityRequirements(category, hasExample)}
 - 只输出 JSON，不要任何解释，markdown 代码块标记也尽量省略；
 - meta.name 具体化（场景+主体+风格+角度，12~30 字），禁止只写风格名；
 - meta.shortDesc 只描述整体氛围与情绪（≤20 字），不得包含「N张」「N个姿势」「连拍」「多宫格」「不同姿势」等数量或多图指令；
-- meta.description 概述光线 / 氛围 / 主体 / 背景 / 构图；composition.description 专写构图（构图法则 + 主体位置与占比 + 留白与层次），
+- meta.description 是给 App 用户看的模板简介，不是生图提示词：只写画面感与情绪（场景 + 主体与动作 + 光线氛围），30~80 字、口语化可读；
+  禁止写入执行细节——机位 / 景别 / 焦距 / 光圈 / 快门 / ISO / 白平衡与色温 / 曝光补偿等相机参数，LUT 或滤镜名等后期参数，补光与布光指令；
+  禁止使用「场景锚点：」「穿搭妆发：」「拍摄参数：」这类分节标签与冒号列举式罗列，穿搭 / 妆发最多一句话带过、不列单品清单；
+  上述执行细节分别写入 composition.description / sceneGuide / camera / postProcess 字段；
+- composition.description 专写构图（构图法则 + 主体位置与占比 + 留白与层次），
   两者都不包含数量或多图指令；
 - pose 数组中的每个 description 必须是「单张画面内可独立生成」的姿势，不要把多个姿势合并到同一个 description 里；
 - meta.subjectCount 必须给出 1~9 的整数：按用户描述与参考图中实际可见的人物数量填写；出现「情侣 / 结婚 / 婚纱 / 闺蜜 / 全家福 / 合影 / 多人 / 聚餐 / 聚会」等场景时不得写 1；

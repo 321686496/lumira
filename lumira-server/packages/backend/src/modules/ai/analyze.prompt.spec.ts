@@ -57,6 +57,19 @@ describe('analyze.prompt 自拍（前置）视角契约', () => {
   });
 });
 
+describe('analyze.prompt meta.description 契约（面向用户的画面感简介，非生图说明书）', () => {
+  it('视觉/纯文字两版系统提示词都把 description 定义为用户简介，并显式禁止相机与后期参数、分节标签', () => {
+    for (const prompt of [buildTextOnlySystemPrompt(CATS), buildAnalyzeSystemPrompt(CATS)]) {
+      expect(prompt).toContain('meta.description 是给 App 用户看的模板简介，不是生图提示词');
+      expect(prompt).toContain('LUT 或滤镜名等后期参数');
+      // 用户投诉过的三个分节标签必须被点名禁止
+      expect(prompt).toContain('场景锚点');
+      expect(prompt).toContain('穿搭妆发');
+      expect(prompt).toContain('拍摄参数');
+    }
+  });
+});
+
 const PORTRAIT_PROFILE: StyleProfile = {
   category: 'portrait',
   archetype: 'fashion_editorial',
