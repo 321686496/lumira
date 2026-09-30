@@ -68,6 +68,8 @@ export interface AiConfigView {
   llmTimeoutMs: number;
   /** 识别稳定性：单次 LLM 输出 token 上限（默认 8192） */
   llmMaxTokens: number;
+  /** AI 生成任务并发上限（默认 2） */
+  jobConcurrency: number;
   /** 网页爬取工具开关 */
   crawlEnabled: boolean;
   /** 单次文本会话最多爬取次数（1~6） */
@@ -174,6 +176,8 @@ const ALL_TEST_TARGETS: AiConfigTestTarget[] = ['vision', 'text', 'image', 'silh
 const DEFAULT_LLM_RETRY_COUNT = 2;
 const DEFAULT_LLM_TIMEOUT_MS = 300_000;
 const DEFAULT_LLM_MAX_TOKENS = 8192;
+/** 生成任务并发上限默认值（1~5） */
+export const DEFAULT_JOB_CONCURRENCY = 2;
 /** 网页爬取默认次数上限（与迁移 049 的 DEFAULT 一致） */
 const DEFAULT_CRAWL_MAX_PER_SESSION = 3;
 /** 无头渲染默认超时（与迁移 050 的 DEFAULT 一致） */
@@ -265,6 +269,7 @@ export class AiConfigService {
       llmRetryCount: row.llmRetryCount ?? DEFAULT_LLM_RETRY_COUNT,
       llmTimeoutMs: row.llmTimeoutMs ?? DEFAULT_LLM_TIMEOUT_MS,
       llmMaxTokens: row.llmMaxTokens ?? DEFAULT_LLM_MAX_TOKENS,
+      jobConcurrency: row.jobConcurrency ?? DEFAULT_JOB_CONCURRENCY,
       crawlEnabled: row.crawlEnabled === 1,
       crawlMaxPerSession: row.crawlMaxPerSession ?? DEFAULT_CRAWL_MAX_PER_SESSION,
       crawlRenderEnabled: row.crawlRenderEnabled === 1,
@@ -353,6 +358,7 @@ export class AiConfigService {
     const llmRetryCount = dto.llmRetryCount ?? existing?.llmRetryCount ?? DEFAULT_LLM_RETRY_COUNT;
     const llmTimeoutMs = dto.llmTimeoutMs ?? existing?.llmTimeoutMs ?? DEFAULT_LLM_TIMEOUT_MS;
     const llmMaxTokens = dto.llmMaxTokens ?? existing?.llmMaxTokens ?? DEFAULT_LLM_MAX_TOKENS;
+    const jobConcurrency = dto.jobConcurrency ?? existing?.jobConcurrency ?? DEFAULT_JOB_CONCURRENCY;
     // 网页爬取配置：越界直接拒绝；开关 / 上限缺省均沿用存量（首次保存回退默认值）
     if (dto.crawlMaxPerSession !== undefined && (dto.crawlMaxPerSession < 1 || dto.crawlMaxPerSession > 6)) {
       throw new BadRequestException('网页爬取次数上限需在 1~6 之间');
@@ -453,6 +459,7 @@ export class AiConfigService {
         llmRetryCount,
         llmTimeoutMs,
         llmMaxTokens,
+        jobConcurrency,
         crawlEnabled,
         crawlMaxPerSession,
         crawlRenderEnabled,
@@ -503,6 +510,7 @@ export class AiConfigService {
           llmRetryCount,
           llmTimeoutMs,
           llmMaxTokens,
+          jobConcurrency,
           crawlEnabled,
           crawlMaxPerSession,
           crawlRenderEnabled,

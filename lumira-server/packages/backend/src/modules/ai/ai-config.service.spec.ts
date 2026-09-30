@@ -1019,3 +1019,11 @@ describe('AiConfigService — researchImages 配置', () => {
     }));
   });
 });
+
+describe('AiConfigService — 生成任务并发数（jobConcurrency）', () => {
+  it('jobConcurrency：行内有值按行返回（缺省 2）', async () => {
+    const svc = new AiConfigService(readonlyDb(row({ jobConcurrency: 3 })) as unknown as DatabaseService);
+    const view = await svc.get();
+    expect(view).toMatchObject({ configured: true, jobConcurrency: 3 });
+  });
+});

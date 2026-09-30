@@ -153,6 +153,13 @@ export class UpdateAiConfigDto {
   @Max(16_384)
   llmMaxTokens?: number;
 
+  /** AI 生成任务并发上限（1~5）；缺省 = 沿用原值 */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  jobConcurrency?: number;
+
   /** Qwen 模型自带搜索端点（searchProvider=qwen 时使用） */
   @IsOptional()
   @IsString()

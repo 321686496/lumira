@@ -111,6 +111,7 @@ interface FormState {
   llmRetryCount: number; // 失败后额外重试次数 0~3
   llmTimeoutSeconds: number; // 单次调用超时（秒，入库时 ×1000）
   llmMaxTokens: number; // 单次输出 token 上限
+  jobConcurrency: number; // 生成任务并发上限 1~5
 }
 
 /** 模态独立平台子表单状态 */
@@ -240,6 +241,7 @@ export function AiConfigForm({
           llmRetryCount: initial.llmRetryCount,
           llmTimeoutSeconds: Math.max(1, Math.round(initial.llmTimeoutMs / 1000)),
           llmMaxTokens: initial.llmMaxTokens,
+          jobConcurrency: initial.jobConcurrency,
         }
       : {
           provider: 'qwen',
@@ -275,6 +277,7 @@ export function AiConfigForm({
           llmRetryCount: 2,
           llmTimeoutSeconds: 300,
           llmMaxTokens: 8192,
+          jobConcurrency: 2,
         },
   );
   /** 手动改过预设字段的标记：切换厂商时不覆盖 */
@@ -547,6 +550,7 @@ export function AiConfigForm({
       payload.llmRetryCount = form.llmRetryCount;
       payload.llmTimeoutMs = Math.round(form.llmTimeoutSeconds * 1000);
       payload.llmMaxTokens = form.llmMaxTokens;
+      payload.jobConcurrency = form.jobConcurrency;
       payload.researchImagesEnabled = form.researchImagesEnabled;
       payload.researchImagesMax = form.researchImagesMax;
       payload.researchImagesPageFetch = form.researchImagesPageFetch;
@@ -1136,7 +1140,7 @@ export function AiConfigForm({
                   会先做结构补救再自动重试；鉴权类错误不重试。
                 </p>
               </div>
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-4">
                 <div className="space-y-2">
                   <Label htmlFor="ai-llm-retry-count">失败重试次数</Label>
                   <Input
@@ -1148,6 +1152,18 @@ export function AiConfigForm({
                     onChange={(e) => setForm((f) => ({ ...f, llmRetryCount: e.target.value === '' ? 2 : Number(e.target.value) }))}
                   />
                   <p className="text-xs text-muted-foreground">0~3，默认 2。总调用次数 ≤ 次数 + 1。</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ai-job-concurrency">生成任务并发数</Label>
+                  <Input
+                    id="ai-job-concurrency"
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={form.jobConcurrency}
+                    onChange={(e) => setForm((f) => ({ ...f, jobConcurrency: e.target.value === '' ? 2 : Number(e.target.value) }))}
+                  />
+                  <p className="text-xs text-muted-foreground">1~5，默认 2。同时执行的生成任务数，超出部分排队。</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="ai-llm-timeout">单次调用超时（秒）</Label>

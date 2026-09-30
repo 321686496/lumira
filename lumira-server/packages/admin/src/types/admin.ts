@@ -491,6 +491,8 @@ export interface AiProviderConfigView {
   llmTimeoutMs: number;
   /** 识别稳定性：单次 LLM 输出 token 上限（默认 8192） */
   llmMaxTokens: number;
+  /** 生成任务并发上限（1~5） */
+  jobConcurrency: number;
   /** 参考图抓取：开关 */
   researchImagesEnabled: boolean;
   /** 参考图抓取：最多保留张数 */
@@ -563,6 +565,8 @@ export interface UpdateAiConfigPayload {
   llmTimeoutMs?: number;
   /** 识别稳定性：单次 LLM 输出 token 上限（1024~16384） */
   llmMaxTokens?: number;
+  /** 生成任务并发上限（1~5）；缺省 = 沿用原值 */
+  jobConcurrency?: number;
   /** 参考图抓取：开关 */
   researchImagesEnabled?: boolean;
   /** 参考图抓取：最多保留张数（1~12） */
