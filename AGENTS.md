@@ -117,6 +117,7 @@
 | `NGINX_NETWORK`       | nginx 容器所在的 docker network 名（如 `lumira-net`）                |
 | `BACKEND_PUBLIC_URL`  | **后端 API 公网域名**，如 `https://lumira.iwtle.top`（详见下方图片 URL 章节） |
 | `SEARXNG_SECRET`      | SearXNG 实例密钥（`openssl rand -hex 32` 生成；可空，未配置时容器重启会重生成） |
+| `APPLE_IAP_SHARED_SECRET` | iOS App 内购买收据校验共享密钥（App Store Connect → App 信息 → App 专用共享密钥）。未配置时 `POST /api/v1/points/iap/verify` 返回 503，iOS 内购积分无法到账 |
 
 > ⚠️ **`BACKEND_PUBLIC_URL`** **必须配置**：后端 `buildPublicUrl()` 用它构造上传图片的可访问 URL，未设置时回退 `http://localhost:3000`，会导致 App 端图片加载失败。修改 `deploy/docker-compose.prod.yml` 后需在服务器 `.env` 同步补充该变量并重新部署。
 

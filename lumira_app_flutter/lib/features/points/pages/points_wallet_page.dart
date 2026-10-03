@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_error.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/services/ios_iap_service.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
@@ -107,15 +108,17 @@ class _PointsWalletPageState extends ConsumerState<PointsWalletPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    FadeUp(
-                      delay: const Duration(milliseconds: 160),
-                      child: _InviteEntryCard(
-                        tokens: tokens,
-                        onTap: () =>
-                            GoRouter.of(context).push(RouteNames.invite),
+                    // iOS：隐藏「邀请有礼」入口（邀请奖励含免费解锁，属非 IAP 内容解锁，App Store 3.1.1）
+                    if (!IosIapService.isSupported)
+                      FadeUp(
+                        delay: const Duration(milliseconds: 160),
+                        child: _InviteEntryCard(
+                          tokens: tokens,
+                          onTap: () =>
+                              GoRouter.of(context).push(RouteNames.invite),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
+                    if (!IosIapService.isSupported) const SizedBox(height: 16),
                     FadeUp(
                       delay: const Duration(milliseconds: 200),
                       child: _EarnWaysCard(tokens: tokens),
@@ -234,40 +237,44 @@ class _BalanceBody extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: balance.freeUnlockCount > 0
-                ? tokens.brandSubtle
-                : tokens.surfaceAlt,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.lock_open_outlined,
-                size: 16,
-                color:
-                    balance.freeUnlockCount > 0 ? tokens.brand : tokens.textTertiary,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  balance.freeUnlockCount > 0
-                      ? '免费解锁 ×${balance.freeUnlockCount}：可在解锁页任选付费模板，不消耗积分'
-                      : '免费解锁 ×0：邀请好友可获取免费解锁次数',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: balance.freeUnlockCount > 0
-                        ? tokens.textPrimary
-                        : tokens.textTertiary,
+        // iOS：免费解锁次数来自「邀请好友」，iOS 不提供该机制，整块隐藏，
+        // 避免暴露「以非 IAP 机制免费解锁付费模板」（App Store 3.1.1）
+        if (!IosIapService.isSupported)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: balance.freeUnlockCount > 0
+                  ? tokens.brandSubtle
+                  : tokens.surfaceAlt,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.lock_open_outlined,
+                  size: 16,
+                  color: balance.freeUnlockCount > 0
+                      ? tokens.brand
+                      : tokens.textTertiary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    balance.freeUnlockCount > 0
+                        ? '免费解锁 ×${balance.freeUnlockCount}：可在解锁页任选付费模板，不消耗积分'
+                        : '免费解锁 ×0：邀请好友可获取免费解锁次数',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: balance.freeUnlockCount > 0
+                          ? tokens.textPrimary
+                          : tokens.textTertiary,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
       ],
     );
   }

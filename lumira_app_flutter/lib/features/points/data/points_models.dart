@@ -138,6 +138,8 @@ String pointSourceLabel(String source) {
       return '广告奖励';
     case 'admin_grant':
       return '后台发放';
+    case 'iap_purchase':
+      return 'App 内购买';
     default:
       return '积分变动';
   }

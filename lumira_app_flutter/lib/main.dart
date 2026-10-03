@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +15,7 @@ import 'core/db/seeders/dev_gallery_seeder.dart';
 import 'core/startup/post_compliance_init.dart';
 import 'core/router/route_names.dart';
 import 'core/services/deep_link_service.dart';
+import 'core/services/ios_iap_service.dart';
 import 'core/theme/theme_controller.dart';
 import 'core/theme/system_brightness_watcher.dart';
 import 'core/utils/safe_share.dart';
@@ -209,6 +210,24 @@ Future<void> _bootstrapAndRun() async {
   // ignore: unawaited_futures
   DeepLinkService.instance.start(
     onTemplateLink: (link) => _handleTemplateLink(container, link),
+  );
+
+  // iOS：挂载 App 内购买交易监听（上次未完成交易补单 + App 外优惠代码兑换）。
+  // 非 iOS 平台在函数内部直接返回，不注册通道、不产生任何副作用。
+  // ignore: unawaited_futures
+  startIosIapTransactionListener(
+    container,
+    onDelivered: (result) {
+      // 到账后刷新积分余额与流水缓存（本监听在 widget 树之外，直接用 container）
+      container.invalidate(pointsBalanceProvider);
+      container.invalidate(pointsRecentTransactionsProvider);
+      final overlay = rootNavigatorKey.currentState?.overlay;
+      if (overlay == null) return;
+      LumiraToast.showWithOverlay(
+        overlay,
+        result.granted ? '充值到账 ${result.points} 积分' : '积分已到账',
+      );
+    },
   );
 
   // 恢复持久化的主题与 UI 风格（内部异步读 DB，后台执行，不阻塞首帧）

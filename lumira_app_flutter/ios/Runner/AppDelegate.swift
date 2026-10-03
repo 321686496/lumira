@@ -11,6 +11,7 @@ import Photos
     GeneratedPluginRegistrant.register(with: self)
     registerPhotoSaverChannel()
     registerSystemShareChannel()
+    registerIapChannel()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -73,6 +74,15 @@ import Photos
           result(["success": false, "error": error?.localizedDescription ?? "保存失败"])
         }
       }
+    }
+  }
+
+  /// 注册 "lumira/iap" 方法通道：iOS 内购（StoreKit）能力，仅 iOS 生效。
+  /// 实现见 LumiraIapChannel.swift；非 iOS 平台不注册、不生效。
+  private func registerIapChannel() {
+    if #available(iOS 15.0, *),
+       let registrar = self.registrar(forPlugin: "LumiraIap") {
+      LumiraIapChannel.register(with: registrar)
     }
   }
 

@@ -174,6 +174,8 @@ class PointTransactionDetailSheet extends ConsumerWidget {
         return '观看广告获得积分';
       case 'admin_grant':
         return '由后台充值发放到你的账号';
+      case 'iap_purchase':
+        return '通过 App Store 购买充值';
       default:
         return '积分变动记录';
     }

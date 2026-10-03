@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
+import '../../../core/services/ios_iap_service.dart';
 import '../../../core/theme/theme_tokens.dart';
 
 /// 单条积分获取途径数据
@@ -36,6 +37,29 @@ const List<PointsEarnWay> pointsEarnWays = [
   ),
 ];
 
+/// iOS 专用积分获取途径（App Store 3.1.1）。
+///
+/// 数字内容与积分付费必须走 App 内购买，因此 iOS 上：
+/// - 去掉「邀请好友」（以非 IAP 机制解锁付费内容）；
+/// - 把「客服充值」（App 外付费渠道）替换为「App Store 充值」，跳内购商城。
+/// 其余平台仍使用 [pointsEarnWays]，行为完全不变。
+const List<PointsEarnWay> iosPointsEarnWays = [
+  PointsEarnWay(
+    Icons.calendar_today_outlined,
+    '每日签到',
+    '+4 积分/天，连签 7 天额外 +14（每日首拍自动完成）',
+  ),
+  PointsEarnWay(Icons.share_outlined, '每日分享', '+2 积分/天'),
+  PointsEarnWay(Icons.emoji_events_outlined, '完成挑战', '+5 积分/次，每日上限 3 次'),
+  PointsEarnWay(Icons.trending_up, '等级升级', '每级发放，档位递增'),
+  PointsEarnWay(
+    Icons.shopping_bag_outlined,
+    'App Store 充值',
+    '通过 App Store 内购积分，安全快捷',
+    route: RouteNames.pointsRecharge,
+  ),
+];
+
 /// 获取积分途径列表
 ///
 /// - [dense]：弹窗等紧凑场景传 true，缩小行距并去掉分隔线
@@ -54,15 +78,17 @@ class PointsEarnWaysList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // iOS 走内购版清单（无「客服充值 / 邀请好友」），其余平台保持原样
+    final ways = IosIapService.isSupported ? iosPointsEarnWays : pointsEarnWays;
     return Column(
       children: [
-        for (var i = 0; i < pointsEarnWays.length; i++) ...[
+        for (var i = 0; i < ways.length; i++) ...[
           if (!dense && i > 0) Divider(height: 1, color: tokens.divider),
           Padding(
             padding: EdgeInsets.symmetric(vertical: dense ? 6 : 8),
             child: stacked
-                ? _StackedRow(tokens: tokens, way: pointsEarnWays[i])
-                : _SplitRow(tokens: tokens, way: pointsEarnWays[i]),
+                ? _StackedRow(tokens: tokens, way: ways[i])
+                : _SplitRow(tokens: tokens, way: ways[i]),
           ),
         ],
       ],

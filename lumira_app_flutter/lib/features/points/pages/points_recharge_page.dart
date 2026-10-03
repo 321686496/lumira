@@ -9,7 +9,9 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/lumira/feedback/lumira_toast.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../../core/services/ios_iap_service.dart';
 import '../data/points_recharge.dart';
+import '../data/points_repository.dart';
 
 /// 积分充值页
 ///
@@ -83,7 +85,8 @@ class _PointsRechargePageState extends ConsumerState<PointsRechargePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _StepsCard(
+                  if (IosIapService.isSupported) _IapRechargeView(tokens: tokens),
+                  if (!IosIapService.isSupported) _StepsCard(
                     tokens: tokens,
                     deviceId: deviceId,
                     onCopyWechat: () => _copy(kRechargeWechat, '微信号已复制'),
@@ -96,10 +99,10 @@ class _PointsRechargePageState extends ConsumerState<PointsRechargePage> {
                       _copy(id, '账号ID已复制');
                     },
                   ),
-                  const SizedBox(height: 16),
-                  _TiersCard(tokens: tokens),
-                  const SizedBox(height: 16),
-                  _NotesCard(tokens: tokens),
+                  if (!IosIapService.isSupported) const SizedBox(height: 16),
+                  if (!IosIapService.isSupported) _TiersCard(tokens: tokens),
+                  if (!IosIapService.isSupported) const SizedBox(height: 16),
+                  if (!IosIapService.isSupported) _NotesCard(tokens: tokens),
                 ],
               ),
             ),
@@ -473,6 +476,401 @@ class _NotesCard extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+
+/// iOS 积分商城（消耗型 IAP，仅 iOS 渲染）。
+///
+/// 价格文案统一取自 StoreKit（displayPrice），避免与 App Store 定价不一致；
+/// 购买与「优惠代码」兑换均通过 App Store 系统面板完成，不在 App 内自建支付。
+class _IapRechargeView extends ConsumerStatefulWidget {
+  const _IapRechargeView({required this.tokens});
+
+  final ThemeTokens tokens;
+
+  @override
+  ConsumerState<_IapRechargeView> createState() => _IapRechargeViewState();
+}
+
+class _IapRechargeViewState extends ConsumerState<_IapRechargeView> {
+  bool _loading = true;
+  String? _error;
+  final Map<String, IapProduct> _products = <String, IapProduct>{};
+  String? _buyingId;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final service = await ref.read(iosIapServiceProvider.future);
+      final products = await service.loadProducts(
+        kRechargeTiers.map((t) => t.iosProductId).toList(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _products
+          ..clear()
+          ..addEntries(products.map((p) => MapEntry(p.id, p)));
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = '$e';
+      });
+    }
+  }
+
+  Future<void> _buy(RechargeTier tier) async {
+    if (_buyingId != null) return;
+    setState(() => _buyingId = tier.iosProductId);
+    try {
+      final service = await ref.read(iosIapServiceProvider.future);
+      final result = await service.purchase(tier.iosProductId);
+      if (!mounted) return;
+      switch (result.status) {
+        case IapPurchaseStatus.success:
+          final tx = result.transaction;
+          if (tx == null || !tx.verified) {
+            LumiraToast.show(context, '购买已完成，积分稍后自动到账');
+            break;
+          }
+          final delivered = await service.deliver(tx);
+          if (!mounted) return;
+          ref.invalidate(pointsBalanceProvider);
+          ref.invalidate(pointsRecentTransactionsProvider);
+          LumiraToast.show(
+            context,
+            '充值成功！到账 ${delivered.points} 积分，余额 ${delivered.balance}',
+          );
+          break;
+        case IapPurchaseStatus.cancelled:
+          // 用户主动取消，不打扰
+          break;
+        case IapPurchaseStatus.pending:
+          LumiraToast.show(context, '购买待处理，完成后积分会自动到账');
+          break;
+        case IapPurchaseStatus.unknown:
+          LumiraToast.show(context, '购买未完成，请稍后重试');
+          break;
+      }
+    } catch (e) {
+      if (!mounted) return;
+      LumiraToast.show(context, '购买失败：$e');
+    } finally {
+      if (mounted) setState(() => _buyingId = null);
+    }
+  }
+
+  Future<void> _openOfferCodeSheet() async {
+    try {
+      final service = await ref.read(iosIapServiceProvider.future);
+      await service.presentOfferCodeSheet();
+    } catch (e) {
+      if (!mounted) return;
+      LumiraToast.show(context, '打开兑换面板失败：$e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = widget.tokens;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionCard(
+          tokens: tokens,
+          icon: Icons.shopping_bag_outlined,
+          title: '积分商城',
+          children: [
+            Text(
+              '通过 App Store 安全支付，积分即时到账',
+              style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+            ),
+            const SizedBox(height: 12),
+            if (_loading)
+              _IapHint(tokens: tokens, text: '正在获取商品信息…')
+            else if (_error != null)
+              _IapHint(
+                tokens: tokens,
+                text: '商品加载失败，请检查网络后重试',
+                onRetry: _load,
+              )
+            else
+              for (var i = 0; i < kRechargeTiers.length; i++) ...[
+                if (i > 0) Divider(height: 1, color: tokens.divider),
+                _IapTierRow(
+                  tokens: tokens,
+                  tier: kRechargeTiers[i],
+                  displayPrice:
+                      _products[kRechargeTiers[i].iosProductId]?.displayPrice,
+                  buying: _buyingId == kRechargeTiers[i].iosProductId,
+                  disabled: _buyingId != null,
+                  onBuy: () => _buy(kRechargeTiers[i]),
+                ),
+              ],
+          ],
+        ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          tokens: tokens,
+          icon: Icons.confirmation_number_outlined,
+          title: '兑换优惠代码',
+          children: [
+            Text(
+              '收到活动优惠代码？直接在本页兑换，积分自动到账',
+              style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+            ),
+            const SizedBox(height: 12),
+            _IapActionButton(
+              tokens: tokens,
+              label: '兑换优惠代码',
+              outlined: true,
+              onTap: _openOfferCodeSheet,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          tokens: tokens,
+          icon: Icons.info_outline,
+          title: '充值须知',
+          children: [
+            _IapNote(tokens: tokens, text: '积分仅可在本 App 内使用，不可兑换现金'),
+            _IapNote(tokens: tokens, text: '支付由 App Store 处理，可在系统账单中查看订单'),
+            _IapNote(tokens: tokens, text: '如遇支付问题，可通过系统账单申请退款'),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// 单档商品行：积分 + 赠送标签 + 购买按钮（价格取自 StoreKit）
+class _IapTierRow extends StatelessWidget {
+  const _IapTierRow({
+    required this.tokens,
+    required this.tier,
+    required this.displayPrice,
+    required this.buying,
+    required this.disabled,
+    required this.onBuy,
+  });
+
+  final ThemeTokens tokens;
+  final RechargeTier tier;
+  final String? displayPrice;
+  final bool buying;
+  final bool disabled;
+  final VoidCallback onBuy;
+
+  @override
+  Widget build(BuildContext context) {
+    final bonus = rechargeBonusLabel(tier);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '${tier.totalPoints} 积分',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: tokens.textPrimary,
+                      ),
+                    ),
+                    if (bonus.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: tokens.brandSubtle,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          bonus,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: tokens.brand,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  tier.bonusPoints > 0
+                      ? '基础 ${tier.basePoints} + 赠送 ${tier.bonusPoints}'
+                      : '标准 1:100',
+                  style: TextStyle(fontSize: 11, color: tokens.textTertiary),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          _IapActionButton(
+            tokens: tokens,
+            label: buying ? '处理中…' : (displayPrice ?? '¥${tier.amount}'),
+            outlined: false,
+            enabled: !disabled,
+            onTap: onBuy,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 简单胶囊按钮（filled/outlined 两种样式）
+class _IapActionButton extends StatelessWidget {
+  const _IapActionButton({
+    required this.tokens,
+    required this.label,
+    required this.outlined,
+    required this.onTap,
+    this.enabled = true,
+  });
+
+  final ThemeTokens tokens;
+  final String label;
+  final bool outlined;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = outlined ? Colors.transparent : tokens.brand;
+    final fg = outlined ? tokens.brand : Colors.white;
+    return Opacity(
+      opacity: enabled ? 1 : 0.5,
+      child: GestureDetector(
+        onTap: enabled ? onTap : null,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(18),
+            border:
+                outlined ? Border.all(color: tokens.brand, width: 1) : null,
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: fg,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 加载中/加载失败提示行（失败时可重试）
+class _IapHint extends StatelessWidget {
+  const _IapHint({required this.tokens, required this.text, this.onRetry});
+
+  final ThemeTokens tokens;
+  final String text;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        color: tokens.surfaceAlt,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+            ),
+          ),
+          if (onRetry != null)
+            GestureDetector(
+              onTap: onRetry,
+              behavior: HitTestBehavior.opaque,
+              child: Text(
+                '重试',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.brand,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 须知条目（圆点 + 文案）
+class _IapNote extends StatelessWidget {
+  const _IapNote({required this.tokens, required this.text});
+
+  final ThemeTokens tokens;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Container(
+              width: 4,
+              height: 4,
+              decoration: BoxDecoration(
+                color: tokens.brand,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12,
+                color: tokens.textSecondary,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

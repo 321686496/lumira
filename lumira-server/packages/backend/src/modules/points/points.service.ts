@@ -1,4 +1,4 @@
-// lumira-server/packages/backend/src/modules/points/points.service.ts
+﻿// lumira-server/packages/backend/src/modules/points/points.service.ts
 
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { eq, sql, and, gte } from 'drizzle-orm';
@@ -16,7 +16,8 @@ type PointTransactionType =
   | 'exchange_template' | 'ad' | 'admin_grant'
   | 'shoot_daily' | 'challenge'
   | 'level_reward'
-  | 'free_unlock' | 'free_unlock_spend';
+  | 'free_unlock' | 'free_unlock_spend'
+  | 'iap_purchase';
 
 // 事件型积分规则：type → 单次积分值
 const DAILY_SHOOT_POINTS = 2; // 每日首次拍摄（保留分支，实际不再被调用；积分由签到合并发放 +4/天）
@@ -226,6 +227,78 @@ export class PointsService {
       if (e instanceof Error && (e.message.includes('Duplicate entry') || e.message.includes('ER_DUP_ENTRY'))) {
         const updated = await this.getBalance(deviceId);
         return { granted: false, delta: 0, balance: updated.balance };
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * iOS App 内购买（消耗型积分包）发放积分。
+   *
+   * 幂等：复用 point_earn_events 的 UNIQUE(device_id, type='iap_purchase', ref_id=transactionId)，
+   * ref_id 使用 Apple transactionId，同一笔交易即使被重复回调也只发一次。
+   * 仅 iOS 客户端会触发该链路，Android / OHOS 不受影响。
+   */
+  async earnIapPurchase(
+    deviceId: string,
+    transactionId: string,
+    points: number,
+  ): Promise<{ granted: boolean; points: number; balance: number }> {
+    if (points <= 0) {
+      throw new BadRequestException('earnIapPurchase points must be positive');
+    }
+    const db = this.dbService.getDb();
+    const now = Math.floor(Date.now() / 1000);
+
+    try {
+      await db.transaction(async (tx) => {
+        // 幂等插入事件记录（device + iap_purchase + transactionId 唯一）
+        await tx.insert(pointEarnEvents).values({
+          deviceId,
+          type: 'iap_purchase',
+          refId: transactionId,
+          points,
+          createdAt: now,
+        });
+
+        const rows = await tx.select().from(userPoints).where(eq(userPoints.deviceId, deviceId)) as BalanceRow[];
+        const existing = rows[0];
+
+        await tx.insert(pointTransactions).values({
+          deviceId,
+          delta: points,
+          type: 'iap_purchase',
+          refId: transactionId,
+          createdAt: now,
+        });
+
+        if (existing) {
+          await tx.update(userPoints)
+            .set({
+              balance: existing.balance + points,
+              totalEarned: existing.totalEarned + points,
+              updatedAt: now,
+            })
+            .where(eq(userPoints.deviceId, deviceId));
+        } else {
+          await tx.insert(userPoints).values({
+            deviceId,
+            balance: points,
+            totalEarned: points,
+            totalSpent: 0,
+            updatedAt: now,
+          });
+        }
+      });
+
+      await this.invalidateBalance(deviceId);
+      const updated = await this.getBalance(deviceId);
+      return { granted: true, points, balance: updated.balance };
+    } catch (e) {
+      // 唯一约束冲突 = 该交易已发放过 → 返回未发放（不抛错）
+      if (e instanceof Error && (e.message.includes('Duplicate entry') || e.message.includes('ER_DUP_ENTRY'))) {
+        const updated = await this.getBalance(deviceId);
+        return { granted: false, points: 0, balance: updated.balance };
       }
       throw e;
     }

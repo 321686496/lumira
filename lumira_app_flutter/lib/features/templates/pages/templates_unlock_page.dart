@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_error.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/services/ios_iap_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -88,6 +89,18 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
   void _onShare() {
     // 分享给好友 → 跳转邀请有礼页，通过邀请获取积分 / 兑换模板
     GoRouter.of(context).push(RouteNames.profileInvite);
+  }
+
+  /// iOS：打开 App Store 官方的「兑换优惠代码」面板（Offer Code）。
+  /// 仅 iOS 有效；非 iOS 不展示该入口，不会被调用。
+  Future<void> _onOfferCode() async {
+    try {
+      final service = await ref.read(iosIapServiceProvider.future);
+      await service.presentOfferCodeSheet();
+    } catch (e) {
+      if (!mounted) return;
+      lumira.LumiraToast.show(context, '打开兑换面板失败：$e');
+    }
   }
 
   Future<void> _onInputCode() async {
@@ -237,6 +250,12 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
 
   /// 单一「解锁」入口：有免费次数时弹「选择解锁方式」，否则直接走积分购买。
   Future<void> _onUnlock() async {
+    // iOS：数字内容解锁必须严格走 App 内购买（积分）链路，
+    // 不提供「邀请免费解锁」等其他解锁方式（App Store 3.1.1）。
+    if (IosIapService.isSupported) {
+      await _onPurchase();
+      return;
+    }
     final price = widget.price ?? 0;
     if (_freeUnlockCount > 0) {
       final choice = await lumira.showLumiraDialog<String>(
@@ -359,6 +378,7 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
                                 onShare: _onShare,
                                 onInputCode: _onInputCode,
                                 onUnlock: _onUnlock,
+                                onOfferCode: _onOfferCode,
                               ),
                               _BottomNote(tokens: tokens),
                             ],
@@ -656,7 +676,8 @@ class _SubtitleWrap extends StatelessWidget {
         child: Column(
           children: [
             Text(
-              '解锁方式任选其一',
+              // iOS 仅保留「积分解锁」一种方式，避免文案与实际入口不符
+              IosIapService.isSupported ? '使用积分解锁' : '解锁方式任选其一',
               style: TextStyle(
                 fontFamily: 'Noto Serif SC',
                 fontSize: 17,
@@ -687,6 +708,7 @@ class _OptionsList extends StatelessWidget {
     required this.onShare,
     required this.onInputCode,
     required this.onUnlock,
+    required this.onOfferCode,
   });
 
   final ThemeTokens tokens;
@@ -695,16 +717,23 @@ class _OptionsList extends StatelessWidget {
   final VoidCallback onShare;
   final Future<void> Function() onInputCode;
   final VoidCallback onUnlock;
+  final Future<void> Function() onOfferCode;
 
   @override
   Widget build(BuildContext context) {
+    // iOS：数字内容解锁必须走 App 内购买（积分）链路，
+    // 隐藏「邀请免费解锁」「输入兑换码」等非 IAP 解锁入口（App Store 3.1.1），
+    // 仅保留「积分解锁」与 App Store 官方的「兑换优惠代码」。
+    final isIOS = IosIapService.isSupported;
     return Column(
       children: [
-        FadeUp(
-          delay: const Duration(milliseconds: 40),
-          child: _FreeUnlockBanner(tokens: tokens, count: freeUnlockCount),
-        ),
-        const SizedBox(height: 12),
+        if (!isIOS) ...[
+          FadeUp(
+            delay: const Duration(milliseconds: 40),
+            child: _FreeUnlockBanner(tokens: tokens, count: freeUnlockCount),
+          ),
+          const SizedBox(height: 12),
+        ],
         FadeUp(
           delay: const Duration(milliseconds: 80),
           child: _OptionCard(
@@ -723,40 +752,61 @@ class _OptionsList extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        FadeUp(
-          delay: const Duration(milliseconds: 160),
-          child: _OptionCard(
-            tokens: tokens,
-            icon: Icons.vpn_key_outlined,
-            iconBgColor: tokens.surfaceAlt,
-            iconColor: tokens.brand,
-            title: '输入兑换码',
-            desc: '使用兑换码直接解锁模板',
-            button: _SmallOutlineButton(
+        if (!isIOS) ...[
+          const SizedBox(height: 12),
+          FadeUp(
+            delay: const Duration(milliseconds: 160),
+            child: _OptionCard(
               tokens: tokens,
-              label: '输入',
-              onTap: onInputCode,
+              icon: Icons.vpn_key_outlined,
+              iconBgColor: tokens.surfaceAlt,
+              iconColor: tokens.brand,
+              title: '输入兑换码',
+              desc: '使用兑换码直接解锁模板',
+              button: _SmallOutlineButton(
+                tokens: tokens,
+                label: '输入',
+                onTap: onInputCode,
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        FadeUp(
-          delay: const Duration(milliseconds: 240),
-          child: _OptionCard(
-            tokens: tokens,
-            icon: Icons.send_outlined,
-            iconBgColor: tokens.surfaceAlt,
-            iconColor: tokens.brand,
-            title: '分享给好友',
-            desc: '邀请好友赚积分 / 兑换模板',
-            button: _SmallOutlineButton(
+          const SizedBox(height: 12),
+          FadeUp(
+            delay: const Duration(milliseconds: 240),
+            child: _OptionCard(
               tokens: tokens,
-              label: '去邀请',
-              onTap: onShare,
+              icon: Icons.send_outlined,
+              iconBgColor: tokens.surfaceAlt,
+              iconColor: tokens.brand,
+              title: '分享给好友',
+              desc: '邀请好友赚积分 / 兑换模板',
+              button: _SmallOutlineButton(
+                tokens: tokens,
+                label: '去邀请',
+                onTap: onShare,
+              ),
             ),
           ),
-        ),
+        ],
+        if (isIOS) ...[
+          const SizedBox(height: 12),
+          FadeUp(
+            delay: const Duration(milliseconds: 160),
+            child: _OptionCard(
+              tokens: tokens,
+              icon: Icons.confirmation_number_outlined,
+              iconBgColor: tokens.surfaceAlt,
+              iconColor: tokens.brand,
+              title: '兑换优惠代码',
+              desc: '使用 App Store 优惠代码获取积分',
+              button: _SmallOutlineButton(
+                tokens: tokens,
+                label: '兑换',
+                onTap: onOfferCode,
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

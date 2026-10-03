@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/preferences/home_wordmark_style.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/services/ios_iap_service.dart';
 import '../../../core/theme/capture_appearance.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -87,6 +88,15 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     _tapTimer = Timer(const Duration(seconds: 3), () => _tapCount = 0);
     if (_tapCount >= 7) {
       _tapCount = 0;
+      // iOS：不走自建兑换页，改为打开 App Store 官方兑换面板（App Store 3.1.1）
+      if (IosIapService.isSupported) {
+        presentIosOfferCodeSheet(ref).then((ok) {
+          if (!ok && mounted) {
+            LumiraToast.show(context, '打开兑换面板失败，请稍后重试');
+          }
+        });
+        return;
+      }
       // 彩蛋：跳转正规兑换页
       GoRouter.of(context).push(RouteNames.profileRedeem);
     }

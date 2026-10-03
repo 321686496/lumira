@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_error.dart';
+import '../../../core/services/ios_iap_service.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/api_error_banner.dart';
@@ -264,7 +265,10 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              '邀请好友或输入兑换码即可解锁专属奖励',
+              // iOS：不提示「兑换码」等非 IAP 解锁途径（App Store 3.1.1）
+              IosIapService.isSupported
+                  ? '完成每日签到、挑战与拍摄，即可积累更多奖励'
+                  : '邀请好友或输入兑换码即可解锁专属奖励',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,

@@ -1,4 +1,4 @@
-// 积分体系类型契约
+﻿// 积分体系类型契约
 
 // 积分流水类型
 export type PointTransactionType =
@@ -11,7 +11,8 @@ export type PointTransactionType =
   | 'admin_grant'      // 后台发放
   | 'shoot_daily'      // 每日首次拍摄
   | 'challenge'        // 完成挑战
-  | 'level_reward';    // 达到指定等级发积分（一级一次）
+  | 'level_reward'     // 达到指定等级发积分（一级一次）
+  | 'iap_purchase';    // iOS App 内购买积分包（消耗型 IAP）
 
 // 积分流水记录
 export interface PointTransaction {

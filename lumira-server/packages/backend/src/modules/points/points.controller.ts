@@ -1,14 +1,18 @@
-// lumira-server/packages/backend/src/modules/points/points.controller.ts
+﻿// lumira-server/packages/backend/src/modules/points/points.controller.ts
 
-import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards, BadRequestException } from '@nestjs/common';
 import { PointsService } from './points.service';
+import { IapService } from './iap.service';
 import { DeviceAuthGuard } from '../../common/guards/device-auth.guard';
 import { DeviceId } from '../../common/decorators';
 
 @Controller('points')
 @UseGuards(DeviceAuthGuard)
 export class PointsController {
-  constructor(private readonly pointsService: PointsService) {}
+  constructor(
+    private readonly pointsService: PointsService,
+    private readonly iapService: IapService,
+  ) {}
 
   @Get('balance')
   async getBalance(@DeviceId() deviceId: string) {
@@ -43,5 +47,33 @@ export class PointsController {
       type as 'shoot_daily' | 'challenge' | 'share' | 'level_reward',
       refId,
     );
+  }
+
+  /**
+   * iOS App 内购买（消耗型积分包）校验收据 + 幂等发积分。
+   * 仅 iOS 客户端调用（StoreKit），Android / OHOS 不走该链路。
+   * 重复回调同一 transactionId 时返回 { granted: false }（200，不抛错）。
+   */
+  @Post('iap/verify')
+  async verifyIap(
+    @DeviceId() deviceId: string,
+    @Body() body: { productId?: string; transactionId?: string; receipt?: string },
+  ) {
+    const productId = (body?.productId ?? '').trim();
+    const transactionId = (body?.transactionId ?? '').trim();
+    const receipt = body?.receipt ?? '';
+    if (!productId || !transactionId) {
+      throw new BadRequestException('productId and transactionId are required');
+    }
+    if (!receipt) {
+      throw new BadRequestException('receipt is required');
+    }
+    const verified = await this.iapService.verify(receipt, productId, transactionId);
+    const granted = await this.pointsService.earnIapPurchase(
+      deviceId,
+      verified.transactionId,
+      verified.points,
+    );
+    return { granted: granted.granted, points: granted.points, balance: granted.balance };
   }
 }

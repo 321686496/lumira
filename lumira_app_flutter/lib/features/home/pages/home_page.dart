@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
+import '../../../core/services/ios_iap_service.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../features/notification/notification_providers.dart';
@@ -124,6 +125,20 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
+  /// 礼盒（兑换码）入口：iOS 走 App Store 官方兑换面板，其余平台进自建兑换页。
+  /// App Store 3.1.1：iOS 不允许以自建兑换码解锁数字内容。
+  void _onGiftTap() {
+    if (IosIapService.isSupported) {
+      presentIosOfferCodeSheet(ref).then((ok) {
+        if (!ok && mounted) {
+          LumiraToast.show(context, '打开兑换面板失败，请稍后重试');
+        }
+      });
+      return;
+    }
+    GoRouter.of(context).push(RouteNames.profileRedeem);
+  }
+
   @override
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
@@ -154,10 +169,12 @@ class _HomePageState extends ConsumerState<HomePage> {
             badgeCount: unreadCount,
             onTap: () => GoRouter.of(context).push(RouteNames.profileNotifications),
           ),
+          // 礼盒（兑换码）：iOS 保留入口，点击打开 App Store 官方兑换面板；
+          // 其余平台维持原有自建兑换页（App Store 3.1.1）
           HomeNavAction(
             icon: Icons.card_giftcard_outlined,
             tokens: tokens,
-            onTap: () => GoRouter.of(context).push(RouteNames.profileRedeem),
+            onTap: _onGiftTap,
           ),
         ],
       ),

@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/router/route_names.dart';
 import '../core/router/route_observers.dart';
+import '../core/services/ios_iap_service.dart';
 import '../features/account/pages/account_protection_page.dart';
 import '../features/account/pages/bind_email_page.dart';
 import '../features/account/pages/recover_account_page.dart';
@@ -549,6 +550,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.profileInvite,
         name: 'profileInvite',
+        // iOS：不提供邀请有礼（邀请奖励含免费解锁，属非 IAP 内容解锁，App Store 3.1.1）
+        redirect: (context, state) =>
+            IosIapService.isSupported ? RouteNames.profile : null,
         builder: (context, state) =>
             ProfileInvitePage(presetCode: state.queryParams['code']),
       ),
@@ -691,6 +695,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.profileRedeem,
         name: 'profileRedeem',
+        // iOS：不提供兑换码页面（App Store 3.1.1），兜底改跳积分充值（IAP）
+        redirect: (context, state) =>
+            IosIapService.isSupported ? RouteNames.pointsRecharge : null,
         builder: (context, state) => const RewardCenterPage(),
       ),
 
@@ -713,6 +720,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.invite,
         name: 'invite',
+        // iOS：不提供邀请有礼（App Store 3.1.1），兜底改跳个人中心
+        redirect: (context, state) =>
+            IosIapService.isSupported ? RouteNames.profile : null,
         builder: (context, state) =>
             ProfileInvitePage(presetCode: state.queryParams['code']),
       ),

@@ -7,12 +7,14 @@ import 'package:photo_view/photo_view.dart';
 import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/router/route_names.dart';
+import '../../../core/services/ios_iap_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/lumira/lumira.dart' show LumiraToast;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../templates/widgets/template_import_sheet.dart';
 import '../data/builtin_profiles.dart';
@@ -799,11 +801,13 @@ class _QuickActionsRow extends ConsumerWidget {
         label: '我的组合',
         onTap: () => onTap(RouteNames.profileCompositionKits),
       ),
-      _QuickActionItem(
-        icon: Icons.card_giftcard_outlined,
-        label: '邀请有礼',
-        onTap: () => onTap(RouteNames.profileInvite),
-      ),
+      // iOS：隐藏「邀请有礼」入口（邀请奖励含免费解锁，属非 IAP 内容解锁，App Store 3.1.1）
+      if (!IosIapService.isSupported)
+        _QuickActionItem(
+          icon: Icons.card_giftcard_outlined,
+          label: '邀请有礼',
+          onTap: () => onTap(RouteNames.profileInvite),
+        ),
       _QuickActionItem(
         icon: Icons.menu_book_outlined,
         label: '摄影美学院',
@@ -977,15 +981,17 @@ class _MenuCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
 
-    const items = <_MenuItem>[
-      _MenuItem(icon: Icons.layers_outlined, title: '我的模板'),
-      _MenuItem(icon: Icons.map_outlined, title: '场景管理'),
-      _MenuItem(icon: Icons.download_outlined, title: '导入模板'),
-      _MenuItem(icon: Icons.card_giftcard_outlined, title: '我的奖励'),
-      _MenuItem(icon: Icons.account_balance_wallet_outlined, title: '我的积分'),
-      _MenuItem(icon: Icons.redeem_outlined, title: '兑换码'),
-      _MenuItem(icon: Icons.info_outline, title: '关于如画'),
-      _MenuItem(icon: Icons.headset_mic_outlined, title: '联系我们'),
+    final items = <_MenuItem>[
+      const _MenuItem(icon: Icons.layers_outlined, title: '我的模板'),
+      const _MenuItem(icon: Icons.map_outlined, title: '场景管理'),
+      const _MenuItem(icon: Icons.download_outlined, title: '导入模板'),
+      const _MenuItem(icon: Icons.card_giftcard_outlined, title: '我的奖励'),
+      const _MenuItem(icon: Icons.account_balance_wallet_outlined, title: '我的积分'),
+      // 兑换码：iOS 上仍保留入口，但点击走 App Store 官方兑换面板；
+      // 其余平台维持原有自建兑换码页（App Store 3.1.1）
+      const _MenuItem(icon: Icons.redeem_outlined, title: '兑换码'),
+      const _MenuItem(icon: Icons.info_outline, title: '关于如画'),
+      const _MenuItem(icon: Icons.headset_mic_outlined, title: '联系我们'),
     ];
 
     // 路由跳转在 _MenuItemRow.onTap 中根据 title 触发，避免 lambda 无法 const 化
@@ -998,7 +1004,7 @@ class _MenuCard extends ConsumerWidget {
               item: items[i],
               isLast: i == items.length - 1,
               tokens: tokens,
-              onTap: () => _handleMenuTap(context, items[i].title, onTap),
+              onTap: () => _handleMenuTap(context, ref, items[i].title, onTap),
             ),
         ],
       ),
@@ -1007,6 +1013,7 @@ class _MenuCard extends ConsumerWidget {
 
   void _handleMenuTap(
     BuildContext context,
+    WidgetRef ref,
     String title,
     void Function(String path) onNav,
   ) {
@@ -1026,7 +1033,16 @@ class _MenuCard extends ConsumerWidget {
     } else if (title == '我的积分') {
       onNav(RouteNames.pointsWallet);
     } else if (title == '兑换码') {
-      onNav(RouteNames.profileRedeem);
+      // iOS：走 App Store 官方兑换面板（非自建兑换码）；其余平台维持原流程
+      if (IosIapService.isSupported) {
+        presentIosOfferCodeSheet(ref).then((ok) {
+          if (!ok && context.mounted) {
+            LumiraToast.show(context, '打开兑换面板失败，请稍后重试');
+          }
+        });
+      } else {
+        onNav(RouteNames.profileRedeem);
+      }
     } else if (title == '关于如画') {
       onNav(RouteNames.profileAbout);
     } else if (title == '联系我们') {

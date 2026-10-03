@@ -52,7 +52,7 @@
 ### 宣传文本 Promo Text（≤170 字符；**不参与搜索索引**，可随时更新，用于运营活动 / 上新）
 > **金秋上新：秋日氛围感人像/探店模板包已上线！**
 >
-> 不会摆姿势？照着想拍的剪影摆，手机也能出大片。内置 60+ 款人像/探店/美食/街拍/夜景模板，一键生成分享海报，邀请好友双方得积分；每日挑战养成拍照习惯，把平凡日子拍成一本日记。
+> 不会摆姿势？照着想拍的剪影摆，手机也能出大片。内置 60+ 款人像/探店/美食/街拍/夜景模板，一键生成分享海报；精品付费模板支持 App Store 内购解锁；每日挑战养成拍照习惯，把平凡日子拍成一本日记。
 
 ### 描述 Description（≤4000 字符；**不参与搜索索引**，仅影响落地转化，首句最关键）
 
@@ -74,7 +74,7 @@
 • 【连续打卡挑战】每日挑战养成拍照习惯，完成挑战解锁专属模板和成就
 • 【一键分享海报】拍完直接生成专属海报，扫码还能拍同款，好看的照片藏不住
 • 【多种 UI 风格随心换】新拟态/扁平/玻璃/女性美学，8+款主题色匹配你的审美
-• 【邀请有礼】邀请好友，双方都得积分，可直接兑换付费模板
+• 【积分与解锁】每日签到、分享、完成挑战均可获得积分；精品付费模板可用积分解锁，积分支持通过 App Store 内购获取
 
 ▷ 隐私说明：
 支持离线使用，不强制登录注册，本地数据由你掌控。
@@ -254,3 +254,75 @@ v1.0.0 首发上线
 | 八张展示图 | 按对应平台尺寸 PNG/JPG | iOS 一张图一个文件，安卓可打包 |
 | 宣传视频（可选） | iOS：15–30 秒 MP4，安卓按需 | 演示从打开到首次出片全过程，突出剪影引导 |
 | 开发者信息 | 联系方式、隐私政策 URL、用户协议 URL | 各市场必填 |
+
+---
+
+## 八、App Store 审核申诉与备注（3.1.1 / 2.3.10）
+
+> 背景：1.0 (472) 提交被拒，Apple 指出 3.1.1（IAP）两条 + 2.3.10（元数据）一条。
+> 代码侧整改仅作用于 iOS 分支（`IosIapService.isSupported`），Android / OHOS 行为不变。
+
+### 8.1 问题与处置对照
+
+| 审核意见 | 处置 |
+|---|---|
+| 3.1.1 付费模板未提供 App 内购买 | iOS 接入 StoreKit 消耗型积分包（积分充值 → 积分商城），付费模板用内购积分解锁 |
+| 3.1.1 使用促销码解锁数字内容 | iOS 移除自建兑换码输入；「兑换码」入口保留，但点击改开 App Store 官方兑换面板 |
+| 3.1.1 存在 App 外付费渠道（隐性） | iOS 从「获取积分方式」清单移除「客服充值」「邀请好友」，替换为「App Store 充值」 |
+| 2.3.10 截图含非 iOS 状态栏 | iOS 展示图须用 iPhone 真机重拍，见 8.4 |
+
+**内购商品（id → 到账积分）**，需与 `iap.service.ts` 的 `IAP_PRODUCT_POINTS` 一致：
+
+| 商品 ID | 到账积分 |
+|---|---|
+| `com.rh.lumira.points.600` | 600 |
+| `com.rh.lumira.points.3300` | 3300 |
+| `com.rh.lumira.points.7800` | 7800 |
+| `com.rh.lumira.points.15300` | 15300 |
+| `com.rh.lumira.points.42800` | 42800 |
+
+### 8.2 回复 App Review（App Store Connect 回复框，可直接粘贴）
+
+```text
+Hello, and thank you for the review.
+
+We have updated the app to comply with Guideline 3.1.1 and 2.3.10.
+
+1) In-App Purchase for paid digital content
+All paid digital content (premium templates) is now unlocked exclusively with points, and points can be purchased inside the app through In-App Purchase (consumable products). The purchase path is:
+Profile → My Points → Recharge → Points Store (我的 → 我的积分 → 积分充值 → 积分商城).
+After purchasing points, users unlock any premium template with those points. No paid digital content is obtained through any payment method outside of In-App Purchase. The previous out-of-app recharge channel (contacting customer service) is no longer shown on iOS.
+
+2) Promo codes
+The app no longer has its own promo-code redemption. On iOS, the 兑换码 entry now opens Apple's official code redemption sheet (StoreKit offer/promo code redemption) instead of a custom code input. Any granted content is delivered through the same In-App Purchase flow.
+
+3) Metadata (2.3.10)
+We have replaced the screenshots with images captured on iOS devices only, so no non-iOS status bar appears in any screenshot.
+
+Thank you. Please let us know if any further information is needed.
+```
+
+### 8.3 App Review Information → Notes（审核备注）
+
+```text
+In-App Purchase test steps:
+1. Launch the app and go to Profile (我的) → My Points (我的积分) → Recharge (积分充值).
+2. The "Points Store (积分商城)" lists 5 consumable points packs
+   (com.rh.lumira.points.600 / 3300 / 7800 / 15300 / 42800).
+3. Purchase any pack with the sandbox Apple ID; points are credited immediately.
+4. Open any locked template → tap 解锁 (Unlock) to spend points and unlock it.
+
+Paid content & promo codes:
+- Premium templates are unlocked with points, and points are purchased via In-App Purchase.
+- On iOS the app shows no external payment channel and no custom promo-code input.
+- The 兑换码 entry opens Apple's official code redemption sheet (StoreKit).
+```
+
+### 8.4 提审前 Checklist
+
+- [ ] App Store Connect 创建上述 5 个**消耗型**内购商品，并在本版本「App 内购买项目」中随版本一起提交审核
+- [ ] 完成「付费 App 协议 + 银行账户 + 税务信息」（**个人开发者同样必须完成，否则 IAP 不可用**）
+- [ ] 服务器 `.env` 配置 `APPLE_IAP_SHARED_SECRET`（App 信息 → App 专用共享密钥），否则 `POST /api/v1/points/iap/verify` 返回 503
+- [ ] iOS 展示图仅用 iPhone 真机重拍，去除任何安卓状态栏
+- [ ] 第 ⑧ 张「邀请好友，双方都得积分 → 积分解锁付费模板」**不作为 iOS 展示图**（iOS 端已隐藏邀请入口，此图仅可用于安卓）
+- [ ] 重新构建 IPA（含本次 iOS 改动）后提交，并附上 8.3 备注
