@@ -378,7 +378,7 @@ static WbResidual WbResidualIdentity = { 1.0f, 1.0f, 1.0f };
       float minIso = _captureDevice.activeFormat.minISO;
       float maxIso = _captureDevice.activeFormat.maxISO;
       float iso = MAX(minIso, MIN(maxIso, _lockedIso * powf(2.0f, (float)ev)));
-      [_captureDevice setExposureModeCustomWithDuration:duration iso:iso completionHandler:nil];
+      [_captureDevice setExposureModeCustomWithDuration:duration ISO:iso completionHandler:nil];
       [_captureDevice unlockForConfiguration];
       return;
     }
