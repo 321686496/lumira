@@ -271,15 +271,20 @@ final class LumiraIapChannel: NSObject {
   }
 
   private static func encode(_ tx: Transaction) -> [String: Any] {
-    return [
+    var dict: [String: Any] = [
       "transactionId": "\(tx.id)",
       "originalTransactionId": "\(tx.originalID)",
       "productId": tx.productID,
       "quantity": tx.purchasedQuantity,
-      "environment": "\(tx.environment)",
       "jws": tx.jsonRepresentation.base64EncodedString(),
       "purchaseTime": tx.purchaseDate.timeIntervalSince1970 * 1000,
     ]
+    // Transaction.environment 仅 iOS 16.0+ 可用，部署目标为 iOS 15.0，
+    // 低版本下省略该诊断字段（消费端不做依赖）。
+    if #available(iOS 16.0, *) {
+      dict["environment"] = "\(tx.environment)"
+    }
+    return dict
   }
 }
 
