@@ -23,6 +23,8 @@
 #   SEARXNG_SECRET=...        （可空，SearXNG 实例密钥；未配置时容器每次重启自动生成新 secret，仅影响实例状态保持，建议配置）
 #   CRAWL_COOKIE_SECRET=...   （可空，网页爬取 cookie 的 AES-256-GCM 密钥，64 位 hex；
 #                              未配置时后台无法保存 cookie，渲染降级不受影响）
+#   APPLE_IAP_SHARED_SECRET=...（iOS 内购收据校验共享密钥，App Store Connect → App 信息 →
+#                               App 专用共享密钥；未配置时 points/iap/verify 返回 503）
 #   RENDERER_WS_ENDPOINT      （由本文件注入，无需在 .env 维护；
 #                              未配置时爬取的渲染降级自动关闭）
 
@@ -90,6 +92,8 @@ services:
       - REDIS_URL=redis://lumira-redis:6379
       # 网页爬取 cookie 的 AES-256-GCM 密钥（服务器 .env 维护；未配置时后台保存 cookie 返回 400）
       - CRAWL_COOKIE_SECRET=${CRAWL_COOKIE_SECRET}
+      # iOS 内购收据校验共享密钥（服务器 .env 维护；未配置时 points/iap/verify 返回 503）
+      - APPLE_IAP_SHARED_SECRET=${APPLE_IAP_SHARED_SECRET}
       # 无头渲染容器 CDP 端点（renderer-net 内部地址，不暴露到宿主机）
       - RENDERER_WS_ENDPOINT=ws://lumira-renderer:9222
     volumes:
