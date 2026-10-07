@@ -79,8 +79,8 @@ class EditorFormMeta {
     this.shortDesc = '',
     this.ambience,
   }) : images = images ??
-            (coverImage != null && coverImage!.isNotEmpty
-                ? <EditorFormMetaImage>[EditorFormMetaImage(data: coverImage!)]
+            (coverImage != null && coverImage.isNotEmpty
+                ? <EditorFormMetaImage>[EditorFormMetaImage(data: coverImage)]
                 : const <EditorFormMetaImage>[]);
 
   String id;

@@ -14,7 +14,8 @@ void main() {
           child: ComparePhotoButton(
             comparing: comparing,
             tokens: tokens,
-            onTap: () {},
+            onHoldStart: () {},
+            onHoldEnd: () {},
             overlayOnImage: overlayOnImage,
           ),
         ),
@@ -22,22 +23,25 @@ void main() {
     );
   }
 
-  testWidgets('tap fires onTap', (tester) async {
-    var tapped = 0;
+  testWidgets('press fires onHoldStart, release fires onHoldEnd', (tester) async {
+    var started = 0;
+    var ended = 0;
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: Center(
           child: ComparePhotoButton(
             comparing: false,
             tokens: tokens,
-            onTap: () => tapped++,
+            onHoldStart: () => started++,
+            onHoldEnd: () => ended++,
           ),
         ),
       ),
     ));
     await tester.tap(find.byType(ComparePhotoButton));
     await tester.pumpAndSettle();
-    expect(tapped, 1);
+    expect(started, 1);
+    expect(ended, 1);
   });
 
   testWidgets('comparing=true shows status dot', (tester) async {

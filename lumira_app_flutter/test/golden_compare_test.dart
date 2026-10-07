@@ -29,8 +29,8 @@ void main() {
       for (var y = 0; y < img.height; y += 1) {
         for (var x = 0; x < img.width; x += 1) {
           final i = (y * img.width + x) * 4;
-          out.add(Color.fromARGB(data!.getUint8(i + 3), data!.getUint8(i),
-              data!.getUint8(i + 1), data!.getUint8(i + 2)));
+          out.add(Color.fromARGB(data!.getUint8(i + 3), data.getUint8(i),
+              data.getUint8(i + 1), data.getUint8(i + 2)));
         }
       }
       return out;

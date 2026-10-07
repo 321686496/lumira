@@ -1,6 +1,6 @@
 // 精准裁剪各样式卡底部二维码区域并放大，直接核验「点 vs 二维码图案」。
 import 'dart:io';
-import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -41,30 +41,34 @@ TemplateRecord _makeRecord() {
 }
 
 /// 从 RGBA 原始字节中裁剪一块区域。
-void _saveCrop(Uint8List rgba, int w, int h, int x, int y, int cw, int ch, String path) {
+Future<void> _saveCrop(Uint8List rgba, int w, int h, int x, int y, int cw, int ch, String path) async {
   final out = ui.PictureRecorder();
   final canvas = Canvas(out);
-  final img = ui.ImageDescriptor.raw(
-    rgba,
+  final buffer = await ui.ImmutableBuffer.fromUint8List(rgba);
+  final descriptor = ui.ImageDescriptor.raw(
+    buffer,
     width: w,
     height: h,
     pixelFormat: ui.PixelFormat.rgba8888,
-  ).instantiateCodec().getNextFrame().image;
+  );
+  final codec = await descriptor.instantiateCodec();
+  final frame = await codec.getNextFrame();
+  final img = frame.image;
   final srcRect = Rect.fromLTWH(x.toDouble(), y.toDouble(), cw.toDouble(), ch.toDouble());
   // 放大 6 倍便于人眼核验
   final dstRect = Rect.fromLTWH(0, 0, cw * 6.0, ch * 6.0);
   canvas.drawImageRect(img, srcRect, dstRect, Paint()..filterQuality = FilterQuality.none);
   final picture = out.endRecording();
-  final cropped = picture.toImage(cw * 6, ch * 6);
-  cropped.toByteData(format: ui.ImageByteFormat.png).then((b) {
-    File(path).writeAsBytesSync(b!.buffer.asUint8List());
-    // ignore: avoid_print
-    print('saved $path');
-  });
+  final cropped = await picture.toImage(cw * 6, ch * 6);
+  final data = await cropped.toByteData(format: ui.ImageByteFormat.png);
+  File(path).writeAsBytesSync(data!.buffer.asUint8List());
+  // ignore: avoid_print
+  print('saved $path');
 }
 
 void main() {
   testWidgets('裁剪各样式卡底部二维码区域', (tester) async {
+    Directory(_outDir).createSync(recursive: true);
     final record = _makeRecord();
     final qrData = TemplateShareCode.buildShareLink(record, usePptpl: false);
     // ignore: avoid_print
@@ -123,7 +127,7 @@ void main() {
         final w = image.width, h = image.height;
         // 卡片底部 60% 区域整体放大，观察二维码
         final cropH = (h * 0.45).round();
-        _saveCrop(rgba, w, h, 0, h - cropH, w, cropH, '$_outDir/${s.id}_bottom.png');
+        await _saveCrop(rgba, w, h, 0, h - cropH, w, cropH, '$_outDir/${s.id}_bottom.png');
       });
     }
   });

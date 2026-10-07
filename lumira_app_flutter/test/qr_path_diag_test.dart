@@ -8,10 +8,7 @@ import 'package:image/image.dart' as img;
 import 'package:lumira_app_flutter/core/db/dao/templates_dao.dart';
 import 'package:lumira_app_flutter/features/templates/services/template_share_code.dart';
 import 'package:lumira_app_flutter/shared/widgets/poster/poster_common.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:zxing2/qrcode.dart';
-
-const _outDir = 'build/qr_path_diag';
 
 TemplateRecord _makeRecord() {
   return TemplateRecord(
@@ -53,37 +50,31 @@ String? decodeScanPage(List<int> bytes) {
   }
 }
 
-/// 用 zxing 的 MultiFormatReader + 多尝试（含 TryHarder）解码。
-String? decodeMulti(List<int> bytes, {bool tryHarder = true}) {
+/// 用 zxing 的 QRCodeReader + pureBarcode 提示解码（单色模块图直取网格）。
+String? decodePure(List<int> bytes) {
   final image = img.decodeImage(Uint8List.fromList(bytes));
   if (image == null) return null;
   try {
     final pixels = image.convert(numChannels: 4).getBytes(order: img.ChannelOrder.rgba);
     final source = RGBLuminanceSource(image.width, image.height, pixels.buffer.asInt32List());
     final bitmap = BinaryBitmap(HybridBinarizer(source));
-    final hints = <DecodeHintType, Object>{
-      DecodeHintType.tryHarder: tryHarder,
-      DecodeHintType.pureBarcode: false,
-      DecodeHintType.possibleFormats: [BarcodeFormat.qrCode],
-    };
-    final result = MultiFormatReader().decode(bitmap, hints);
+    final hints = DecodeHints()..put(DecodeHintType.pureBarcode);
+    final result = QRCodeReader().decode(bitmap, hints: hints);
     return result.text.isEmpty ? null : result.text;
   } catch (_) {
     return null;
   }
 }
 
-/// 手动 Detector：只探测，看 finder pattern 是否被找到。
+/// finder pattern 能否被定位：解码抛 NotFoundException 即定位失败。
 String? detectOnly(List<int> bytes) {
   final image = img.decodeImage(Uint8List.fromList(bytes));
   if (image == null) return null;
   try {
     final pixels = image.convert(numChannels: 4).getBytes(order: img.ChannelOrder.rgba);
     final source = RGBLuminanceSource(image.width, image.height, pixels.buffer.asInt32List());
-    final bitmap = BinaryBitmap(HybridBinarizer(source));
-    final detector = Detector(bitmap.blackMatrix);
-    final det = detector.detect();
-    return 'FOUND ${det.bottomLeft} ${det.topLeft} ${det.topRight}';
+    final result = QRCodeReader().decode(BinaryBitmap(HybridBinarizer(source)));
+    return 'FOUND ${result.text}';
   } catch (e) {
     return 'NOT-FOUND: $e';
   }
@@ -127,10 +118,7 @@ void main() {
     final bytes = await renderPosterQr(tester, data, 54, 4.0);
     // ignore: avoid_print
     print('scanPage(QRCodeReader) : ${decodeScanPage(bytes) ?? 'FAIL'}');
-    // ignore: avoid_print
-    print('multi(tryHarder=false) : ${decodeMulti(bytes, tryHarder: false) ?? 'FAIL'}');
-    // ignore: avoid_print
-    print('multi(tryHarder=true)  : ${decodeMulti(bytes, tryHarder: true) ?? 'FAIL'}');
+    print('pure(QRCodeReader)     : ${decodePure(bytes) ?? 'FAIL'}');
     // ignore: avoid_print
     print('detector-only          : ${detectOnly(bytes)}');
   });

@@ -108,7 +108,7 @@ void main() {
       final rec = await dao.load();
       expect(rec, isNotNull);
       expect(rec!.token, '');
-      expect(rec!.deviceId, 'saved-id');
+      expect(rec.deviceId, 'saved-id');
     });
 
     test('registerIfNeeded skips when already registered', () async {

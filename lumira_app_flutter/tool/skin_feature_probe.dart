@@ -2,16 +2,31 @@
 //   A. 皮肤区域的细毛孔被真正磨掉（肤色方差下降）
 //   B. 五官/高对比结构几乎不被破坏（五官区域与原图差异极小）
 //   C. 背景（非肤色）100% 保留
+//
+// 运行方式：dart run tool/skin_feature_probe.dart
 import 'dart:math' as math;
 import 'package:image/image.dart' as img;
 import '../lib/features/capture/services/skin_smoother.dart';
 
-double _stdOf(img.Image im, List<(int, int)> pts) {
-  double sum = 0; int n = 0;
-  for (final (x, y) in pts) { sum += (im.getPixel(x, y).r + im.getPixel(x, y).g + im.getPixel(x, y).b) / 3.0; n++; }
+class _Pt {
+  const _Pt(this.x, this.y);
+  final int x;
+  final int y;
+}
+
+double _stdOf(img.Image im, List<_Pt> pts) {
+  double sum = 0;
+  int n = 0;
+  for (final p in pts) {
+    sum += (im.getPixel(p.x, p.y).r + im.getPixel(p.x, p.y).g + im.getPixel(p.x, p.y).b) / 3.0;
+    n++;
+  }
   final mean = sum / n;
   double s = 0;
-  for (final (x, y) in pts) { final d = (im.getPixel(x, y).r + im.getPixel(x, y).g + im.getPixel(x, y).b) / 3.0 - mean; s += d * d; }
+  for (final p in pts) {
+    final d = (im.getPixel(p.x, p.y).r + im.getPixel(p.x, p.y).g + im.getPixel(p.x, p.y).b) / 3.0 - mean;
+    s += d * d;
+  }
   return math.sqrt(s / n);
 }
 
@@ -30,11 +45,10 @@ void main() {
   }
   // 五官/结构：深色"眼睛"椭圆 + 深色"眉毛"横条 + 深色"唇线"（均非肤色，应原样保留）
   bool inFeature(int x, int y) {
-    final dx = x - 256.0, dy = y - 260.0;
-    // 眼睛：以(240,240)为中心的深色椭圆
+    // 眼睛：以(200,210)/(308,210)为中心的深色椭圆
     final ex = x - 200.0, ey = y - 210.0;
     final inEye = (ex * ex) / (34 * 34) + (ey * ey) / (26 * 26) <= 1.0;
-    final inEye2 = (	(x - 308.0) * (x - 308.0)) / (34 * 34) + ((y - 210.0) * (y - 210.0)) / (26 * 26) <= 1.0;
+    final inEye2 = ((x - 308.0) * (x - 308.0)) / (34 * 34) + ((y - 210.0) * (y - 210.0)) / (26 * 26) <= 1.0;
     // 眉毛宽条
     final inBrow = (y > 140 && y < 158 && x > 170 && x < 340);
     // 唇
@@ -53,12 +67,12 @@ void main() {
     }
   }
 
-  final skinPts = <(int, int)>[];
+  final skinPts = <_Pt>[];
   final rnd2 = math.Random(99);
   for (var i = 0; i < 4000; i++) {
     final x = rnd2.nextInt(240) + 20, y = rnd2.nextInt(100) + 20; // 左上空旷肤色区，避开五官
     if (!inFeature(x, y)) {
-      skinPts.add((x, y));
+      skinPts.add(_Pt(x, y));
     }
   }
   // 五官采样点
@@ -74,7 +88,7 @@ void main() {
       if (inFeature(x, y)) {
         final a = src.getPixel(x, y);
         final b = out.getPixel(x, y);
-        final d = (a.r - b.r).abs() + (a.g - b.g).abs() + (a.b - b.b).abs();
+        final d = ((a.r - b.r).abs() + (a.g - b.g).abs() + (a.b - b.b).abs()).toDouble();
         featCount++;
         if (d > 30) featChanged++;
         if (d > featMaxDiff) featMaxDiff = d;

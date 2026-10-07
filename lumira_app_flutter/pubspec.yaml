@@ -1,7 +1,7 @@
 name: lumira_app_flutter
 description: 如画 Lumira - 摄影辅助应用（Flutter 版）
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+1
 
 environment:
   # 调整：实际环境为 Harmony 兼容 Flutter 3.7.12 / Dart 2.19.6（brief 中 >=3.0.0 <4.0.0 不兼容）
@@ -10,6 +10,11 @@ environment:
 
 dependencies:
   flutter:
+    sdk: flutter
+
+  # 官方本地化包：让 MaterialApp 支持 zh-Hans/en 系统语言解析
+  # （App Store「语言」列与搜索权重的必要前提）
+  flutter_localizations:
     sdk: flutter
 
   # iOS 风格图标（CupertinoIcons 字体）
@@ -103,7 +108,9 @@ dependencies:
 
   # 工具（brief path ^1.9.0 / intl ^0.19.0 → 调整为兼容 Dart 2.19 的版本）
   path: ^1.8.2
-  intl: ^0.18.0
+  # Fix(本地化): Flutter 3.7.12 的 flutter_localizations 精确锁定 intl 0.17.0，
+  # 0.18.x 会导致 pub get 版本冲突；代码仅用 DateFormat 基础 pattern，0.17.0 兼容
+  intl: 0.17.0
 
   # SVG 渲染（brief ^2.0.0 → 调整为兼容 Dart 2.19 的版本，2.x 需 Dart 3）
   # 用于渲染如画品牌 logo（symbol / wordmark / primary 等矢量资源）

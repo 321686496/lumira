@@ -42,8 +42,8 @@ void main() {
       final x = px.floor().clamp(0, image.width - 1);
       final y = py.floor().clamp(0, image.height - 1);
       final i = (y * image.width + x) * 4;
-      return Color.fromARGB(data!.getUint8(i + 3), data!.getUint8(i),
-          data!.getUint8(i + 1), data!.getUint8(i + 2));
+      return Color.fromARGB(data!.getUint8(i + 3), data.getUint8(i),
+          data.getUint8(i + 1), data.getUint8(i + 2));
     }
 
     final cLogical = at(rect.left + 45, rect.top + 19);

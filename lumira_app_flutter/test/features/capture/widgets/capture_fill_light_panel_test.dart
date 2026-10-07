@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lumira_app_flutter/features/capture/data/custom_fill_light_colors.dart';
 import 'package:lumira_app_flutter/features/capture/data/recent_fill_light_colors.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/capture_bottom_controls.dart';
+import 'package:lumira_app_flutter/shared/widgets/effects/color_picker.dart';
 
 void main() {
   group('fill light color picker', () {
