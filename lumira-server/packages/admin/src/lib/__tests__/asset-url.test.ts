@@ -44,6 +44,14 @@ describe('toAssetUrl', () => {
     );
   });
 
+  it('keeps inline data: URLs unchanged (multi-pose silhouettes embed base64)', () => {
+    const dataUrl = 'data:image/webp;base64,UklGRlAAAABXRUJQVlA4WAQAAAAA';
+    expect(toAssetUrl(dataUrl, BACKEND)).toBe(dataUrl);
+    expect(toAssetUrl('data:image/png;base64,iVBORw0KGgo=', BACKEND)).toBe(
+      'data:image/png;base64,iVBORw0KGgo=',
+    );
+  });
+
   it('returns null for empty input', () => {
     expect(toAssetUrl(null, BACKEND)).toBeNull();
     expect(toAssetUrl(undefined, BACKEND)).toBeNull();

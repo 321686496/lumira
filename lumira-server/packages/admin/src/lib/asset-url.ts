@@ -22,6 +22,11 @@ export function toAssetUrl(
   backendUrl: string,
 ): string | null {
   if (!url) return null;
+  // 内嵌 data URL（如多姿势剪影以 base64 存于 silhouette.data）原样返回，
+  // 不能拼接 backendUrl，否则生成无效 URL 导致图片加载失败。
+  if (url.startsWith('data:')) {
+    return url;
+  }
   if (url.startsWith('https://')) {
     return url;
   }
