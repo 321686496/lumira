@@ -115,7 +115,7 @@ SIL_PROMPT = (
 SIL_THRESHOLD = 245
 SIL_BBOX_RATIO = 0.3
 SIL_PAD_RATIO = 0.05
-SIZE = "768x1024"      # 参考图上传前的缩放盒(仅 load_ref_tuple 用); 出图尺寸见 pose_size()
+SIZE = "512x683"      # 参考图上传前的缩放盒(仅 load_ref_tuple 用); 出图尺寸见 pose_size()
 SIZE_TUPLE = tuple(int(v) for v in SIZE.split("x"))
 
 
@@ -157,7 +157,7 @@ def pose_size(ratio: float) -> str:
     return gpt_image2.cell_size_str(ratio)
 
 
-REF_JPEG_QUALITY = 88  # 参考图上传前压成 JPEG: MaaS(qwen-image) 对大体积 base64 输入会上游超时
+REF_JPEG_QUALITY = 78  # 参考图上传前压成 JPEG: MaaS(qwen-image) 对大体积 base64 输入会上游超时
 MAX_TRY = 3
 TIMEOUT = 660
 ASPECT = [0.75, "3:4"]   # 运行时由 resolve_aspect 填入 (ratio 浮点, 显示标签)

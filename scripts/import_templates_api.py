@@ -8,8 +8,9 @@
 用法:
   python import_templates_api.py [folder] | --skill-test
   python import_templates_api.py --rebuild   # 压缩源图为 JPEG q85 重建，再删除旧模板
+  python import_templates_api.py --root <dir> --inline-sil <folder前缀>  # 指定根目录 + 内联剪影
 """
-import io, json, sys, time, uuid
+import base64, io, json, sys, time, uuid
 import urllib.request, urllib.error
 from pathlib import Path
 from PIL import Image
@@ -18,6 +19,9 @@ ROOT = Path(r"e:\Project\photo_post\selfie_templates")
 BASE = "https://lumira.iwtle.top"
 TOKEN = "46c3850364b14d20da48c31cfc7d233031b94f4c2fc76c8b32de527fb4c03043"
 SKIP = {"37_skincare_morning"}
+# 每张姿势的剪影内联为 base64 data URL（后端只接受 1 个 silhouette 文件，
+# 而 App 端 <image :src="silhouette.data"> 需要可访问的 URL/dataURL）
+INLINE_SIL = False
 _opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 def classif(c):
@@ -35,6 +39,7 @@ def build_meta(doc):
             "price": 0, "description": meta.get("description",""),
             "shortDesc": meta.get("shortDesc",""), "tags": meta.get("tags",[]),
             "referenceSource": meta.get("referenceSource","原创"),
+            "gender": meta.get("gender") or "unisex",
             "classification": classif(meta.get("classification")),
             "ambience": {"seasons": amb.get("seasons",[]),
                          "weathers": amb.get("weathers",[]),
@@ -85,12 +90,34 @@ def multipart(fields, files):
     body.write(f"--{b}--\r\n".encode())
     return b, body.getvalue()
 
+def inline_sil(d, poses):
+    """把每张姿势的剪影文件名(data)替换为 base64 data URL，App 端可直接渲染"""
+    miss = 0
+    for p in poses:
+        s = p.get("silhouette")
+        if not isinstance(s, dict) or s.get("type") != "image":
+            continue
+        fn = s.get("data") or ""
+        fp = d / fn if fn else None
+        if not fp or not fp.is_file():
+            miss += 1; continue
+        raw = fp.read_bytes()
+        s["data"] = "data:image/png;base64," + base64.b64encode(raw).decode()
+        s["filename"] = fn
+        s["sizeKB"] = max(1, round(len(raw) / 1024))
+    if miss:
+        print(f"  [WARN] {miss} 张剪影文件缺失，未内联", flush=True)
+    return poses
+
+
 def post_one(folder, compress=False):
     doc, poses, aligned = alignment(folder)
     miss = [(p,f) for p,f in aligned if f is None]
     if miss:
         return f"SKIP {folder}: {len(miss)} 姿势缺图", False, None, None
     meta = build_meta(doc)
+    if INLINE_SIL:
+        inline_sil(ROOT / folder, meta.get("poses") or [])
     try:
         files = {}
         for i,(pname,fp) in enumerate(aligned):
@@ -122,8 +149,13 @@ def delete_template(tid):
     return True
 
 def main():
-    only = None
-    if len(sys.argv)>1 and not sys.argv[1].startswith("-"): only = sys.argv[1]
+    global ROOT, INLINE_SIL
+    args = sys.argv[1:]
+    if "--root" in args:
+        i = args.index("--root"); ROOT = Path(args[i+1]); del args[i:i+2]
+    if "--inline-sil" in args:
+        INLINE_SIL = True; args.remove("--inline-sil")
+    only = args[0] if args and not args[0].startswith("-") else None
     if "--skill-test" in sys.argv:
         for d in sorted(ROOT.iterdir()):
             if not d.is_dir(): continue

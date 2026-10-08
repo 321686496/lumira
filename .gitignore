@@ -126,3 +126,15 @@ skills/**/_down/
 skills/**/_pose*/
 skills/**/_*
 skills/**/*.pyc
+
+# 根目录一次性调试产物（临时脚本/截图/性能抓取/剪贴板文案草稿，不入库）
+/.tmp-*
+/.tmp_*
+/_tmp/
+/_cdp.py
+/_feeds_*.json
+/597762.html.urls.txt
+
+# 营销素材 AI 原始出图（可由 scripts/gen_*.py 重生成，仅入库裁切成品）
+docs/marketing/assets/**/raw/
+docs/marketing/assets/**/raw-*/
