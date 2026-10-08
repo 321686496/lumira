@@ -14,6 +14,44 @@ export interface StatsResponse {
   totalCodesGenerated: number;
   totalCodesUsed: number;
   totalCodesRemaining: number;
+  // 活跃度
+  dau: number;
+  mau: number;
+  newDevicesThisMonth: number;
+  // 平台分布
+  platformBreakdown: Array<{ platform: string; count: number }>;
+  // 用户画像
+  profileBreakdown: {
+    gender: Record<string, number>;
+    skillLevel: Record<string, number>;
+    shootFrequency: Record<string, number>;
+  };
+  // 积分健康
+  totalPointsEarned: number;
+  totalPointsSpent: number;
+  totalPointsBalance: number;
+  todaySignIns: number;
+  todayPointEvents: number;
+  // 内容健康度
+  totalTemplates: number;
+  activeTemplates: number;
+  paidTemplates: number;
+  pendingFeedbacks: number;
+  inviteSuccessRate: number;
+  totalBatches: number;
+}
+
+export interface TrendPoint {
+  date: string; // "MM-DD"
+  newDevices: number;
+  dau: number;
+  invites: number;
+  redemptions: number;
+  rewardUnlocks: number;
+}
+
+export interface TrendResponse {
+  days: TrendPoint[];
 }
 
 export interface DeviceRecord {

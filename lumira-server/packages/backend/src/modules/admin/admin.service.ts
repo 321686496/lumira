@@ -74,6 +74,12 @@ export class AdminService {
     todayStart.setHours(0, 0, 0, 0);
     const todayTs = Math.floor(todayStart.getTime() / 1000);
 
+    // 时间口径：本月 1 日 0 点、近 30 天起点（均按服务器本地时区）
+    const monthStart = new Date(todayStart);
+    monthStart.setDate(1);
+    const monthStartTs = Math.floor(monthStart.getTime() / 1000);
+    const thirtyDaysAgoTs = todayTs - 30 * 86400;
+
     const [deviceCount] = await db.select({ value: count() }).from(devices);
     const [inviteCount] = await db.select({ value: count() }).from(inviteRecords);
     const [rewardCount] = await db.select({ value: count() }).from(rewardUnlocks);
@@ -94,6 +100,73 @@ export class AdminService {
     const totalGenerated = codesRow?.generated || 0;
     const totalUsed = codesRow?.used || 0;
 
+    // ===== 活跃度（DAU / MAU / 本月注册）=====
+    const [dauRow] = await db.select({ value: count() }).from(devices)
+      .where(sql`${devices.lastSeenAt} >= ${todayTs}`);
+    const [mauRow] = await db.select({ value: count() }).from(devices)
+      .where(sql`${devices.lastSeenAt} >= ${thirtyDaysAgoTs}`);
+    const [newMonthRow] = await db.select({ value: count() }).from(devices)
+      .where(sql`${devices.firstSeenAt} >= ${monthStartTs}`);
+
+    // ===== 平台分布 =====
+    const platformRows = await db.select({
+      platform: devices.platform,
+      count: sql<number>`COUNT(*)`,
+    }).from(devices)
+      .groupBy(devices.platform)
+      .orderBy(sql`COUNT(*) DESC`);
+    const platformBreakdown = platformRows.map((r) => ({
+      platform: r.platform || '未知',
+      count: r.count || 0,
+    }));
+
+    // ===== 用户画像分布（从 user_profiles 聚合）=====
+    const profileRows = await db.select({
+      gender: userProfiles.gender,
+      skillLevel: userProfiles.skillLevel,
+      shootFrequency: userProfiles.shootFrequency,
+    }).from(userProfiles);
+    const profileBreakdown: Record<string, Record<string, number>> = {
+      gender: {},
+      skillLevel: {},
+      shootFrequency: {},
+    };
+    for (const row of profileRows) {
+      if (row.gender) profileBreakdown.gender[row.gender] = (profileBreakdown.gender[row.gender] || 0) + 1;
+      if (row.skillLevel) profileBreakdown.skillLevel[row.skillLevel] = (profileBreakdown.skillLevel[row.skillLevel] || 0) + 1;
+      if (row.shootFrequency) profileBreakdown.shootFrequency[row.shootFrequency] = (profileBreakdown.shootFrequency[row.shootFrequency] || 0) + 1;
+    }
+
+    // ===== 积分健康 =====
+    const [pointsRow] = await db.select({
+      earned: sql<number>`COALESCE(SUM(${userPoints.totalEarned}), 0)`,
+      spent: sql<number>`COALESCE(SUM(${userPoints.totalSpent}), 0)`,
+      balance: sql<number>`COALESCE(SUM(${userPoints.balance}), 0)`,
+    }).from(userPoints);
+    const [signInRow] = await db.select({ value: count() }).from(dailySignInRecords)
+      .where(sql`${dailySignInRecords.createdAt} >= ${todayTs}`);
+    const [pointEventRow] = await db.select({ value: count() }).from(pointEarnEvents)
+      .where(sql`${pointEarnEvents.createdAt} >= ${todayTs}`);
+
+    // ===== 内容健康度 =====
+    const [templateRow] = await db.select({ value: count() }).from(templates);
+    const [activeTemplateRow] = await db.select({ value: count() }).from(templates)
+      .where(eq(templates.isActive, 1));
+    const [paidTemplateRow] = await db.select({ value: count() }).from(templates)
+      .where(sql`${templates.price} > 0`);
+    const [pendingFeedbackRow] = await db.select({ value: count() }).from(feedbacks)
+      .where(eq(feedbacks.status, 'pending'));
+    const [successInviteRow] = await db.select({ value: count() }).from(inviteRecords)
+      .where(eq(inviteRecords.status, 'success'));
+    const [pendingInviteRow] = await db.select({ value: count() }).from(inviteRecords)
+      .where(eq(inviteRecords.status, 'pending'));
+    const [batchRow] = await db.select({ value: count() }).from(redemptionCodeBatches);
+
+    const inviteTotal = (successInviteRow?.value || 0) + (pendingInviteRow?.value || 0);
+    const inviteSuccessRate = inviteTotal > 0
+      ? Math.round(((successInviteRow?.value || 0) / inviteTotal) * 100)
+      : 0;
+
     return {
       totalDevices: deviceCount?.value || 0,
       todayNewDevices: todayNewDevicesRow?.value || 0,
@@ -105,7 +178,81 @@ export class AdminService {
       totalCodesGenerated: totalGenerated,
       totalCodesUsed: totalUsed,
       totalCodesRemaining: totalGenerated - totalUsed,
+      // 活跃度
+      dau: dauRow?.value || 0,
+      mau: mauRow?.value || 0,
+      newDevicesThisMonth: newMonthRow?.value || 0,
+      // 平台分布
+      platformBreakdown,
+      // 用户画像
+      profileBreakdown,
+      // 积分健康
+      totalPointsEarned: pointsRow?.earned || 0,
+      totalPointsSpent: pointsRow?.spent || 0,
+      totalPointsBalance: pointsRow?.balance || 0,
+      todaySignIns: signInRow?.value || 0,
+      todayPointEvents: pointEventRow?.value || 0,
+      // 内容健康度
+      totalTemplates: templateRow?.value || 0,
+      activeTemplates: activeTemplateRow?.value || 0,
+      paidTemplates: paidTemplateRow?.value || 0,
+      pendingFeedbacks: pendingFeedbackRow?.value || 0,
+      inviteSuccessRate,
+      totalBatches: batchRow?.value || 0,
     };
+  }
+
+  // 近 N 日逐日趋势（7/30）：newDevices / dau / invites / redemptions / rewardUnlocks
+  async getTrend(days: number = 7) {
+    const db = this.dbService.getDb();
+    const n = days === 30 ? 30 : 7;
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayTs = Math.floor(todayStart.getTime() / 1000);
+    const startTs = todayTs - (n - 1) * 86400;
+
+    const dayStarts: number[] = [];
+    for (let i = 0; i < n; i++) dayStarts.push(startTs + i * 86400);
+
+    const countBuckets = (stamps: number[]): number[] => {
+      const out = new Array<number>(n).fill(0);
+      for (const s of stamps) {
+        const idx = Math.floor((s - startTs) / 86400);
+        if (idx >= 0 && idx < n) out[idx]++;
+      }
+      return out;
+    };
+
+    const [newDeviceRows, dauRows, inviteRows, redemptionRows, rewardRows] = await Promise.all([
+      db.select({ t: devices.firstSeenAt }).from(devices).where(sql`${devices.firstSeenAt} >= ${startTs}`),
+      db.select({ t: devices.lastSeenAt }).from(devices).where(sql`${devices.lastSeenAt} >= ${startTs}`),
+      db.select({ t: inviteRecords.activatedAt }).from(inviteRecords).where(sql`${inviteRecords.activatedAt} >= ${startTs}`),
+      db.select({ t: redemptionRecords.redeemedAt }).from(redemptionRecords).where(sql`${redemptionRecords.redeemedAt} >= ${startTs}`),
+      db.select({ t: rewardUnlocks.unlockedAt }).from(rewardUnlocks).where(sql`${rewardUnlocks.unlockedAt} >= ${startTs}`),
+    ]);
+
+    const newDevices = countBuckets(newDeviceRows.map((r) => r.t));
+    const dau = countBuckets(dauRows.map((r) => r.t));
+    const invites = countBuckets(inviteRows.map((r) => r.t));
+    const redemptions = countBuckets(redemptionRows.map((r) => r.t));
+    const rewardUnlockBuckets = countBuckets(rewardRows.map((r) => r.t));
+
+    const daySeries = dayStarts.map((ds, i) => {
+      const d = new Date(ds * 1000);
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return {
+        date: `${mm}-${dd}`,
+        newDevices: newDevices[i],
+        dau: dau[i],
+        invites: invites[i],
+        redemptions: redemptions[i],
+        rewardUnlocks: rewardUnlockBuckets[i],
+      };
+    });
+
+    return { days: daySeries };
   }
 
   async getDeviceList(page: number = 1, pageSize: number = 20, search?: string) {

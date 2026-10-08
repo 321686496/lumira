@@ -4,14 +4,9 @@
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
+import type { TrendPoint } from '@/types/admin';
 
-export interface TrendDataPoint {
-  date: string;       // "MM-DD"
-  devices: number;
-  invites: number;
-}
-
-export function TrendChart({ data }: { data: TrendDataPoint[] }) {
+export function TrendChart({ data }: { data: TrendPoint[] }) {
   if (!data.length) {
     return (
       <div className="h-72 flex items-center justify-center text-sm text-muted-foreground">
@@ -37,16 +32,24 @@ export function TrendChart({ data }: { data: TrendDataPoint[] }) {
           <Legend />
           <Line
             type="monotone"
-            dataKey="devices"
+            dataKey="newDevices"
             stroke="hsl(var(--chart-1))"
-            name="设备注册"
+            name="日注册"
+            strokeWidth={2}
+            dot={{ r: 3 }}
+          />
+          <Line
+            type="monotone"
+            dataKey="dau"
+            stroke="hsl(var(--chart-2))"
+            name="日活"
             strokeWidth={2}
             dot={{ r: 3 }}
           />
           <Line
             type="monotone"
             dataKey="invites"
-            stroke="hsl(var(--chart-2))"
+            stroke="hsl(var(--chart-3))"
             name="邀请激活"
             strokeWidth={2}
             dot={{ r: 3 }}

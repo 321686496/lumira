@@ -45,6 +45,7 @@ import type {
   MigrationRunningView,
   StorageConfigView,
   StorageConfigPayload,
+  TrendResponse,
 } from '@/types/admin';
 import type { AiJobDetail, AiJobListItem, AiJobStatus } from '@/lib/ai-jobs';
 
@@ -246,6 +247,11 @@ function parseJsonCriteria(value: string): Record<string, string[]> {
 
 export const api = {
   getStats: () => adminFetch<StatsResponse>('/stats'),
+
+  getStatsTrend: (days?: number) => {
+    const url = days ? '/stats/trend?days=' + days : '/stats/trend';
+    return adminFetch<TrendResponse>(url);
+  },
 
   getDevices: (params: { page?: number; pageSize?: number; search?: string } = {}) => {
     const search = new URLSearchParams();

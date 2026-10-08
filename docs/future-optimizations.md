@@ -1306,6 +1306,18 @@
 - **目标状态**：① 支持创建时或入队后调整优先级（如按优先级 + `created_at` 排序出队，或为 `waiting` 维护优先级队列并刷新 `queue_pos`）；② 提供任务改名端点并同步列表 / 详情；③ 为终态任务引入自动过期（如超过 N 天由定时 sweeper 调 `deleteJob` 清理 DB 行 + 存储文件），TTL 可配置。
 - **状态**：⏳ 待优化
 
+---
+
+## 后台概览页数据统计（2026-10-08）
+
+### P2 · 概览聚合统计加短 TTL 缓存 / 定时物化
+
+- **模块**：后台概览页（`backend admin.service.ts` 的 `getStats` / `getTrend` + admin dashboard）
+- **优化点**：`getStats` 现每次请求约 20+ 个聚合 COUNT/SUM 查询、`getTrend` 按天拉取全量时间戳做逐日分桶；概览页为低频运营页面，数据实时性要求不高，但查询量偏大。
+- **背景/动机**：当前以「实现功能为先」，未做缓存以控制复杂度；后续流量增长或需要秒开概览时需收敛查询成本。
+- **目标状态**：对 `getStats` / `getTrend` 结果加短 TTL 缓存（如 Redis 或内存 + 60s），或接入定时聚合表（daily_agg），概览页读取物化结果，降低拉取延迟与 DB 压力。
+- **状态**：⏳ 待优化
+
 ### P2 · pollPipelineJob / resumePipelineJob / cancelPipelineJob 生产无消费方
 
 - **模块**：后台（`lumira-server/packages/admin/src/lib/pipeline-task.ts`）

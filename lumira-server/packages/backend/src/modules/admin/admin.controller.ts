@@ -18,6 +18,12 @@ export class AdminController {
     return this.adminService.getStats();
   }
 
+  @Get('stats/trend')
+  async getStatsTrend(@Query('days') days?: string) {
+    const n = days === '30' ? 30 : 7;
+    return this.adminService.getTrend(n);
+  }
+
   @Get('devices')
   async getDeviceList(
     @Query('page') page?: string,
