@@ -22,14 +22,10 @@ from PIL import Image
 
 # 检测灰色方差时, 低方差判空格的阈值 (0-255)
 BLANK_STD_THRESHOLD = 20.0
-# gutter 探测时, 中央探测带范围 (占边长比例)
-BAND_LO, BAND_HI = 0.30, 0.70
-# 判定"存在 gutter"的阈值: 中央带最小方差显著低于该带最大方差
+# 判定"存在 gutter"的阈值: 连续低方差带上限 = profile 最大方差的此比例
 GUTTER_VAR_RATIO = 0.35
-# 分隔线=全局最小方差处; 扩展该线时允许的方差近邻容差(绝对量), 避免把平坦内容(海水/天空)并入
+# 外白边/均质边识别时的方差容差上限(绝对量, 0-255)
 SEP_TOL = 2.0
-# 认为"干净细分隔线"的最大宽度(占边长比例); 超出说明合并到了空白/内容, 退化为窄切
-SEP_MAX_W_RATIO = 0.03
 
 
 def _smooth(vals: list[float], window: int) -> list[float]:
@@ -78,85 +74,75 @@ def _profiles(gray: Image.Image, px, step: int = 2) -> tuple[list[float], list[f
     return row_var, col_var
 
 
-def _sep_line(prof: list[float]) -> tuple[int, int] | None:
-    """在中央带内定位"细分隔线"(白色净线), 返回 [start, end) (半开).
+def _gutter_bands(prof: list[float], rel_thr: float = GUTTER_VAR_RATIO,
+                  min_w: int = 2) -> list[tuple[int, int]]:
+    """返回连续低方差 band(分隔 gutter/白线/留白)列表 [start, end)。
 
-    策略: 分隔线是方差接近全局最小值的干净白线; 从最小方差点向两侧扩展,
-    只并入方差仍接近最小值的邻近位置(绝对容差 SEP_TOL), 从而不把平坦内容(海水/天空)
-    悄悄合并成一条巨型"分隔带"。若扩展后宽度过大(说明实际是空白/内容大块),
-    则退化为取最小方差点附近一个窄切, 保证切点不跑到内容深处。
+    只保留宽度 >= min_w 的带, 排除单点噪点。这是定位「可切割的缝隙」的依据:
+    真实格线是一条宽度一致的低方差带, 而不是单个极小方差点——只认波动区间、
+    不认单点, 就能避免把天空/空白里某个低方差点误当成格线切进内容。
     """
     n = len(prof)
-    lo = int(n * BAND_LO)
-    hi = min(int(n * BAND_HI), n - 1)
-    if hi <= lo:
-        hi = lo + 1
-    seg = prof[lo:hi + 1]
-    ref = max(seg) if seg else 1.0
+    ref = max(prof) if prof else 0.0
     if ref <= 1e-6:
-        return None  # 整带近乎无变化, 无法定位分隔线
-    # 必须存在"明显低于带内最大"的分隔线
-    if min(seg) > GUTTER_VAR_RATIO * ref:
-        return None
-    pos = lo + seg.index(min(seg))
-    tol = max(SEP_TOL, min(seg) * 1.5)
-    a = pos
-    while a - 1 >= lo and prof[a - 1] < min(seg) + tol:
-        a -= 1
-    b = pos
-    while b + 1 <= hi and prof[b + 1] < min(seg) + tol:
-        b += 1
-    b += 1
-    max_w = max(1, int(n * SEP_MAX_W_RATIO))
-    if b - a > max_w:
-        # 扩展过宽 = 误把平坦内容/空白当分隔线 -> 只按最小方差点做窄切, 安全不伤内容
-        a, b = pos, pos + 1
-    return a, b
+        return []
+    thr = rel_thr * ref
+    bands: list[tuple[int, int]] = []
+    i = 0
+    while i < n:
+        if prof[i] <= thr:
+            j = i
+            while j < n and prof[j] <= thr:
+                j += 1
+            if j - i >= min_w:
+                bands.append((i, j))
+            i = j
+        else:
+            i += 1
+    return bands
 
 
-def _sep_lines(prof: list[float], count: int) -> list[tuple[int, int]]:
-    """定位 count-1 条内部分隔线, 返回各分隔带 [start, end) (升序, 半开)。
+def _sep_lines(prof: list[float], count: int) -> list[int]:
+    """定位 count-1 条分界切点(prof 索引, 升序)。
 
-    count==2 时沿用 _sep_line 的中央带逻辑(保持 2x2 行为完全不变);
-    count>=3 时按等分位置推出预期边界, 在每个预期边界附近的小窗口内
-    套用同一套「最小方差 + 容差扩展 + 过宽退化窄切」逻辑。
-    定位不到的分隔线返回该等分位置的零宽退化带, 调用方得到紧邻的两格。
+    原则(修复「裁到上下两格中间区域」的关键):
+      * 只在「期望等分位置近邻(±win)」内存在真实 gutter 带时才切, 切在带的中心,
+        从而剔除白线并保证切的是缝隙而不是内容;
+      * 近邻内找不到 gutter 时, 退回该期望等分位置做均分切——绝不把切点投进
+        高方差的内容区(那正是旧实现把切点落在人物/场景中间的最大原因)。
     """
     n = len(prof)
-    if count <= 1:
-        return []
-    if count == 2:
-        band = _sep_line(prof)
-        return [band if band else (n // 2, n // 2)]
+    if count <= 1 or n <= 2:
+        return [n // 2] * max(0, count - 1)
+    min_w = max(2, int(n * 0.004))
+    bands = [b for b in _gutter_bands(prof) if b[1] - b[0] >= min_w]
     span = n / count
-    win = max(3, int(span * 0.35))
-    out: list[tuple[int, int]] = []
-    for i in range(1, count):
-        center = int(round(span * i))
-        lo = max(1, center - win)
-        hi = min(n - 1, center + win)
-        seg = prof[lo:hi + 1]
-        ref = max(seg) if seg else 0.0
-        if ref <= 1e-6 or min(seg) > GUTTER_VAR_RATIO * ref:
-            out.append((center, center))     # 无明显分隔线 -> 零宽退化带
-            continue
-        pos = lo + seg.index(min(seg))
-        tol = max(SEP_TOL, min(seg) * 1.5)
-        a, b = pos, pos
-        while a - 1 >= lo and prof[a - 1] < min(seg) + tol:
-            a -= 1
-        while b + 1 <= hi and prof[b + 1] < min(seg) + tol:
-            b += 1
-        b += 1
-        max_w = max(1, int(n * SEP_MAX_W_RATIO))
-        if b - a > max_w:
-            a, b = pos, pos + 1
-        out.append((a, b))
-    # 保证严格升序且不重叠
-    for i in range(1, len(out)):
-        if out[i][0] < out[i - 1][1]:
-            out[i] = (out[i - 1][1], max(out[i - 1][1] + 1, out[i][1]))
-    return out
+    win = max(3, int(span * 0.4))
+    cuts: list[int] = []
+    for k in range(1, count):
+        center = int(round(span * k))
+        lo, hi = max(0, center - win), min(n, center + win)
+        best: tuple[int, int] | None = None
+        best_d = float("inf")
+        for a, b in bands:
+            bc = (a + b) / 2.0
+            if lo <= bc <= hi:
+                d = abs(bc - center)
+                if d < best_d:
+                    best_d, best = d, (a, b)
+        if best is not None and best_d <= win:
+            cut = int(round((best[0] + best[1]) / 2.0))
+        else:
+            cut = center  # 无可靠缝隙 -> 均分, 不硬切内容
+        cuts.append(cut)
+    # 升序、不重叠、落在 [1, n-1]
+    prev = 0
+    result: list[int] = []
+    for c in cuts:
+        c = max(min(c, n - 1), prev + 1)
+        result.append(c)
+        prev = c
+    return result
 
 
 def _edge_rim(prof: list[float]) -> int | None:
@@ -247,9 +233,9 @@ def crop_grid(img: Image.Image, rows: int = 2, cols: int = 2):
     col_sm = _smooth(col_var, max(3, sw // 30))
     W, H = img.size
 
-    # 内部分隔线 (det 坐标, [start,end))
-    row_bands = _sep_lines(row_sep, rows)   # 横向分隔带(行方向)
-    col_bands = _sep_lines(col_sep, cols)   # 纵向分隔带(列方向)
+    # 内部分隔切点 (det 坐标, 单点; 对应两条相邻格的共用边界)
+    row_cuts = _sep_lines(row_sep, rows)   # 横向分隔切点(行方向)
+    col_cuts = _sep_lines(col_sep, cols)   # 纵向分隔切点(列方向)
 
     def sx(i) -> int:
         return int(round(i * W / sw))
@@ -268,20 +254,20 @@ def crop_grid(img: Image.Image, rows: int = 2, cols: int = 2):
         if left:
             if c <= 0:
                 return sx(left_trim) if left_trim is not None else 0
-            return sx(col_bands[c - 1][1])
+            return sx(col_cuts[c - 1])
         if c >= cols - 1:
             return W - sx(right_trim) if right_trim is not None else W
-        return sx(col_bands[c][0])
+        return sx(col_cuts[c])
 
     def row_edge(r: int, top: bool) -> int:
         """第 r 行的上/下边界(不含白线); r 超出范围时退回整幅边界。"""
         if top:
             if r <= 0:
                 return sy(top_trim) if top_trim is not None else 0
-            return sy(row_bands[r - 1][1])
+            return sy(row_cuts[r - 1])
         if r >= rows - 1:
             return H - sy(bottom_trim) if bottom_trim is not None else H
-        return sy(row_bands[r][0])
+        return sy(row_cuts[r])
 
     boxes: list[tuple[int, int, int, int]] = []
     for r in range(rows):

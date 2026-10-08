@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """线上模板批量生产脚本：按参考图姿势生成 9 姿势效果图 + 9 剪影图。
 
@@ -41,7 +41,7 @@ OUT_ROOT = ROOT / "online_templates"
 HAPI_SCRIPT = SCRIPT_DIR / "gpt_image2.py"
 MASS_SCRIPT = SCRIPT_DIR / "gen_image.py"
 
-HAPI_KEY = "sk-8d0149c3e8dbf782ed1356b0be5e25579121eef8326c29db64884786bdf959df"
+HAPI_KEY = "sk-ra-QGXBDTeNXX08c0Ae36c4CWbBBrNyQ4xO"
 HAPI_MODEL = "gpt-image-2"
 MASS_MODEL = "qwen-image-3.0-pro"   # MaaS 可用图像模型（doubao-seedream-5-0 当前无可用渠道）
 SIZE = "3:4"                 # 竖构图（与模板 aspectRatio 一致）

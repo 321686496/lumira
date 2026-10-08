@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>如画 Lumira · 抖音 MG 动画成片（HTML 演示版）</title>
+<style>
+  :root{
+    --bg0:#0f0c1a; --bg1:#1a1230; --accent:#b57bff; --accent2:#ffb45b; --pink:#ff7ad9;
+    --card:#170f2b; --line:rgba(255,255,255,.08); --txt:#f4efff; --mut:#9a8fbe;
+    --w:396px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{margin:0;min-height:100vh;background:radial-gradient(120% 130% at 50% 0%,#2a1f4a,#0f0c1a 60%);
+    display:flex;gap:26px;align-items:center;justify-content:center;padding:24px;flex-wrap:wrap;
+    font-family:-apple-system,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;color:var(--txt)}
+
+  /* 舞台 9:16 */
+  .stage{position:relative;width:var(--w);height:calc(var(--w)*16/9);max-height:92vh;flex:0 0 auto;
+    border-radius:30px;overflow:hidden;background:linear-gradient(165deg,#2b2050,#161040 55%,#0d0a1f);
+    box-shadow:0 30px 70px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.06)}
+  /* 背景装饰 */
+  .orb{position:absolute;border-radius:50%;filter:blur(40px);opacity:.5;pointer-events:none}
+  .orb.a{width:260px;height:260px;background:radial-gradient(circle,#b57bff,transparent 70%);top:-60px;left:-60px;animation:drift 9s ease-in-out infinite}
+  .orb.b{width:300px;height:300px;background:radial-gradient(circle,#ff9d4d,transparent 70%);bottom:-90px;right:-80px;animation:drift 11s ease-in-out infinite reverse}
+  .orb.c{width:180px;height:180px;background:radial-gradient(circle,#ff7ad9,transparent 70%);top:38%;left:60%;animation:drift 8s ease-in-out infinite}
+  @keyframes drift{0%,100%{transform:translate(0,0)}50%{transform:translate(18px,-14px)}}
+  .dots{position:absolute;inset:0;opacity:.5;pointer-events:none;
+    background-image:radial-gradient(rgba(255,255,255,.16) 1px,transparent 1.4px);background-size:22px 22px}
+  .shine{position:absolute;inset:0;pointer-events:none;z-index:1;
+    background:radial-gradient(60% 40% at 50% 0,rgba(255,255,255,.14),transparent 70%)}
+
+  /* 顶栏 */
+  .brand{position:absolute;top:18px;left:20px;right:20px;z-index:8;display:flex;align-items:center;gap:9px}
+  .brand .logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(145deg,#fff,#e6d6ff);flex:0 0 auto;
+    box-shadow:0 6px 16px rgba(181,123,255,.5)}
+  .brand .nm{font-weight:800;font-size:15px;letter-spacing:1px}
+  .brand .tag{margin-left:auto;font-size:11px;color:var(--mut);letter-spacing:1px}
+
+  /* 手机样机 */
+  .phone{position:absolute;top:64px;left:50%;transform:translateX(-50%);width:74%;z-index:3;
+    background:linear-gradient(150deg,#0b0812,#05040a);border-radius:30px;padding:8px;
+    box-shadow:0 26px 60px rgba(0,0,0,.55),0 0 0 1.5px rgba(255,255,255,.1),0 0 30px rgba(181,123,255,.18);
+    animation:phonefloat 5s ease-in-out infinite}
+  @keyframes phonefloat{0%,100%{margin-top:0}50%{margin-top:-10px}}
+  .notch{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:44%;height:16px;border-radius:20px;
+    background:#000;z-index:5}
+  .screens{position:relative;height:0;padding-bottom:205%;border-radius:22px;overflow:hidden;background:#0a0714}
+  .scr{position:absolute;inset:0;will-change:transform,opacity}
+  .scr img{width:100%;height:100%;object-fit:cover;display:block}
+  .scr .shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(5,3,12,.05) 40%,rgba(5,3,12,.5) 100%)}
+
+  /* 手势光标 */
+  .gesture{position:absolute;z-index:6;width:56px;height:56px;border-radius:50%;
+    background:rgba(255,255,255,.1);border:2.5px solid #fff;
+    box-shadow:0 0 0 5px rgba(255,255,255,.25),0 0 24px rgba(255,255,255,.6);pointer-events:none;
+    opacity:0}
+  .gesture::after{content:"";position:absolute;inset:14px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--pink));filter:blur(3px)}
+  .touch{transform:translate(-50%,-50%)}
+  .rip{position:absolute;z-index:6;width:70px;height:70px;border-radius:50%;border:2px solid rgba(255,255,255,.5);
+    pointer-events:none;opacity:0}
+
+  /* 功能浮卡 */
+  .fcards{position:absolute;left:20px;right:20px;top:120px;z-index:7;display:flex;flex-direction:column;gap:9px}
+  .fcard{display:flex;align-items:center;gap:10px;background:rgba(12,8,26,.55);border:1px solid var(--line);
+    backdrop-filter:blur(10px);border-radius:15px;padding:10px 13px;transform:translateX(-70px);opacity:0;
+    box-shadow:0 10px 24px rgba(0,0,0,.35)}
+  .fcard .ic{width:34px;height:34px;flex:0 0 auto;border-radius:10px;display:flex;align-items:center;justify-content:center;
+    font-size:17px;background:linear-gradient(145deg,#fff2,#fff1)}
+  .fcard .t{line-height:1.2}
+  .fcard .t b{display:block;font-size:14px}
+  .fcard .t i{font-style:normal;font-size:11px;color:var(--mut)}
+  .scene.active .fcard.go{animation:cardin .55s cubic-bezier(.2,.9,.3,1.3) forwards}
+  .scene.active .fcard.go:nth-child(1){animation-delay:1s}
+  .scene.active .fcard.go:nth-child(2){animation-delay:1.5s}
+  .scene.active .fcard.go:nth-child(3){animation-delay:2s}
+  @keyframes cardin{to{transform:none;opacity:1}}
+
+  /* 大字报标题 */
+  .ttl{position:absolute;left:20px;right:20px;bottom:120px;z-index:7;text-align:center;
+    transform:translateY(30px);opacity:0}
+  .ttl.go{animation:ttlin .5s .4s cubic-bezier(.2,.9,.3,1.2) forwards}
+  @keyframes ttlin{to{transform:none;opacity:1}}
+  .ttl .big{font-size:22px;font-weight:900;line-height:1.25;letter-spacing:.5px}
+  .ttl .big span{background:linear-gradient(90deg,var(--accent),var(--pink),var(--accent2));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .ttl .small{font-size:12px;color:var(--mut);margin-top:7px;letter-spacing:.3px}
+
+  /* 底部口号字幕 */
+  .motto{position:absolute;left:16px;right:16px;bottom:26px;z-index:7;text-align:center;
+    background:rgba(12,8,26,.6);border:1px solid var(--line);backdrop-filter:blur(8px);
+    border-radius:16px;padding:11px 14px;transform:translateY(18px);opacity:0}
+  .motto.go{animation:mod .45s .7s cubic-bezier(.2,.9,.3,1.15) forwards}
+  @keyframes mod{to{transform:none;opacity:1}}
+  .motto p{margin:0;font-size:13.5px;line-height:1.55;font-weight:600;color:var(--txt)}
+  .motto p b{color:#ffd9a0}
+
+  /* 收尾大logo */
+  .outro{position:absolute;inset:0;z-index:4;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:14px;opacity:0;transform:scale(.9);background:radial-gradient(90% 70% at 50% 40%,#2e2155,#0d0a1f)}
+  .outro.go{animation:out .6s cubic-bezier(.2,.9,.3,1.2) forwards}
+  @keyframes out{to{transform:none;opacity:1}}
+  .outro .lg{width:96px;height:96px;border-radius:26px;background:linear-gradient(145deg,#fff,#e6d6ff);
+    box-shadow:0 0 0 6px rgba(181,123,255,.25),0 20px 50px rgba(181,123,255,.4);
+    animation:breath 2.6s ease-in-out infinite}
+  .outro .lg::before{content:"";display:block;width:34px;height:8px;margin:40px auto 0;border-radius:10px;background:linear-gradient(90deg,var(--accent),var(--pink))}
+  @keyframes breath{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+  .outro .nm{font-size:26px;font-weight:900;letter-spacing:2px}
+  .outro .nm span{background:linear-gradient(90deg,#fff,var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .outro .st{font-size:12px;color:var(--mut);letter-spacing:2px}
+
+  .eq{position:absolute;right:18px;bottom:84px;z-index:8;display:flex;gap:3px;align-items:flex-end;height:16px}
+  .eq i{width:4px;background:var(--accent);border-radius:2px;animation:eq .8s ease-in-out infinite}
+  @keyframes eq{0%,100%{height:4px}50%{height:16px}}
+
+  /* 面板 */
+  .panel{width:var(--w);flex:0 0 auto;background:#15102b;border-radius:22px;padding:20px;border:1px solid var(--line);
+    box-shadow:0 22px 50px rgba(0,0,0,.4)}
+  .panel h1{font-size:17px;margin:0 0 4px}
+  .panel .meta{color:var(--mut);margin:0 0 14px;font-size:12px}
+  .progress{height:6px;background:rgba(255,255,255,.1);border-radius:6px;overflow:hidden}
+  .bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--pink));transition:width .2s linear}
+  .time{display:flex;justify-content:space-between;color:var(--mut);margin:6px 2px 12px;font-size:12px}
+  .controls{display:flex;gap:10px}
+  .controls button{flex:1;border:none;cursor:pointer;font-weight:700;font-size:14px;padding:11px 0;border-radius:12px;color:#fff;
+    background:linear-gradient(135deg,var(--accent),var(--pink));transition:filter .15s,transform .1s}
+  .controls button:active{transform:scale(.97)}
+  .controls button.ghost{background:transparent;border:1.5px solid var(--accent)}
+  .scenelist{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+  .row{display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;border-radius:8px}
+  .row:hover{background:rgba(255,255,255,.04)}.row .dot{width:8px;height:8px;border-radius:4px;background:rgba(255,255,255,.2)}
+  .row.on .dot{background:var(--pink);box-shadow:0 0 10px var(--pink)}.row.on{font-weight:700}
+  .row .lab{flex:1;color:var(--mut);font-size:12px}.row.on .lab{color:var(--txt)}
+  .note{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);color:var(--mut);font-size:11.5px;line-height:1.7}
+
+  /* 场景层掩码 */
+  .scn{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .35s}
+  .scn.active{opacity:1;pointer-events:auto}
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="orb a"></div><div class="orb b"></div><div class="orb c"></div>
+  <div class="dots"></div><div class="shine"></div>
+
+  <div class="brand">
+    <div class="logo"></div><span class="nm">如画 · LUMIRA</span>
+    <span class="tag">MG 功能介绍</span>
+  </div>
+
+  <!-- 手机样机 -->
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="screens">
+      <div class="scr active"><img src="app首页.png" alt="app首页"/><div class="shade"></div></div>
+      <div class="scr"><img src="搜索页.png" alt="搜索"/><div class="shade"></div></div>
+      <div class="scr"><img src="Screenshot_2026-10-08T103036.png" alt="取景框剪影"/><div class="shade"></div></div>
+      <div class="scr"><img src="Screenshot_2026-10-08T103555.png" alt="实时调参"/><div class="shade"></div></div>
+      <div class="scr"><img src="我的精选集页.png" alt="精选集"/><div class="shade"></div></div>
+      <div class="scr"><img src="今日灵感页.png" alt="今日灵感"/><div class="shade"></div></div>
+    </div>
+  </div>
+
+  <div class="gesture" id="gesture"></div>
+  <div class="rip" id="rip"></div>
+  <div class="fcards" id="fcards"></div>
+  <div class="ttl" id="ttl"></div>
+  <div class="motto" id="motto"><p></p></div>
+  <div class="outro" id="outro"><div class="lg"></div><div class="nm">如画 <span>Lumira</span></div>
+    <div class="st">iOS · 鸿蒙 已上线　搜「如画 Lumira」</div></div>
+  <div class="eq"><i></i><i></i><i></i></div>
+</div>
+
+<div class="panel">
+  <h1>如画 Lumira · MG 动画成片（HTML 演示版）</h1>
+  <p class="meta">9:16 竖屏 · 约 40s · 真实界面 + 手势动效 + 功能浮卡 · 脚本见文档 D</p>
+  <div class="progress"><div class="bar" id="bar"></div></div>
+  <div class="time"><span id="tcur">0.0s</span><span id="ttot">40.0s</span></div>
+  <div class="controls"><button id="play" class="ghost">▶ 播放</button><button id="replay">↺ 重播</button></div>
+  <div class="scenelist" id="scenelist"></div>
+  <div class="note">仿 vibecoding / MG 动画 App 介绍：手机样机滑动切换 + 手势光标演示 + 功能浮卡 + 潮流大字报 + 底部口播字幕。真实界面走截图，logo/浮卡装饰为程序合成。</div>
+</div>
+
+<script>
+  const stage=document.querySelector('.stage'), scr=document.querySelectorAll('.scr');
+  const sceneList=document.getElementById('scenelist'), bar=document.getElementById('bar'), tcur=document.getElementById('tcur');
+  const ges=document.getElementById('gesture'), rip=document.getElementById('rip');
+  const fcards=document.getElementById('fcards'), ttl=document.getElementById('ttl'), motto=document.getElementById('motto');
+  const mp=motto.querySelector('p'), outro=document.getElementById('outro'), playBtn=document.getElementById('play');
+
+  // cues
+  const cues=[
+    {dur:5,scr:0,gest:'none',ttl:['一切从首页开始','全部入口，一屏进'],
+     cards:[['📷','首页 · 模板库','看今天拍什么'],['🔍','搜索模板','输关键词直达']],
+     motto:'看到好看的风景，想美美来一张——打开如画，从这里开始'},
+    {dur:6,scr:1,gest:'swipeL',ttl:['关键词一搜','找到匹配模板'],
+     cards:[['🔍','通用搜索','好看模板/风景前都能用'],['✅','一键应用','合适就直接套']],
+     motto:'在某个位置、某片好看的风景前，输个关键词一搜，一键应用'},
+    {dur:7,scr:2,gest:'tap',ttl:['取景框叠好剪影','照着站就出片'],
+     cards:[['🧍','构图辅助','人物放哪一目了然'],['🙆','pose 引导','手/腿/机位怎么摆'],['✨','照着拍','按剪影对位即可']],
+     motto:'构图辅助、pose 引导——取景框剪影直接告诉你往哪站'},
+    {dur:7,scr:3,gest:'swipeR',ttl:['后期调参','所见即所得'],
+     cards:[['🎛️','后期调参','亮度/对比/色调'],['⚡','实时生效','取景器里直接看成片']],
+     motto:'后期参数实时生效在取景器里，你实时就能看到调完的画面'},
+    {dur:6,scr:4,gest:'tap',ttl:['探店打卡','精选集晒片'],
+     cards:[['🗺️','探店打卡','记录好店好风景'],['🖼️','精选集','好片组九宫格晒出去']],
+     motto:'拍摄模板、探店打卡、精选集九宫格——拍完直接晒成海报'},
+    {dur:6,scr:5,gest:'swipeL',ttl:['今日灵感','把拍照养成习惯'],
+     cards:[['💡','今日灵感','推荐今天拍什么'],['🎯','今日挑战','突破新题材'],['🎓','美学院','越拍越会拍']],
+     motto:'今日灵感 + 今日挑战 + 摄影美学院，把拍照养成小习惯'},
+    {dur:5,scr:0,gest:'none',ttlB:1,ttl:['',''],
+     cards:null,motto:'套一个模板、照着拍、美美出片'}
+  ];
+  const labels=['首页 · 入口','关键词搜模板','取景框剪影','实时调参','探店/精选集','灵感/美学院','收尾'];
+  cues.forEach((c,i)=>{
+    const r=document.createElement('div'); r.className='row';
+    r.innerHTML='<span class="dot"></span><span class="lab">'+(i+1)+'. '+labels[i]+'</span><span class="time">'+c.dur+'s</span>';
+    r.onclick=()=>{ if(state)pause(); seek(i); }; sceneList.appendChild(r);
+  });
+  const rows=sceneList.querySelectorAll('.row');
+  const total=cues.reduce((a,c)=>a+c.dur,0);
+
+  let idx=0,playFrom=0,state=false,raf=null,last=0;
+
+  function animate(el,kf,opt){ el.getAnimations().forEach(a=>a.cancel()); return el.animate(kf,opt); }
+
+  function gesture(i){
+    const c=cues[i];
+    if(c.gest==='none'){ges.style.opacity=0; return;}
+    // 定位到手机屏中部
+    const rect=document.querySelector('.phone .screens').getBoundingClientRect();
+    const s=rect.width;
+    ges.style.transform='translate(-50%,-50%)'; ges.style.left=(rect.left+rect.width/2)+'px'; ges.style.top=(rect.top+rect.height/2)+'px';
+    ges.style.opacity=1;
+    if(c.gest==='tap'){
+      animate(ges,[{transform:'translate(-50%,-50%) scale(.9)',opacity:0},{transform:'translate(-50%,-50%) scale(1)',opacity:1},{transform:'translate(-50%,-50%) scale(.65)',opacity:0}],{duration:1400,delay:400});
+      const rr=rip; rip.style.left=ges.style.left; rip.style.top=ges.style.top; rip.style.opacity=1;
+      animate(rip,[{transform:'scale(.6)',opacity:.9},{transform:'scale(1.8)',opacity:0}],{duration:900,delay:500});
+    } else {
+      const dir=c.gest==='swipeL'? -1 : 1;
+      animate(ges,[{transform:'translate(-50%,-50%) translateX(0)',opacity:1},{transform:`translate(-50%,-50%) translateX(${dir*70}px)`,opacity:.4}],{duration:1100,delay:800,easing:'cubic-bezier(.2,.9,.3,1)'});
+    }
+    setTimeout(()=>{ges.style.opacity=0;},2500);
+  }
+
+  function render(i){
+    const c=cues[i];
+    scr.forEach((s,k)=>s.classList.toggle('active',k===c.scr));
+    rows.forEach((r,k)=>r.classList.toggle('on',k===i));
+    // 屏幕滑动动画
+    const sc=scr[c.scr]; sc.getAnimations().forEach(a=>a.cancel());
+    sc.animate([{clipPath:'inset(0 0 0 100%)'},{clipPath:'inset(0 0 0 0%)'}],{duration:500,easing:'cubic-bezier(.6,.05,.3,1)'});
+    // 大字报
+    ttl.innerHTML = c.ttl[0]?  '<div class="big">'+c.ttl[0]+'</div><div class="small">'+(c.ttl[1]||'')+'</div>' : '';
+    ttl.classList.remove('go'); void ttl.offsetWidth; ttl.classList.add('go');
+    // 浮卡
+    fcards.innerHTML=''; if(c.cards){ c.cards.forEach(x=>{const d=document.createElement('div');d.className='fcard go';
+      d.innerHTML='<div class="ic">'+x[0]+'</div><div class="t"><b>'+x[1]+'</b><i>'+x[2]+'</i></div>';fcards.appendChild(d);}); }
+    // 字幕
+    mp.innerHTML=c.motto; motto.classList.remove('go'); void motto.offsetWidth; motto.classList.add('go');
+    // 收尾
+    outro.classList.toggle('go', !!c.ttlB);
+    gesture(i);
+  }
+  function seek(i){ idx=i; playFrom=0; render(i); sync(); }
+  function sync(){ const g=cues.slice(0,idx).reduce((a,x)=>a+x.dur,0)+playFrom; bar.style.width=(g/total*100)+'%'; tcur.textContent=g.toFixed(1)+'s'; }
+
+  function tick(now){
+    if(state){ const dt=(now-last)/1000; last=now; playFrom+=dt; const c=cues[idx];
+      if(playFrom>=c.dur){ if(idx<cues.length-1) seek(idx+1); else {state=false;playBtn.textContent='▶ 播放';cancelAnimationFrame(raf);sync();return;} }
+      sync(); raf=requestAnimationFrame(tick);
+    }
+  }
+  function play(){ if(!state){state=true;last=performance.now();playBtn.textContent='⏸ 暂停';raf=requestAnimationFrame(tick);} else pause(); }
+  function pause(){ state=false; playBtn.textContent='▶ 播放'; cancelAnimationFrame(raf); }
+  function replay(){ state=false;cancelAnimationFrame(raf);seek(0);state=true;playBtn.textContent='⏸ 暂停';last=performance.now();raf=requestAnimationFrame(tick); }
+  playBtn.onclick=play; document.getElementById('replay').onclick=replay;
+  ttot.textContent=total+'.0s'; seek(0);
+</script>
+</body>
+</html>

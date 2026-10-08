@@ -241,7 +241,10 @@ def main() -> int:
     ap.add_argument("--timeout", type=int, default=300)
     ap.add_argument("--no-grid", action="store_true",
                     help="不做宫格打包, 每张图单独跑一次单图编辑(部分渠道对多图输入会上游超时时使用)")
-    ap.add_argument("--keep-grids", action="store_true", help="保留中间宫格拼图到 out/_grids")
+    ap.add_argument("--no-keep-grids", dest="keep_grids", action="store_false",
+                    help="不保留中间宫格拼图(默认保留到 out/_grids)")
+    ap.add_argument("--anchor", default=None,
+                    help="显式指定衣着锚点图(单张/纠错重编辑时维持衣着统一)")
     ap.add_argument("--dry-run", action="store_true", help="只打印分批/锚点计划, 不调接口")
     args = ap.parse_args()
 
@@ -307,7 +310,7 @@ def main() -> int:
     grids_dir = os.path.join(args.out, "_grids")
     os.makedirs(grids_dir, exist_ok=True)
 
-    anchor_path: str | None = None  # 首批首张成片, 用作后续批次衣着锚点
+    anchor_path: str | None = args.anchor  # 显式锚点优先; 否则首批首张成片用作后续批次衣着锚点
 
     for bi, idxs in enumerate(batches, 1):
         targets = [args.images[i] for i in idxs]

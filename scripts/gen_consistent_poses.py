@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(r"e:\Project\photo_post\selfie_templates")
 SCRIPT = r"e:\Project\photo_post\scripts\gpt_image2.py"
-KEY = "sk-8d0149c3e8dbf782ed1356b0be5e25579121eef8326c29db64884786bdf959df"
+KEY = "sk-ra-QGXBDTeNXX08c0Ae36c4CWbBBrNyQ4xO"
 MODEL = "gpt-image-2"
 SIZE = "3:4"
 ANCHOR = "anchor.png"

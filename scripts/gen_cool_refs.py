@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """用真实爆款照片做 img2img 参考，重新生成 5 套清冷模板 x4 姿势 = 20 张姿势参考图 (HAPI gpt-image-2)。
 每张以该模板的爆款参考图(风格/色调/人物)为底，改为对应姿势。记录 pose_images.json 便于断点。
 用法: python gen_cool_refs.py <start> <end>
@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(r"e:\Project\photo_post\selfie_templates")
 REFS = Path(r"e:\Project\photo_post\refs\cool")
 SCRIPT = r"e:\Project\photo_post\scripts\gpt_image2.py"
-KEY = "sk-8d0149c3e8dbf782ed1356b0be5e25579121eef8326c29db64884786bdf959df"
+KEY = "sk-ra-QGXBDTeNXX08c0Ae36c4CWbBBrNyQ4xO"
 MODEL = "gpt-image-2"
 SIZE = "3:4"
 

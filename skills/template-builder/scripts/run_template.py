@@ -293,8 +293,8 @@ def run_anti_infringement(pose_sources: list[str], work: Path, api_key: str = ""
         cmd += ["--max-per-call", str(max_per_call)]
     if ratio:
         cmd += ["--ratio", ratio]
-    if keep_grids:
-        cmd += ["--keep-grids"]
+    if not keep_grids:
+        cmd += ["--no-keep-grids"]
     if no_grid:
         cmd += ["--no-grid"]
     r = subprocess.run(cmd, capture_output=True, text=True,
@@ -404,8 +404,8 @@ def main() -> int:
                     help="有参考图时不走反侵权加工(直接当最终成片)")
     ap.add_argument("--no-split", action="store_true",
                     help="跳过宫格检测(输入已是逐张单图时使用, 避免纯色单图被误判拆分)")
-    ap.add_argument("--keep-grids", action="store_true",
-                    help="保留反侵权步骤的中间宫格拼图原图到 <out>/_anti_infringe/_grids/")
+    ap.add_argument("--no-keep-grids", dest="keep_grids", action="store_false",
+                    help="不保留反侵权步骤的中间宫格拼图(默认保留到 <out>/_anti_infringe/_grids/)")
     ap.add_argument("--anti-no-grid", action="store_true",
                     help="反侵权加工不做宫格打包, 每张单独编辑(渠道对多图输入超时时使用)")
     ap.add_argument("--parent", default="create_templates", help="输出父目录(默认 create_templates)")

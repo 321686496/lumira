@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """修复 pose_images.json 中为 0 字节/缺失的姿势图（重生成，保持人物一致）。
 用本文件夹内一个有效姿势图作为参考，图生图只改姿势 → 更新 pose_images.json。
 用法: python regen_missing_poses.py   (处理所有模板中损坏的姿势图)
@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(r"e:\Project\photo_post\selfie_templates")
 SCRIPT = r"e:\Project\photo_post\scripts\gpt_image2.py"
-KEY = "sk-8d0149c3e8dbf782ed1356b0be5e25579121eef8326c29db64884786bdf959df"
+KEY = "sk-ra-QGXBDTeNXX08c0Ae36c4CWbBBrNyQ4xO"
 MAX_TRY = 4
 TIMEOUT = 420
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """线上模板生产：樱花和服扇影人像（由小红书「和服 - KIKI」笔记整理，6 姿势）。
 
@@ -36,7 +36,7 @@ HAPI_SCRIPT = SCRIPT_DIR / "gpt_image2.py"
 MASS_SCRIPT = SCRIPT_DIR / "gen_image.py"
 
 BACKEND = "maas"            # hapi 额尽, 用 MaaS；可用 "hapi"/"maas"
-HAPI_KEY = "sk-8d0149c3e8dbf782ed1356b0be5e25579121eef8326c29db64884786bdf959df"
+HAPI_KEY = "sk-ra-QGXBDTeNXX08c0Ae36c4CWbBBrNyQ4xO"
 HAPI_MODEL = "gpt-image-2"
 MASS_MODEL = "qwen-image-3.0-pro"
 P_SIZE = "3:4"          # 与模板 aspectRatio 一致

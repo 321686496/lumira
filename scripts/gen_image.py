@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 MaaS 平台图片/视频生成脚本 (RouteAll 协议, 仅标准库, 零依赖)
@@ -34,7 +34,7 @@ import urllib.error
 import urllib.request
 
 BASE_URL = os.environ.get("MASS_BASE_URL", "https://mass.hzxmfg.com")
-API_KEY = os.environ.get("MASS_API_KEY", "sk-ra-c57TT8YRQu5khVviGeqcfYkNvtQAJAwU")
+API_KEY = os.environ.get("MASS_API_KEY", "sk-ra-QGXBDTeNXX08c0Ae36c4CWbBBrNyQ4xO")
 DEFAULT_MODEL = os.environ.get("MASS_MODEL", "doubao-seedream-5-0")
 
 # 禁用系统代理: urllib 默认会读 Windows/环境变量里的代理, 导致请求被代理劫持

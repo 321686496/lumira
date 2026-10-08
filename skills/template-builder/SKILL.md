@@ -44,11 +44,13 @@ skills/template-builder/
    - **有真实参考图** → 脚本自动调用 `anti-infringement-pose-edit/run_batch_edit.py` 对姿势图做换脸防侵权 + 统一衣着，得到 N 张干净成片姿势图（`--skip-anti-infringement` 可跳过）。
    - **无参考图** → 加 `--auto-gen`，脚本基于 `cfg.poses[i].description` 用引擎的文生图自动补姿势（默认 `qwen3pro`/MaaS，`--engine gpt2k` 走 HAPI）。
 
-4. **剪影**：对每张 `pose{i}.png` **单独一次图生图**（默认 `qwen3pro`/MaaS，`--engine gpt2k` 走 HAPI；提示词要求纯白底极简黑色线稿，只勾姿势轮廓），再用阈值 245 二值化转透明底线稿 → `pose{i}_sil.png`。逐个生成以保证姿势与姿势图一致、质量最高。
+4. **姿势图 QA 与纠错（必做）**：在姿势图加工（反侵权成片 或 auto-gen 成片）产出后，**Agent 用看图能力对每张 `pose{i}.png` 逐张视觉审查**，判据与纠错闭环见 `anti-infringement-pose-edit` 技能的「加工后 Agent 视觉 QA 与自动纠错」一节（对照参考原图 + cfg.poses 姿势描述 + `aspect_ratio`）。审查项：裁剪错位（人物被切/邻格串入）、人物/背景畸变、姿势/风格/画面一致性。某张不合格：内容缺陷→对 `pose{i}.png` 单图重编辑复查；裁剪缺陷→用保留的宫格 `_grids/batchN.png` 该格重裁或重跑该批。最多重试 3 次，仍不合格标记 `QA_FAIL` 并写入 `qa_report.md` 报告用户，不擅自交付。
 
-5. **组装文档**：生成 `pose_images.json`（姿势名→文件）与 `template.pptpl`（与后端在线模板同构，可被导入）。
+5. **剪影**：对每张 `pose{i}.png` **单独一次图生图**（默认 `qwen3pro`/MaaS，`--engine gpt2k` 走 HAPI；提示词要求纯白底极简黑色线稿，只勾姿势轮廓），再用阈值 245 二值化转透明底线稿 → `pose{i}_sil.png`。逐个生成以保证姿势与姿势图一致、质量最高。剪影生成后同样抽查与对应姿势图姿势比例是否吻合。
 
-6. **输出**：全部产物写入 **`create_templates/<key>/`**（根目录下）。
+6. **组装文档**：生成 `pose_images.json`（姿势名→文件）与 `template.pptpl`（与后端在线模板同构，可被导入）。
+
+7. **输出**：全部产物写入 **`create_templates/<key>/`**（根目录下）。
 
 ## 用法
 

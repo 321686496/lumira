@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """批量生成 4 套清冷模板(按真实爆款重切)x4 姿势 = 16 张姿势参考图 (HAPI gpt-image-2 文生图，风格锚定真实爆款)。
 用法: python gen_cool_poses.py <start> <end>
 每个模板目录内记录 pose_images.json (pose name -> filename) 便于断点续跑。
@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(r"e:\Project\photo_post\selfie_templates")
 SCRIPT = r"e:\Project\photo_post\scripts\gpt_image2.py"
-KEY = "sk-8d0149c3e8dbf782ed1356b0be5e25579121eef8326c29db64884786bdf959df"
+KEY = "sk-ra-QGXBDTeNXX08c0Ae36c4CWbBBrNyQ4xO"
 MODEL = "gpt-image-2"
 SIZE = "3:4"
 
