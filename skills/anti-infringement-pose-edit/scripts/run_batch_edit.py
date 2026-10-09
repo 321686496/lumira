@@ -40,12 +40,18 @@ if _SCRIPTS not in sys.path:
 
 import gpt_image2  # noqa: E402
 
+# 构图保持硬约束(拼进默认提示词, 单图/宫格共用): 防止生图模型把原图重绘成紧凑特写
+COMPOSE_KEEP = (
+    "严格保持每张原图的构图与取景：景别（全身/半身/特写）、人物在画面中的位置与大小占比、"
+    "头顶与脚下及四周的环境留白，都必须与原图完全一致；"
+    "禁止推近变焦、禁止裁切为特写、禁止改变留白与人物位置。"
+)
 # 默认编辑提示词(用户给定)
 BASE_PROMPT = (
     "修改一下这些图中人物的面部，变得更精致、更帅气美丽、有辨识度；"
     "优化衣着，使其更时髦有质感、贴合场景，同时风格统一、配色协调；"
     "仅修改人物面部与衣着，使其完全看不出与原图是同一个人，以避免侵权；"
-    "并统一这几张图中人物的衣着。"
+    "并统一这几张图中人物的衣着。" + COMPOSE_KEEP
 )
 # 多图打包成宫格的指令(布局在运行时按批内张数生成)
 def grid_suffix(rows: int, cols: int) -> str:
@@ -63,6 +69,7 @@ SINGLE_PROMPT = (
     "修改一下这张图中人物的面部，变得更精致、更帅气美丽、有辨识度；"
     "优化衣着，使其更时髦有质感、贴合场景，同时风格统一、配色协调；"
     "仅修改人物面部与衣着，使其完全看不出与原图是同一个人，以避免侵权。"
+    + COMPOSE_KEEP +
     "直接输出这张修改后的单张人物照片，保持原姿势与构图。"
 )
 
@@ -198,15 +205,19 @@ def split_and_normalize(grid_img, n: int, ratio: float) -> tuple:
 
 def run_single(client, model, target: str, out_dir: str, prefix: str,
                size_single: str, timeout: int, ratio: float,
-               anchor: str | None = None, custom_prompt: bool = False) -> str | None:
+               anchor: str | None = None, custom_prompt: bool = False,
+               hint: str = "", input_fidelity: str | None = None) -> str | None:
     """单图编辑: 直接产出一张成片(附锚点参考以统一衣着), 并归一化到目标尺寸。"""
     imgs = [_load_tuple(target)]
     prompt = SINGLE_PROMPT + gpt_image2.ratio_note(ratio)
+    if hint and not custom_prompt:
+        prompt += f"构图要求：{hint}。"
     if anchor and not custom_prompt:
         prompt += ANCHOR_NOTE
         imgs.append(_load_tuple(anchor))
     size = gpt_image2.resolve_size(size_single, imgs[0][2])
-    status, resp = client.edit(model, prompt, imgs, size=size, n=1, timeout=timeout)
+    status, resp = client.edit(model, prompt, imgs, size=size, n=1, timeout=timeout,
+                               input_fidelity=input_fidelity)
     if status != 200 or not resp.get("data"):
         print(f"    [回退失败] HTTP {status}: {resp}", file=sys.stderr)
         return None
@@ -245,6 +256,9 @@ def main() -> int:
                     help="不保留中间宫格拼图(默认保留到 out/_grids)")
     ap.add_argument("--anchor", default=None,
                     help="显式指定衣着锚点图(单张/纠错重编辑时维持衣着统一)")
+    ap.add_argument("--hints", default=None,
+                    help="按输入顺序的构图提示, 用 ';;' 分隔与图片一一对应; "
+                         "默认提示词下宫格按格序拼入、单图编辑附带对应提示")
     ap.add_argument("--dry-run", action="store_true", help="只打印分批/锚点计划, 不调接口")
     args = ap.parse_args()
 
@@ -290,6 +304,13 @@ def main() -> int:
     os.makedirs(args.out, exist_ok=True)
 
     base_prompt = (args.prompt or BASE_PROMPT) + gpt_image2.ratio_note(ratio)
+    # 构图提示(与输入顺序对齐) + hapi 通道启用 input_fidelity=high(提高对输入构图的保真)
+    hints = [h.strip() for h in (args.hints or "").split(";;")] if args.hints else []
+
+    def hint_for(idx: int) -> str:
+        return hints[idx] if 0 <= idx < len(hints) else ""
+
+    fidelity = "high" if eng["platform"] == "hapi" else None
 
     outputs: list[str | None] = [None] * len(args.images)  # 与输入顺序对齐
 
@@ -299,7 +320,8 @@ def main() -> int:
             print(f"[单图 {i+1}/{len(args.images)}] {src}")
             outputs[i] = run_single(client, model, src, args.out, f"out{i+1}",
                                     args.size_single, args.timeout, ratio,
-                                    None, bool(args.prompt))
+                                    None, bool(args.prompt),
+                                    hint=hint_for(i), input_fidelity=fidelity)
         print("\n==== 结果(按输入顺序) ====")
         for i, (src, out) in enumerate(zip(args.images, outputs), 1):
             print(f"  {i}. {os.path.abspath(src)} -> {out or '[失败]'}")
@@ -323,10 +345,16 @@ def main() -> int:
             gi = idxs[0]
             outputs[gi] = run_single(client, model, targets[0], args.out,
                                      f"out{gi+1}", args.size_single, args.timeout,
-                                     ratio, anchor_path, bool(args.prompt))
+                                     ratio, anchor_path, bool(args.prompt),
+                                     hint=hint_for(gi), input_fidelity=fidelity)
             continue
 
         prompt = base_prompt + grid_suffix(rows, cols)
+        cell_hints = [hint_for(gi) for gi in idxs]
+        if not args.prompt and any(cell_hints):
+            # 构图提示按输出格序拼入(与输入顺序一一对应)
+            prompt += "各格构图要求（与输出格序一一对应）：" + \
+                      "; ".join(f"格{k+1}：{h}" for k, h in enumerate(cell_hints) if h) + "。"
         imgs = [_load_tuple(t) for t in targets]
         if anchor_path and not args.prompt:
             # 仅在使用默认提示词时注入锚点说明(自定义 prompt 时不叠加, 避免措辞冲突)
@@ -337,7 +365,8 @@ def main() -> int:
         size_arg = canvas_size(ratio, rows, cols)
         size = gpt_image2.resolve_size(size_arg)
         print(f"    画布 {size_arg}")
-        status, resp = client.edit(model, prompt, imgs, size=size, n=1, timeout=args.timeout)
+        status, resp = client.edit(model, prompt, imgs, size=size, n=1,
+                                   timeout=args.timeout, input_fidelity=fidelity)
         if status != 200 or not resp.get("data"):
             print(f"    [批次失败] HTTP {status}: {resp}", file=sys.stderr)
             # 逐张回退
@@ -374,7 +403,8 @@ def main() -> int:
                 print(f"    格{j+1} 空白/低质, 单图回退 {targets[j]}")
                 outputs[gi] = run_single(client, model, targets[j], args.out,
                                          f"out{gi+1}", args.size_single, args.timeout,
-                                         ratio, anchor_path, bool(args.prompt))
+                                         ratio, anchor_path, bool(args.prompt),
+                                         hint=hint_for(gi), input_fidelity=fidelity)
 
         # 记录锚点: 第一批的首张成片
         if bi == 1 and outputs[idxs[0]]:

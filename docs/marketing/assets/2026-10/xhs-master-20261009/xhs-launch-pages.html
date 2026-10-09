@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  @font-face { font-family:'NotoSerifSC'; src:local('思源宋体'); }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1242px; height:1656px; overflow:hidden; }
+  body { font-family:'NotoSerifSC','Source Han Serif SC','Noto Serif SC',serif; background:#FDFBF7; }
+  .page { position:relative; width:1242px; height:1656px; overflow:hidden;
+    background:url('file:///d:/app/projects/photo_post/docs/marketing/assets/2026-10/xhs-master-20261009/bg-page.png') center/cover no-repeat; }
+  .cover-bg { background:url('file:///d:/app/projects/photo_post/docs/marketing/assets/2026-10/xhs-master-20261009/bg-cover.png') center/cover no-repeat; }
+  .vf { position:absolute; inset:0; pointer-events:none; }
+  .vf i { position:absolute; width:84px; height:84px; border:0 solid rgba(169,138,82,.85); }
+  .vf i:nth-child(1){ top:44px; left:44px; border-top-width:5px; border-left-width:5px; border-top-left-radius:22px; }
+  .vf i:nth-child(2){ top:44px; right:44px; border-top-width:5px; border-right-width:5px; border-top-right-radius:22px; }
+  .vf i:nth-child(3){ bottom:44px; left:44px; border-bottom-width:5px; border-left-width:5px; border-bottom-left-radius:22px; }
+  .vf i:nth-child(4){ bottom:44px; right:44px; border-bottom-width:5px; border-right-width:5px; border-bottom-right-radius:22px; }
+
+  .brandrow { position:absolute; top:64px; width:100%; display:flex; align-items:center; justify-content:center; gap:26px; }
+  .brandrow .name { font-size:38px; font-weight:700; letter-spacing:8px; color:#3A362E; }
+  .brandrow .en { font-size:30px; letter-spacing:5px; color:#A98A52; }
+  .brandrow .dot { width:10px; height:10px; border-radius:50%; background:#C2A06B; }
+
+  .kicker { position:absolute; top:136px; width:100%; text-align:center; font-size:36px; color:#A98A52; letter-spacing:6px; }
+  .h1 { position:absolute; top:216px; width:100%; text-align:center; font-size:100px; font-weight:700; letter-spacing:6px; }
+  .h2 { position:absolute; top:352px; width:100%; text-align:center; font-size:112px; font-weight:700; letter-spacing:8px; }
+  .h2 .verm { color:#C7472F; }
+  .sub { position:absolute; top:500px; width:100%; text-align:center; font-size:37px; color:#57503F; font-weight:500; letter-spacing:4px; }
+
+  .badges { position:absolute; top:596px; width:100%; display:flex; justify-content:center; gap:28px; }
+  .badges span { font-size:34px; font-weight:700; letter-spacing:4px; color:#7A5C28;
+    background:rgba(255,254,251,.92); border:2px solid rgba(194,160,107,.75); border-radius:999px; padding:14px 40px;
+    box-shadow:0 12px 28px rgba(58,54,46,.10); }
+
+  .pains { position:absolute; top:560px; left:171px; width:900px; display:flex; flex-direction:column; gap:22px; }
+  .pains .pain-card { display:flex; align-items:center; gap:22px; background:#FFFEFB;
+    border:2px solid rgba(194,160,107,.75); border-radius:24px; padding:22px 34px;
+    box-shadow:0 16px 36px rgba(58,54,46,.13); }
+  .pains .x { flex:none; width:50px; height:50px; border-radius:50%; background:#C7472F; color:#FDFBF7;
+    display:flex; align-items:center; justify-content:center; font-size:29px; font-weight:700; }
+  .pains b { font-size:42px; font-weight:700; letter-spacing:3px; }
+  .pains em { font-style:normal; font-size:30px; color:#57503F; margin-left:auto; letter-spacing:1px; }
+  .pains.gold { left:171px; }
+  .pains.gold .pain-card { border-color:rgba(194,160,107,.9); }
+  .pains.gold .x { background:#C2A06B; }
+  .pains.gold b { font-size:40px; }
+  .pains.gold em { font-size:29px; }
+
+  .phone { position:absolute; left:50%; transform:translateX(-50%); background:#2A2622; border-radius:52px; padding:12px;
+    box-shadow:0 34px 70px rgba(58,54,46,.30); border:1px solid rgba(255,255,255,.55); }
+  .phone img { display:block; border-radius:42px; }
+  .duo { position:absolute; top:534px; left:0; width:100%; display:flex; justify-content:center; align-items:flex-start; gap:52px; }
+  .duo .phone { position:static; transform:none; }
+  .duo .phone img { width:338px; }
+  .duo .phone.d2 img { width:280px; }
+  .duo .phone.d2 { margin-top:64px; }
+
+  .bullets { position:absolute; top:1332px; left:110px; width:1022px; background:rgba(255,254,251,.94);
+    border:1.5px solid rgba(194,160,107,.6); border-radius:26px; padding:24px 40px;
+    box-shadow:0 16px 36px rgba(58,54,46,.10); }
+  .bullets ul { list-style:none; }
+  .bullets li { position:relative; font-size:33px; line-height:1.55; color:#3A362E; letter-spacing:1.5px; padding-left:42px; }
+  .bullets li::before { content:''; position:absolute; left:6px; top:17px; width:16px; height:16px; border-radius:50%;
+    background:#C2A06B; box-shadow:0 0 0 4px rgba(194,160,107,.22); }
+  .bullets li b { color:#8C5A2B; }
+
+  .fan { position:absolute; top:545px; left:0; width:100%; display:flex; justify-content:center; align-items:flex-end; gap:22px; }
+  .fan .polaroid { background:#fff; padding:10px; border-radius:16px; border:1px solid rgba(194,160,107,.35);
+    box-shadow:0 16px 34px rgba(58,54,46,.20); }
+  .fan .polaroid img { display:block; height:460px; width:auto; border-radius:8px; }
+
+  .closing { position:absolute; top:470px; width:100%; text-align:center; }
+  .closing .big { font-size:92px; font-weight:700; letter-spacing:8px; }
+  .closing .big .verm { color:#C7472F; }
+  .closing .wish { margin-top:44px; font-size:40px; letter-spacing:8px; color:#6E675C; }
+  .store-card { position:absolute; top:1010px; left:181px; width:880px; background:rgba(255,254,251,.94);
+    border:2px solid rgba(194,160,107,.75); border-radius:30px; padding:46px 60px; text-align:center;
+    box-shadow:0 18px 40px rgba(58,54,46,.12); }
+  .store-card .t { font-size:40px; font-weight:700; letter-spacing:4px; color:#3A362E; }
+  .store-card .p { margin-top:18px; font-size:36px; letter-spacing:3px; color:#8C5A2B; }
+  .store-card .u { margin-top:18px; font-size:30px; letter-spacing:2px; color:#6E675C; line-height:1.7; }
+  .foot-note { position:absolute; bottom:44px; width:100%; text-align:center; font-size:24px; letter-spacing:2px; color:#B4AC9E; }
+  .store-line { position:absolute; bottom:140px; left:50%; transform:translateX(-50%); white-space:nowrap;
+    background:rgba(255,254,251,.94); border:2px solid rgba(194,160,107,.75); border-radius:999px;
+    padding:14px 44px; font-size:30px; letter-spacing:3px; color:#6E675C;
+    box-shadow:0 12px 26px rgba(58,54,46,.10); }
+  .store-line b { color:#8C5A2B; font-size:33px; }
+  .section-t { position:absolute; top:206px; width:100%; text-align:center; font-size:78px; font-weight:700; letter-spacing:6px; }
+  .section-t .num { color:#C2A06B; font-size:52px; letter-spacing:2px; margin-right:18px; }
+  .section-sub { position:absolute; top:322px; width:100%; text-align:center; font-size:35px; color:#6E675C; letter-spacing:4px; }
+</style>
+</head>
+<body>
+
+<!-- ============ L1 官宣封面 ============ -->
+<section class="page cover-bg" id="p1">
+  <div class="brandrow"><span class="name">如画</span><span class="dot"></span><span class="en">Lumira</span></div>
+  <div class="kicker">🎉 官宣 · 我的第一个 App</div>
+  <div class="h1">我用AI<span class="verm">，</span>做了个拍照App</div>
+  <div class="sub">给不会摆姿势 · 不会调参数 · 不会构图的集美们</div>
+  <div class="badges"><span>AI 辅助开发</span><span>1 个人</span><span>3 个月</span></div>
+  <div class="phone" style="top:728px;"><img style="width:300px;" src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/app首页.png" alt=""></div>
+  <div class="store-line">拍照前，先打开<b>如画</b> ✨</div>
+</section>
+
+<!-- ============ L2 它解决什么 ============ -->
+<section class="page" id="p2">
+  <div class="section-t"><span class="num">01</span>它到底解决什么？</div>
+  <div class="section-sub">刷到好看的风景想拍照发朋友圈，结果……</div>
+  <div class="pains" style="top:470px;">
+    <div class="pain-card"><span class="x">✕</span><b>画面杂乱</b><em>怎么拍都不舒服</em></div>
+    <div class="pain-card"><span class="x">✕</span><b>不会摆姿势</b><em>轮到自己上镜就僵住</em></div>
+    <div class="pain-card"><span class="x">✕</span><b>他拍找不好角度</b><em>男友拍摄全靠开盲盒</em></div>
+    <div class="pain-card"><span class="x">✕</span><b>拍几百张只出 1 张</b><em>甚至一张都不能用</em></div>
+    <div class="pain-card"><span class="x">✕</span><b>后期参数不会调</b><em>画面平平无奇</em></div>
+  </div>
+  <div class="bullets" style="top:1140px; background:#FBF5E9; border-width:2.5px; border-color:rgba(194,160,107,.9);"><ul class="dots" style="text-align:center;">
+    <li style="padding-left:0; line-height:1.5;"><b style="font-size:42px;">所以我把它做成了「拍摄模板」</b><br><span style="font-size:31px; color:#6E675C; letter-spacing:3px;">—— 上面这些，一次解决</span></li>
+  </ul></div>
+</section>
+
+<!-- ============ L3 核心玩法 ============ -->
+<section class="page" id="p3">
+  <div class="section-t"><span class="num">02</span>核心玩法：套模板拍</div>
+  <div class="section-sub">搜关键词 · 一键应用 · 照着拍，就出片</div>
+  <div class="duo">
+    <div class="phone s d2"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/搜索页.png" alt=""></div>
+    <div class="phone s"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/_i2i_full/Screenshot_2026-10-08T103036/once_1791431278929_1.png" alt=""></div>
+  </div>
+  <div class="bullets"><ul class="dots">
+    <li><b>关键词搜索</b>：「日落」「咖啡店」「银杏」，秒出匹配模板</li>
+    <li><b>一键应用</b>：构图、姿势引导、后期调参，全包</li>
+    <li><b>照着拍</b>：半透明剪影贴进取景框，站上去就贴合</li>
+  </ul></div>
+  <div class="foot-note">* 界面截图为效果示意</div>
+</section>
+
+<!-- ============ L4 调参实时预览 ============ -->
+<section class="page" id="p4">
+  <div class="section-t"><span class="num">03</span>调参不靠猜，所见即所得</div>
+  <div class="section-sub">后期参数实时生效在取景器里</div>
+  <div class="duo">
+    <div class="phone s"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/拍摄页参数调整抽屉弹出页-处理后.png" alt=""></div>
+    <div class="phone s d2"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/Screenshot_2026-10-08T103555.png" alt=""></div>
+  </div>
+  <div class="bullets"><ul class="dots">
+    <li><b>拖动滑杆</b>，画面实时跟着变</li>
+    <li>拍之前就看到成片样子，<b>不用赌「后期调了会不会好看」</b></li>
+    <li>你看到的，就是你拍到的</li>
+  </ul></div>
+  <div class="foot-note">* 界面截图为效果示意</div>
+</section>
+
+<!-- ============ L5 海报与分享 ============ -->
+<section class="page" id="p5">
+  <div class="section-t"><span class="num">04</span>出片只是开始</div>
+  <div class="section-sub">模板分享 · 海报导出 · 九宫格精选集</div>
+  <div class="fan">
+    <div class="polaroid"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/IMG_044.jpg" alt=""></div>
+    <div class="polaroid"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/IMG_057.jpg" alt=""></div>
+    <div class="polaroid"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/IMG_053.jpg" alt=""></div>
+    <div class="polaroid"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/IMG_037.jpg" alt=""></div>
+  </div>
+  <div class="bullets" style="top:1188px;"><ul class="dots">
+    <li><b>模板分享</b>：刷到好看的模板，分享给姐妹一起拍同款</li>
+    <li><b>海报导出</b>：好照片一键变海报，朋友圈美美发</li>
+    <li><b>精选集</b>：挑出最好看的几张，组成九宫格海报分享</li>
+  </ul></div>
+  <div class="foot-note">* 海报为效果示意</div>
+</section>
+
+<!-- ============ L6 探店打卡 ============ -->
+<section class="page" id="p6">
+  <div class="section-t"><span class="num">05</span>探店女孩的出片日记</div>
+  <div class="section-sub">探店打卡 · 出片攻略 · 海报分享被夸爆</div>
+  <div class="duo">
+    <div class="phone s d2"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/探店足迹页.png" alt=""></div>
+    <div class="phone s"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/探店足迹详情页.png" alt=""></div>
+  </div>
+  <div class="bullets"><ul class="dots">
+    <li>探到好看的店、看到好看的风景，<b>记一篇探店日记</b></li>
+    <li>出片照片 + 出片攻略，全留存在这里</li>
+    <li>一键导出海报分享，<b>让别人美美夸赞</b></li>
+  </ul></div>
+  <div class="foot-note">* 界面截图为效果示意</div>
+</section>
+
+<!-- ============ L7 自己做模板 ============ -->
+<section class="page" id="p7">
+  <div class="section-t"><span class="num">06</span>进阶玩家：自己做模板</div>
+  <div class="section-sub">嫌模板不够用？做一个，还能分享出去</div>
+  <div class="duo">
+    <div class="phone s d2"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/自定义模板导出详情页.png" alt=""></div>
+    <div class="phone s"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/新建模板页面-基本信息.png" alt=""></div>
+    <div class="phone s d2"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/自定义模板分享二维码页.png" alt=""></div>
+  </div>
+  <div class="bullets"><ul class="dots">
+    <li><b>自定义模板</b>：构图、姿势、参数，全由你定义</li>
+    <li>支持<b>导出</b>与<b>分享</b>给其他用户使用</li>
+    <li>好用的拍摄思路，让更多人复制</li>
+  </ul></div>
+  <div class="foot-note">* 界面截图为效果示意</div>
+</section>
+
+<!-- ============ L8 灵感与挑战 ============ -->
+<section class="page" id="p8">
+  <div class="section-t"><span class="num">07</span>不知道拍什么？</div>
+  <div class="section-sub">今日灵感 · 摄影美学院 · 每日挑战</div>
+  <div class="duo">
+    <div class="phone s d2"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/每日挑战-翻牌.png" alt=""></div>
+    <div class="phone s"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/今日灵感页.png" alt=""></div>
+  </div>
+  <div class="bullets"><ul class="dots">
+    <li><b>今日灵感</b>：每天给你一个「今天就拍这个」</li>
+    <li><b>摄影美学院</b>：构图与审美的充电站</li>
+    <li><b>每日挑战</b>：风格拍腻了？翻牌挑战没试过的类型</li>
+  </ul></div>
+  <div class="foot-note">* 界面截图为效果示意</div>
+</section>
+
+<!-- ============ L9 收尾 ============ -->
+<section class="page cover-bg" id="p9">
+  <div class="brandrow"><span class="name">如画</span><span class="dot"></span><span class="en">Lumira</span></div>
+  <div class="closing">
+    <div class="big">三个月 · 一个人 · <span class="verm">如画</span></div>
+    <div class="wish">愿你随手一拍，皆是如画</div>
+  </div>
+  <div class="store-card">
+    <div class="t">✨ 模板持续上新</div>
+    <div class="p">套上模板 · 按下快门 · 美美出片</div>
+    <div class="u">模板会不定期实时更新，跟随网络热门拍照风格与姿势——<br>秋天的银杏、冬天的初雪，都会有对应模板上线🍂</div>
+  </div>
+  <div class="store-line">一个人写代码，很累但很开心 · 有想法随时来聊🙏</div>
+</section>
+
+<script>
+  (function(){
+    var q = new URLSearchParams(location.search);
+    var n = parseInt(q.get('p')||'1',10);
+    var pages = document.querySelectorAll('.page');
+    pages.forEach(function(pg,i){ if(i+1!==n) pg.style.display='none'; });
+    document.querySelectorAll('.page').forEach(function(pg){
+      var vf=document.createElement('div'); vf.className='vf';
+      vf.innerHTML='<i></i><i></i><i></i><i></i>';
+      pg.appendChild(vf);
+    });
+  })();
+</script>
+</body>
+</html>

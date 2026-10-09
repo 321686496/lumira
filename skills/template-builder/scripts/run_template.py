@@ -39,7 +39,8 @@ for _p in (str(_SCRIPTS), str(_AIE_SCRIPTS)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-import gpt_image2  # noqa: E402
+import gpt_image2
+from crop_grid import crop_grid, _cell_std  # 反侵权技能: 宫格裁剪(带清边)+空白判定  # noqa: E402
 
 # ---------------------------------------------------------------- 图像工具
 
@@ -64,12 +65,13 @@ def _unipool(img, maxdim: int = 400):
     return rowvar, colvar, w, h
 
 
-def _low_strips(var, scale: float, min_gap: int, length: int) -> list[int]:
-    """找低方差条带并返回各自中心(映射到原图坐标)。忽略落到外缘 10% 的条带(外白边/留白)。"""
+def _low_strips(var, scale: float, min_gap: int, length: int, rel: float = 0.15) -> list[int]:
+    """找低方差条带并返回各自中心(映射到原图坐标)。忽略落到外缘 10% 的条带(外白边/留白)。
+    rel 为相对最大方差的阈值比例; 0.35 可抓被缩略图混染的细白缝(与 crop_grid 口径一致)。"""
     mx = max(var) if var else 0.0
     if mx <= 1e-6:
         return []
-    thr = mx * 0.15
+    thr = mx * rel
     strips: list[list[int]] = []
     for i, v in enumerate(var):
         if v <= thr:
@@ -82,29 +84,40 @@ def _low_strips(var, scale: float, min_gap: int, length: int) -> list[int]:
             if lo < (a + b + 1) / 2 * scale < hi]
 
 
-def detect_grid_factor(img) -> int:
-    """宫格阶数检测: 行/列内部低方差条带数一致且≥1 视为 k×k; 否则单图(1)。"""
-    rowvar, colvar, w, h = _unipool(img)
-    gap = max(2, min(w, h) // 80)
-    col_cuts = _low_strips(colvar, img.width / w, gap, img.width)
-    row_cuts = _low_strips(rowvar, img.height / h, gap, img.height)
-    ncols, nrows = len(col_cuts) + 1, len(row_cuts) + 1
-    if ncols == nrows and 2 <= ncols <= 4:
-        return ncols
-    return 1
+def _cuts_near_equal(cuts: list[int], n_div: int, length: int, win: float = 0.25) -> bool:
+    """条带中心是否都落在期望等分位置近邻(±win 格距)内, 降低单张照片误判成 1×n。"""
+    span = length / n_div
+    for c in cuts:
+        k = round(c / span)
+        if k < 1 or k >= n_div or abs(c - span * k) > span * win:
+            return False
+    return True
 
 
-def split_grid(img, factor: int) -> list:
-    """按检测到的内部低方差条带把 k×k 宫格拆成单张(读取顺序)。"""
-    rowvar, colvar, w, h = _unipool(img)
-    gap = max(2, min(w, h) // 80)
-    xs = [0] + _low_strips(colvar, img.width / w, gap, img.width) + [img.width]
-    ys = [0] + _low_strips(rowvar, img.height / h, gap, img.height) + [img.height]
-    cells = []
-    for r in range(len(ys) - 1):
-        for c in range(len(xs) - 1):
-            cells.append(img.crop((xs[c], ys[r], xs[c + 1], ys[r + 1])))
-    return cells
+def detect_layout(img) -> tuple[int, int]:
+    """宫格布局检测: 返回 (rows, cols)。
+
+    两级阈值逐级尝试: 0.35(能抓被缩略图混染的细白缝) → 0.15(严格, 旧口径兜底)。
+    每级判定:
+    - 行/列内部低方差条带数一致且 2~4 → k×k;
+    - 仅单轴有条带(1~3 条且都靠近期望等分位置) → 1×n / n×1 横竖排;
+    - 其余 → 单图 (1, 1)。
+    """
+    for rel in (0.35, 0.15):
+        rowvar, colvar, w, h = _unipool(img)
+        gap = max(2, min(w, h) // 80)
+        col_cuts = _low_strips(colvar, img.width / w, gap, img.width, rel=rel)
+        row_cuts = _low_strips(rowvar, img.height / h, gap, img.height, rel=rel)
+        ncols, nrows = len(col_cuts) + 1, len(row_cuts) + 1
+        if ncols == nrows and 2 <= ncols <= 4:
+            return (ncols, ncols)
+        if col_cuts and not row_cuts and 2 <= ncols <= 4 \
+                and _cuts_near_equal(col_cuts, ncols, img.width):
+            return (1, ncols)
+        if row_cuts and not col_cuts and 2 <= nrows <= 4 \
+                and _cuts_near_equal(row_cuts, nrows, img.height):
+            return (nrows, 1)
+    return (1, 1)
 
 # 剪影口径(与后端 AI 一键建模一致)
 SIL_PROMPT = (
@@ -274,10 +287,32 @@ def gen_silhouette(client, model, pose_path: Path, out_dir: Path) -> Path | None
     return final
 
 
+def framing_hint(desc: str) -> str:
+    """从姿势描述提取构图约束句(景别/留白), 供反侵权编辑保持参考图构图。"""
+    d = desc or ""
+    if "全身" in d:
+        shot = ("全身景别：人物含脚部完整入镜，头顶留白≥画面高度15%，脚下保留地面环境，"
+                "禁止裁脚、禁止推近成半身或特写")
+    elif "半身" in d:
+        shot = ("半身景别：保持原图的人物画面占比与取景范围，头顶留白≥画面高度10%，"
+                "禁止推近成面部特写或拉远成全身")
+    else:
+        shot = "保持原图取景景别与人物画面占比"
+    return shot + "；人物位置与四周环境留白与原图完全一致"
+
+
+def build_hints(cfg: dict, n: int) -> list[str]:
+    """按姿势顺序生成构图提示(与拆分后的姿势图集合对齐)。"""
+    poses = cfg.get("poses", [])
+    return [framing_hint(poses[i].get("description", "") if i < len(poses) else "")
+            for i in range(n)]
+
+
 def run_anti_infringement(pose_sources: list[str], work: Path, api_key: str = "",
                           platform: str = "", model: str = "",
                           max_per_call: int = 0, ratio: str = "",
-                          keep_grids: bool = False, no_grid: bool = False) -> list[Path] | None:
+                          keep_grids: bool = False, no_grid: bool = False,
+                          hints: list[str] | None = None) -> list[Path] | None:
     """调用反侵权技能加工真实参考姿势图, 返回 N 张成片(按输入顺序)。"""
     tmp = work / "_anti_infringe"
     tmp.mkdir(parents=True, exist_ok=True)
@@ -293,6 +328,8 @@ def run_anti_infringement(pose_sources: list[str], work: Path, api_key: str = ""
         cmd += ["--max-per-call", str(max_per_call)]
     if ratio:
         cmd += ["--ratio", ratio]
+    if hints:
+        cmd += ["--hints", ";;".join(hints)]
     if not keep_grids:
         cmd += ["--no-keep-grids"]
     if no_grid:
@@ -371,24 +408,41 @@ def resolve_inputs(args, work: Path) -> list[Path]:
 
 
 def _grid_split_all(paths: list[Path]) -> list[Path]:
-    """对每张图做网格检测; 宫格则拆成多张单图, 单图原样。返回统一后的姿势图集合。"""
-    from PIL import Image
+    """对每张图做布局检测(k×k 与 1×n/n×1); 宫格用 crop_grid 拆分并校验, 单图原样。
+
+    拆分后校验: 每格非空白(crop_grid validity)。任一格空白 → 判为误检,
+    该图按单图处理并告警(避免把单张照片硬拆成两半)。
+    """
     result: list[Path] = []
     for i, p in enumerate(paths, 1):
         with Image.open(p) as im:
             im = im.convert("RGB")
-            factor = detect_grid_factor(im)
-            if factor > 1:
-                cells = split_grid(im, factor)
-                print(f"  {p.name} 识别为 {factor}x{factor} 宫格, 拆成 {len(cells)} 张", flush=True)
-                for j, cell in enumerate(cells, 1):
-                    cell = cell.convert("RGB")
-                    op = p.parent / f"panel_{i}_{j}.png"
-                    cell.save(op)
-                    result.append(op)
-            else:
+            rows, cols = detect_layout(im)
+            if rows * cols == 1:
                 print(f"  {p.name} 视为单图", flush=True)
                 result.append(p)
+                continue
+            cells, validity = crop_grid(im, rows, cols)
+            stds = [round(_cell_std(c), 1) for c in cells]
+            if not all(validity):
+                print(f"  !! {p.name} 疑似 {rows}x{cols} 宫格但存在空白格(std={stds}), "
+                      f"判为误检, 按单图处理", flush=True)
+                result.append(p)
+                continue
+            sizes = sorted({c.size for c in cells})
+            if len(sizes) > 1:
+                ratio_span = max(s[0] / s[1] for s in sizes) / min(s[0] / s[1] for s in sizes)
+                if ratio_span > 1.25:
+                    print(f"  !! {p.name} 拆出格尺寸差异过大 {sizes}, 判为误检, 按单图处理",
+                          flush=True)
+                    result.append(p)
+                    continue
+            print(f"  {p.name} 识别为 {rows}x{cols} 宫格, 拆成 {len(cells)} 张 (std={stds})",
+                  flush=True)
+            for j, cell in enumerate(cells, 1):
+                op = p.parent / f"panel_{i}_{j}.png"
+                cell.convert("RGB").save(op)
+                result.append(op)
     return result
 
 
@@ -496,6 +550,10 @@ def main() -> int:
             print(f"  [输入] 跳过宫格检测, {len(refs)} 张单图", flush=True)
         else:
             pose_sources = _grid_split_all(refs)
+        if len(pose_sources) != pose_count:
+            print(f"  [警告] 拆分后姿势图 {len(pose_sources)} 张 ≠ 预期 {pose_count} 张, "
+                  f"请 Agent 在 QA 时复核每张 panel 是否拆分正确"
+                  f"(必要时用 --no-split + 预拆单图重跑)", flush=True)
     else:
         pose_sources = []
 
@@ -511,7 +569,8 @@ def main() -> int:
             done = run_anti_infringement([str(p) for p in pose_sources], out_dir, key,
                                          eng["platform"], eng["model"],
                                          eng["max_input_images"], ASPECT[1],
-                                         args.keep_grids, args.anti_no_grid)
+                                         args.keep_grids, args.anti_no_grid,
+                                         hints=build_hints(cfg, len(pose_sources)))
             if done:
                 final_poses = done[:pose_count]
             else:

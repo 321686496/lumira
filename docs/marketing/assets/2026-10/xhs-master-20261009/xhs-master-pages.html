@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>如画Lumira · 小红书总纲篇图卡</title>
+<style>
+  @font-face { font-family:'NSerif'; src:url('file:///d:/app/projects/photo_post/lumira_app_flutter/assets/fonts/NotoSerifSC-Bold.otf'); font-weight:700; }
+  @font-face { font-family:'NSerif'; src:url('file:///d:/app/projects/photo_post/lumira_app_flutter/assets/fonts/NotoSerifSC-Regular.otf'); font-weight:400; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#555; font-family:'NSerif',serif; color:#3A362E; }
+  .page {
+    width:1242px; height:1656px; position:relative; overflow:hidden;
+    background:#FDFBF7 url('ai-bg-page-v2.jpg') center/cover no-repeat;
+    display:none;
+  }
+  .page.cover { background-image:url('ai-bg-cover-v2.jpg'); }
+  .page.active { display:block; }
+
+  /* 取景框四角装饰（呼应App剪影取景主题） */
+  .vf span { position:absolute; width:62px; height:62px; border:3px solid rgba(194,160,107,.5); }
+  .vf span:nth-child(1) { top:34px; left:34px; border-right:none; border-bottom:none; border-radius:10px 0 0 0; }
+  .vf span:nth-child(2) { top:34px; right:34px; border-left:none; border-bottom:none; border-radius:0 10px 0 0; }
+  .vf span:nth-child(3) { bottom:34px; left:34px; border-right:none; border-top:none; border-radius:0 0 0 10px; }
+  .vf span:nth-child(4) { bottom:34px; right:34px; border-left:none; border-top:none; border-radius:0 0 10px 0; }
+
+  /* ---- 公共 ---- */
+  .brandrow { position:absolute; top:64px; left:0; width:100%; display:flex; align-items:center; justify-content:center; gap:26px; }
+  .brandrow .hline { width:120px; height:1px; background:linear-gradient(90deg,transparent,#C2A06B); }
+  .brandrow .hline.r { background:linear-gradient(90deg,#C2A06B,transparent); }
+  .brandrow .name { font-size:30px; letter-spacing:10px; color:#8A7B5E; font-weight:700; }
+  .kicker { position:absolute; top:150px; width:100%; text-align:center; }
+  .kicker span {
+    display:inline-block; font-size:31px; letter-spacing:6px; color:#C7472F;
+    border:2px solid rgba(199,71,47,.55); border-radius:999px; padding:12px 38px 12px 44px; background:rgba(255,254,251,.72);
+  }
+  .step-tag {
+    display:inline-block; font-size:30px; letter-spacing:6px; color:#FDFBF7; background:#C7472F;
+    border-radius:999px; padding:12px 40px 12px 46px;
+  }
+  .foot-note { position:absolute; bottom:44px; width:100%; text-align:center; font-size:24px; color:#B4AB9C; letter-spacing:2px; }
+  .dots { list-style:none; }
+  .dots li { position:relative; padding-left:44px; font-size:33px; line-height:2; color:#57503F; letter-spacing:2px; }
+  .dots li::before { content:''; position:absolute; left:8px; top:50%; transform:translateY(-50%); width:14px; height:14px; border-radius:50%; background:#C2A06B; }
+
+  /* ---- 手机样机 ---- */
+  .phone {
+    position:absolute; left:50%; transform:translateX(-50%);
+    background:#221F1B; border-radius:52px; padding:12px;
+    box-shadow:0 34px 70px rgba(58,54,46,.30), 0 8px 22px rgba(58,54,46,.16);
+  }
+  .phone img { display:block; width:336px; height:auto; border-radius:40px; }
+  .phone.s { padding:11px; border-radius:48px; }
+  .phone.s img { width:338px; border-radius:38px; }
+
+  /* ---- 多图排布 ---- */
+  .duo { position:absolute; top:534px; left:0; width:100%; display:flex; justify-content:center; align-items:flex-start; gap:26px; }
+  .duo .phone { position:static; transform:none; }
+  .duo .phone.d2 { margin-top:64px; }
+  .duo .phone.d2 img { width:280px; }
+  .duo .phone.d3 { margin-top:96px; }
+  .duo .phone.d3 img { width:264px; }
+  .pcard { margin-top:14px; border-radius:28px; overflow:hidden; border:1px solid rgba(194,160,107,.45);
+    box-shadow:0 30px 60px rgba(58,54,46,.24), 0 8px 20px rgba(58,54,46,.12); background:#fff; }
+  .pcard img { display:block; width:452px; height:auto; }
+  .fan { position:absolute; top:545px; left:0; width:100%; display:flex; justify-content:center; align-items:flex-end; gap:22px; }
+  .fan .polaroid { background:#fff; padding:10px; border-radius:16px; border:1px solid rgba(194,160,107,.35);
+    box-shadow:0 16px 34px rgba(58,54,46,.20); }
+  .fan .polaroid img { display:block; height:460px; width:auto; border-radius:8px; }
+
+  /* ================= P1 封面 ================= */
+  .cover .h1 { position:absolute; top:214px; width:100%; text-align:center; font-size:122px; font-weight:700; letter-spacing:8px; }
+  .cover .h2 { position:absolute; top:352px; width:100%; text-align:center; font-size:122px; font-weight:700; letter-spacing:8px; }
+  .cover .h2 .verm { color:#C7472F; position:relative; display:inline-block; }
+  .cover .h2 svg.scribble { position:absolute; left:-2%; bottom:-24px; width:104%; height:32px; }
+  .cover .pains { position:absolute; top:540px; left:131px; width:980px; display:flex; flex-direction:column; gap:24px; }
+  .cover .pains .pain-card {
+    display:flex; align-items:center; gap:24px; background:#FFFEFB;
+    border:2px solid rgba(194,160,107,.75); border-radius:24px; padding:20px 34px;
+    box-shadow:0 18px 40px rgba(58,54,46,.17);
+  }
+  .cover .pains .x {
+    flex:none; width:52px; height:52px; border-radius:50%; background:#C7472F; color:#FDFBF7;
+    display:flex; align-items:center; justify-content:center; font-size:30px; font-weight:700;
+  }
+  .cover .pains b { font-size:44px; font-weight:700; letter-spacing:4px; }
+  .cover .pains em { font-style:normal; font-size:31px; color:#57503F; margin-left:auto; letter-spacing:1px; }
+  .cover .phone { top:896px; transform:translateX(-50%) rotate(-4deg); }
+  .cover .phone img { width:268px; }
+  .cover .sticker {
+    position:absolute; left:782px; top:1010px; transform:rotate(4deg);
+    background:#C7472F; color:#FDFBF7; font-size:32px; font-weight:700; letter-spacing:4px; line-height:1.55;
+    padding:20px 26px; border-radius:22px; box-shadow:0 14px 30px rgba(199,71,47,.35);
+  }
+  .cover .sticker svg.arrow { position:absolute; left:-92px; top:32px; filter:drop-shadow(0 2px 3px rgba(34,31,27,.45)); }
+  .cover .store-line { position:absolute; bottom:30px; width:100%; text-align:center; font-size:29px; letter-spacing:3px; color:#6E675C; }
+  .cover .store-line b { color:#3A362E; }
+
+  /* ================= P2 痛点 ================= */
+  .p2 .title { position:absolute; top:236px; width:100%; text-align:center; font-size:102px; font-weight:700; letter-spacing:10px; }
+  .p2 .sub { position:absolute; top:402px; width:100%; text-align:center; font-size:32px; color:#6E675C; letter-spacing:3px; }
+  .p2 .cards { position:absolute; top:492px; left:91px; width:1060px; }
+  .p2 .card {
+    display:flex; align-items:center; gap:34px; background:rgba(255,254,251,.92);
+    border:1.5px solid rgba(194,160,107,.55); border-radius:26px; padding:26px 40px; margin-bottom:24px;
+    box-shadow:0 10px 26px rgba(58,54,46,.07);
+  }
+  .p2 .seal {
+    flex:none; width:80px; height:80px; border-radius:50%; background:#C7472F; color:#FDFBF7;
+    display:flex; align-items:center; justify-content:center; font-size:40px; font-weight:700;
+  }
+  .p2 .card h3 { font-size:42px; font-weight:700; letter-spacing:4px; margin-bottom:8px; }
+  .p2 .card p { font-size:28px; color:#6E675C; letter-spacing:0; line-height:1.55; white-space:nowrap; }
+  .p2 .quote {
+    position:absolute; top:1290px; left:191px; width:860px; text-align:center;
+    background:rgba(253,251,247,.95); border:1px solid rgba(194,160,107,.4); border-radius:24px; padding:30px 20px;
+  }
+  .p2 .quote .l1 { font-size:34px; color:#8A7B5E; letter-spacing:4px; margin-bottom:14px; }
+  .p2 .quote .l2 { font-size:42px; font-weight:700; letter-spacing:3px; }
+  .p2 .quote .l2 b { color:#C7472F; }
+  .p2 .next-hint { position:absolute; top:1520px; width:100%; text-align:center; font-size:30px; font-weight:700; color:#C7472F; letter-spacing:6px; }
+
+  /* ================= P3~P8 步骤/功能页 ================= */
+  .step .t-row { position:absolute; top:210px; width:100%; text-align:center; }
+  .step .t-row .step-tag { margin-bottom:34px; }
+  .step h2 { font-size:84px; font-weight:700; letter-spacing:5px; }
+  .step .sub { position:absolute; top:432px; width:100%; text-align:center; font-size:34px; color:#6E675C; letter-spacing:3px; }
+  .step .phone { top:534px; }
+  .step .bullets { position:absolute; top:1352px; left:0; width:100%; }
+  .step .bullets .dots {
+    width:860px; margin:0 auto; background:rgba(253,251,247,.92);
+    border:1px solid rgba(194,160,107,.35); border-radius:24px; padding:20px 30px;
+  }
+  .step .bullets li { font-size:32px; line-height:1.95; }
+  .p6 .bullets { top:1208px; }
+
+  /* ================= P9 尾页 ================= */
+  .p9 .big { position:absolute; top:320px; width:100%; text-align:center; font-size:124px; font-weight:700; letter-spacing:16px; }
+  .p9 .sub { position:absolute; top:502px; width:100%; text-align:center; font-size:40px; color:#6E675C; letter-spacing:6px; }
+  .p9 .store-card {
+    position:absolute; top:648px; left:171px; width:900px; text-align:center;
+    background:rgba(255,254,251,.94); border:1.5px solid rgba(194,160,107,.6); border-radius:30px;
+    padding:64px 40px 58px; box-shadow:0 16px 40px rgba(58,54,46,.09);
+  }
+  .p9 .store-card .cap { font-size:29px; letter-spacing:6px; color:#8A7B5E; margin-bottom:26px; }
+  .p9 .store-card .plat { font-size:40px; font-weight:700; letter-spacing:2px; margin-bottom:34px; }
+  .p9 .store-card .plat i { font-style:normal; color:#C2A06B; padding:0 22px; }
+  .p9 .store-card .search { font-size:56px; font-weight:700; letter-spacing:2px; }
+  .p9 .store-card .search b { color:#C7472F; }
+  .p9 .tagline-row { position:absolute; top:1130px; width:100%; display:flex; align-items:center; justify-content:center; gap:34px; }
+  .p9 .tagline-row .hline { width:150px; height:1px; background:linear-gradient(90deg,transparent,#C2A06B); }
+  .p9 .tagline-row .hline.r { background:linear-gradient(90deg,#C2A06B,transparent); }
+  .p9 .tagline { font-size:54px; font-weight:700; letter-spacing:10px; }
+  .p9 .update {
+    position:absolute; top:1318px; left:50%; transform:translateX(-50%); width:780px;
+    text-align:center; font-size:30px; color:#8A7B5E; letter-spacing:4px; line-height:2;
+    background:rgba(253,251,247,.97); border:1px solid rgba(194,160,107,.35); border-radius:24px; padding:26px 20px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ P1 封面 ============ -->
+<section class="page cover active" data-p="1">
+  <div class="brandrow"><i class="hline"></i><span class="name">如画 Lumira</span><i class="hline r"></i></div>
+  <div class="kicker"><span>别再拍「罚站式游客照」了</span></div>
+  <div class="h1">拍照 300 张</div>
+  <div class="h2"><span class="verm">废了 299 张？
+    <svg class="scribble" viewBox="0 0 400 34" preserveAspectRatio="none"><path d="M6 24 Q100 8 200 18 T394 14" fill="none" stroke="#C7472F" stroke-width="7" stroke-linecap="round" opacity=".8"/></svg>
+  </span></div>
+  <div class="pains">
+    <div class="pain-card"><span class="x">✕</span><b>不会摆姿势</b><em>站哪都像罚站</em></div>
+    <div class="pain-card"><span class="x">✕</span><b>不会调参数</b><em>全凭感觉瞎调</em></div>
+    <div class="pain-card"><span class="x">✕</span><b>不会构图</b><em>拍来拍去都像证件照</em></div>
+  </div>
+  <div class="phone"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/_i2i_full/Screenshot_2026-10-08T103036/once_1791431278929_1.png" alt=""></div>
+  <div class="sticker">答案直接<br>贴进取景框
+    <svg class="arrow" width="92" height="60" viewBox="0 0 92 60"><path d="M88 12 Q40 4 18 34" fill="none" stroke="#FDFBF7" stroke-width="6.5" stroke-linecap="round"/><path d="M12 22 L16 38 L32 34" fill="none" stroke="#FDFBF7" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </div>
+  <div class="store-line">拍照前，先打开<b>如画</b> ✨</div>
+</section>
+
+<!-- ============ P2 痛点 ============ -->
+<section class="page p2" data-p="2">
+  <div class="brandrow"><i class="hline"></i><span class="name">如画 Lumira</span><i class="hline r"></i></div>
+  <div class="kicker"><span>把手机交给男朋友之前 · 先看这页</span></div>
+  <div class="title">为什么你拍照不出片？</div>
+  <div class="sub">#男朋友拍照能有多离谱# 只是冰山一角 · 对照看看你卡在哪一关</div>
+  <div class="cards">
+    <div class="card"><div class="seal">壹</div><div><h3>不会摆姿势</h3><p>手不知道往哪放，站哪都像罚站；表情僵硬，连笑容都是尬的</p></div></div>
+    <div class="card"><div class="seal">贰</div><div><h3>不会调参数</h3><p>一堆参数看不懂，全凭感觉瞎调；调完还不如原图，修图两小时依旧假</p></div></div>
+    <div class="card"><div class="seal">叁</div><div><h3>不会构图找角度</h3><p>人往中间一站就按快门；背景杂乱、角度平平，怎么拍都像证件照</p></div></div>
+    <div class="card"><div class="seal">肆</div><div><h3>他拍全靠运气</h3><p>把手机交给男朋友，就像开盲盒——原本人像大片，拍成深夜悬疑剧照</p></div></div>
+  </div>
+  <div class="quote">
+    <div class="l1">—— 不是你的问题 ——</div>
+    <div class="l2">是没人教你：<b>怎么摆、怎么调、怎么构</b></div>
+  </div>
+  <div class="next-hint">往后翻 · 一页一关讲透 ↓</div>
+</section>
+
+<!-- ============ P3 第①步 搜模板 ============ -->
+<section class="page step" data-p="3">
+  <div class="brandrow"><i class="hline"></i><span class="name">如画 Lumira</span><i class="hline r"></i></div>
+  <div class="t-row"><span class="step-tag">第 ① 关 · 不会构图？</span><h2>关键词一搜，直接抄作业</h2></div>
+  <div class="sub">站在好看的景前？输「日落」「公园」「闺蜜」</div>
+  <div class="phone s"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/搜索页.png" alt=""></div>
+  <div class="bullets"><ul class="dots">
+    <li>匹配模板秒出，按场景 / 风格分好类</li>
+    <li>每套都标注季节 · 场景 · 拍摄方式</li>
+    <li>觉得合适 → 一键应用</li>
+  </ul></div>
+  <div class="foot-note">* 界面截图为效果示意</div>
+</section>
+
+<!-- ============ P4 第②关 摆姿势：剪影+构图引导 ============ -->
+<section class="page step" data-p="4">
+  <div class="brandrow"><i class="hline"></i><span class="name">如画 Lumira</span><i class="hline r"></i></div>
+  <div class="t-row"><span class="step-tag">第 ② 关 · 不会摆姿势？</span><h2>照着剪影摆，角度都标好</h2></div>
+  <div class="sub">姿势怎么摆、构图怎么构、机位放哪 —— 全都画给你看</div>
+  <div class="duo">
+    <div class="phone s"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/_i2i_full/Screenshot_2026-10-08T103036/once_1791431278929_1.png" alt=""></div>
+    <div class="phone s d2"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/_i2i_full/Screenshot_2026-10-08T103257/once_1791431401128_1.png" alt=""></div>
+  </div>
+  <div class="bullets"><ul class="dots">
+    <li>不会摆姿势？半透明剪影贴进取景框，照着摆</li>
+    <li>不会构图？构图引导帮你框好画面找角度</li>
+    <li>一套模板多个姿势，滑动切换不重样</li>
+  </ul></div>
+  <div class="foot-note">* 界面截图为效果示意</div>
+</section>
+
+<!-- ============ P5 第③关 调参数：实时预览 ============ -->
+<section class="page step" data-p="5">
+  <div class="brandrow"><i class="hline"></i><span class="name">如画 Lumira</span><i class="hline r"></i></div>
+  <div class="t-row"><span class="step-tag">第 ③ 关 · 不会调参数？</span><h2>调参不靠猜，所见即所得</h2></div>
+  <div class="sub">拍摄页实时调参面板 —— 边调边看，拍之前就锁定成片</div>
+  <div class="duo">
+    <div class="phone s"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/拍摄页参数调整抽屉弹出页-处理后.png" alt=""></div>
+    <div class="phone s d2"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/Screenshot_2026-10-08T103555.png" alt=""></div>
+  </div>
+  <div class="bullets"><ul class="dots">
+    <li>模板自带后期参数，应用后自动套好</li>
+    <li>拖动滑杆实时预览，取景器同步生效</li>
+    <li>不用赌「保存后会不会变丑」</li>
+  </ul></div>
+  <div class="foot-note">* 界面截图为效果示意</div>
+</section>
+
+<!-- ============ P6 爱分享：海报 + 模板推荐 ============ -->
+<section class="page step p6" data-p="6">
+  <div class="brandrow"><i class="hline"></i><span class="name">如画 Lumira</span><i class="hline r"></i></div>
+  <div class="t-row"><span class="step-tag">爱分享 · 本命功能</span><h2>拍完，美美发出去</h2></div>
+  <div class="sub">出片只是开始 —— 海报分享 · 模板推荐 · 探店打卡</div>
+  <div class="fan">
+    <div class="polaroid"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/IMG_044.jpg" alt=""></div>
+    <div class="polaroid"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/IMG_057.jpg" alt=""></div>
+    <div class="polaroid"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/IMG_053.jpg" alt=""></div>
+    <div class="polaroid"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/IMG_037.jpg" alt=""></div>
+  </div>
+  <div class="bullets"><ul class="dots">
+    <li>模板 · 相册 · 探店，三类海报一键生成</li>
+    <li>用到好模板？推荐给朋友，一键拍同款</li>
+    <li>好照片直接变海报，朋友圈美美发</li>
+  </ul></div>
+  <div class="foot-note">* 界面截图为效果示意</div>
+</section>
+
+<!-- ============ P7 探店足迹 ============ -->
+<section class="page step" data-p="7">
+  <div class="brandrow"><i class="hline"></i><span class="name">如画 Lumira</span><i class="hline r"></i></div>
+  <div class="t-row"><span class="step-tag">探店女孩 · 出片足迹</span><h2>探店打卡，足迹也很美</h2></div>
+  <div class="sub">去过的好店、拍过的出片机位，都替你记着</div>
+  <div class="duo">
+    <div class="phone s"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/探店足迹页.png" alt=""></div>
+    <div class="phone s d2"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/探店足迹详情页.png" alt=""></div>
+  </div>
+  <div class="bullets"><ul class="dots">
+    <li>探店列表 · 打卡记录一目了然</li>
+    <li>店铺详情 · 出片攻略沉淀下来</li>
+    <li>生成专属海报，分享给闺蜜</li>
+  </ul></div>
+  <div class="foot-note">* 界面截图为效果示意</div>
+</section>
+
+<!-- ============ P8 自定义模板 ============ -->
+<section class="page step" data-p="8">
+  <div class="brandrow"><i class="hline"></i><span class="name">如画 Lumira</span><i class="hline r"></i></div>
+  <div class="t-row"><span class="step-tag">进阶玩家 · 模板创作者</span><h2>会拍照的你，来当创作者</h2></div>
+  <div class="sub">在 App 里自定义专属模板，分享或导出给其他用户</div>
+  <div class="duo">
+    <div class="phone s d2"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/自定义模板导出详情页.png" alt=""></div>
+    <div class="phone s"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/新建模板页面-基本信息.png" alt=""></div>
+    <div class="phone s d2"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/自定义模板分享二维码页.png" alt=""></div>
+  </div>
+  <div class="bullets"><ul class="dots">
+    <li>构图、姿势、参数，全部由你定义</li>
+    <li>一键导出 · 分享二维码给其他用户</li>
+    <li>你的审美，也能成为别人的出片答案</li>
+  </ul></div>
+  <div class="foot-note">* 界面截图为效果示意</div>
+</section>
+
+<!-- ============ P9 尾页 ============ -->
+<section class="page p9" data-p="9">
+  <div class="brandrow"><i class="hline"></i><span class="name">如画 Lumira</span><i class="hline r"></i></div>
+  <div class="big">银杏黄了</div>
+  <div class="sub">正是一年里最适合拍照的季节</div>
+  <div class="store-card">
+    <div class="cap">—— 出 片 秘 籍 ——</div>
+    <div class="plat">拍照前<i>·</i>打开如画</div>
+    <div class="search">套上模板 · 按下快门 · 美美出片</div>
+  </div>
+  <div class="tagline-row"><i class="hline"></i><div class="tagline">愿你随手一拍，皆是如画</div><i class="hline r"></i></div>
+  <div class="update">模板不定期更新<br>跟随网络热门拍照风格与姿势持续上新</div>
+</section>
+
+<script>
+  const p = new URLSearchParams(location.search).get('p') || '1';
+  document.querySelectorAll('.page').forEach(el => {
+    if (el.classList.contains('cover')) { el.classList.toggle('active', el.dataset.p === p); return; } // 封面背景已自带取景框/丝带装饰
+    el.classList.toggle('active', el.dataset.p === p);
+    const vf = document.createElement('div');
+    vf.className = 'vf';
+    vf.innerHTML = '<span></span><span></span><span></span><span></span>';
+    el.prepend(vf);
+  });
+  document.title = 'p' + p;
+</script>
+</body>
+</html>

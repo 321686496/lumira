@@ -130,6 +130,8 @@ skills/**/*.pyc
 # 根目录一次性调试产物（临时脚本/截图/性能抓取/剪贴板文案草稿，不入库）
 /.tmp-*
 /.tmp_*
+/_tmp-*
+/_tmp_*
 /_tmp/
 /_cdp.py
 /_feeds_*.json
@@ -138,3 +140,18 @@ skills/**/*.pyc
 # 营销素材 AI 原始出图（可由 scripts/gen_*.py 重生成，仅入库裁切成品）
 docs/marketing/assets/**/raw/
 docs/marketing/assets/**/raw-*/
+
+# ===== 2026-10-09 补充：一次性临时产物（不入库，仅忽略不删除）=====
+# scripts 根目录一次性抓取/分析脚本与产物（小红书/smzdm 爬取等）
+/scripts/_*
+/vf_mask/
+/vf_test_bg.png/
+# OHOS 构装备份目录与分析缓存
+/lumira_app_flutter/ohos/.appanalyzer/
+/lumira_app_flutter/ohos/entry/.cxx_bak*/
+/lumira_app_flutter/ohos/entry/build_bak*/
+/lumira_app_flutter/ohos/oh_modules.bak*/
+# 抖音推流视频制作中间产物（v1 参考片段 / v2 渲染帧与 onnx 缓存，成片另行入库）
+/上架运营/推流文章相关素材/_douyin_video*/
+# 技能运行时预览图（可由脚本重生成）
+skills/**/*_preview.png
