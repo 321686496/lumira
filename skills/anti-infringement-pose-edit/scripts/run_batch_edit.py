@@ -4,7 +4,7 @@
 
 流程:
   1. 读取 N 张输入图(保持顺序);
-  2. 按引擎预设的单次上限分批(--engine qwen3pro 上限3 / gpt2k 上限4; --max-per-call 可覆盖):
+  2. 按引擎预设的单次上限分批(--engine qwen3 上限3 / gpt2k 上限4; --max-per-call 可覆盖):
      - 第一批: 最多 `上限` 张目标图(无锚点);
      - 后续批: 每批 `上限-1` 张目标图 + 追加 1 张"衣着锚点"(第一批首张成片), 用于统一衣着;
      - 批内只剩 1 张时不走宫格, 直接单图编辑(仍附锚点);
@@ -46,12 +46,18 @@ COMPOSE_KEEP = (
     "头顶与脚下及四周的环境留白，都必须与原图完全一致；"
     "禁止推近变焦、禁止裁切为特写、禁止改变留白与人物位置。"
 )
+# 面部可见性保持(与 COMPOSE_KEEP 同用): 防止不露脸原图被模型脑补成露脸
+FACE_VISIBILITY = (
+    "面部可见性规则：若原图人物未露出面部（背影、侧后、低头、手/头发/帽子/口罩/物品遮挡等），"
+    "输出必须保持同样程度的不可见状态与头部朝向，禁止补画、脑补或翻转出完整面部；"
+    "仅当原图明确露出面部时，才对可见面部做美化修改。"
+)
 # 默认编辑提示词(用户给定)
 BASE_PROMPT = (
     "修改一下这些图中人物的面部，变得更精致、更帅气美丽、有辨识度；"
     "优化衣着，使其更时髦有质感、贴合场景，同时风格统一、配色协调；"
     "仅修改人物面部与衣着，使其完全看不出与原图是同一个人，以避免侵权；"
-    "并统一这几张图中人物的衣着。" + COMPOSE_KEEP
+    "并统一这几张图中人物的衣着。" + COMPOSE_KEEP + FACE_VISIBILITY
 )
 # 多图打包成宫格的指令(布局在运行时按批内张数生成)
 def grid_suffix(rows: int, cols: int) -> str:
@@ -69,7 +75,7 @@ SINGLE_PROMPT = (
     "修改一下这张图中人物的面部，变得更精致、更帅气美丽、有辨识度；"
     "优化衣着，使其更时髦有质感、贴合场景，同时风格统一、配色协调；"
     "仅修改人物面部与衣着，使其完全看不出与原图是同一个人，以避免侵权。"
-    + COMPOSE_KEEP +
+    + COMPOSE_KEEP + FACE_VISIBILITY +
     "直接输出这张修改后的单张人物照片，保持原姿势与构图。"
 )
 
@@ -236,9 +242,10 @@ def main() -> int:
     ap.add_argument("images", nargs="+", help="输入图片路径(≥1 张, 顺序即输出顺序)")
     ap.add_argument("--out", default="./anti_infringement_outputs", help="输出目录")
     ap.add_argument("--prompt", default=None, help="覆盖默认编辑提示词")
-    ap.add_argument("--engine", default=gpt_image2.DEFAULT_ENGINE,
+    ap.add_argument("--engine", default="qwen3",
                     choices=list(gpt_image2.ENGINES),
-                    help="生图引擎预设(默认 qwen3pro: mass/qwen-image-3.0-pro, 单次上限 3 张)")
+                    help="生图引擎预设(默认 qwen3: mass/qwen-image-3.0, 快速; "
+                         "qwen3pro 为换脸级重任务在 mass 120s 超时内跑不完会 502)")
     ap.add_argument("--platform", default=None, choices=list(gpt_image2.PLATFORMS),
                     help="覆盖引擎预设的平台")
     ap.add_argument("--model", default=None, help="覆盖引擎预设的模型")

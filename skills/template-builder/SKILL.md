@@ -18,7 +18,7 @@ description: >
 
 ## 运行前提
 
-- 环境变量 API Key（或 `--api-key`）：默认引擎 `qwen3pro` 走 `MASS_API_KEY`；`--engine gpt2k` 走 `HAPI_API_KEY`——复用 `gpt_image2.py` 的图生图/文生图接口。
+- 环境变量 API Key（或 `--api-key`）：文生图/剪影默认引擎 `qwen3pro` 走 `MASS_API_KEY`；反侵权默认引擎 `qwen3` 也走 `MASS_API_KEY`；`--engine gpt2k` 走 `HAPI_API_KEY`——复用 `gpt_image2.py` 的图生图/文生图接口。
 - `requests`、`Pillow` 可用；反侵权技能的 `run_batch_edit.py` 在同一仓库内。
 - 联网搜索/爬取：**由 agent 自带联网工具完成**（无独立爬虫脚本）。
 
@@ -32,19 +32,26 @@ skills/template-builder/
 
 ## 执行流程（agent 逐段推进）
 
+> ⏱️ **执行纪律与时间预算（硬性，违反=事故）**：本流程理论耗时 **≤30 分钟**（参考收集 5min + 反侵权 4 次调用 6min + 剪影 6min + 组装秒级 + 验收 3min）。
+> 1. **一条命令跑通**：`run_template.py` 自动串联 拆分→反侵权→剪影→组装。命令启动后**中途禁止停下来逐张看图、禁止边跑边改**，让脚本一次跑到组装完成。
+> 2. **QA 只做一次**：组装完成后对全部成片**一次性**看图验收（不许逐张多轮看）。
+> 3. **返工硬上限**：整批重跑 ≤2 轮、单张重生成 ≤3 次。**禁止创建 `_reedit{N}` 轮次目录**——重跑直接覆盖输出目录同名文件。超限立即停止，把不合格清单写入 `qa_report.md` 交用户决策，**绝不无限打磨**。
+> 4. QA 由历史教训（6 轮 reedit 烧 3 小时）而来：agent 的"多看一眼、再修一张"就是时间黑洞，纪律优先于完美。
+
 1. **判定输入并收集素材**
    - **链接(URL)**：用你的 WebFetch/WebSearch 抓取正文要点 + 收集图片 URL（og:image / 正文首图等），图片交给脚本下载。
    - **参考图**：直接采用。
    - **创作要求(纯文本)**：用你的联网搜索收集准确内容与图片资源。
    - 把收集到的信息整理成 `config.json`（见下），图片作为 `--inputs` 传入。
+   - **素材存放约定（硬性）**：agent 收集/下载的参考原图与派生裁剪图，一律存到 **`create_templates/<key>/_refs/`**（与脚本自下载 URL 的 `_refs` 目录同构，config.json 同放 `<key>/` 下），`--inputs` 从该目录取路径；禁止散落在项目根目录等临时位置，验收通过后 `_refs/` 随中间产物按需清理。
 
 2. **宫格检测/拆分**：脚本对每张参考图做布局检测（支持 k×k 正宫格与 1×n/n×1 横竖排，两级阈值抓白缝），是宫格则用反侵权技能的 `crop_grid` 拆分（band 边缘切 + 均质边清理），并**自动校验**：每格非空白、格尺寸一致；任一格空白或尺寸异常判为误检、该图回退按单图处理。拆分张数与 `cfg.poses` 数不符时打印告警，Agent 须在 QA 时逐张复核 panel。无缝宫格（格间无分隔线）无法自动检测，必要时人工预拆或 `--no-split` 逐张传入。
 
 3. **姿势图加工**
-   - **有真实参考图** → 脚本自动调用 `anti-infringement-pose-edit/run_batch_edit.py` 对姿势图做换脸防侵权 + 统一衣着，得到 N 张干净成片姿势图（`--skip-anti-infringement` 可跳过）。脚本会从 `cfg.poses[i].description` 提取景别（全身/半身）自动生成**构图提示**（含头顶/脚下留白与禁止推近裁切的约束）传给反侵权编辑，保持参考图构图；`--engine gpt2k` 时反侵权自动启用 `input_fidelity=high`。
+   - **有真实参考图** → 脚本自动调用 `anti-infringement-pose-edit/run_batch_edit.py` 对姿势图做换脸防侵权 + 统一衣着，得到 N 张干净成片姿势图（`--skip-anti-infringement` 可跳过；引擎由 `--anti-engine` 决定，默认 `qwen3`/MaaS 快速通道，勿用 qwen3pro——mass 120s 硬超时会 502）。脚本会从 `cfg.poses[i].description` 提取景别（全身/半身）自动生成**构图提示**（含头顶/脚下留白与禁止推近裁切的约束）传给反侵权编辑，保持参考图构图；反侵权走 gpt2k 时自动启用 `input_fidelity=high`。
    - **无参考图** → 加 `--auto-gen`，脚本基于 `cfg.poses[i].description` 用引擎的文生图自动补姿势（默认 `qwen3pro`/MaaS，`--engine gpt2k` 走 HAPI）。
 
-4. **姿势图 QA 与纠错（必做）**：在姿势图加工（反侵权成片 或 auto-gen 成片）产出后，**Agent 用看图能力对每张 `pose{i}.png` 逐张视觉审查**，判据与纠错闭环见 `anti-infringement-pose-edit` 技能的「加工后 Agent 视觉 QA 与自动纠错」一节（对照参考原图 + cfg.poses 姿势描述 + `aspect_ratio`）。审查项：裁剪错位（人物被切/邻格串入）、**构图忠实度（景别/人物占比/头顶脚下与四周留白必须与参考原图一致，成片明显更"满"即 FAIL，重点）**、人物/背景畸变、姿势/风格/画面一致性；若本轮走过宫格拆分，还需抽看拆分 panel 与成片的对应关系。某张不合格：内容缺陷→对 `pose{i}.png` 单图重编辑复查；构图不符→**仅对不合格张**用 `run_batch_edit.py --no-grid` 单图重编辑（只传不合格张，勿全量重跑以免浪费调用）；裁剪缺陷→用保留的宫格 `_grids/batchN.png` 该格重裁或重跑该批。最多重试 3 次，仍不合格标记 `QA_FAIL` 并写入 `qa_report.md` 报告用户，不擅自交付。
+4. **姿势图 QA 与纠错（一次性验收）**：组装完成后，Agent 用看图能力对全部 `pose{i}.png` **一次性逐张审查**（就一次，不许反复看），判据见 `anti-infringement-pose-edit` 技能的「加工后 Agent 视觉 QA 与自动纠错」一节（对照参考原图 + cfg.poses 姿势描述 + `aspect_ratio`）：裁剪错位（人物被切/邻格串入）、**构图忠实度（景别/人物占比/留白与参考一致，成片明显更"满"即 FAIL，重点）**、**面部可见性一致性（原图不露脸→成片不得露脸，重点）**、人物/背景畸变、一致性。不合格张按其纠错闭环单图修复；**整批返工 ≤2 轮、单张 ≤3 次，超限即写 `qa_report.md` 交用户决策**，不擅自交付也不无限打磨。
 
 5. **剪影**：对每张 `pose{i}.png` **单独一次图生图**（默认 `qwen3pro`/MaaS，`--engine gpt2k` 走 HAPI；提示词要求纯白底极简黑色线稿，只勾姿势轮廓），再用阈值 245 二值化转透明底线稿 → `pose{i}_sil.png`。逐个生成以保证姿势与姿势图一致、质量最高。剪影生成后同样抽查与对应姿势图姿势比例是否吻合。
 
@@ -72,17 +79,19 @@ python scripts/run_template.py --key my_tpl --cfg config.json --dry-run
 
 ## 生图引擎
 
-默认走 **`qwen-image-3.0-pro`（MaaS，单次最多 3 张输入图）**；需要 GPT-Image-2 2K 时显式指定 `--engine gpt2k`（HAPI，单次最多 4 张）：
+**分工默认**：反侵权加工走 `--anti-engine`（默认 `qwen3` = `mass`/`qwen-image-3.0`，快速）；文生图补姿势与剪影走 `--engine`（默认 `qwen3pro` = `mass`/`qwen-image-3.0-pro`）；需要 GPT-Image-2 2K 时显式指定 `--engine gpt2k`（HAPI，单次最多 4 张）：
+
+> ⚠️ **反侵权勿用 `qwen3pro`**（2026-10 实测）：mass 平台对生图任务有 **120s 硬超时**，pro 版换脸级重绘任务 >120s 必然 502（`upstream_error: timeout`）。非 pro 版 `qwen-image-3.0` 同任务 31s、宫格 3 图约 90s 稳定通过，质量肉眼接近 pro。轻任务（色调/衣着/白底线稿）用 pro 不超时，所以 `--engine` 默认保持 qwen3pro。
 
 ```bash
-# 默认: qwen3pro
+# 默认: 反侵权 qwen3 / 文生图与剪影 qwen3pro
 python scripts/run_template.py --key my_tpl --cfg config.json --inputs ref1.png ref2.png
 
-# 指定 gpt-image2 2K
-python scripts/run_template.py --key my_tpl --cfg config.json --inputs ref1.png ref2.png --engine gpt2k
+# 指定 gpt-image2 2K（剪影仍可留给 MaaS 省成本）
+python scripts/run_template.py --key my_tpl --cfg config.json --inputs ref1.png ref2.png --engine gpt2k --sil-engine qwen3pro
 ```
 
-引擎决定平台、模型与「单次请求图片上限」三件事，并自动透传给反侵权子步骤；`--platform` / `--model` / `--max-per-call` 可单独覆盖。
+`--engine` 决定文生图/剪影的平台、模型与「单次请求图片上限」；反侵权子步骤由 `--anti-engine` 决定（默认 qwen3）；`--platform` / `--model` / `--max-per-call` 可单独覆盖。
 另有 `--ratio`（覆盖 config.json 的 aspect_ratio）与 `--anti-no-grid`（反侵权不做宫格打包、每张单独编辑；渠道对多图输入超时时使用）。
 
 ## config.json 结构

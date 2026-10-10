@@ -136,6 +136,10 @@ skills/**/*.pyc
 /_cdp.py
 /_feeds_*.json
 /597762.html.urls.txt
+# 抖音页面抓取与路由数据一次性产物
+/_douyin_*
+/_douyin_refs/
+/_router_data.json
 
 # 营销素材 AI 原始出图（可由 scripts/gen_*.py 重生成，仅入库裁切成品）
 docs/marketing/assets/**/raw/

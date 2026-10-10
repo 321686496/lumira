@@ -116,6 +116,12 @@ ENGINES = {
         "model": "qwen-image-3.0-pro",
         "max_input_images": 3,        # 该模型单次请求最多接受 3 张输入图
     },
+    "qwen3": {
+        "label": "Qwen Image 3.0 (MaaS, 快速)",
+        "platform": "mass",
+        "model": "qwen-image-3.0",
+        "max_input_images": 3,
+    },
     "gpt2k": {
         "label": "GPT-Image-2 2K (HAPI)",
         "platform": "hapi",
@@ -568,18 +574,39 @@ class OpenAICompatibleImages:
 
 
 class MassImages:
-    """MaaS (mass.hzxmfg.com) 异步任务客户端: 提交 -> 轮询 -> 取 result_url"""
+    """MaaS (mass.hzxmfg.com) 客户端: 同步 /images/generations 端点 (JSON)
+
+    2026-10 实测: 该平台的尺寸参数只在 /v1/images/generations 生效;
+    旧异步 /v1/generations 端点会忽略 size 恒返 1024x1024, 且无 /v1/images/edits (404)。
+    图生图在同端点用 images 字段传 data URL 数组。
+    """
+
+    # qwen-image 系官方支持的尺寸档位 (比例不匹配的任意 WxH 会被平台忽略并回退 1024x1024)
+    SIZE_PRESETS = [
+        (1024, 1024),  # 1:1
+        (1664, 928),   # 16:9
+        (928, 1664),   # 9:16
+        (1472, 1140),  # 4:3
+        (1140, 1472),  # 3:4
+    ]
 
     def __init__(self, api_key: str, base_url: str):
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
 
     def _norm_size(self, size):
+        """'WxH' -> 官方尺寸档位: 比例与某档接近(≤8%)时吸附到该档, 否则原样透传
+        (如宫格画布 2304x1024 无匹配档, 透传由平台自行处理, 保持既有行为)。"""
         s = str(size).strip() if size else size
         m = re.match(r"^(\d+)[xX*](\d+)$", s or "")
-        if m:
-            return f"{m.group(1)}x{m.group(2)}"
-        return s
+        if not m:
+            return s
+        w, h = int(m.group(1)), int(m.group(2))
+        ratio = w / h
+        for pw, ph in self.SIZE_PRESETS:
+            if abs(ratio - pw / ph) / (pw / ph) <= 0.08:
+                return f"{pw}x{ph}"
+        return f"{w}x{h}"
 
     def _post_json(self, path, body, timeout=300):
         url = self.base_url + path
@@ -602,89 +629,46 @@ class MassImages:
             except json.JSONDecodeError:
                 return e.code, {"error": {"message": raw[:500]}}
 
-    def _get_json(self, path, timeout=60):
-        url = self.base_url + path
-        req = urllib.request.Request(
-            url, headers={"Authorization": f"Bearer {self.api_key}"})
-        try:
-            with _opener.open(req, timeout=timeout) as resp:
-                raw = resp.read().decode("utf-8", "replace")
-                try:
-                    return resp.status, json.loads(raw)
-                except json.JSONDecodeError:
-                    return resp.status, {"error": {"message": raw[:500]}}
-        except urllib.error.HTTPError as e:
-            raw = e.read().decode("utf-8", "replace")
-            try:
-                return e.code, json.loads(raw)
-            except json.JSONDecodeError:
-                return e.code, {"error": {"message": raw[:500]}}
-
-    def _poll(self, job_id: str, timeout: int = 600, cancel_check=None):
-        start = time.time()
-        while time.time() - start < timeout:
-            if cancel_check and cancel_check():
-                raise TaskCancelled("任务已取消")
-            status, resp = self._get_json(f"/generations/{job_id}")
-            if status != 200:
-                return status, resp
-            st = (resp or {}).get("status")
-            if st == "succeeded":
-                return 200, resp
-            if st in ("failed", "timed_out", "canceled"):
-                msg = resp.get("error") or resp.get("message") or f"任务状态 {st}"
-                return 200, {"error": {"message": msg}, "status": st}
-            time.sleep(3)
-        return 408, {"error": {"message": f"轮询任务 {job_id} 超时 ({int(timeout)}s)"}}
-
-    def _run_job(self, body, timeout: int = 600, cancel_check=None):
-        """提交一次异步任务并轮询到终态, 返回 (status, resp)"""
-        status, resp = self._post_json("/generations", body, timeout=timeout)
+    def _run_sync(self, body, timeout, cancel_check=None):
+        status, resp = self._post_json("/images/generations", body, timeout=timeout)
         if status != 200:
             return status, resp
-        job_id = (resp or {}).get("id")
-        if not job_id:
-            return 502, {"error": {"message": f"提交任务未返回 id: {resp}"}}
-        return self._poll(job_id, timeout=timeout, cancel_check=cancel_check)
+        if cancel_check and cancel_check():
+            raise TaskCancelled("任务已取消")
+        if not (resp or {}).get("data"):
+            return 502, {"error": {"message": f"响应缺少 data: {str(resp)[:200]}"}}
+        return 200, resp
 
     def generate(self, model, prompt, size=None, n=1, quality=None,
                  output_format=None, background=None, moderation=None,
                  timeout=600, cancel_check=None):
         n = max(1, int(n))
         results = []
-        for i in range(n):
-            if cancel_check and cancel_check():
-                raise TaskCancelled("任务已取消")
-            body = {"model": model, "prompt": prompt}
+        for _ in range(n):
+            body = {"model": model, "prompt": prompt, "n": 1}
             if size:
                 body["size"] = self._norm_size(size)
-            status, resp = self._run_job(body, timeout=timeout, cancel_check=cancel_check)
+            status, resp = self._run_sync(body, timeout, cancel_check)
             if status != 200:
                 return status, resp
-            if (resp or {}).get("status") != "succeeded":
-                return 502, resp
-            results.append({"url": (resp or {}).get("result_url")})
+            results.extend(resp["data"])
         return 200, {"data": results}
 
     def edit(self, model, prompt, images, size=None, n=1, quality=None,
              output_format=None, input_fidelity=None, background=None,
              moderation=None, timeout=600, cancel_check=None):
-        """images 转 base64 data URL 通过 images 数组字段传给异步任务"""
+        """images 转 base64 data URL 数组, 与文生图同端点图生图"""
         n = max(1, int(n))
         data_urls = [_data_url(ct, data) for _, ct, data in images]
         results = []
-        for i in range(n):
-            if cancel_check and cancel_check():
-                raise TaskCancelled("任务已取消")
-            body = {"model": model, "prompt": prompt, "images": data_urls}
+        for _ in range(n):
+            body = {"model": model, "prompt": prompt, "n": 1, "images": data_urls}
             if size:
                 body["size"] = self._norm_size(size)
-            status, resp = self._run_job(body, timeout=timeout, cancel_check=cancel_check)
+            status, resp = self._run_sync(body, timeout, cancel_check)
             if status != 200:
                 return status, resp
-            if (resp or {}).get("status") != "succeeded":
-                return 502, resp
-            results.append({"url": (resp or {}).get("result_url")})
+            results.extend(resp["data"])
         return 200, {"data": results}
 
 

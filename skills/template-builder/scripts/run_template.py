@@ -288,9 +288,13 @@ def gen_silhouette(client, model, pose_path: Path, out_dir: Path) -> Path | None
 
 
 def framing_hint(desc: str) -> str:
-    """从姿势描述提取构图约束句(景别/留白), 供反侵权编辑保持参考图构图。"""
+    """从姿势描述提取构图约束句(景别/留白/露脸状态), 供反侵权编辑保持参考图构图。"""
     d = desc or ""
-    if "全身" in d:
+    if "远景" in d:
+        shot = ("远景景别：人物仅占画面高度约25%-35%，含脚完整入镜，"
+                "完整保留大树/长椅/大片落叶地等全部环境与四周留白，"
+                "禁止放大人物、禁止推近成中景/近景/半身")
+    elif "全身" in d:
         shot = ("全身景别：人物含脚部完整入镜，头顶留白≥画面高度15%，脚下保留地面环境，"
                 "禁止裁脚、禁止推近成半身或特写")
     elif "半身" in d:
@@ -298,7 +302,13 @@ def framing_hint(desc: str) -> str:
                 "禁止推近成面部特写或拉远成全身")
     else:
         shot = "保持原图取景景别与人物画面占比"
-    return shot + "；人物位置与四周环境留白与原图完全一致"
+    face = ""
+    if any(k in d for k in ("背影", "背对", "不露脸", "低头", "侧脸", "遮挡", "回头")):
+        face = "；该姿势不露出完整面部（背影/低头/遮挡），输出必须同样不露脸，禁止补画面部"
+    cam = ("；机位与视角（高低/俯仰/拍摄距离）、光线方向与色温、景深与虚化程度、场景氛围与整体影调质感"
+           "均与原图保持一致，禁止改变画面风格；"
+           "若原图含叠加文字/水印/字幕/贴纸，必须彻底清除且不得改动背景")
+    return shot + "；人物位置与四周环境留白与原图完全一致" + cam + face
 
 
 def build_hints(cfg: dict, n: int) -> list[str]:
@@ -465,7 +475,10 @@ def main() -> int:
     ap.add_argument("--parent", default="create_templates", help="输出父目录(默认 create_templates)")
     ap.add_argument("--engine", default=gpt_image2.DEFAULT_ENGINE,
                     choices=list(gpt_image2.ENGINES),
-                    help="生图引擎预设(默认 qwen3pro: mass/qwen-image-3.0-pro)")
+                    help="文生图/图生图引擎预设(默认 qwen3pro: mass/qwen-image-3.0-pro)")
+    ap.add_argument("--anti-engine", default="qwen3", choices=list(gpt_image2.ENGINES),
+                    help="反侵权加工引擎预设(默认 qwen3: mass/qwen-image-3.0)。"
+                         "勿用 qwen3pro: mass 平台对任务有 120s 硬超时, 换脸级重任务跑不完会 502")
     ap.add_argument("--sil-engine", default=None, choices=list(gpt_image2.ENGINES),
                     help="剪影生图引擎预设(默认跟随 --engine); "
                          "如 --engine gpt2k --sil-engine qwen3pro 让姿势图走 HAPI、剪影走 MaaS")
@@ -565,10 +578,11 @@ def main() -> int:
             print(f"  [姿势] 跳过反侵权, 直接用 {len(final_poses)} 张", flush=True)
         else:
             print("  [姿势] 真实参考图 -> 反侵权加工…", flush=True)
-            key = args.api_key or os.environ.get(eng["key_env"], "")
+            anti_eng = gpt_image2.resolve_engine(args.anti_engine)
+            key = args.api_key or os.environ.get(anti_eng["key_env"], "")
             done = run_anti_infringement([str(p) for p in pose_sources], out_dir, key,
-                                         eng["platform"], eng["model"],
-                                         eng["max_input_images"], ASPECT[1],
+                                         anti_eng["platform"], anti_eng["model"],
+                                         anti_eng["max_input_images"], ASPECT[1],
                                          args.keep_grids, args.anti_no_grid,
                                          hints=build_hints(cfg, len(pose_sources)))
             if done:
