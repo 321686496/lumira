@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>拍照总是尬站？我们把"照着拍就能出片"这件事做成了 App · B 痛点切入版 · 公众号预览</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#e8e5df; font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif; padding:28px 12px 80px; }
+  .wrap { max-width:677px; margin:0 auto; }
+  .meta { background:#fff; border-radius:12px; padding:22px 24px; margin-bottom:14px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+  .meta h1 { font-size:21px; line-height:1.5; color:#1a1a1a; font-weight:700; }
+  .meta .digest { margin-top:12px; font-size:14px; color:#888; line-height:1.7; }
+  .meta .digest b { color:#555; font-weight:600; }
+  .cover { border-radius:12px; overflow:hidden; margin-bottom:14px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+  .cover img { display:block; width:100%; }
+  .cover .tip { padding:10px 16px; font-size:13px; color:#999; background:#fff; }
+  .article { background:#fff; border-radius:12px; padding:28px 24px 40px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+  .toolbar { position:fixed; left:50%; transform:translateX(-50%); bottom:20px; z-index:9; }
+  .toolbar button {
+    border:none; cursor:pointer; background:#C7472F; color:#fff; font-size:15px; font-weight:600;
+    padding:13px 34px; border-radius:999px; box-shadow:0 6px 18px rgba(199,71,47,.4); letter-spacing:2px;
+  }
+  .toolbar button:active { transform:scale(.97); }
+  #toast { position:fixed; left:50%; transform:translateX(-50%); bottom:84px; background:rgba(0,0,0,.78); color:#fff;
+    font-size:13px; padding:9px 18px; border-radius:8px; display:none; z-index:9; letter-spacing:1px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="meta">
+    <h1>拍照总是尬站？我们把"照着拍就能出片"这件事做成了 App</h1>
+    <div class="digest"><b>摘要：</b>不会摆姿势、不懂构图，拍十张废九张。我们把"照着拍就能出片"这件事，做成了一个 App。</div>
+    <div class="digest" style="margin-top:8px;"><b>备选标题：</b>二十张连拍，二十张证件照？问题可能不在你的脸</div>
+    <div class="digest" style="margin-top:8px;"><b>定位：</b>痛点切入、节奏最快、转化意图最强的版本；适合独立首发或作为非连载期的官宣稿。<br><b>评论区话术储备：</b>"安卓能用吗？"→"目前已上架 iOS 和华为（鸿蒙）应用市场，其他机型在规划中～"｜"要钱吗？"→"下载即可用，内置 60+ 款模板；部分付费模板可以用邀请好友攒的积分解锁～"｜"男朋友能用吗？"→"可以，剪影是给拍照的人看的提示，谁拿手机都能照着指挥。"</div>
+    <div class="digest" style="margin-top:8px;"><b>朋友圈转发文案：</b>如果你也属于"拍照十张废九张"的那种人——我们做了个 App 专门治这个：打开模板，取景框上会叠一条人形剪影，照着摆就行。iOS 和鸿蒙都能搜到「如画 Lumira」。转给那个拍照时总说"我不知道手往哪放"的朋友。</div>
+  </div>
+  <div class="cover">
+    <img src="../lumira-mp-20261010/assets/wx-02-template.png" alt="痛点切入版封面">
+    <div class="tip">封面建议：wx-02-template.png（剪影玩法）｜正文配图 6 张：wx-02、wx-03、wx-04、wx-06、wx-08、wx-05（在 ../lumira-mp-20261010/assets/ 逐张上传）</div>
+  </div>
+  <div class="article" id="content">
+<p style="font-size:16px;color:#3A362E;line-height:1.9;margin:0 0 20px;letter-spacing:0.5px;">你举起手机，对方站在原地，手不知道往哪放，眼神不知道往哪看。快门按了二十下，张张都像证件照。</p>
+<p style="font-size:16px;color:#3A362E;line-height:1.9;margin:0 0 20px;letter-spacing:0.5px;">这个场景，你大概率不陌生。风景很好，光线很好，人往镜头前一站，就僵住了。</p>
+<p style="font-size:16px;color:#3A362E;line-height:1.9;margin:0 0 20px;letter-spacing:0.5px;"><strong style="color:#3A362E;">问题不在设备，也不在脸，而在两件特别具体的事：</strong></p>
+<p style="font-size:15px;color:#57503F;line-height:2.1;margin:0 0 20px;padding:16px 18px;background:#FAF6EE;border-left:3px solid #C2A06B;letter-spacing:0.5px;">1. 被拍的人不知道该干嘛——手放哪、腿怎么站、往哪看；<br>2. 拍照的人不知道往哪放人——人在画面里该多大、镜头该多高。</p>
+<p style="font-size:16px;color:#3A362E;line-height:1.9;margin:0 0 20px;letter-spacing:0.5px;">这两件事听起来要"学摄影"才能解决。但我们觉得，绝大多数人需要的不是一门课，而是<strong style="color:#C7472F;">按下快门前的那一句提示</strong>。</p>
+<p style="font-size:16px;color:#3A362E;line-height:1.9;margin:0 0 20px;letter-spacing:0.5px;">所以我们做了「如画 Lumira」。核心功能一句话就能讲完：<strong>打开一款模板，人形剪影会叠在你的取景框上——照着剪影站，照着剪影摆，构图姿势一次到位。</strong>不需要懂"三分法"，不需要背"站姿三十式"，你只管照着摆，剩下的交给快门。</p>
+<img src="../lumira-mp-20261010/assets/wx-02-template.png" alt="取景框剪影" style="width:100%;display:block;border-radius:10px;margin:26px 0 8px;">
+<p style="text-align:center;font-size:13px;color:#B4AB9C;margin:0 0 28px;letter-spacing:1px;">▲ 取景框里的半透明剪影 · 效果示意</p>
+<p style="text-align:center;font-size:18px;font-weight:bold;color:#2b2b2b;margin:36px 0 20px;letter-spacing:1px;">▷ 60+ 款模板，覆盖生活里会拍照的每个场景</p>
+<p style="font-size:16px;color:#3A362E;line-height:1.9;margin:0 0 20px;letter-spacing:0.5px;">人像、探店、美食、街拍、夜景——内置 <strong>60+ 款</strong>精品模板，每款都标注了场景与姿势要点，线上持续上新。看到好看的，或正站在好看的景前，关键词一搜——「日落」「咖啡店」「闺蜜」——匹配的直接出来，直接抄作业。</p>
+<img src="../lumira-mp-20261010/assets/wx-03-search.png" alt="关键词搜索" style="width:100%;display:block;border-radius:10px;margin:26px 0 8px;">
+<p style="text-align:center;font-size:13px;color:#B4AB9C;margin:0 0 28px;letter-spacing:1px;">▲ 搜索页 · 效果示意</p>
+<p style="text-align:center;font-size:18px;font-weight:bold;color:#2b2b2b;margin:36px 0 20px;letter-spacing:1px;">▷ 后期调参总翻车？所见即所得</p>
+<p style="font-size:16px;color:#3A362E;line-height:1.9;margin:0 0 20px;letter-spacing:0.5px;">拍完再进编辑页调，一保存才发现过曝了、变丑了——晚了。如画反过来：模板自带后期参数，应用即套好；在取景器里直接拖亮度、对比度、色调，<strong>参数实时生效，眼前所见就是成片</strong>。你看到的，就是你拍到的，不用赌。</p>
+<img src="../lumira-mp-20261010/assets/wx-04-params.png" alt="实时调参" style="width:100%;display:block;border-radius:10px;margin:26px 0 8px;">
+<p style="text-align:center;font-size:13px;color:#B4AB9C;margin:0 0 28px;letter-spacing:1px;">▲ 实时调参面板 · 效果示意</p>
+<p style="text-align:center;font-size:18px;font-weight:bold;color:#2b2b2b;margin:36px 0 20px;letter-spacing:1px;">▷ 帮别人拍照，不用再喊"自然一点"</p>
+<p style="font-size:16px;color:#3A362E;line-height:1.9;margin:0 0 20px;letter-spacing:0.5px;">被拍的人最大的痛苦是"不知道干嘛"。有了剪影，<strong>指挥变成了对齐</strong>——"你站进这个框里就行"。看到好看的模板，还能一键生成分享卡片发给对方，轻轻一点，同一套直接用。男朋友、闺蜜、路过的同事，谁拿手机都能当一次"隔空摄影师"。</p>
+<img src="../lumira-mp-20261010/assets/wx-06-share.png" alt="模板分享" style="width:100%;display:block;border-radius:10px;margin:26px 0 8px;">
+<p style="text-align:center;font-size:13px;color:#B4AB9C;margin:0 0 28px;letter-spacing:1px;">▲ 模板分享卡片 · 效果示意</p>
+<p style="text-align:center;font-size:18px;font-weight:bold;color:#2b2b2b;margin:36px 0 20px;letter-spacing:1px;">▷ 每天打开，都有"今天拍什么"的答案</p>
+<p style="font-size:16px;color:#3A362E;line-height:1.9;margin:0 0 20px;letter-spacing:0.5px;">不知道拍什么，是另一个隐形门槛。<strong>今日灵感</strong>会结合天气、时间与你的偏好，给出今天值得拍的主题；<strong>每日挑战</strong>推一些没试过的风格，"拍照"慢慢变成像记账一样的日常习惯。</p>
+<img src="../lumira-mp-20261010/assets/wx-08-inspire.png" alt="今日灵感与每日挑战" style="width:100%;display:block;border-radius:10px;margin:26px 0 8px;">
+<p style="text-align:center;font-size:13px;color:#B4AB9C;margin:0 0 28px;letter-spacing:1px;">▲ 今日灵感 · 每日挑战 · 效果示意</p>
+<p style="text-align:center;font-size:18px;font-weight:bold;color:#2b2b2b;margin:36px 0 20px;letter-spacing:1px;">▷ 拍完的那一下，就该有下文</p>
+<p style="font-size:16px;color:#3A362E;line-height:1.9;margin:0 0 20px;letter-spacing:0.5px;">探到好看的店、好看的景，随手记成一条探店足迹，配上好片一键导出海报；几百张里挑出真正能打的收进精选集，凑够九张拼成九宫格海报。别人发朋友圈是"随手发"，你是"精选发"。</p>
+<img src="../lumira-mp-20261010/assets/wx-05-explore.png" alt="探店打卡与精选集" style="width:100%;display:block;border-radius:10px;margin:26px 0 8px;">
+<p style="text-align:center;font-size:13px;color:#B4AB9C;margin:0 0 28px;letter-spacing:1px;">▲ 探店足迹 · 我的精选集 · 效果示意</p>
+<p style="text-align:center;font-size:18px;font-weight:bold;color:#2b2b2b;margin:36px 0 20px;letter-spacing:1px;">▷ 邀请有礼：把好用的模板转给朋友</p>
+<p style="font-size:16px;color:#3A362E;line-height:1.9;margin:0 0 20px;letter-spacing:0.5px;">把邀请码分享给好友，好友首次激活并完拍一张后，<strong>双方各得 30 积分</strong>，积攒起来可以解锁付费模板。好用的东西，本来就该被转给"总说自己不上相"的那位。</p>
+<p style="text-align:center;font-size:18px;font-weight:bold;color:#2b2b2b;margin:36px 0 20px;letter-spacing:1px;">▷ 关于隐私，我们想认真说一句</p>
+<p style="font-size:16px;color:#3A362E;line-height:1.9;margin:0 0 20px;letter-spacing:0.5px;">如画支持<strong>离线使用，不强制登录注册</strong>，你的照片和本地数据由你自己掌控。拍照是很私人的事，我们希望这个工具安静、可靠、不越界。</p>
+<p style="font-size:16px;color:#3A362E;line-height:1.9;margin:40px 0 20px;letter-spacing:0.5px;">「如画 Lumira」已上架：</p>
+<p style="font-size:15px;color:#57503F;line-height:2.1;margin:0 0 20px;padding:16px 18px;background:#FAF6EE;border-left:3px solid #C2A06B;letter-spacing:0.5px;"><strong>iOS App Store</strong>：搜索「如画」或「Lumira」，或点击文末"阅读原文"【商店链接待补】<br><strong>华为应用市场（OHOS）</strong>：同步上架，搜索「如画 Lumira」【商店链接待补】</p>
+<p style="font-size:16px;color:#3A362E;line-height:1.9;margin:0 0 20px;letter-spacing:0.5px;">新应用难免有糙的地方。使用中遇到任何问题，欢迎在「设置 → 意见反馈」里告诉我们，每一条我们都会认真读。</p>
+<p style="font-size:16px;color:#3A362E;line-height:1.9;margin:0 0 20px;letter-spacing:0.5px;">下次举起手机，别再喊"自然一点"了——<strong style="color:#C7472F;">照着剪影摆，就行。</strong></p>
+<p style="text-align:center;font-size:15px;color:#8A7B5E;margin:36px 0 0;letter-spacing:1px;">互动：你拍过最"冒犯"自己的一张照片是什么？评论区见。</p>
+  </div>
+</div>
+<div class="toolbar"><button onclick="copyRich()">一键复制正文</button></div>
+<div id="toast"></div>
+<script>
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 2600);
+  }
+  async function copyRich() {
+    const el = document.getElementById('content');
+    const html = el.innerHTML;
+    try {
+      const item = new ClipboardItem({
+        'text/html': new Blob([html], {type: 'text/html'}),
+        'text/plain': new Blob([el.innerText], {type: 'text/plain'})
+      });
+      await navigator.clipboard.write([item]);
+      toast('已复制富文本 · 去公众号后台粘贴即可');
+    } catch (e) {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = getSelection();
+      sel.removeAllRanges(); sel.addRange(range);
+      document.execCommand('copy');
+      sel.removeAllRanges();
+      toast('已复制（兼容模式）· 去公众号后台粘贴即可');
+    }
+  }
+</script>
+</body>
+</html>
