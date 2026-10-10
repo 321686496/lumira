@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>如画Lumira · B/C 版专属封面</title>
+<style>
+  @font-face { font-family:'NSerif'; src:url('file:///d:/app/projects/photo_post/lumira_app_flutter/assets/fonts/NotoSerifSC-Bold.otf'); font-weight:700; }
+  @font-face { font-family:'NSerif'; src:url('file:///d:/app/projects/photo_post/lumira_app_flutter/assets/fonts/NotoSerifSC-Regular.otf'); font-weight:400; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#555; font-family:'NSerif',serif; color:#3A362E; }
+  .page {
+    width:1080px; height:460px; position:relative; overflow:hidden; margin:0 auto 24px;
+    background:linear-gradient(135deg,#FDFBF7 0%,#F8F2E7 55%,#F2E9D8 100%);
+    text-align:center;
+  }
+
+  /* 取景框四角装饰 */
+  .vf span { position:absolute; width:48px; height:48px; border:3px solid rgba(194,160,107,.5); }
+  .vf span:nth-child(1) { top:26px; left:26px; border-right:none; border-bottom:none; border-radius:10px 0 0 0; }
+  .vf span:nth-child(2) { top:26px; right:26px; border-left:none; border-bottom:none; border-radius:0 10px 0 0; }
+  .vf span:nth-child(3) { bottom:26px; left:26px; border-right:none; border-top:none; border-radius:0 0 0 10px; }
+  .vf span:nth-child(4) { bottom:26px; right:26px; border-left:none; border-top:none; border-radius:0 0 10px 0; }
+
+  /* 金线内框 */
+  .frame { position:absolute; top:16px; left:16px; right:16px; bottom:16px; border:1px solid rgba(194,160,107,.4); border-radius:14px; pointer-events:none; }
+
+  .brand { position:absolute; top:58px; width:100%; font-size:21px; letter-spacing:9px; color:#8A7B5E; font-weight:700; }
+  .kicker { position:absolute; top:104px; width:100%; }
+  .kicker span {
+    display:inline-block; font-size:24px; letter-spacing:4px; color:#C7472F;
+    border:2px solid rgba(199,71,47,.5); border-radius:999px; padding:8px 30px 8px 36px; background:rgba(255,254,251,.72);
+  }
+  .store { position:absolute; bottom:38px; width:100%; font-size:22px; letter-spacing:3px; color:#6E675C; }
+  .store b { color:#3A362E; }
+
+  /* ---- B 痛点切入版 ---- */
+  .b0 .h1 { position:absolute; top:178px; width:100%; font-size:72px; font-weight:700; letter-spacing:6px; }
+  .b0 .h1 .verm { color:#C7472F; }
+  .b0 .sub { position:absolute; top:296px; width:100%; font-size:29px; letter-spacing:5px; color:#6E675C; }
+
+  /* ---- C 情绪共鸣版 ---- */
+  .c0 .h1 { position:absolute; top:168px; width:100%; font-size:50px; font-weight:700; letter-spacing:4px; line-height:1.45; }
+  .c0 .h1 .verm { color:#C7472F; }
+  .c0 .sub { position:absolute; top:346px; width:100%; font-size:24px; letter-spacing:4px; color:#8A7B5E; }
+</style>
+</head>
+<body>
+
+<!-- ============ B0 痛点切入版封面 ============ -->
+<section class="page b0" id="b0">
+  <div class="vf"><span></span><span></span><span></span><span></span></div>
+  <i class="frame"></i>
+  <div class="brand">如画 Lumira</div>
+  <div class="kicker"><span>二十张连拍，二十张证件照</span></div>
+  <div class="h1">拍照总是<span class="verm">尬站</span>？</div>
+  <div class="sub">照着剪影摆，就能出片</div>
+  <div class="store">iOS App Store · 华为应用市场｜搜「<b>如画 Lumira</b>」</div>
+</section>
+
+<!-- ============ C0 情绪共鸣版封面 ============ -->
+<section class="page c0" id="c0">
+  <div class="vf"><span></span><span></span><span></span><span></span></div>
+  <i class="frame"></i>
+  <div class="brand">如画 Lumira · 上架了</div>
+  <div class="h1">不会摆姿势的人<br>也配拥有<span class="verm">好看的照片</span></div>
+  <div class="sub">把平凡的日子，拍成一本漂亮的日记</div>
+  <div class="store">iOS App Store · 华为应用市场｜搜「<b>如画 Lumira</b>」</div>
+</section>
+
+<script>
+  // 无 hash：两页平铺预览；带 #b0 / #c0：只显示对应页（渲染截图用）
+  window.addEventListener('load', function () {
+    var h = location.hash.slice(1);
+    if (!h) return;
+    document.querySelectorAll('.page').forEach(function (el) { el.style.display = 'none'; });
+    var t = document.getElementById(h);
+    if (t) t.style.display = 'block';
+  });
+</script>
+</body>
+</html>
