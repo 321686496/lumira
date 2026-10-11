@@ -72,9 +72,12 @@ ANCHOR_NOTE = (
 )
 # 单图(兜底重绘)提示词
 SINGLE_PROMPT = (
-    "修改一下这张图中人物的面部，变得更精致、更帅气美丽、有辨识度；"
-    "优化衣着，使其更时髦有质感、贴合场景，同时风格统一、配色协调；"
-    "仅修改人物面部与衣着，使其完全看不出与原图是同一个人，以避免侵权。"
+    "把这张图中人物的脸部彻底换成另一个全新的人物：重塑脸型轮廓、五官形态、眼距、鼻唇与眉眼细节，"
+    "并调整发型发色等头部特征，生成一个与原图人物毫无相似之处的全新形象，"
+    "完全看不出与原图是同一个人，以避免肖像侵权；"
+    "但必须保留原图人物的表情神态（笑容/视线方向/情绪氛围）、姿势动作与肢体语言不变。"
+    "衣着必须完全照搬最后一张锚点参考图的整套服装：上下装的颜色/款式/材质、鞋子、随身包袋与配饰"
+    "全部与锚点一致，禁止保留原图服装的任何颜色或款式特征；"
     + COMPOSE_KEEP + FACE_VISIBILITY +
     "直接输出这张修改后的单张人物照片，保持原姿势与构图。"
 )
@@ -218,14 +221,30 @@ def run_single(client, model, target: str, out_dir: str, prefix: str,
     prompt = SINGLE_PROMPT + gpt_image2.ratio_note(ratio)
     if hint and not custom_prompt:
         prompt += f"构图要求：{hint}。"
-    if anchor and not custom_prompt:
-        prompt += ANCHOR_NOTE
+    if anchor:
+        # 锚点图无条件注入(custom_prompt 下由自定义提示词自行描述其用途, 默认提示词用 ANCHOR_NOTE)
         imgs.append(_load_tuple(anchor))
+        if not custom_prompt:
+            prompt += ANCHOR_NOTE
     size = gpt_image2.resolve_size(size_single, imgs[0][2])
-    status, resp = client.edit(model, prompt, imgs, size=size, n=1, timeout=timeout,
-                               input_fidelity=input_fidelity)
-    if status != 200 or not resp.get("data"):
-        print(f"    [回退失败] HTTP {status}: {resp}", file=sys.stderr)
+    status, resp = None, None
+    for attempt in range(1, 4):          # 偶发 read 超时重试, 与 gen_hapi 的 MAX_TRY=3 对齐
+        try:
+            status, resp = client.edit(model, prompt, imgs, size=size, n=1,
+                                       timeout=timeout, input_fidelity=input_fidelity)
+        except Exception as e:
+            print(f"    [单图尝试{attempt} 异常] {e}", file=sys.stderr)
+            if attempt < 3:
+                time.sleep(20)
+                continue
+            return None
+        if status == 200 and resp.get("data"):
+            break
+        print(f"    [单图尝试{attempt} 失败] HTTP {status}: {str(resp)[:200]}", file=sys.stderr)
+        status, resp = None, None
+        if attempt < 3:
+            time.sleep(20)
+    if status is None:
         return None
     with tempfile.TemporaryDirectory() as td:
         item = resp["data"][0]

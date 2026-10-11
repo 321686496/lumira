@@ -322,7 +322,8 @@ def run_anti_infringement(pose_sources: list[str], work: Path, api_key: str = ""
                           platform: str = "", model: str = "",
                           max_per_call: int = 0, ratio: str = "",
                           keep_grids: bool = False, no_grid: bool = False,
-                          hints: list[str] | None = None) -> list[Path] | None:
+                          hints: list[str] | None = None,
+                          anchor: str = "") -> list[Path] | None:
     """调用反侵权技能加工真实参考姿势图, 返回 N 张成片(按输入顺序)。"""
     tmp = work / "_anti_infringe"
     tmp.mkdir(parents=True, exist_ok=True)
@@ -340,6 +341,8 @@ def run_anti_infringement(pose_sources: list[str], work: Path, api_key: str = ""
         cmd += ["--ratio", ratio]
     if hints:
         cmd += ["--hints", ";;".join(hints)]
+    if anchor:
+        cmd += ["--anchor", anchor]
     if not keep_grids:
         cmd += ["--no-keep-grids"]
     if no_grid:
@@ -472,6 +475,8 @@ def main() -> int:
                     help="不保留反侵权步骤的中间宫格拼图(默认保留到 <out>/_anti_infringe/_grids/)")
     ap.add_argument("--anti-no-grid", action="store_true",
                     help="反侵权加工不做宫格打包, 每张单独编辑(渠道对多图输入超时时使用)")
+    ap.add_argument("--anti-anchor", default="",
+                    help="反侵权加工的衣着锚点图(统一全批服装到该图穿着, 强烈建议传)")
     ap.add_argument("--parent", default="create_templates", help="输出父目录(默认 create_templates)")
     ap.add_argument("--engine", default=gpt_image2.DEFAULT_ENGINE,
                     choices=list(gpt_image2.ENGINES),
@@ -584,7 +589,8 @@ def main() -> int:
                                          anti_eng["platform"], anti_eng["model"],
                                          anti_eng["max_input_images"], ASPECT[1],
                                          args.keep_grids, args.anti_no_grid,
-                                         hints=build_hints(cfg, len(pose_sources)))
+                                         hints=build_hints(cfg, len(pose_sources)),
+                                         anchor=args.anti_anchor)
             if done:
                 final_poses = done[:pose_count]
             else:
