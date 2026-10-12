@@ -597,6 +597,48 @@ export const AtmoE01: React.FC = () => {
           );
         })()}
 
+        {/* ============ P5 CTA：成片墙 + 品牌章 + slogan（900-1050） ============ */}
+        {frame >= 900 && (() => {
+          const walls = [
+            {f: 910, src: 'atmo/wall-1.jpg', left: 30, top: 260, rotate: -6},
+            {f: 925, src: 'atmo/wall-2.jpg', left: 570, top: 330, rotate: 5},
+            {f: 940, src: 'atmo/wall-3.jpg', left: 60, top: 1180, rotate: 4},
+            {f: 955, src: 'atmo/wall-4.jpg', left: 560, top: 1250, rotate: -5},
+          ];
+          const sIn = spring({frame: Math.max(0, frame - 990), fps, config: {damping: 13, stiffness: 170}});
+          return (
+            <>
+              {walls.map((w) => (
+                <div key={w.src} style={{position: 'absolute', left: w.left, top: w.top}}>
+                  <VPolaroid frame={frame} fps={fps} start={w.f} w={480} rotate={w.rotate}>
+                    <Img src={staticFile(w.src)} style={{width: '100%', height: '100%', objectFit: 'cover'}} />
+                  </VPolaroid>
+                </div>
+              ))}
+              <div style={{position: 'absolute', left: 0, right: 0, top: 880, display: 'flex', justifyContent: 'center'}}>
+                <Stamp text="如画" frame={frame} fps={fps} start={970} size={150} color={V.goldDeep} border rotate={-3} />
+              </div>
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: 1085,
+                  textAlign: 'center',
+                  fontSize: 44,
+                  fontWeight: 700,
+                  color: V.inkSoft,
+                  letterSpacing: 6,
+                  opacity: sIn,
+                  transform: `translateY(${(1 - sIn) * 20}px)`,
+                }}
+              >
+                跟着拍，就有氛围感
+              </div>
+            </>
+          );
+        })()}
+
         {/* ============ 转折后全片暖调罩（240 起持续） ============ */}
         <AbsoluteFill
           style={{
@@ -612,6 +654,7 @@ export const AtmoE01: React.FC = () => {
         <Cap text="让光替你说话" frame={frame} fps={fps} start={476} duration={74} highlight={['光']} />
         <Cap text="退远，环境讲故事" frame={frame} fps={fps} start={576} duration={74} rotate={-1} highlight={['环境']} />
         <Cap text="不用学，跟着模板拍就行" frame={frame} fps={fps} start={676} duration={210} highlight={['模板']} />
+        {/* P5 不设底部字幕：中央 slogan 已承担收尾文案，避免同句重复 */}
 
         {/* ============ 音效 ============ */}
         {SFX.map((s, i) => (
