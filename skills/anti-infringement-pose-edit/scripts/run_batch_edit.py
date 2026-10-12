@@ -215,10 +215,11 @@ def split_and_normalize(grid_img, n: int, ratio: float) -> tuple:
 def run_single(client, model, target: str, out_dir: str, prefix: str,
                size_single: str, timeout: int, ratio: float,
                anchor: str | None = None, custom_prompt: bool = False,
-               hint: str = "", input_fidelity: str | None = None) -> str | None:
+               hint: str = "", input_fidelity: str | None = None,
+               prompt_override: str | None = None) -> str | None:
     """单图编辑: 直接产出一张成片(附锚点参考以统一衣着), 并归一化到目标尺寸。"""
     imgs = [_load_tuple(target)]
-    prompt = SINGLE_PROMPT + gpt_image2.ratio_note(ratio)
+    prompt = (prompt_override or SINGLE_PROMPT) + gpt_image2.ratio_note(ratio)
     if hint and not custom_prompt:
         prompt += f"构图要求：{hint}。"
     if anchor:
@@ -276,6 +277,9 @@ def main() -> int:
                     help="模板宽高比(如 3:4 / 3/4 / 0.75)。缺省按输入图比例推断(全部一致用该比例, 否则取多数), 再缺省 3:4")
     ap.add_argument("--size-single", default="from-image", help="单图路径的输出尺寸")
     ap.add_argument("--timeout", type=int, default=300)
+    ap.add_argument("--input-fidelity", default="auto", choices=["auto", "low", "high"],
+                    help="参考图保真度: auto=hapi 通道 high/其他 None(保持输入原样); "
+                         "换脸/遮脸/换装等大改任务用 low 放开编辑幅度")
     ap.add_argument("--no-grid", action="store_true",
                     help="不做宫格打包, 每张图单独跑一次单图编辑(部分渠道对多图输入会上游超时时使用)")
     ap.add_argument("--no-keep-grids", dest="keep_grids", action="store_false",
@@ -336,7 +340,12 @@ def main() -> int:
     def hint_for(idx: int) -> str:
         return hints[idx] if 0 <= idx < len(hints) else ""
 
-    fidelity = "high" if eng["platform"] == "hapi" else None
+    # input_fidelity: auto=hapi 通道 high/其他 None(保持旧默认);
+    # 该参数会压制编辑幅度, 换脸/遮脸/换装类大改任务应显式 --input-fidelity low
+    if args.input_fidelity == "auto":
+        fidelity = "high" if eng["platform"] == "hapi" else None
+    else:
+        fidelity = args.input_fidelity
 
     outputs: list[str | None] = [None] * len(args.images)  # 与输入顺序对齐
 
@@ -372,7 +381,8 @@ def main() -> int:
             outputs[gi] = run_single(client, model, targets[0], args.out,
                                      f"out{gi+1}", args.size_single, args.timeout,
                                      ratio, anchor_path, bool(args.prompt),
-                                     hint=hint_for(gi), input_fidelity=fidelity)
+                                     hint=hint_for(gi), input_fidelity=fidelity,
+                                     prompt_override=args.prompt)
             continue
 
         prompt = base_prompt + grid_suffix(rows, cols)
@@ -400,7 +410,8 @@ def main() -> int:
                 gi = args.images.index(t)
                 outputs[gi] = run_single(client, model, t, args.out, f"out{gi+1}",
                                          args.size_single, args.timeout, ratio,
-                                         anchor_path, bool(args.prompt))
+                                         anchor_path, bool(args.prompt),
+                                         prompt_override=args.prompt)
             continue
 
         # 解码宫格 -> 按布局裁剪 -> 归一化
@@ -430,7 +441,8 @@ def main() -> int:
                 outputs[gi] = run_single(client, model, targets[j], args.out,
                                          f"out{gi+1}", args.size_single, args.timeout,
                                          ratio, anchor_path, bool(args.prompt),
-                                         hint=hint_for(gi), input_fidelity=fidelity)
+                                         hint=hint_for(gi), input_fidelity=fidelity,
+                                         prompt_override=args.prompt)
 
         # 记录锚点: 第一批的首张成片
         if bi == 1 and outputs[idxs[0]]:
