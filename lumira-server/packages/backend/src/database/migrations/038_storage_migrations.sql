@@ -5,8 +5,6 @@ CREATE TABLE IF NOT EXISTS storage_migrations (
   id            VARCHAR(64) PRIMARY KEY,
   status        VARCHAR(16)  NOT NULL COMMENT 'running|success|failed|stopped',
   trigger_by    TEXT         NOT NULL,
-  source_id     VARCHAR(32)  NOT NULL DEFAULT 'local' COMMENT '迁移源存储 id（当前激活存储）',
-  target_id     VARCHAR(32)  NOT NULL DEFAULT 'r2' COMMENT '迁移目标存储 id',
   started_at    INT          NOT NULL,
   finished_at   INT,
   error         TEXT,
@@ -14,3 +12,5 @@ CREATE TABLE IF NOT EXISTS storage_migrations (
   failure_file  VARCHAR(512) COMMENT '失败详情文件（服务器本地相对路径）',
   created_at    INT          NOT NULL
 ) ENGINE=InnoDB;
+-- source_id / target_id 由 043 统一补列（038 曾被误改为建表直含两列，
+-- 导致全新库执行 043 时 ER_DUP_FIELDNAME，见 043 注释）

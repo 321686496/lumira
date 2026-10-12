@@ -64,6 +64,26 @@ export class AdminTemplatesService {
     return this.imageCompression.compress(file.buffer, file.filename, file.mimetype, options);
   }
 
+  /** 把 meta.images 中的 data URL 新图落盘为 image_{n}.{ext}，返回存储 URL；解析失败返回 null */
+  private async persistDataUrlImage(
+    templateId: string,
+    entry: Record<string, unknown>,
+    index: number,
+  ): Promise<string | null> {
+    const m = /^data:image\/([a-z0-9.+-]+);base64,(.+)$/i.exec(
+      typeof entry.url === 'string' ? entry.url : '',
+    );
+    if (!m) return null;
+    const ext = m[1].toLowerCase() === 'jpeg' ? 'jpg' : m[1].toLowerCase();
+    try {
+      const buffer = Buffer.from(m[2], 'base64');
+      if (buffer.length === 0) return null;
+      return await this.storage.write('templates', templateId, `image_${index}.${ext}`, buffer);
+    } catch {
+      return null;
+    }
+  }
+
   // ===== 列表 / 详情 =====
 
   /** Admin 模板列表（含 isActive=0），分页 + 分类名 JOIN */
@@ -440,16 +460,37 @@ export class AdminTemplatesService {
       coverUrl = await this.storage.write('templates', id, coverFilename, coverImage!.buffer);
       imagesArr = [{ url: coverUrl }];
     } else if (Array.isArray(meta.images)) {
-      // meta.images 提供则覆盖（可空数组表示清空）
-      imagesArr = meta.images
-        .map((img) => {
-          const r = img as Record<string, unknown>;
-          const url = typeof r.url === 'string' ? normalizeImageUrl(r.url) : '';
-          const data = typeof r.data === 'string' ? r.data : undefined;
-          if (!url) return null;
-          return data ? { url, data } : { url };
-        })
-        .filter((x): x is { url: string; data?: string } => x !== null);
+      // meta.images 提供则覆盖（可空数组表示清空）。
+      // 内嵌 data URL（admin 编辑「保留旧图 + 新增图」混合提交时新图以此内嵌）在此
+      // 落盘转存为存储文件，避免大体积 base64 直接进入 imagesJson / cover_url。
+      const pendingDataSlots: number[] = [];
+      imagesArr = [];
+      for (let i = 0; i < meta.images.length; i++) {
+        const r = meta.images[i] as Record<string, unknown>;
+        const rawUrl = typeof r.url === 'string' ? r.url : '';
+        const data = typeof r.data === 'string' ? r.data : undefined;
+        if (!rawUrl) continue;
+        if (rawUrl.startsWith('data:')) {
+          pendingDataSlots.push(imagesArr.push({ url: '' }) - 1);
+          continue;
+        }
+        const url = normalizeImageUrl(rawUrl);
+        imagesArr.push(data ? { url, data } : { url });
+      }
+      if (pendingDataSlots.length > 0) {
+        // 落盘命名避开最终列表仍引用的 image_N 文件名，防止覆盖仍生效的旧图
+        const maxStem = imagesArr.reduce((acc, item) => {
+          const m = /image_(\d+)\.\w+/.exec(item.url);
+          return m ? Math.max(acc, parseInt(m[1], 10)) : acc;
+        }, -1);
+        for (let k = 0; k < pendingDataSlots.length; k++) {
+          const persisted = await this.persistDataUrlImage(
+            id, meta.images[pendingDataSlots[k]] as Record<string, unknown>, maxStem + 1 + k,
+          );
+          if (persisted) imagesArr[pendingDataSlots[k]] = { url: persisted };
+        }
+      }
+      imagesArr = imagesArr.filter((x): x is { url: string; data?: string } => !!x.url);
       coverUrl = imagesArr[0]?.url || '';
     } else {
       // 无文件、无 meta.images：保留旧 imagesJson

@@ -344,6 +344,18 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+/**
+ * 效果图条目（统一已有图 / 新上传文件，解决编辑模式删除、排序与新增混合提交）：
+ * - 已有图：url 为后端返回的原始地址（提交 meta.images 原样回传）
+ * - 新上传：file 为压缩后的文件（提交时按需转 data URL 内嵌或走文件直传）
+ */
+interface ImageEntry {
+  preview: string;
+  url?: string;
+  data?: string;
+  file?: File;
+}
+
 /** AI 向导注入（stamp 变化触发应用；各字段独立可选） */
 export interface TemplateFormAiInjection {
   /** 每次注入递增；变化触发应用 */
@@ -352,7 +364,7 @@ export interface TemplateFormAiInjection {
   json?: Record<string, unknown>;
   /** 效果图列表 */
   images?: File[];
-  /** true=替换 imageFiles；false=追加 */
+  /** true=替换效果图列表；false=追加 */
   replaceImages?: boolean;
   /** 应用到当前姿势的剪影（AI 生成的透明底 PNG） */
   silhouette?: File | null;
@@ -395,12 +407,16 @@ export default function TemplateForm({
   const formContainerRef = React.useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>(() => {
+  const [imageEntries, setImageEntries] = useState<ImageEntry[]>(() => {
+    // 编辑模式：从已有效果图回填（url 保留 DB 原始地址，供提交 meta.images 回传）
     if (templateId && initial?.images) {
       return initial.images
-        .map((img) => toAssetUrl(img.url, backendUrl))
-        .filter(Boolean) as string[];
+        .filter((img) => !!img.url)
+        .map((img) => ({
+          preview: toAssetUrl(img.url, backendUrl) ?? '',
+          url: img.url,
+          ...(img.data ? { data: img.data } : {}),
+        }));
     }
     return [];
   });
@@ -451,9 +467,11 @@ export default function TemplateForm({
   };
 
   const [poses, setPoses] = useState<PoseFormData[]>(() => buildInitialPoses());
+  /** 渲染用预览列表（既有渲染代码按 imagePreviews[i] 取值，保持兼容） */
+  const imagePreviews = imageEntries.map((e) => e.preview);
   useEffect(() => {
-    onImagesChange?.(imageFiles);
-  }, [imageFiles, onImagesChange]);
+    onImagesChange?.(imageEntries.flatMap((e) => (e.file ? [e.file] : [])));
+  }, [imageEntries, onImagesChange]);
   const [pptplFile, setPptplFile] = useState<File | null>(null);
   const imageInputRef = React.useRef<HTMLInputElement>(null);
   const pptplInputRef = React.useRef<HTMLInputElement>(null);
@@ -811,26 +829,22 @@ export default function TemplateForm({
     const processed = await Promise.all(
       files.map((f) => compressImage(f, { maxDim: 1080, quality: 0.8 })),
     );
-    setImageFiles((prev) => [...prev, ...processed]);
-    setImagePreviews((prev) => [...prev, ...processed.map((f) => URL.createObjectURL(f))]);
+    setImageEntries((prev) => [
+      ...prev,
+      ...processed.map((f) => ({ preview: URL.createObjectURL(f), file: f })),
+    ]);
     if (e.target) e.target.value = '';
   };
 
   const removeImage = (i: number) => {
-    setImageFiles((prev) => prev.filter((_, idx) => idx !== i));
-    setImagePreviews((prev) => prev.filter((_, idx) => idx !== i));
+    setImageEntries((prev) => prev.filter((_, idx) => idx !== i));
   };
 
   /** 拖拽前的简单排序：左移/右移（封面始终 = 首张） */
   const moveImage = (i: number, dir: -1 | 1) => {
     const j = i + dir;
-    if (j < 0 || j >= imageFiles.length) return;
-    setImageFiles((prev) => {
-      const c = [...prev];
-      [c[i], c[j]] = [c[j], c[i]];
-      return c;
-    });
-    setImagePreviews((prev) => {
+    if (j < 0 || j >= imageEntries.length) return;
+    setImageEntries((prev) => {
       const c = [...prev];
       [c[i], c[j]] = [c[j], c[i]];
       return c;
@@ -875,15 +889,17 @@ export default function TemplateForm({
   const onSubmit = async (data: FormValues) => {
     setError(null);
 
-    if (!isEdit && imageFiles.length === 0) {
-      setError('请上传封面图片（Step 2）');
+    if (imageEntries.length === 0) {
+      setError('请至少保留一张效果图（Step 2）');
       setStep(1);
       return;
     }
 
-    // 提交前统一压缩，避免多个 base64/文件叠加超过 Vercel 4.5MB 平台硬限制。
+    // 新上传文件提交前统一压缩，避免多个 base64/文件叠加超过 Vercel 4.5MB 平台硬限制
+    // （顺序与 imageEntries 一致，供下方 meta.images 构建按下标对应）
+    const newEntryFiles = imageEntries.flatMap((e) => (e.file ? [e.file] : []));
     const submissionImages = await Promise.all(
-      imageFiles.map((f) => compressImage(f, { maxDim: 1080, quality: 0.75, maxBytes: 320 * 1024 })),
+      newEntryFiles.map((f) => compressImage(f, { maxDim: 1080, quality: 0.75, maxBytes: 320 * 1024 })),
     );
 
     // 各姿势新上传的剪影文件转为 data URL 内嵌进 poses（后端仅对 poses[0] 落盘文件）
@@ -1025,12 +1041,37 @@ export default function TemplateForm({
       },
     };
 
+    // ===== 编辑模式效果图持久化 =====
+    // 表单内的删除 / 排序仅改本地状态；若提交不带最终列表，后端会保留旧 imagesJson，
+    // 导致"删图保存后重新进入仍然存在"。因此编辑模式按最终列表二选一：
+    // - 含已有图 → 整列表走 meta.images（已有图回传原 URL，新文件压缩后转 data URL
+    //   内嵌，由后端落盘转存），删除与排序才能生效
+    // - 全部为新文件 → 维持 images/cover 文件直传路径
+    if (isEdit && imageEntries.some((e) => e.url)) {
+      let fileCursor = 0;
+      const metaImages: Array<{ url: string; data?: string }> = [];
+      for (const entry of imageEntries) {
+        if (entry.url) {
+          metaImages.push({ url: entry.url, ...(entry.data ? { data: entry.data } : {}) });
+        } else {
+          const f = submissionImages[fileCursor++];
+          if (f) metaImages.push({ url: await fileToDataUrl(f) });
+        }
+      }
+      meta.images = metaImages;
+    }
+
     const fd = new FormData();
     fd.set('meta', JSON.stringify(meta));
-    // 首图同时作为 cover（后端单图兼容）
-    if (submissionImages.length > 0) fd.set('cover', submissionImages[0]);
-    // 多效果图：多个同名字段 images
-    submissionImages.forEach((f) => fd.append('images', f));
+    // 含已有图的编辑提交已走 meta.images 整列表覆盖（后端封面取首张），
+    // 不再发文件字段，避免后端"文件优先"分支丢弃保留的已有图
+    const usesMetaImages = isEdit && Array.isArray(meta.images);
+    if (!usesMetaImages) {
+      // 首图同时作为 cover（后端单图兼容）
+      if (submissionImages.length > 0) fd.set('cover', submissionImages[0]);
+      // 多效果图：多个同名字段 images
+      submissionImages.forEach((f) => fd.append('images', f));
+    }
     // 首个姿势的剪影文件走单 silhouette 字段（后端注入 poses[0]）
     if (firstSilhouetteFile) {
       fd.set('silhouette', firstSilhouetteFile);
@@ -1098,12 +1139,11 @@ export default function TemplateForm({
     if (!aiInjection || !aiInjection.stamp) return;
     if (aiInjection.json) applyTemplateJson(aiInjection.json);
     if (aiInjection.images && aiInjection.images.length > 0) {
+      const injected = aiInjection.images.map((f) => ({ preview: URL.createObjectURL(f), file: f }));
       if (aiInjection.replaceImages) {
-        setImageFiles(aiInjection.images);
-        setImagePreviews(aiInjection.images.map((f) => URL.createObjectURL(f)));
+        setImageEntries(injected);
       } else {
-        setImageFiles((prev) => [...prev, ...aiInjection.images!]);
-        setImagePreviews((prev) => [...prev, ...aiInjection.images!.map((f) => URL.createObjectURL(f))]);
+        setImageEntries((prev) => [...prev, ...injected]);
       }
     }
     if (aiInjection.silhouette) {
