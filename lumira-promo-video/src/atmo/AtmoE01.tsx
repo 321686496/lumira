@@ -154,6 +154,65 @@ const AtmoWord: React.FC<{text: string; s: number}> = ({text, s}) => (
   </div>
 );
 
+/** P3 标注：藏——沿人物轮廓强调线 + 箭头指向 */
+const TipHideAnno: React.FC<{frame: number; start: number}> = ({frame, start}) => (
+  <svg viewBox="0 0 766 766" style={{position: 'absolute', inset: 0, width: '100%', height: '100%'}}>
+    <InkPath d="M300 180 C 250 300, 255 470, 300 620" frame={frame} start={start + 16} duration={18} width={7} color={V.goldDeep} />
+    <InkPath d="M356 190 C 402 300, 404 460, 356 612" frame={frame} start={start + 21} duration={18} width={7} color={V.goldDeep} opacity={0.75} />
+    <InkPath d="M612 236 C 530 252, 448 276, 384 318" frame={frame} start={start + 36} duration={14} width={8} color={V.goldDeep} />
+    <InkPath d="M438 292 L 384 318 L 428 352" frame={frame} start={start + 48} duration={8} width={8} color={V.goldDeep} />
+  </svg>
+);
+
+/** P3 标注：光——光斑圈选 + 短射线 */
+const TipLightAnno: React.FC<{frame: number; start: number}> = ({frame, start}) => (
+  <svg viewBox="0 0 766 766" style={{position: 'absolute', inset: 0, width: '100%', height: '100%'}}>
+    <InkPath d="M615 195 a95 95 0 1 1 -0.1 0" frame={frame} start={start + 16} duration={18} width={7} color={V.goldDeep} />
+    {[0, 60, 120, 180, 240, 300].map((deg) => {
+      const rad = (deg * Math.PI) / 180;
+      const x1 = 520 + Math.cos(rad) * 118;
+      const y1 = 195 + Math.sin(rad) * 118;
+      const x2 = 520 + Math.cos(rad) * 168;
+      const y2 = 195 + Math.sin(rad) * 168;
+      return (
+        <InkPath key={deg} d={`M${x1} ${y1} L${x2} ${y2}`} frame={frame} start={start + 34} duration={10} width={6} color={V.goldDeep} />
+      );
+    })}
+  </svg>
+);
+
+/** P3 标注：远——三分线 + 交点金色呼吸光点 */
+const TipFarAnno: React.FC<{frame: number; start: number}> = ({frame, start}) => (
+  <svg viewBox="0 0 766 766" style={{position: 'absolute', inset: 0, width: '100%', height: '100%'}}>
+    <InkPath d="M255 30 V736" frame={frame} start={start + 14} duration={14} width={4} color={V.white} opacity={0.9} dash="0.03 0.04" />
+    <InkPath d="M511 30 V736" frame={frame} start={start + 18} duration={14} width={4} color={V.white} opacity={0.9} dash="0.03 0.04" />
+    <InkPath d="M30 255 H736" frame={frame} start={start + 22} duration={14} width={4} color={V.white} opacity={0.9} dash="0.03 0.04" />
+    <InkPath d="M30 511 H736" frame={frame} start={start + 26} duration={14} width={4} color={V.white} opacity={0.9} dash="0.03 0.04" />
+    <circle cx={511} cy={511} r={16 + Math.sin(frame * 0.15) * 4} fill={V.gold} opacity={0.9} stroke="rgba(26,26,26,0.4)" strokeWidth={3} />
+    <circle cx={511} cy={511} r={6} fill={V.white} />
+  </svg>
+);
+
+/** P3 三招拍立得卡：AI 图 + 手绘标注 + 金章 */
+const TipCard: React.FC<{
+  frame: number;
+  fps: number;
+  start: number;
+  img: string;
+  label: string;
+  anno: React.ReactNode;
+}> = ({frame, fps, start, img, label, anno}) => (
+  <div style={{position: 'absolute', left: '50%', top: 430, transform: 'translateX(-50%)'}}>
+    <VPolaroid frame={frame} fps={fps} start={start} w={860} rotate={-1.2}>
+      <Img src={staticFile(img)} style={{width: '100%', height: '100%', objectFit: 'cover'}} />
+      {anno}
+    </VPolaroid>
+    <div style={{position: 'absolute', top: -24, right: -34}}>
+      <Stamp text={label} frame={frame} fps={fps} start={start + 30} size={96} color={V.goldDeep} rotate={6} />
+    </div>
+  </div>
+);
+
 /* ================================ 音效清单 ================================ */
 
 const SFX: {f: number; src: string; v: number}[] = [
@@ -322,6 +381,41 @@ export const AtmoE01: React.FC = () => {
           );
         })()}
 
+        {/* ============ P3 三招：藏 / 光 / 远（360-660） ============ */}
+        {frame >= 350 && frame < 660 && (() => {
+          const tips = [
+            {enter: 360, img: 'atmo/tip-hide.jpg', label: '藏', anno: <TipHideAnno frame={frame} start={360} />},
+            {enter: 460, img: 'atmo/tip-light.jpg', label: '光', anno: <TipLightAnno frame={frame} start={460} />},
+            {enter: 560, img: 'atmo/tip-far.jpg', label: '远', anno: <TipFarAnno frame={frame} start={560} />},
+          ];
+          let idx = -1;
+          for (let i = 0; i < tips.length; i++) if (frame >= tips[i].enter) idx = i;
+          if (idx < 0) return null;
+          const cur = tips[idx];
+          const prev = idx > 0 ? tips[idx - 1] : null;
+          const prevOut = prev ? interpolate(frame, [cur.enter, cur.enter + 10], [1, 0], clamp) : 0;
+          return (
+            <>
+              {prev && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: '50%',
+                    top: 430,
+                    transform: 'translateX(-50%)',
+                    opacity: prevOut,
+                  }}
+                >
+                  <VPolaroid frame={frame} fps={fps} start={-999} w={860} rotate={1.2}>
+                    <Img src={staticFile(prev.img)} style={{width: '100%', height: '100%', objectFit: 'cover'}} />
+                  </VPolaroid>
+                </div>
+              )}
+              <TipCard frame={frame} fps={fps} start={cur.enter} img={cur.img} label={cur.label} anno={cur.anno} />
+            </>
+          );
+        })()}
+
         {/* ============ 转折后全片暖调罩（240 起持续） ============ */}
         <AbsoluteFill
           style={{
@@ -333,6 +427,9 @@ export const AtmoE01: React.FC = () => {
         {/* ============ 字幕 ============ */}
         <Cap text="脸不好看，怎么出片？" frame={frame} fps={fps} start={34} duration={66} highlight={['脸不好看']} />
         <Cap text="每次拍照都翻车？" frame={frame} fps={fps} start={104} duration={124} rotate={1} highlight={['翻车']} />
+        <Cap text="侧身藏进光影里" frame={frame} fps={fps} start={376} duration={74} rotate={1} highlight={['藏']} />
+        <Cap text="让光替你说话" frame={frame} fps={fps} start={476} duration={74} highlight={['光']} />
+        <Cap text="退远，环境讲故事" frame={frame} fps={fps} start={576} duration={74} rotate={-1} highlight={['环境']} />
 
         {/* ============ 音效 ============ */}
         {SFX.map((s, i) => (
