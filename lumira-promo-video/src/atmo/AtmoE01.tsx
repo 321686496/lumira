@@ -11,7 +11,35 @@ import {
   useVideoConfig,
 } from 'remotion';
 import {V, FONT2} from '../v2/theme';
+import {C} from '../theme';
 import {Paper, Stamp, StickyCap, InkPath} from '../v2/ink';
+import {ShotClosedEyes, ShotTilted, ShotStiff} from '../v2/props';
+
+const clamp = {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'} as const;
+
+/** 金色星尘迸发（双描边 + 端点光点，12 向星芒） */
+const SparkleBurst: React.FC<{frame: number; start: number; cx: number; cy: number}> = ({frame, start, cx, cy}) => (
+  <svg width={1500} height={1500} viewBox="-750 -750 1500 1500" style={{position: 'absolute', left: cx - 750, top: cy - 750, pointerEvents: 'none'}}>
+    {Array.from({length: 12}, (_, i) => i * 30).map((deg) => {
+      const p = interpolate(frame, [start + (deg % 90) / 30, start + 52 + (deg % 90) / 30], [0, 1], clamp);
+      const r1 = 60 + p * 520;
+      const r2 = r1 + 110;
+      const rad = (deg * Math.PI) / 180;
+      const o = 1 - p;
+      const x1 = Math.cos(rad) * r1;
+      const y1 = Math.sin(rad) * r1;
+      const x2 = Math.cos(rad) * r2;
+      const y2 = Math.sin(rad) * r2;
+      return (
+        <g key={deg}>
+          <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={C.goldBright} strokeWidth={18} strokeLinecap="round" opacity={o * 0.5} />
+          <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={C.goldBright} strokeWidth={8} strokeLinecap="round" opacity={o} />
+          <circle cx={x2} cy={y2} r={9} fill={C.goldBright} opacity={o} />
+        </g>
+      );
+    })}
+  </svg>
+);
 
 /* ============================ 局部组件（竖屏专用） ============================ */
 
@@ -84,6 +112,45 @@ const Cap: React.FC<{text: string; frame: number; fps: number; start: number; du
     }}
   >
     <StickyCap {...p} />
+  </div>
+);
+
+/** P2 竖排金句（暗场专用）：底层辉光 + 顶层锐利金属渐变 */
+const AtmoWord: React.FC<{text: string; s: number}> = ({text, s}) => (
+  <div style={{position: 'relative', transform: `scale(${s})`, opacity: s}}>
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        writingMode: 'vertical-rl',
+        fontSize: 158,
+        fontWeight: 900,
+        letterSpacing: 14,
+        lineHeight: 1.1,
+        color: C.goldBright,
+        filter: 'blur(24px)',
+        opacity: 0.95,
+      }}
+    >
+      {text}
+    </div>
+    <div
+      style={{
+        position: 'relative',
+        writingMode: 'vertical-rl',
+        fontSize: 158,
+        fontWeight: 900,
+        letterSpacing: 14,
+        lineHeight: 1.1,
+        backgroundImage: 'linear-gradient(175deg, #FFF6DC 0%, #FFD98A 32%, #FFB45B 58%, #E8954A 100%)',
+        WebkitBackgroundClip: 'text',
+        backgroundClip: 'text',
+        color: 'transparent',
+        filter: 'drop-shadow(0 5px 12px rgba(0,0,0,0.5))',
+      }}
+    >
+      {text}
+    </div>
   </div>
 );
 
@@ -168,8 +235,104 @@ export const AtmoE01: React.FC = () => {
           </>
         )}
 
+        {/* ============ P1 共鸣：三张废片卡甩入（90-240） ============ */}
+        {frame >= 90 && frame < 240 && (() => {
+          const fadeAll = interpolate(frame, [228, 240], [1, 0], clamp);
+          const cards = [
+            {f: 100, rotate: 1.6, node: <ShotTilted frame={frame} start={104} />},
+            {f: 150, rotate: -1.6, node: <ShotClosedEyes frame={frame} start={154} />},
+            {f: 200, rotate: 1.6, node: <ShotStiff frame={frame} start={204} />},
+          ];
+          const cur = [...cards].reverse().find((c) => frame >= c.f);
+          if (!cur) return null;
+          return (
+            <div
+              key={cur.f}
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: 470,
+                transform: 'translateX(-50%)',
+                opacity: fadeAll,
+              }}
+            >
+              <VPolaroid frame={frame} fps={fps} start={cur.f} w={700} rotate={cur.rotate}>
+                {cur.node}
+              </VPolaroid>
+            </div>
+          );
+        })()}
+
+        {/* ============ P2 转折：白闪 → 暗场金光爆发 + 星尘 + 竖排大字（240-360） ============ */}
+        {frame >= 240 && frame < 360 && (() => {
+          const stage =
+            interpolate(frame, [240, 252], [0, 1], clamp) * interpolate(frame, [336, 358], [1, 0], clamp);
+          const flash = interpolate(frame, [238, 244], [0, 0.9], clamp) * interpolate(frame, [246, 258], [1, 0], clamp);
+          const glow =
+            interpolate(frame, [240, 262], [0, 1], clamp) * interpolate(frame, [300, 342], [1, 0.7], clamp);
+          const exit = interpolate(frame, [330, 355], [0, 1], clamp);
+          const s1 = spring({frame: Math.max(0, frame - 260), fps, config: {damping: 12, stiffness: 170}});
+          const s2 = spring({frame: Math.max(0, frame - 280), fps, config: {damping: 12, stiffness: 170}});
+          return (
+            <>
+              <AbsoluteFill style={{opacity: stage}}>
+                {/* 暗场基底：给金光一个「夜」作依托 */}
+                <AbsoluteFill
+                  style={{
+                    background: 'radial-gradient(circle at 50% 54%, #4E3617 0%, #33240F 46%, #170F06 100%)',
+                  }}
+                />
+                {/* 金光爆发（外圈琥珀 + 内核米金） */}
+                <AbsoluteFill
+                  style={{
+                    background: `radial-gradient(circle at 50% 55%, rgba(255,180,91,${glow * 0.95}) 0%, rgba(255,160,60,${glow * 0.55}) 30%, transparent 62%)`,
+                  }}
+                />
+                <AbsoluteFill
+                  style={{
+                    background: `radial-gradient(circle at 50% 55%, rgba(255,246,224,${glow}) 0%, transparent 34%)`,
+                  }}
+                />
+                <SparkleBurst frame={frame} start={252} cx={540} cy={990} />
+                {/* 边缘深暗角：把视线钉在中心 */}
+                <AbsoluteFill
+                  style={{
+                    background: 'radial-gradient(ellipse at center, transparent 36%, rgba(8,5,2,0.78) 100%)',
+                  }}
+                />
+                {/* 竖排大字：辉光层 + 锐利金属层 */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: 70,
+                    opacity: 1 - exit,
+                    transform: `translateY(${-50 * exit}px)`,
+                  }}
+                >
+                  <AtmoWord text="拍氛围" s={s2} />
+                  <AtmoWord text="别拍脸" s={s1} />
+                </div>
+              </AbsoluteFill>
+              <AbsoluteFill style={{backgroundColor: '#FDFBF7', opacity: flash, pointerEvents: 'none'}} />
+            </>
+          );
+        })()}
+
+        {/* ============ 转折后全片暖调罩（240 起持续） ============ */}
+        <AbsoluteFill
+          style={{
+            background: `rgba(201,169,110,${interpolate(frame, [240, 262], [0, 0.16], clamp)})`,
+            pointerEvents: 'none',
+          }}
+        />
+
         {/* ============ 字幕 ============ */}
         <Cap text="脸不好看，怎么出片？" frame={frame} fps={fps} start={34} duration={66} highlight={['脸不好看']} />
+        <Cap text="每次拍照都翻车？" frame={frame} fps={fps} start={104} duration={124} rotate={1} highlight={['翻车']} />
 
         {/* ============ 音效 ============ */}
         {SFX.map((s, i) => (
