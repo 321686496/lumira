@@ -1,0 +1,236 @@
+{
+  "format": "pptpl",
+  "version": "1.0.0",
+  "_meta": {
+    "name": "男生不露脸·青岛氛围感拍照",
+    "author": "Lumira",
+    "category": "portrait",
+    "price": 0,
+    "description": "以青岛城市漫游为取景骨架：老城街道、海边步道、玻璃砖墙、暖光咖啡店、树荫小巷皆成片场，扶栏杆回头、海边背影、低头站姿、坐台阶扶帽、蹲姿看手机、扶帽拎包等九种不露脸姿势轮番上阵，棒球帽+休闲穿搭配托特包与咖啡道具，无需露脸，随手定格松弛感拉满的男生氛围感大片。",
+    "shortDesc": "不露脸也能拍出电影感·青岛漫游",
+    "tags": [
+      "人像",
+      "男生",
+      "不露脸",
+      "citywalk",
+      "氛围感",
+      "街拍",
+      "姿势"
+    ],
+    "referenceSource": "抖音图文：男生不露脸氛围感拍照姿势大全套 #青岛陪拍（note/7654499983714435663）",
+    "classification": {
+      "type": "portrait",
+      "majorStyle": "vibe",
+      "style": "korea-style-relax",
+      "subStyle": "korea-style-relax",
+      "method": ""
+    },
+    "ambience": {
+      "seasons": [
+        "summer",
+        "autumn"
+      ],
+      "weathers": [
+        "sunny"
+      ],
+      "timeTones": [
+        "day",
+        "goldenHour"
+      ]
+    },
+    "gender": "male"
+  },
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "aspectRatio": "9:16",
+    "opacity": 0.5,
+    "description": ""
+  },
+  "pose": [
+    {
+      "name": "扶栏杆回头走",
+      "silhouette": {
+        "type": "image",
+        "data": "pose1_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "全身走姿：走在老城街道上侧身回头看向侧下方，一手扶身侧玻璃顶棚金属栏杆，另一手拎黑色托特包，黑色棒球帽压低完全遮脸，黑色立领外套配白色阔腿长裤，石墙老建筑与绿植背景，光线明亮，人物位于画面左侧三分之一",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "海边步道背影侧走",
+      "silhouette": {
+        "type": "image",
+        "data": "pose2_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "全身背影走姿：沿海边步行道行走侧身回望大海方向，一手拎黑色大容量托特包，黑色棒球帽遮脸，黑色立领外套配白色阔腿长裤，蓝天白云与大海礁石背景，海面波光，人物位于画面中央偏左",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "玻璃砖墙低头站",
+      "silhouette": {
+        "type": "image",
+        "data": "pose3_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "全身站姿：站在白色玻璃砖墙与白墙夹角处低头看向地面，双手在身前自然拎黑色包，黑色棒球帽压低遮脸，黑色立领外套配白色阔腿长裤，玻璃砖透光质感背景，光线柔和，人物位于画面右侧",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "暖光咖啡店坐台阶",
+      "silhouette": {
+        "type": "image",
+        "data": "pose4_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "大半身坐姿：坐在暖光咖啡店门口台阶上身体微侧前倾，一手扶压帽檐完全遮脸，另一手拿透明冰咖啡杯，黑色立领外套配白色阔腿长裤，暖黄灯光与店内陈设背景，氛围慵懒，人物位于画面中央偏左",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "墙角蹲姿看手机",
+      "silhouette": {
+        "type": "image",
+        "data": "pose5_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "全身蹲姿：蹲在老城墙角阳光光斑里低头看手中手机，一手撑膝一手拿手机，黑色棒球帽压低遮脸，黑色立领外套配白色阔腿长裤，石墙与树影背景，午后阳光，人物位于画面中央",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "绿植台阶放松坐",
+      "silhouette": {
+        "type": "image",
+        "data": "pose6_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "全身坐姿：坐在老建筑木质台阶上放松后仰，双腿自然伸展，头部侧转向一旁不露脸，黑色立领外套配白色阔腿长裤，绿色爬藤植物与石墙背景，树荫光影，人物位于画面中央偏右",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "黄栏杆扶帽拎包站",
+      "silhouette": {
+        "type": "image",
+        "data": "pose7_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "全身站姿：站在黄色护栏与管道墙前，一手抬起扶压帽檐遮脸，另一手拎黑色手提包，黑色立领外套配白色阔腿长裤，黄色护栏与石墙管道背景，夕阳暖光，人物位于画面中央偏右",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "树荫小巷纵深走",
+      "silhouette": {
+        "type": "image",
+        "data": "pose8_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "全身背影走姿：走在树荫覆盖的小巷深处背向镜头，肩背黑色包，黑色棒球帽，黑色立领外套配白色阔腿长裤，两侧石墙与绿树夹道形成纵深感，巷口透光，人物位于画面中央",
+      "cameraDirection": "back"
+    },
+    {
+      "name": "绿树街道扶帽回头",
+      "silhouette": {
+        "type": "image",
+        "data": "pose9_sil.png"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0,
+      "description": "全身走姿：走在绿树成荫的街道上一手扶帽檐一手拎包，头部压低转向镜头方向但帽檐完全遮挡面部，黑色立领外套配白色阔腿长裤，石墙老建筑与绿树背景，自然光，人物位于画面右侧三分线",
+      "cameraDirection": "back"
+    }
+  ],
+  "camera": {
+    "exposureCompensation": 0.3,
+    "isoMode": "auto",
+    "iso": 200,
+    "shutterSpeed": "1/500",
+    "whiteBalance": "daylight",
+    "whiteBalanceK": 5600,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "26mm",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "自然光为主 / 咖啡店暖光 / 午后光斑",
+    "lightDirectionAngle": 120,
+    "shootingDistance": "2-4m",
+    "background": "青岛城市街景（老城街道、海边步道、玻璃砖墙、咖啡店、树荫小巷）",
+    "props": [
+      "托特包",
+      "冰咖啡杯",
+      "棒球帽",
+      "手机"
+    ],
+    "bestTime": "上午 9:00-11:00 或午后 15:00-17:00（光线柔和；暖光咖啡店室内不限时段）",
+    "tips": [
+      "全程无需露脸：帽檐压低、低头、背影、侧身即可出片",
+      "让手有事做——拎包、扶帽檐、拿咖啡、看手机，画面立刻自然",
+      "行走中连拍更容易抓到松弛的随拍感",
+      "小巷与玻璃砖墙利用纵深和透光质感放大氛围"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "9:16",
+    "color": {
+      "brightness": 3,
+      "contrast": 3,
+      "saturation": 0,
+      "temperature": 4,
+      "tint": 0,
+      "highlights": -2,
+      "shadows": 4,
+      "clarity": 3,
+      "vibrance": 2
+    },
+    "smoothStrength": 3,
+    "sharpen": 6,
+    "vignette": 2,
+    "grain": 4,
+    "lut": "film_warm"
+  }
+}
