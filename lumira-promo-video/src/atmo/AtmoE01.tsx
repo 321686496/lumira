@@ -213,6 +213,177 @@ const TipCard: React.FC<{
   </div>
 );
 
+/** P4 对比：左→右擦除，before 渐被 after 替换 + 金章「出片」 */
+const BeforeAfter: React.FC<{frame: number; start: number; fps: number}> = ({frame, start, fps}) => {
+  const p = interpolate(frame, [start, start + 50], [100, 0], clamp);
+  const left = `${100 - p}%`;
+  return (
+    <div style={{position: 'absolute', inset: 0}}>
+      <Img src={staticFile('atmo/after.jpg')} style={{position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover'}} />
+      <div style={{position: 'absolute', inset: 0, clipPath: `inset(0 0 0 ${left})`}}>
+        <Img src={staticFile('atmo/before.jpg')} style={{width: '100%', height: '100%', objectFit: 'cover'}} />
+      </div>
+      {p > 0 && p < 100 && <div style={{position: 'absolute', top: 0, bottom: 0, left, width: 4, background: V.ink}} />}
+      <div style={{position: 'absolute', left: '50%', bottom: 30, transform: 'translateX(-50%)'}}>
+        <Stamp text="出片" frame={frame} fps={fps} start={start + 50} size={70} color={V.goldDeep} rotate={-3} border />
+      </div>
+    </div>
+  );
+};
+
+/** P4 手机：模板库列表 → 模板详情 → 擦除对比（屏内三幕） */
+const DemoPhone: React.FC<{frame: number; start: number; fps: number}> = ({frame, start, fps}) => {
+  const s = spring({frame: Math.max(0, frame - start), fps, config: {damping: 12, stiffness: 160}});
+  const rows = [
+    {name: '黄昏逆光', tag: '氛围 · 黄昏', bg: 'linear-gradient(135deg,#F7B267,#E2571B)'},
+    {name: '窗边光斑', tag: '氛围 · 室内', bg: 'linear-gradient(135deg,#FDF3E0,#D9C9A8)'},
+    {name: '街角远景', tag: '氛围 · 街拍', bg: 'linear-gradient(135deg,#9AA7B8,#4A5468)'},
+  ];
+  const pills = ['构图·三分线', '姿势·侧身', '场景·黄昏'];
+  const o1 =
+    interpolate(frame, [start + 12, start + 18], [0, 1], clamp) * interpolate(frame, [736, 744], [1, 0], clamp);
+  const o2 = interpolate(frame, [740, 746], [0, 1], clamp) * interpolate(frame, [826, 832], [1, 0], clamp);
+  const o3 = interpolate(frame, [830, 836], [0, 1], clamp);
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: '50%',
+        top: 500,
+        width: 430,
+        height: 860,
+        background: V.white,
+        border: `7px solid ${V.ink}`,
+        borderRadius: 64,
+        transform: `translateX(-50%) rotate(1.5deg) scale(${s}) translateY(${(1 - s) * 90}px)`,
+        opacity: s,
+        padding: 22,
+        boxShadow: '14px 16px 0 rgba(26,26,26,0.12)',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          border: `4px solid ${V.ink}`,
+          borderRadius: 40,
+          background: V.paper,
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        {/* 幕1：模板库列表 */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            padding: '26px 22px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            gap: 18,
+            opacity: o1,
+          }}
+        >
+          {rows.map((r, i) => {
+            const rs = spring({frame: Math.max(0, frame - start - 20 - i * 10), fps, config: {damping: 13, stiffness: 200}});
+            return (
+              <div
+                key={r.name}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 16,
+                  background: V.white,
+                  border: `3px solid ${V.ink}`,
+                  borderRadius: 18,
+                  padding: 14,
+                  transform: `translateX(${(1 - rs) * 120}px)`,
+                  opacity: rs,
+                }}
+              >
+                <div style={{width: 92, height: 92, borderRadius: 12, border: `3px solid ${V.ink}`, background: r.bg, flexShrink: 0}} />
+                <div style={{flex: 1}}>
+                  <div style={{fontSize: 33, fontWeight: 800, color: V.ink}}>{r.name}</div>
+                  <div
+                    style={{
+                      marginTop: 8,
+                      display: 'inline-block',
+                      border: `2.5px solid ${V.goldDeep}`,
+                      color: V.goldDeep,
+                      borderRadius: 999,
+                      padding: '3px 12px',
+                      fontSize: 21,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {r.tag}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {/* 幕2：模板详情（三分线 + 剪影 + 参数 pill） */}
+        <div style={{position: 'absolute', inset: 0, opacity: o2}}>
+          <svg viewBox="0 0 360 760" width="100%" height="100%" style={{position: 'absolute', inset: 0}}>
+            {[120, 240].map((x, i) => (
+              <InkPath key={'v' + i} d={`M${x} 20 V740`} frame={frame} start={748 + i * 4} duration={14} width={2.5} color={V.gray} dash="0.03 0.04" />
+            ))}
+            {[253, 506].map((y, i) => (
+              <InkPath key={'h' + i} d={`M20 ${y} H340`} frame={frame} start={752 + i * 4} duration={14} width={2.5} color={V.gray} dash="0.03 0.04" />
+            ))}
+            <circle cx="248" cy="330" r="34" fill="none" stroke={V.ink} strokeWidth={5} opacity={interpolate(frame, [760, 770], [0, 1], clamp)} />
+            <InkPath d="M248 366 C 240 440, 238 500, 242 580" frame={frame} start={762} duration={16} width={5.5} />
+            <InkPath d="M242 580 L224 716 M242 580 L268 712" frame={frame} start={770} duration={12} width={5} />
+            <InkPath d="M247 400 C 226 440, 220 470, 228 494" frame={frame} start={772} duration={10} width={5} />
+            <circle cx="248" cy="506" r={10 + Math.sin(frame * 0.15) * 4} fill={V.gold} opacity={0.7} />
+          </svg>
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 26,
+              display: 'flex',
+              justifyContent: 'center',
+              gap: 10,
+              flexWrap: 'wrap',
+              padding: '0 16px',
+            }}
+          >
+            {pills.map((p, i) => {
+              const ps = spring({frame: Math.max(0, frame - 780 - i * 8), fps, config: {damping: 13, stiffness: 220}});
+              return (
+                <div
+                  key={p}
+                  style={{
+                    background: V.white,
+                    border: `3px solid ${V.goldDeep}`,
+                    borderRadius: 999,
+                    padding: '7px 16px',
+                    fontSize: 24,
+                    fontWeight: 800,
+                    color: V.goldDeep,
+                    transform: `scale(${ps})`,
+                    opacity: ps,
+                  }}
+                >
+                  {p}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        {/* 幕3：擦除对比 */}
+        <div style={{position: 'absolute', inset: 0, opacity: o3}}>
+          <BeforeAfter frame={frame} start={830} fps={fps} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* ================================ 音效清单 ================================ */
 
 const SFX: {f: number; src: string; v: number}[] = [
@@ -416,6 +587,16 @@ export const AtmoE01: React.FC = () => {
           );
         })()}
 
+        {/* ============ P4 产品演示：手机三幕（660-900） ============ */}
+        {frame >= 656 && frame < 906 && (() => {
+          const leave = interpolate(frame, [888, 904], [1, 0], clamp);
+          return (
+            <div style={{position: 'absolute', inset: 0, opacity: leave}}>
+              <DemoPhone frame={frame} start={660} fps={fps} />
+            </div>
+          );
+        })()}
+
         {/* ============ 转折后全片暖调罩（240 起持续） ============ */}
         <AbsoluteFill
           style={{
@@ -430,6 +611,7 @@ export const AtmoE01: React.FC = () => {
         <Cap text="侧身藏进光影里" frame={frame} fps={fps} start={376} duration={74} rotate={1} highlight={['藏']} />
         <Cap text="让光替你说话" frame={frame} fps={fps} start={476} duration={74} highlight={['光']} />
         <Cap text="退远，环境讲故事" frame={frame} fps={fps} start={576} duration={74} rotate={-1} highlight={['环境']} />
+        <Cap text="不用学，跟着模板拍就行" frame={frame} fps={fps} start={676} duration={210} highlight={['模板']} />
 
         {/* ============ 音效 ============ */}
         {SFX.map((s, i) => (
