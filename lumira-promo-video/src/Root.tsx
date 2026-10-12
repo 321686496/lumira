@@ -1,6 +1,7 @@
 import {Composition, Folder} from 'remotion';
 import {LumiraPromo} from './LumiraPromo';
 import {V2Promo} from './v2/V2Promo';
+import {AtmoE01} from './atmo/AtmoE01';
 import {Replay37E01} from './replay37/E01';
 import {FactE01} from './facts/E01';
 import {FactE02} from './facts/E02';
@@ -59,6 +60,14 @@ export const RemotionRoot: React.FC = () => {
         height={H}
         fps={FPS}
         durationInFrames={2475}
+      />
+      <Composition
+        id="AtmoE01"
+        component={AtmoE01}
+        width={1080}
+        height={1920}
+        fps={FPS}
+        durationInFrames={1050}
       />
       <Composition
         id="Replay37E01"

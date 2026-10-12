@@ -167,7 +167,7 @@ export const StickyCap: React.FC<{
     : 0;
   const boxOpacity = box * (1 - exit);
   // 高亮词切分
-  let segs: {t: string; hl: boolean}[] = [];
+  const segs: {t: string; hl: boolean}[] = [];
   let rest = text;
   while (rest.length) {
     let hit = '';
