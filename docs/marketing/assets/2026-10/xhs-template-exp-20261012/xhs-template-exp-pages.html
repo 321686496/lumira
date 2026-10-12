@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>如画 LUMIRA · 拍照心得 · 胶片日记 9P</title>
+<style>
+/* ============ 品牌字体 ============ */
+@font-face{
+  font-family:'NSerif';font-weight:700;font-display:block;
+  src:url('file:///d:/app/projects/photo_post/lumira_app_flutter/assets/fonts/NotoSerifSC-Bold.otf') format('opentype');
+}
+@font-face{
+  font-family:'NSerif';font-weight:400;font-display:block;
+  src:url('file:///d:/app/projects/photo_post/lumira_app_flutter/assets/fonts/NotoSerifSC-Regular.otf') format('opentype');
+}
+:root{
+  --main:#4A4038; --sub:#8C8172; --terra:#C97B5A; --rose:#C4826E; --gold:#B08D57;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scrollbar-width:none}
+html::-webkit-scrollbar{display:none}
+body{width:1242px;background:#EFE7D9;font-family:'Microsoft YaHei',sans-serif}
+img{display:block}
+
+/* ============ 画布：柔光胶片纸底 ============ */
+.pg{
+  position:relative;width:1242px;height:1656px;overflow:hidden;display:none;
+  background:url('bg-inner.jpg') center/cover no-repeat;
+}
+.pg:target{display:block}
+#p1{background:url('bg-cover.jpg') center/cover no-repeat}
+.inner{position:relative;height:100%;padding:0 90px}
+
+/* ============ 通用文字 ============ */
+.kick{font:400 26px/1 'Microsoft YaHei';color:var(--terra);letter-spacing:9px}
+.title{font-family:'NSerif';font-weight:700;color:var(--main)}
+.lead{font:400 31px/1.7 'Microsoft YaHei';color:var(--main);letter-spacing:2px}
+.note{font:400 28px/1 'Microsoft YaHei';color:var(--sub);letter-spacing:2px}
+
+/* ============ 悬浮卡（半透明白） ============ */
+.card{background:rgba(255,255,255,.78);border-radius:26px;
+  box-shadow:0 18px 40px rgba(180,140,110,.18)}
+
+/* ============ 相纸卡（拍立得） ============ */
+.photo{background:#FFFDF8;padding:14px 14px 40px;border-radius:8px;
+  box-shadow:0 18px 40px rgba(180,140,110,.22)}
+.photo img{width:100%;object-fit:cover;object-position:top}
+
+/* ============ 手机样机（白细边+柔和阴影） ============ */
+.phone{background:#fff;border-radius:36px;padding:10px;
+  border:2px solid rgba(255,255,255,.95);
+  box-shadow:0 24px 48px rgba(180,140,110,.25),0 6px 16px rgba(180,140,110,.14)}
+.phone .scr{border-radius:26px;overflow:hidden;background:#EFE7D9}
+.phone img{width:100%;aspect-ratio:1308/2880;object-fit:cover}
+
+/* ============ 金棕细线 / 圆点 / 页脚 ============ */
+.gline{height:2px;background:linear-gradient(90deg,rgba(176,141,87,0),#B08D57 30%,#B08D57 70%,rgba(176,141,87,0));border:0}
+.gdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--gold);flex:none}
+.pfoot{position:absolute;left:90px;right:90px;bottom:46px;display:flex;
+  align-items:center;justify-content:space-between}
+.pfoot .bl{font:400 20px/1 'Microsoft YaHei';color:var(--sub);letter-spacing:4px}
+.pfoot .num{font:700 22px/1 Consolas,'Courier New',monospace;color:var(--sub);letter-spacing:3px}
+
+/* ============ P1 封面 ============ */
+#p1 .inner{padding-top:104px}
+#p1 .kick{margin-top:0}
+#p1 .bigtitle{margin-top:34px;font-size:106px;line-height:1.22;letter-spacing:6px}
+#p1 .uline{margin:6px 0 0 6px}
+#p1 .hook{margin-top:34px;font:400 36px/1 'Microsoft YaHei';color:var(--sub);letter-spacing:5px}
+#p1 .pstage{margin-top:170px;display:flex;justify-content:center}
+#p1 .photo{width:482px;transform:rotate(-2deg)}
+#p1 .photo img{height:455px}
+#p1 .brand{position:absolute;right:92px;bottom:150px;
+  font:400 13px/1 'Microsoft YaHei';color:var(--sub);letter-spacing:4px}
+
+/* ============ P2 出片公式 ============ */
+.head{padding-top:150px}
+.head .title{font-size:92px;line-height:1.2;letter-spacing:4px;margin-top:32px}
+.head .subtitle{margin-top:24px;font:400 30px/1 'Microsoft YaHei';color:var(--sub);letter-spacing:3px}
+#p2 .fcards{margin-top:64px;display:flex;flex-direction:column;gap:60px}
+#p2 .fcard{padding:36px 44px;display:flex;align-items:center;gap:36px}
+#p2 .fcard .no{font:700 56px/1 'NSerif';color:var(--terra);letter-spacing:2px;flex:none}
+#p2 .fcard .sep{width:2px;height:74px;background:rgba(176,141,87,.4);flex:none}
+#p2 .fcard .tx b{display:block;font:700 40px/1 'NSerif';color:var(--main);letter-spacing:6px}
+#p2 .fcard .tx p{margin-top:16px;font:400 29px/1 'Microsoft YaHei';color:var(--sub);letter-spacing:2px}
+#p2 .tail{margin-top:40px;text-align:center}
+
+/* ============ P3 体验故事（三卡绝对定位咬合） ============ */
+#p3 .head{padding-top:132px}
+#p3 .title{font-size:74px;line-height:1.34;letter-spacing:3px}
+#p3 .pstage{position:relative;left:8px;width:790px;height:548px;margin:96px auto 0}
+#p3 .photo{width:392px}
+#p3 .photo img{height:365px}
+#p3 .pb img{height:285px;object-position:50% 15%}
+#p3 .pa{position:absolute;left:0;top:102px;transform:rotate(-2.4deg);z-index:1}
+#p3 .pb{position:absolute;left:384px;top:150px;transform:rotate(2deg);z-index:2}
+#p3 .mini{position:absolute;left:270px;top:0;transform:none;
+  width:264px;z-index:3;background:#FFFDF8;padding:11px 11px 30px;border-radius:8px;
+  box-shadow:0 22px 44px rgba(160,120,90,.28)}
+#p3 .mini img{width:100%;height:142px;object-fit:cover;object-position:50% 18%}
+#p3 .line{margin-top:84px;display:flex;align-items:center;justify-content:center;gap:18px}
+#p3 .line b{font:700 40px/1 'NSerif';color:var(--main);letter-spacing:4px}
+#p3 .tail{margin-top:44px;text-align:center}
+
+/* ============ P4-P7 单手机体验页 ============ */
+.xp .head{padding-top:128px;text-align:center}
+.xp .head .title{font-size:88px;line-height:1.2;letter-spacing:4px}
+.xp .pstage{margin-top:56px;display:flex;justify-content:center}
+.xp .phone{width:434px}
+.xp .lead{text-align:center;margin-top:54px;letter-spacing:3px}
+#p7 .pstage{margin-top:72px}
+#p7 .phone{width:395px}
+#p7 .lead{margin-top:48px;line-height:2}
+
+/* ============ P8 玩法 ============ */
+#p8 .head{padding-top:128px;text-align:center}
+#p8 .head .title{font-size:92px;line-height:1.2;letter-spacing:4px}
+#p8 .tri{margin-top:64px;display:flex;justify-content:center;gap:40px;align-items:flex-start}
+#p8 .phone{width:316px}
+#p8 .pa{transform:rotate(-1.6deg)}
+#p8 .pb{transform:translateY(-24px)}
+#p8 .pc{transform:rotate(1.4deg)}
+#p8 .quad{margin-top:66px;display:grid;grid-template-columns:auto auto;
+  justify-content:center;gap:26px 88px}
+#p8 .li{display:flex;align-items:center;gap:16px}
+#p8 .li p{font:400 29px/1 'Microsoft YaHei';color:var(--main);letter-spacing:2px}
+
+/* ============ P9 尾页 ============ */
+#p9 .stack{position:absolute;left:0;right:0;top:318px;text-align:center}
+#p9 .big{font:700 92px/1.28 'NSerif';color:var(--main);letter-spacing:8px}
+#p9 .big em{font-style:normal;color:var(--terra);display:block;font-size:130px;margin-top:14px}
+#p9 .sum{margin-top:52px;font:400 30px/1 'Microsoft YaHei';color:var(--sub);letter-spacing:4px}
+#p9 .gline{width:320px;margin:72px auto 0}
+#p9 .cta{margin-top:76px;font:700 62px/1 'NSerif';color:var(--main);letter-spacing:6px}
+#p9 .ctaline{width:300px;height:3px;background:#B08D57;border-radius:2px;margin:20px auto 0}
+#p9 .hook{margin-top:30px;font:400 28px/1 'Microsoft YaHei';color:var(--sub);letter-spacing:3px}
+</style>
+</head>
+<body>
+
+<!-- ================= P1 封面 ================= -->
+<section class="pg" id="p1">
+  <div class="inner">
+    <div class="kick">拍照心得 · 体验分享</div>
+    <div class="title bigtitle">把专业摄影<br>做成模板用</div>
+    <svg class="uline" width="620" height="24" viewBox="0 0 620 24" fill="none">
+      <path d="M8 15 C 96 5, 190 21, 286 12 S 460 6, 612 13" stroke="#C97B5A" stroke-width="7" stroke-linecap="round"/>
+    </svg>
+    <div class="hook">照着做，就能出片</div>
+    <div class="pstage">
+      <div class="photo"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/IMG_044.jpg" alt=""></div>
+    </div>
+    <div class="brand">如画 LUMIRA</div>
+  </div>
+</section>
+
+<!-- ================= P2 出片公式 ================= -->
+<section class="pg" id="p2">
+  <div class="inner head">
+    <div class="kick">先拆开说</div>
+    <div class="title">出片，原来靠三件事</div>
+    <div class="subtitle">专业摄影的底层公式</div>
+    <div class="fcards">
+      <div class="card fcard"><span class="no">01</span><span class="sep"></span>
+        <span class="tx"><b>构图</b><p>人和景怎么摆，画面才不杂乱</p></span></div>
+      <div class="card fcard"><span class="no">02</span><span class="sep"></span>
+        <span class="tx"><b>姿势</b><p>镜头前怎么凹，才不上镜僵</p></span></div>
+      <div class="card fcard"><span class="no">03</span><span class="sep"></span>
+        <span class="tx"><b>参数</b><p>光线怎么调，才有氛围感</p></span></div>
+    </div>
+    <div class="note tail">记不住？下页告诉你我的偷懒办法 →</div>
+  </div>
+  <div class="pfoot"><span class="bl">如画 LUMIRA · 拍照心得</span><span class="num">02 / 09</span></div>
+</section>
+
+<!-- ================= P3 体验故事 ================= -->
+<section class="pg" id="p3">
+  <div class="inner head">
+    <div class="title">那天拍秋景，<br>朋友以为我偷偷约了跟拍</div>
+    <div class="pstage">
+      <div class="photo pa"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/IMG_053.jpg" alt=""></div>
+      <div class="photo pb"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/IMG_057.jpg" alt=""></div>
+      <div class="mini"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/IMG_037.jpg" alt=""></div>
+    </div>
+    <div class="line"><span class="gdot"></span><b>不是我突然开窍，是拍法是现成的</b><span class="gdot"></span></div>
+    <div class="note tail">翻页拆给你看 →</div>
+  </div>
+  <div class="pfoot"><span class="bl">如画 LUMIRA · 拍照心得</span><span class="num">03 / 09</span></div>
+</section>
+
+<!-- ================= P4 揭底 ================= -->
+<section class="pg xp" id="p4">
+  <div class="inner head">
+    <div class="kick">我的偷懒办法</div>
+    <div class="title" style="margin-top:30px">其实我只是选了一个模板</div>
+    <div class="pstage">
+      <div class="phone"><div class="scr"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/模板详情页.png" alt=""></div></div>
+    </div>
+    <div class="lead">场景模板都分好类，选一个套上就能拍<br>构图、姿势、参数，全都替你安排好了</div>
+  </div>
+  <div class="pfoot"><span class="bl">如画 LUMIRA · 拍照心得</span><span class="num">04 / 09</span></div>
+</section>
+
+<!-- ================= P5 体验①构图 ================= -->
+<section class="pg xp" id="p5">
+  <div class="inner head">
+    <div class="kick">体验 01</div>
+    <div class="title" style="margin-top:30px">构图，有人替我框好</div>
+    <div class="pstage">
+      <div class="phone"><div class="scr"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/Screenshot_2026-10-08T103559.png" alt=""></div></div>
+    </div>
+    <div class="lead">画面比例一键选，人和景站哪心里有数</div>
+  </div>
+  <div class="pfoot"><span class="bl">如画 LUMIRA · 拍照心得</span><span class="num">05 / 09</span></div>
+</section>
+
+<!-- ================= P6 体验②姿势 ================= -->
+<section class="pg xp" id="p6">
+  <div class="inner head">
+    <div class="kick">体验 02</div>
+    <div class="title" style="margin-top:30px">姿势，照着剪影凹</div>
+    <div class="pstage">
+      <div class="phone"><div class="scr"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/Screenshot_2026-10-08T103302.png" alt=""></div></div>
+    </div>
+    <div class="lead">剪影直接叠在画面里，照着摆就行<br>左右滑换下一个——i 人狂喜</div>
+  </div>
+  <div class="pfoot"><span class="bl">如画 LUMIRA · 拍照心得</span><span class="num">06 / 09</span></div>
+</section>
+
+<!-- ================= P7 体验③参数 ================= -->
+<section class="pg xp" id="p7">
+  <div class="inner head">
+    <div class="kick">体验 03</div>
+    <div class="title" style="margin-top:30px">参数，不用懂后期</div>
+    <div class="pstage">
+      <div class="phone"><div class="scr"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/拍摄页参数调整抽屉弹出页-处理后.png" alt=""></div></div>
+    </div>
+    <div class="lead">拖一拖，取景器里直接看效果<br>不用拍完再猜</div>
+  </div>
+  <div class="pfoot"><span class="bl">如画 LUMIRA · 拍照心得</span><span class="num">07 / 09</span></div>
+</section>
+
+<!-- ================= P8 玩法 ================= -->
+<section class="pg" id="p8">
+  <div class="inner head">
+    <div class="kick">后来发现</div>
+    <div class="title" style="margin-top:30px">还能这样玩</div>
+    <div class="tri">
+      <div class="phone pa"><div class="scr"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/app首页.png" alt=""></div></div>
+      <div class="phone pb"><div class="scr"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/探店足迹页.png" alt=""></div></div>
+      <div class="phone pc"><div class="scr"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/我的模板页面.png" alt=""></div></div>
+    </div>
+    <div class="quad">
+      <div class="li"><span class="gdot"></span><p>模板跟热门风格一直上新</p></div>
+      <div class="li"><span class="gdot"></span><p>拍完直接出一张能发的海报</p></div>
+      <div class="li"><span class="gdot"></span><p>探店打卡，留下足迹</p></div>
+      <div class="li"><span class="gdot"></span><p>还能做『自己的模板』</p></div>
+    </div>
+  </div>
+  <div class="pfoot"><span class="bl">如画 LUMIRA · 拍照心得</span><span class="num">08 / 09</span></div>
+</section>
+
+<!-- ================= P9 尾页 ================= -->
+<section class="pg" id="p9">
+  <div class="stack">
+    <div class="big">拍照不再是碰运气<em>是抄作业</em></div>
+    <div class="sum">把专业摄影做成模板来用，是这种体验</div>
+    <div class="gline"></div>
+    <div class="cta">拍照前，先打开如画</div>
+    <div class="ctaline"></div>
+    <div class="hook">你最想套哪个场景？评论区聊聊✨</div>
+  </div>
+  <div class="pfoot"><span class="bl">如画 LUMIRA · 拍照心得</span><span class="num">09 / 09</span></div>
+</section>
+
+</body>
+</html>
