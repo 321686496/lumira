@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>秋日约拍 · 全过程实录 · 胶片 9P</title>
+<style>
+/* ============ 品牌字体 ============ */
+@font-face{
+  font-family:'NSerif';font-weight:700;font-display:block;
+  src:url('file:///d:/app/projects/photo_post/lumira_app_flutter/assets/fonts/NotoSerifSC-Bold.otf') format('opentype');
+}
+@font-face{
+  font-family:'NSerif';font-weight:400;font-display:block;
+  src:url('file:///d:/app/projects/photo_post/lumira_app_flutter/assets/fonts/NotoSerifSC-Regular.otf') format('opentype');
+}
+:root{
+  --main:#4A4038; --sub:#8C8172; --terra:#C97B5A; --gold:#B08D57;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scrollbar-width:none}
+html::-webkit-scrollbar{display:none}
+body{width:1242px;background:#EFE7D9;font-family:'Microsoft YaHei',sans-serif}
+img{display:block}
+
+/* ============ 画布 ============ */
+.pg{
+  position:relative;width:1242px;height:1656px;overflow:hidden;display:none;
+  background:url('bg-inner.jpg') center/cover no-repeat;
+}
+.pg:target{display:block}
+/* 无锚点直接打开时：9 页纵向铺开预览 */
+body:not(:has(:target)) .pg{display:block;margin:0 auto 48px}
+body:not(:has(:target)){background:#E6DFD2;padding:48px 0}
+#p1{background:url('bg-cover.jpg') center/cover no-repeat}
+.inner{position:relative;height:100%;padding:0 90px}
+
+/* ============ 通用文字 ============ */
+.title{font-family:'NSerif';font-weight:700;color:var(--main)}
+.lead{font:400 31px/1.8 'Microsoft YaHei';color:var(--main);letter-spacing:2px}
+.note{font:400 28px/1 'Microsoft YaHei';color:var(--sub);letter-spacing:2px}
+.mono{font-family:Consolas,'Courier New',monospace}
+
+/* ============ 时间码章 ============ */
+.chip{display:inline-flex;align-items:center;gap:14px;
+  border:2px solid rgba(176,141,87,.55);border-radius:999px;padding:12px 30px;
+  font:700 26px/1 Consolas,'Courier New',monospace;color:var(--sub);letter-spacing:4px}
+.chip .dot{width:11px;height:11px;border-radius:50%;background:var(--terra);flex:none}
+
+/* ============ 卡 / 拍立得 / 胶带 / 贴条 ============ */
+.card{background:rgba(255,255,255,.8);border-radius:26px;
+  box-shadow:0 18px 40px rgba(180,140,110,.18)}
+.photo{background:#FFFDF8;padding:14px 14px 40px;border-radius:8px;
+  box-shadow:0 18px 40px rgba(180,140,110,.22)}
+.photo img{width:100%;object-fit:cover;object-position:top}
+.tape{position:absolute;width:150px;height:42px;background:rgba(226,206,176,.75);
+  transform:rotate(-4deg);box-shadow:0 2px 6px rgba(120,90,60,.12);z-index:5}
+.sticky{background:#FBF3DF;color:#A4653F;border-radius:6px;
+  box-shadow:0 10px 24px rgba(160,120,80,.2);padding:22px 30px;
+  font:700 30px/1.5 'Microsoft YaHei';letter-spacing:2px;transform:rotate(2deg)}
+
+/* ============ 手机样机 ============ */
+.phone{background:#fff;border-radius:36px;padding:10px;
+  border:2px solid rgba(255,255,255,.95);
+  box-shadow:0 24px 48px rgba(180,140,110,.25),0 6px 16px rgba(180,140,110,.14)}
+.phone .scr{border-radius:26px;overflow:hidden;background:#EFE7D9}
+.phone img{width:100%;aspect-ratio:1080/2340;object-fit:cover;object-position:top}
+
+/* ============ 页脚（无品牌，胶片编号） ============ */
+.pfoot{position:absolute;left:90px;right:90px;bottom:44px;display:flex;
+  align-items:center;justify-content:space-between}
+.pfoot span{font:700 22px/1 Consolas,'Courier New',monospace;color:rgba(140,129,114,.75);letter-spacing:4px}
+.pfoot .rule{flex:1;height:1px;background:rgba(176,141,87,.3);margin:0 28px}
+
+/* ============ P1 封面 ============ */
+#p1 .inner{padding-top:112px}
+#p1 .kick{font:400 26px/1 'Microsoft YaHei';color:var(--terra);letter-spacing:9px}
+#p1 .bigtitle{margin-top:36px;font-size:100px;line-height:1.24;letter-spacing:6px}
+#p1 .hook{margin-top:30px;font:400 34px/1 'Microsoft YaHei';color:var(--sub);letter-spacing:6px}
+#p1 .pstage{margin-top:64px;display:flex;justify-content:center}
+#p1 .photo{width:560px;transform:rotate(-2deg);position:relative}
+#p1 .photo img{height:600px}
+#p1 .tape{top:-20px;left:50%;margin-left:-75px}
+#p1 .date{position:absolute;right:96px;bottom:120px;
+  font:700 24px/1 Consolas,'Courier New',monospace;color:var(--sub);letter-spacing:5px}
+
+/* ============ P2 出发前（文字页） ============ */
+#p2 .inner{padding-top:170px;text-align:left}
+#p2 .title{font-size:80px;line-height:1.3;letter-spacing:4px;margin-top:36px}
+#p2 .body{margin-top:56px}
+#p2 .lead{margin-bottom:26px}
+#p2 .pull{margin-top:64px;padding:44px 50px;width:860px}
+#p2 .pull b{display:block;font:700 42px/1.5 'NSerif';color:var(--main);letter-spacing:4px}
+#p2 .pull p{margin-top:16px;font:400 28px/1 'Microsoft YaHei';color:var(--sub);letter-spacing:2px}
+#p2 .film{position:absolute;right:90px;bottom:150px}
+
+/* ============ P3/P4 单手机页 ============ */
+.xp .inner{padding-top:118px;text-align:center}
+.xp .title{font-size:72px;line-height:1.3;letter-spacing:3px;margin-top:32px}
+.xp .pstage{margin-top:46px;display:flex;justify-content:center}
+.xp .phone{width:398px}
+.xp .lead{margin-top:44px}
+.xp .quote{margin-top:44px;display:inline-block;padding:34px 46px;transform:rotate(-1.2deg)}
+.xp .quote b{font:700 36px/1.6 'NSerif';color:var(--main);letter-spacing:3px}
+.xp .quote p{margin-top:14px;font:400 27px/1 'Microsoft YaHei';color:var(--sub);letter-spacing:2px}
+
+/* ============ P5 第一张 ============ */
+#p5 .inner{padding-top:118px;text-align:center}
+#p5 .title{font-size:76px;line-height:1.3;letter-spacing:3px;margin-top:32px}
+#p5 .pstage{margin-top:54px;display:flex;justify-content:center}
+#p5 .photo{width:500px;transform:rotate(1.8deg);position:relative}
+#p5 .photo img{height:650px}
+#p5 .tape{top:-18px;right:38px}
+#p5 .sticky{position:absolute;left:50%;margin-left:180px;bottom:64px;width:270px}
+#p5 .note{margin-top:56px}
+
+/* ============ P6 转场三连 ============ */
+#p6 .inner{padding-top:118px;text-align:center}
+#p6 .title{font-size:76px;line-height:1.3;letter-spacing:3px;margin-top:32px}
+#p6 .tri{margin-top:58px;display:flex;justify-content:center;gap:26px;align-items:center}
+#p6 .tile{background:#FFFDF8;padding:12px 12px 34px;border-radius:8px;
+  box-shadow:0 18px 40px rgba(180,140,110,.22);flex:none}
+#p6 .tile img{height:430px;object-fit:cover}
+#p6 .ta{width:367px;transform:rotate(-1.8deg)}
+#p6 .tb{width:354px;transform:translateY(-22px)}
+#p6 .tc{width:242px;transform:rotate(1.6deg)}
+#p6 .lead{margin-top:52px}
+
+/* ============ P7 返图（照片+聊天） ============ */
+#p7 .inner{padding-top:118px}
+#p7 .title{font-size:74px;line-height:1.3;letter-spacing:3px;margin-top:32px;text-align:center}
+#p7 .row{margin-top:56px;display:flex;justify-content:center;align-items:center;gap:64px}
+#p7 .photo{width:440px;transform:rotate(-2deg);position:relative;flex:none}
+#p7 .photo img{height:320px}
+#p7 .tape{top:-18px;left:50%;margin-left:-75px}
+#p7 .chats{width:430px;display:flex;flex-direction:column;gap:22px}
+#p7 .bub{max-width:340px;padding:20px 30px;border-radius:24px;
+  font:400 29px/1.4 'Microsoft YaHei';letter-spacing:1px}
+#p7 .fl{align-self:flex-start;background:rgba(255,255,255,.92);color:var(--main);
+  border-bottom-left-radius:6px;box-shadow:0 8px 20px rgba(180,140,110,.16)}
+#p7 .me{align-self:flex-end;background:#E9D9C6;color:#6B4F35;
+  border-bottom-right-radius:6px;box-shadow:0 8px 20px rgba(180,140,110,.16)}
+#p7 .note{margin-top:52px;text-align:center;display:block}
+
+/* ============ P8 九宫格 ============ */
+#p8 .inner{padding-top:110px;text-align:center}
+#p8 .title{font-size:76px;line-height:1.3;letter-spacing:3px;margin-top:32px}
+#p8 .grid{margin-top:50px;display:grid;grid-template-columns:repeat(3,250px);
+  gap:14px;justify-content:center}
+#p8 .cell{width:250px;height:250px;overflow:hidden;background:#E7DCC9}
+#p8 .cell img{width:100%;height:100%;object-fit:cover}
+#p8 .quote{margin-top:52px;display:inline-block;text-align:center}
+#p8 .quote b{font:700 36px/1.7 'NSerif';color:var(--main);letter-spacing:2px}
+#p8 .quote p{margin-top:16px;font:400 28px/1 'Microsoft YaHei';color:var(--sub);letter-spacing:2px}
+
+/* ============ P9 尾页 ============ */
+#p9 .stack{position:absolute;left:0;right:0;top:400px;text-align:center}
+#p9 .big{font:700 88px/1.35 'NSerif';color:var(--main);letter-spacing:6px}
+#p9 .big em{font-style:normal;color:var(--terra);display:block;font-size:112px;margin-top:20px}
+#p9 .sum{margin-top:56px;font:400 30px/1.9 'Microsoft YaHei';color:var(--sub);letter-spacing:3px}
+#p9 .gline{width:320px;height:2px;border:0;margin:72px auto 0;
+  background:linear-gradient(90deg,rgba(176,141,87,0),#B08D57 30%,#B08D57 70%,rgba(176,141,87,0))}
+#p9 .brand{margin-top:44px;font:400 20px/1 'Microsoft YaHei';color:rgba(140,129,114,.62);letter-spacing:6px}
+</style>
+</head>
+<body>
+
+<!-- ============ P1 封面 ============ -->
+<section class="pg" id="p1">
+  <div class="inner">
+    <div class="kick">拍照实录 · 一卷拍完的下午</div>
+    <div class="title bigtitle">秋日约拍<br>全过程实录</div>
+    <svg width="560" height="22" viewBox="0 0 560 22" fill="none" style="margin:10px 0 0 8px">
+      <path d="M8 14 C 90 5, 170 19, 260 11 S 420 6, 552 12" stroke="#C97B5A" stroke-width="7" stroke-linecap="round"/>
+    </svg>
+    <div class="hook">非摄影师 · 第一视角</div>
+    <div class="pstage">
+      <div class="photo">
+        <div class="tape"></div>
+        <img src="file:///d:/app/projects/photo_post/docs/marketing/assets/2026-10/xhs-template-exp-20261012/photos/cover.png" style="object-position:50% 15%" alt="">
+      </div>
+    </div>
+    <div class="date">OCT. 2026</div>
+  </div>
+</section>
+
+<!-- ============ P2 11:00 出发前 ============ -->
+<section class="pg" id="p2">
+  <div class="inner">
+    <div class="chip"><span class="dot"></span>11:00 · 出发前</div>
+    <div class="title">说实话，出发前<br>我有点虚</div>
+    <div class="body">
+      <div class="lead">上次给朋友拍照，还是去年。</div>
+      <div class="lead">十张里能挑出一张，全靠运气。</div>
+      <div class="lead">这次答应得爽快，是因为我带了点不一样的东西——</div>
+    </div>
+    <div class="card pull">
+      <b>一套现成的「拍法」</b>
+      <p>构图、站位、光线效果，都有人替我安排好了</p>
+    </div>
+    <svg class="film" width="150" height="420" viewBox="0 0 150 420" fill="none">
+      <rect x="10" y="0" width="130" height="420" rx="10" fill="rgba(74,64,56,.10)"/>
+      <g fill="rgba(74,64,56,.16)">
+        <rect x="24" y="16" width="26" height="18" rx="4"/><rect x="100" y="16" width="26" height="18" rx="4"/>
+        <rect x="24" y="62" width="26" height="18" rx="4"/><rect x="100" y="62" width="26" height="18" rx="4"/>
+        <rect x="24" y="108" width="26" height="18" rx="4"/><rect x="100" y="108" width="26" height="18" rx="4"/>
+        <rect x="24" y="154" width="26" height="18" rx="4"/><rect x="100" y="154" width="26" height="18" rx="4"/>
+        <rect x="24" y="200" width="26" height="18" rx="4"/><rect x="100" y="200" width="26" height="18" rx="4"/>
+        <rect x="24" y="246" width="26" height="18" rx="4"/><rect x="100" y="246" width="26" height="18" rx="4"/>
+        <rect x="24" y="292" width="26" height="18" rx="4"/><rect x="100" y="292" width="26" height="18" rx="4"/>
+        <rect x="24" y="338" width="26" height="18" rx="4"/><rect x="100" y="338" width="26" height="18" rx="4"/>
+        <rect x="24" y="384" width="26" height="18" rx="4"/><rect x="100" y="384" width="26" height="18" rx="4"/>
+      </g>
+    </svg>
+  </div>
+  <div class="pfoot"><span>FRAME 02</span><span class="rule"></span><span>02 / 09</span></div>
+</section>
+
+<!-- ============ P3 14:00 到场·选拍法 ============ -->
+<section class="pg xp" id="p3">
+  <div class="inner">
+    <div class="chip"><span class="dot"></span>14:00 · 到场</div>
+    <div class="title">到了落叶街，先选今天的拍法</div>
+    <div class="pstage">
+      <div class="phone"><div class="scr"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/模板详情页.png" alt=""></div></div>
+    </div>
+    <div class="lead">构图、站位、光线效果，全是现成的<br>我只要挑一个顺眼的</div>
+  </div>
+  <div class="pfoot"><span>FRAME 03</span><span class="rule"></span><span>03 / 09</span></div>
+</section>
+
+<!-- ============ P4 14:20 对位 ============ -->
+<section class="pg xp" id="p4">
+  <div class="inner">
+    <div class="chip"><span class="dot"></span>14:20 · 对位</div>
+    <div class="title">第一次指挥朋友摆姿势</div>
+    <div class="pstage">
+      <div class="phone"><div class="scr"><img src="file:///d:/app/projects/photo_post/上架运营/推流文章相关素材/Screenshot_2026-10-08T103302.png" alt=""></div></div>
+    </div>
+    <div class="quote card">
+      <b>「脚往左一点，<br>手搭在栏杆上。」</b>
+      <p>她照着剪影凹，居然一次到位</p>
+    </div>
+  </div>
+  <div class="pfoot"><span>FRAME 04</span><span class="rule"></span><span>04 / 09</span></div>
+</section>
+
+<!-- ============ P5 14:40 第一张 ============ -->
+<section class="pg" id="p5">
+  <div class="inner">
+    <div class="chip"><span class="dot"></span>14:40 · 第一张</div>
+    <div class="title">回看的那一眼，稳了</div>
+    <div class="pstage">
+      <div class="photo">
+        <div class="tape"></div>
+        <img src="file:///d:/app/projects/photo_post/docs/marketing/assets/2026-10/xhs-template-exp-20261012/photos/first.png" style="object-position:50% 20%" alt="">
+        <div class="sticky">第一张<br>就这张</div>
+      </div>
+    </div>
+    <div class="note">不需要运气的感觉，太好了</div>
+  </div>
+  <div class="pfoot"><span>FRAME 05</span><span class="rule"></span><span>05 / 09</span></div>
+</section>
+
+<!-- ============ P6 15:30 转场 ============ -->
+<section class="pg" id="p6">
+  <div class="inner">
+    <div class="chip"><span class="dot"></span>15:30 · 转场</div>
+    <div class="title">换景，换模板，接着拍</div>
+    <div class="tri">
+      <div class="tile ta"><img src="file:///d:/app/projects/photo_post/docs/marketing/assets/2026-10/xhs-template-exp-20261012/photos/cafe.png" style="object-position:50% 40%" alt=""></div>
+      <div class="tile tb"><img src="file:///d:/app/projects/photo_post/docs/marketing/assets/2026-10/xhs-template-exp-20261012/photos/backlight.png" style="object-position:50% 30%" alt=""></div>
+      <div class="tile tc"><img src="file:///d:/app/projects/photo_post/docs/marketing/assets/2026-10/xhs-template-exp-20261012/photos/lawn.png" style="object-position:50% 50%" alt=""></div>
+    </div>
+    <div class="lead">咖啡店一组，逆光一组，草地一组<br>换模板跟换镜头似的——虽然我只有一部手机</div>
+  </div>
+  <div class="pfoot"><span>FRAME 06</span><span class="rule"></span><span>06 / 09</span></div>
+</section>
+
+<!-- ============ P7 17:30 返图 ============ -->
+<section class="pg" id="p7">
+  <div class="inner">
+    <div class="chip" style="display:flex"><span class="dot"></span>17:30 · 返图</div>
+    <div class="title">挑片半小时，微信被催了三条</div>
+    <div class="row">
+      <div class="photo">
+        <div class="tape"></div>
+        <img src="file:///d:/app/projects/photo_post/docs/marketing/assets/2026-10/xhs-template-exp-20261012/photos/backlight.png" style="object-position:50% 28%" alt="">
+      </div>
+      <div class="chats">
+        <div class="bub fl">拍到没！</div>
+        <div class="bub fl">原图原图</div>
+        <div class="bub me">在挑了在挑了，张张都想发</div>
+        <div class="bub fl">九宫格等你</div>
+      </div>
+    </div>
+    <span class="note">上次是我求朋友「随便发一张就行」</span>
+  </div>
+  <div class="pfoot"><span>FRAME 07</span><span class="rule"></span><span>07 / 09</span></div>
+</section>
+
+<!-- ============ P8 21:00 当晚 ============ -->
+<section class="pg" id="p8">
+  <div class="inner">
+    <div class="chip"><span class="dot"></span>21:00 · 当晚</div>
+    <div class="title">九宫格发出之后</div>
+    <div class="grid">
+      <div class="cell"><img src="file:///d:/app/projects/photo_post/docs/marketing/assets/2026-10/xhs-template-exp-20261012/photos/cover.png" style="object-position:50% 20%" alt=""></div>
+      <div class="cell"><img src="file:///d:/app/projects/photo_post/docs/marketing/assets/2026-10/xhs-template-exp-20261012/photos/cafe.png" style="object-position:50% 40%" alt=""></div>
+      <div class="cell"><img src="file:///d:/app/projects/photo_post/docs/marketing/assets/2026-10/xhs-template-exp-20261012/photos/backlight.png" style="object-position:50% 30%" alt=""></div>
+      <div class="cell"><img src="file:///d:/app/projects/photo_post/docs/marketing/assets/2026-10/xhs-template-exp-20261012/photos/lawn.png" style="object-position:50% 12%" alt=""></div>
+      <div class="cell"><img src="file:///d:/app/projects/photo_post/docs/marketing/assets/2026-10/xhs-template-exp-20261012/photos/first.png" style="object-position:50% 20%" alt=""></div>
+      <div class="cell"><img src="file:///d:/app/projects/photo_post/docs/marketing/assets/2026-10/xhs-template-exp-20261012/photos/cafe.png" style="object-position:20% 60%;width:160%;height:160%;margin-left:-30%;margin-top:-30%" alt=""></div>
+      <div class="cell"><img src="file:///d:/app/projects/photo_post/docs/marketing/assets/2026-10/xhs-template-exp-20261012/photos/backlight.png" style="object-position:50% 15%;width:150%;height:150%;margin-left:-25%;margin-top:-15%" alt=""></div>
+      <div class="cell"><img src="file:///d:/app/projects/photo_post/docs/marketing/assets/2026-10/xhs-template-exp-20261012/photos/cover.png" style="object-position:30% 70%;width:150%;height:150%;margin-left:-20%;margin-top:-25%" alt=""></div>
+      <div class="cell"><img src="file:///d:/app/projects/photo_post/docs/marketing/assets/2026-10/xhs-template-exp-20261012/photos/lawn.png" style="object-position:50% 40%;width:140%;height:140%;margin-left:-20%;margin-top:-15%" alt=""></div>
+    </div>
+    <div class="quote">
+      <b>朋友配文：「摄影师太会拍了。」<br>评论都在问：哪家约的？</b>
+      <p>——可我只是照着现成的拍法，按了快门而已</p>
+    </div>
+  </div>
+  <div class="pfoot"><span>FRAME 08</span><span class="rule"></span><span>08 / 09</span></div>
+</section>
+
+<!-- ============ P9 尾页 ============ -->
+<section class="pg" id="p9">
+  <div class="stack">
+    <div class="big">这一卷拍完，我很确定<em>下次，换我主动约拍</em></div>
+    <div class="sum">从怕镜头，到自己开麦指挥<br>用的不过是别人拆好的「专业」而已</div>
+    <div class="gline"></div>
+    <div class="brand">如画 LUMIRA</div>
+  </div>
+  <div class="pfoot"><span>FRAME 09</span><span class="rule"></span><span>09 / 09</span></div>
+</section>
+
+</body>
+</html>

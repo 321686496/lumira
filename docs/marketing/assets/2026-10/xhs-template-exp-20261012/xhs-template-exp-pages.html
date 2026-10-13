@@ -28,6 +28,9 @@ img{display:block}
   background:url('bg-inner.jpg') center/cover no-repeat;
 }
 .pg:target{display:block}
+/* 无锚点直接打开时：9 页纵向铺开预览 */
+body:not(:has(:target)) .pg{display:block;margin:0 auto 48px}
+body:not(:has(:target)){background:#E6DFD2;padding:48px 0}
 #p1{background:url('bg-cover.jpg') center/cover no-repeat}
 .inner{position:relative;height:100%;padding:0 90px}
 
