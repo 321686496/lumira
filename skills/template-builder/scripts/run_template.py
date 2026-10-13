@@ -213,9 +213,41 @@ def decode_item(item: dict, tmp: Path, prefix: str) -> Path:
 
 # ---------------------------------------------------------------- 剪影
 
+def _otsu_threshold(gray) -> int:
+    """Otsu 自适应阈值: 线稿底色非纯白时比固定 245 更稳。"""
+    hist = gray.histogram()
+    total = sum(hist)
+    sum_all = sum(i * c for i, c in enumerate(hist))
+    sum_b, w_b, best, best_var = 0.0, 0, 128, -1.0
+    for t in range(256):
+        w_b += hist[t]
+        if w_b == 0:
+            continue
+        w_f = total - w_b
+        if w_f == 0:
+            break
+        sum_b += t * hist[t]
+        m_b = sum_b / w_b
+        m_f = (sum_all - sum_b) / w_f
+        var = w_b * w_f * (m_b - m_f) ** 2
+        if var > best_var:
+            best_var, best = var, t
+    return best
+
+
 def binarize_to_transparent(img) -> object:
+    """线稿 -> 透明底黑线。透明/灰底 PNG 先合成白底再取灰度,
+    否则底色会被阈值判成线导致整图全黑; 阈值用 Otsu(夹取 120..SIL_THRESHOLD)。"""
+    if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+        img = img.convert("RGBA")
+        bg = Image.new("RGB", img.size, (255, 255, 255))
+        bg.paste(img, mask=img.split()[3])
+        img = bg
+    else:
+        img = img.convert("RGB")
     gray = img.convert("L")
-    alpha = gray.point(lambda v: 255 if v < SIL_THRESHOLD else 0)
+    thr = max(120, min(SIL_THRESHOLD, _otsu_threshold(gray)))
+    alpha = gray.point(lambda v: 255 if v < thr else 0)
     black = Image.new("RGB", img.size, (0, 0, 0))
     rgba = black.convert("RGBA")
     rgba.putalpha(alpha)
@@ -273,9 +305,10 @@ def gen_hapi(client, model, prompt, out_dir: Path, label, ref: Path | None = Non
     return None
 
 
-def gen_silhouette(client, model, pose_path: Path, out_dir: Path) -> Path | None:
+def gen_silhouette(client, model, pose_path: Path, out_dir: Path,
+                   prompt: str = "") -> Path | None:
     final = out_dir / f"{pose_path.stem}_sil.png"
-    raw = gen_hapi(client, model, SIL_PROMPT + gpt_image2.ratio_note(ASPECT[0]),
+    raw = gen_hapi(client, model, (prompt or SIL_PROMPT) + gpt_image2.ratio_note(ASPECT[0]),
                    out_dir / "_sil_raw", "sil", ref=pose_path, size=pose_size(ASPECT[0]))
     if not raw:
         return None
@@ -369,7 +402,7 @@ def write_docs(cfg: dict, out_dir: Path, poses: list[dict], aspect_ratio: str | 
     pptpl = {
         "format": "pptpl", "version": "1.0.0",
         "_meta": {
-            "name": cfg.get("name"), "author": "Lumira", "category": "portrait",
+            "name": cfg.get("name"), "author": "Lumira", "category": cfg.get("category", "portrait"),
             "price": 0, "description": cfg.get("description"), "shortDesc": cfg.get("short_desc"),
             "tags": cfg.get("tags") or [],
             "referenceSource": cfg.get("reference_source", ""),
@@ -491,6 +524,8 @@ def main() -> int:
                     help="覆盖引擎预设的平台")
     ap.add_argument("--model", default=None, help="覆盖引擎预设的模型")
     ap.add_argument("--sil-model", default=None, help="覆盖剪影引擎的模型")
+    ap.add_argument("--sil-prompt", default=None,
+                    help="覆盖剪影线稿提示词(风景模板用构图骨架线稿)")
     ap.add_argument("--sil-api-key", default=None, help="剪影引擎的 API Key(缺省读该引擎的环境变量)")
     ap.add_argument("--max-per-call", type=int, default=None,
                     help="反侵权每批图片上限(默认按引擎推导)")
@@ -599,10 +634,12 @@ def main() -> int:
     elif args.auto_gen:
         print(f"  [姿势] 无参考图 -> 文生图自动补 {pose_count} 张…", flush=True)
         style = cfg.get("style_prompt", "")
+        tpl = cfg.get("auto_gen_prompt") or ("{style}。姿势动作:{desc}。写实全身人像, "
+                                             "{ratio_note}保留皮肤毛孔与真实质感。")
         for i in range(pose_count):
             desc = cfg["poses"][i].get("description", "")
-            prompt = (f"{style}。姿势动作:{desc}。写实全身人像, "
-                      f"{gpt_image2.ratio_note(ASPECT[0])}保留皮肤毛孔与真实质感。")
+            prompt = tpl.format(style=style, desc=desc,
+                                ratio_note=gpt_image2.ratio_note(ASPECT[0]))
             p = gen_hapi(client, model, prompt, out_dir, f"pose{i+1}", size=pose_size(ASPECT[0]))
             if p:
                 final_poses.append(p)
@@ -627,7 +664,7 @@ def main() -> int:
     # 3) 剪影(逐个生成, 保证质量与姿势一致)
     print("\n[剪影] 逐张生成…", flush=True)
     for i, pose in enumerate(final_poses, 1):
-        gen_silhouette(sil_client, sil_model, pose, out_dir)
+        gen_silhouette(sil_client, sil_model, pose, out_dir, prompt=args.sil_prompt)
 
     # 4) 文档
     poses_cfg = cfg.get("poses", [])[:n]

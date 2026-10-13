@@ -73,6 +73,12 @@ python scripts/run_template.py --key my_tpl --cfg config.json \
 # 纯文字/无图 → 文生图补姿势
 python scripts/run_template.py --key my_tpl --cfg config.json --auto-gen --count 9
 
+# 风景/非人像模板(纯风景空镜): cfg 配 auto_gen_prompt(空镜提示词)/category:scenery。
+# 剪影槽位 = 构图引导线(地平线/主体位置圈/透视汇聚线/S走向箭头/取景框, 不描景物轮廓),
+# 必须程序化绘制(PIL 画线, 可控零成本); 勿用生图画构图线——模型会画成景物轮廓素描(踩过坑)
+python scripts/run_template.py --key my_tpl --cfg config.json --auto-gen
+# 然后对产出 pose{i}.png 按机位逐张定义引导线坐标(相对 0..1)用 PIL 绘制覆盖 pose{i}_sil.png
+
 # 只预览
 python scripts/run_template.py --key my_tpl --cfg config.json --dry-run
 ```
@@ -119,6 +125,8 @@ python scripts/run_template.py --key my_tpl --cfg config.json --inputs ref1.png 
 
 - 姿势图数量 = 参考图拆分后张数，或 `--count` 指定；`cfg.poses` 与之对齐。
 - `scene_guide` / `post_process` 选填，直接透写入 `template.pptpl`。
+- `auto_gen_prompt` 选填：auto-gen 文生图提示词模板（占位 `{style}/{desc}/{ratio_note}`），风景模板配「写实风景摄影空镜…画面纯净无人物」；缺省为人像模板的「姿势动作…写实全身人像」。
+- `category` 选填：`template.pptpl` 的 `_meta.category`（人像缺省 `portrait`，风景模板配 `scenery`）；`classification.type` 同步使用。
 - `aspect_ratio`：模板宽高比，**必须依据参考内容（链接正文/参考图/创作要求）判定后写入**，取值 `3:4 | 4:3 | 16:9 | 9:16 | 1:1`。它统一决定姿势图与剪影的出图尺寸、反侵权宫格画布、成片的最终像素与 `template.pptpl` 的 `composition.aspectRatio`。缺省时脚本按参考图比例推断，再缺省 `3:4`。
 
 ## 已知假设与局限
