@@ -599,15 +599,15 @@ export function BannerManager({
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="bnr-position">广告槽位（留空=最后）</Label>
+                <Label htmlFor="bnr-position">槽位（留空=最后）</Label>
                 <Input
                   id="bnr-position"
                   type="number"
                   min={0}
                   value={form.position}
                   onChange={(e) => setForm({ ...form, position: e.target.value })}
-                  placeholder="如：4"
-                  disabled={form.kind !== 'ad'}
+                  placeholder="如：0"
+                  disabled={form.kind === 'operation'}
                 />
               </div>
             </div>
